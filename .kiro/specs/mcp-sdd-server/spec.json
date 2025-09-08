@@ -1,0 +1,22 @@
+{
+  "feature_name": "mcp-sdd-server",
+  "created_at": "2025-09-08T00:00:00Z",
+  "updated_at": "2025-09-08T00:00:00Z",
+  "language": "en",
+  "phase": "tasks-generated",
+  "approvals": {
+    "requirements": {
+      "generated": true,
+      "approved": true
+    },
+    "design": {
+      "generated": true,
+      "approved": true
+    },
+    "tasks": {
+      "generated": true,
+      "approved": false
+    }
+  },
+  "ready_for_implementation": false
+}

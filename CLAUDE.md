@@ -18,6 +18,9 @@ Kiro-style Spec Driven Development implementation using claude code slash comman
 - Check `.kiro/specs/` for active specifications
 - Use `/kiro:spec-status [feature-name]` to check progress
 
+**Current Specifications:**
+- `mcp-sdd-server`: MCP server for spec-driven development across AI-agent CLIs and IDEs
+
 ## Development Guidelines
 - Think in English, generate responses in English
 
