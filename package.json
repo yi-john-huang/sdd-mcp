@@ -1,0 +1,39 @@
+{
+  "name": "@sdd/mcp-server",
+  "version": "1.0.0",
+  "description": "MCP server for spec-driven development workflows across AI-agent CLIs and IDEs",
+  "main": "dist/index.js",
+  "type": "module",
+  "scripts": {
+    "build": "tsc",
+    "dev": "tsx watch src/index.ts",
+    "start": "node dist/index.js",
+    "test": "jest",
+    "lint": "eslint src --ext .ts",
+    "typecheck": "tsc --noEmit"
+  },
+  "keywords": ["mcp", "sdd", "spec-driven-development", "ai-agent", "cli"],
+  "author": "SDD MCP Server",
+  "license": "MIT",
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.0.0",
+    "handlebars": "^4.7.8",
+    "ajv": "^8.17.1",
+    "reflect-metadata": "^0.2.2",
+    "inversify": "^6.0.2"
+  },
+  "devDependencies": {
+    "@types/node": "^22.0.0",
+    "@types/handlebars": "^4.1.0",
+    "@types/jest": "^29.5.0",
+    "@typescript-eslint/eslint-plugin": "^7.0.0",
+    "@typescript-eslint/parser": "^7.0.0",
+    "eslint": "^8.57.0",
+    "jest": "^29.7.0",
+    "tsx": "^4.16.0",
+    "typescript": "^5.5.0"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  }
+}
