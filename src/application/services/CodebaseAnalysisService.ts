@@ -241,13 +241,14 @@ export class CodebaseAnalysisService {
       const items = await this.fileSystem.readdir(currentPath);
       const children: string[] = [];
       let fileCount = 0;
+      const relativePath = path.relative(basePath, currentPath);
 
       for (const item of items) {
         const itemPath = path.join(currentPath, item);
-        const relativePath = path.relative(basePath, itemPath);
+        const itemRelativePath = path.relative(basePath, itemPath);
 
         // Skip ignored patterns
-        if (ignorePatterns.some(pattern => relativePath.includes(pattern))) {
+        if (ignorePatterns.some(pattern => itemRelativePath.includes(pattern))) {
           continue;
         }
 
@@ -459,7 +460,10 @@ export class CodebaseAnalysisService {
           while ((match = importRegex.exec(content)) !== null) {
             const dep = match[1] || match[2];
             if (dep && !dep.startsWith('.')) {
-              dependencies.push(dep.split('/')[0]); // Get package name
+              const packageName = dep.split('/')[0];
+              if (packageName) {
+                dependencies.push(packageName); // Get package name
+              }
             }
           }
           break;
@@ -471,7 +475,10 @@ export class CodebaseAnalysisService {
           while ((pythonMatch = pythonImportRegex.exec(content)) !== null) {
             const dep = pythonMatch[1] || pythonMatch[2];
             if (dep && !dep.startsWith('.')) {
-              dependencies.push(dep.split('.')[0]);
+              const packageName = dep.split('.')[0];
+              if (packageName) {
+                dependencies.push(packageName);
+              }
             }
           }
           break;
@@ -483,7 +490,10 @@ export class CodebaseAnalysisService {
           while ((javaMatch = javaImportRegex.exec(content)) !== null) {
             const dep = javaMatch[1];
             if (dep && !dep.startsWith('java.') && !dep.startsWith('javax.')) {
-              dependencies.push(dep.split('.')[0]);
+              const packageName = dep.split('.')[0];
+              if (packageName) {
+                dependencies.push(packageName);
+              }
             }
           }
           break;
@@ -510,6 +520,13 @@ export class CodebaseAnalysisService {
         [ProgrammingLanguage.JAVA]: ['if', 'else', 'while', 'for', 'switch', 'case', 'catch', '&&', '||'],
         [ProgrammingLanguage.GO]: ['if', 'else', 'for', 'switch', 'case', '&&', '||'],
         [ProgrammingLanguage.RUST]: ['if', 'else', 'while', 'for', 'match', '&&', '||'],
+        [ProgrammingLanguage.CPP]: ['if', 'else', 'while', 'for', 'switch', 'case', 'catch', '&&', '||'],
+        [ProgrammingLanguage.CSHARP]: ['if', 'else', 'while', 'for', 'switch', 'case', 'catch', '&&', '||'],
+        [ProgrammingLanguage.PHP]: ['if', 'else', 'while', 'for', 'switch', 'case', 'catch', '&&', '||'],
+        [ProgrammingLanguage.RUBY]: ['if', 'else', 'while', 'for', 'case', '&&', '||'],
+        [ProgrammingLanguage.SWIFT]: ['if', 'else', 'while', 'for', 'switch', 'case', '&&', '||'],
+        [ProgrammingLanguage.KOTLIN]: ['if', 'else', 'while', 'for', 'when', '&&', '||'],
+        [ProgrammingLanguage.DART]: ['if', 'else', 'while', 'for', 'switch', 'case', '&&', '||'],
         [ProgrammingLanguage.UNKNOWN]: []
       };
 

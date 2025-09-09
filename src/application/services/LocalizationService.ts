@@ -4,7 +4,6 @@ import { injectable, inject } from 'inversify';
 import type { LoggerPort } from '../../domain/ports.js';
 import type { 
   I18nService,
-  SupportedLanguage,
   LocaleInfo,
   LanguagePack,
   LocalizedTemplate,
@@ -14,6 +13,8 @@ import type {
   ValidationResult,
   PlatformAdapter
 } from '../../domain/i18n/index.js';
+
+import { SupportedLanguage } from '../../domain/i18n/index.js';
 import { TYPES } from '../../infrastructure/di/types.js';
 
 interface CulturalAdaptation {
@@ -220,7 +221,7 @@ export class LocalizationService implements I18nManagerPort {
     } catch (error) {
       this.logger.error('Localization service initialization failed', {
         error: error instanceof Error ? error.message : String(error)
-      });
+      } as any);
       throw error;
     }
   }
@@ -264,7 +265,7 @@ export class LocalizationService implements I18nManagerPort {
       this.logger.error('Failed to load language pack', {
         language,
         error: error instanceof Error ? error.message : String(error)
-      });
+      } as any);
       throw error;
     }
   }
@@ -317,7 +318,7 @@ export class LocalizationService implements I18nManagerPort {
         params,
         language,
         error: error instanceof Error ? error.message : String(error)
-      });
+      } as any);
       return key;
     }
   }

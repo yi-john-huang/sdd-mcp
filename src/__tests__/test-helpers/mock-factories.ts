@@ -5,7 +5,7 @@ import {
   HookPhase, 
   ToolCategory, 
   PermissionType,
-  SteeringDocumentType,
+  SteeringDocumentType as PluginSteeringDocumentType,
   SteeringMode,
   PluginState,
   ValidationSeverity,
@@ -15,9 +15,10 @@ import {
 import {
   WorkflowPhase,
   WorkflowState,
-  ApprovalStatus,
-  SteeringDocumentType as ContextSteeringType
-} from '../../domain/context/ProjectContext.js';
+  ApprovalStatus
+} from '../../domain/types.js';
+
+import { SteeringDocumentType } from '../../domain/context/ProjectContext.js';
 
 export class MockFactories {
   // Hook System Mocks
@@ -358,24 +359,24 @@ export class MockFactories {
       state: WorkflowState.IN_PROGRESS,
       phases: {
         [WorkflowPhase.INIT]: {
-          status: ApprovalStatus.IN_PROGRESS,
+          status: WorkflowState.IN_PROGRESS,
           startedAt: new Date(),
           duration: 0
         },
         [WorkflowPhase.REQUIREMENTS]: {
-          status: ApprovalStatus.PENDING,
+          status: WorkflowState.PENDING,
           duration: 0
         },
         [WorkflowPhase.DESIGN]: {
-          status: ApprovalStatus.PENDING,
+          status: WorkflowState.PENDING,
           duration: 0
         },
         [WorkflowPhase.TASKS]: {
-          status: ApprovalStatus.PENDING,
+          status: WorkflowState.PENDING,
           duration: 0
         },
         [WorkflowPhase.IMPLEMENTATION]: {
-          status: ApprovalStatus.PENDING,
+          status: WorkflowState.PENDING,
           duration: 0
         }
       },

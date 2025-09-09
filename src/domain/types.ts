@@ -34,6 +34,13 @@ export enum WorkflowPhase {
   IMPLEMENTATION = 'implementation-ready'
 }
 
+export enum WorkflowState {
+  PENDING = 'pending',
+  IN_PROGRESS = 'in-progress',
+  COMPLETED = 'completed',
+  ERROR = 'error'
+}
+
 export interface Requirement {
   readonly id: string;
   readonly title: string;

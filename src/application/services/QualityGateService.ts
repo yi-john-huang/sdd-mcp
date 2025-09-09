@@ -2,15 +2,19 @@
 
 import { injectable, inject } from 'inversify';
 import type { LoggerPort, FileSystemPort } from '../../domain/ports.js';
+import { WorkflowPhase } from '../../domain/types.js';
+import type { Project } from '../../domain/types.js';
 import type { 
   CodeQualityAnalyzerPort,
   CodeAnalysisResult,
-  QualityReport,
+  QualityReport
+} from '../../domain/quality/index.js';
+
+import { 
   QualityScore,
   ViolationSeverity,
   ImprovementPriority
 } from '../../domain/quality/index.js';
-import type { WorkflowPhase, Project } from '../../domain/types.js';
 import { TYPES } from '../../infrastructure/di/types.js';
 
 export interface QualityGateConfig {
@@ -53,7 +57,7 @@ export interface QualityWarning {
 }
 
 const DEFAULT_QUALITY_CONFIG: QualityGateConfig = {
-  enforceOnPhases: ['REQUIREMENTS', 'DESIGN', 'TASKS', 'IMPLEMENTATION'],
+  enforceOnPhases: [WorkflowPhase.REQUIREMENTS, WorkflowPhase.DESIGN, WorkflowPhase.TASKS, WorkflowPhase.IMPLEMENTATION],
   minimumScore: QualityScore.PASSABLE,
   maxCriticalViolations: 0,
   maxMajorViolations: 5,
@@ -100,7 +104,7 @@ export class QualityGateService {
       }
 
       // Discover and analyze source files
-      const sourceFiles = await this.discoverSourceFiles(project.path, effectiveConfig);
+      const sourceFiles = await this.discoverSourceFiles(project, effectiveConfig);
       if (sourceFiles.length === 0) {
         this.logger.warn('No source files found for quality analysis', {
           projectPath: project.path,
@@ -150,7 +154,7 @@ export class QualityGateService {
         projectId: project.id,
         phase,
         error: error instanceof Error ? error.message : String(error)
-      });
+      } as any);
       throw error;
     }
   }
@@ -164,7 +168,7 @@ export class QualityGateService {
       includePatterns: ['**/requirements.md', '**/specs/**/*.md']
     };
     
-    return this.executeQualityGate(project, 'REQUIREMENTS', config);
+    return this.executeQualityGate(project, WorkflowPhase.REQUIREMENTS, config);
   }
 
   async validateDesignQuality(project: Project): Promise<QualityGateResult> {
@@ -177,7 +181,7 @@ export class QualityGateService {
       includePatterns: ['**/design.md', 'src/**/*.ts', '!src/**/*.test.ts']
     };
     
-    return this.executeQualityGate(project, 'DESIGN', config);
+    return this.executeQualityGate(project, WorkflowPhase.DESIGN, config);
   }
 
   async validateTasksQuality(project: Project): Promise<QualityGateResult> {
@@ -189,7 +193,7 @@ export class QualityGateService {
       includePatterns: ['**/tasks.md', 'src/**/*.ts']
     };
     
-    return this.executeQualityGate(project, 'TASKS', config);
+    return this.executeQualityGate(project, WorkflowPhase.TASKS, config);
   }
 
   async validateImplementationQuality(project: Project): Promise<QualityGateResult> {
@@ -202,18 +206,18 @@ export class QualityGateService {
       failOnGarbage: true
     };
     
-    return this.executeQualityGate(project, 'IMPLEMENTATION', config);
+    return this.executeQualityGate(project, WorkflowPhase.IMPLEMENTATION, config);
   }
 
   private async discoverSourceFiles(
-    projectPath: string, 
+    project: Project, 
     config: QualityGateConfig
   ): Promise<Array<{ path: string; content: string }>> {
     const files: Array<{ path: string; content: string }> = [];
     
     try {
       // This is a simplified implementation - in production, would use glob patterns
-      const srcDir = `${projectPath}/src`;
+      const srcDir = `${project.path}/src`;
       if (await this.fileSystem.exists(srcDir)) {
         const sourceFiles = await this.findFilesRecursively(srcDir, config.includePatterns, config.excludePatterns);
         
@@ -232,9 +236,9 @@ export class QualityGateService {
 
       // Also check documentation files for requirements/design phases
       const docsFiles = [
-        `${projectPath}/.kiro/specs/${project.name}/requirements.md`,
-        `${projectPath}/.kiro/specs/${project.name}/design.md`,
-        `${projectPath}/.kiro/specs/${project.name}/tasks.md`
+        `${project.path}/.kiro/specs/${project.name}/requirements.md`,
+        `${project.path}/.kiro/specs/${project.name}/design.md`,
+        `${project.path}/.kiro/specs/${project.name}/tasks.md`
       ];
 
       for (const filePath of docsFiles) {
@@ -252,9 +256,9 @@ export class QualityGateService {
       }
     } catch (error) {
       this.logger.error('Failed to discover source files', {
-        projectPath,
+        projectPath: project.path,
         error: error instanceof Error ? error.message : String(error)
-      });
+      } as any);
     }
     
     return files;
@@ -287,7 +291,7 @@ export class QualityGateService {
       this.logger.error('File discovery failed', {
         dir,
         error: error instanceof Error ? error.message : String(error)
-      });
+      } as any);
     }
     
     return files;
@@ -441,12 +445,12 @@ export class QualityGateService {
     const recommendations: string[] = [];
     
     switch (phase) {
-      case 'REQUIREMENTS':
+      case WorkflowPhase.REQUIREMENTS:
         recommendations.push('Ensure requirements are testable and measurable');
         recommendations.push('Review requirements with stakeholders for completeness');
         break;
         
-      case 'DESIGN':
+      case WorkflowPhase.DESIGN:
         recommendations.push('Validate architectural decisions against requirements');
         recommendations.push('Consider design patterns for complex interactions');
         if (report.summary.technicalDebt > 20) {
@@ -454,12 +458,12 @@ export class QualityGateService {
         }
         break;
         
-      case 'TASKS':
+      case WorkflowPhase.TASKS:
         recommendations.push('Break down complex tasks into smaller, manageable units');
         recommendations.push('Ensure task dependencies are clearly defined');
         break;
         
-      case 'IMPLEMENTATION':
+      case WorkflowPhase.IMPLEMENTATION:
         recommendations.push('Focus on high-priority quality improvements first');
         if (report.summary.garbageFiles > 0) {
           recommendations.push('Refactor garbage-quality files before proceeding');

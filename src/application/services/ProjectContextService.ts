@@ -208,7 +208,7 @@ export class ProjectContextService {
       ContextChangeType.ANALYSIS_REFRESHED,
       'Project context metadata updated',
       { changes, triggeredBy },
-      this.assessChangeImpact(changes)
+      this.mapChangeImpactToContextImpact(this.assessChangeImpact(changes))
     );
 
     this.logger.info('Project context updated successfully', {
@@ -314,10 +314,15 @@ export class ProjectContextService {
       refreshedSteering: options.refreshSteering
     });
 
-    return {
-      context: updatedContext,
-      changeDetection
+    const result: { context: ProjectContext; changeDetection?: ContextChangeDetection } = {
+      context: updatedContext
     };
+    
+    if (changeDetection) {
+      result.changeDetection = changeDetection;
+    }
+    
+    return result;
   }
 
   private async detectContextChanges(context: ProjectContext): Promise<ContextChangeDetection> {
@@ -524,13 +529,22 @@ export class ProjectContextService {
         impact
       };
       
-      sessionContext.history.push(changeEntry);
+      // Create updated history
+      let updatedHistory = [...sessionContext.history, changeEntry];
       
       // Keep only recent entries
       const maxEntries = 100;
-      if (sessionContext.history.length > maxEntries) {
-        sessionContext.history = sessionContext.history.slice(-maxEntries);
+      if (updatedHistory.length > maxEntries) {
+        updatedHistory = updatedHistory.slice(-maxEntries);
       }
+      
+      // Update session context with new history
+      const updatedSessionContext: SessionContext = {
+        ...sessionContext,
+        history: updatedHistory
+      };
+      
+      this.sessionContexts.set(sessionId, updatedSessionContext);
     }
   }
 
@@ -556,9 +570,8 @@ export class ProjectContextService {
       this.logger.debug('Failed to load project metadata from spec.json', { projectPath });
     }
 
-    return {
+    const metadata: ProjectContextMetadata = {
       name,
-      description,
       technology: {
         primary: [],
         frameworks: [],
@@ -574,6 +587,12 @@ export class ProjectContextService {
       complexity: CodeComplexity.MODERATE,
       changeHistory: []
     };
+
+    if (description !== undefined) {
+      (metadata as any).description = description;
+    }
+
+    return metadata;
   }
 
   private async createMinimalCodebaseAnalysis(projectPath: string) {
@@ -661,6 +680,20 @@ export class ProjectContextService {
     if (changes.architecture || changes.technology) return ChangeImpact.MAJOR;
     if (changes.complexity) return ChangeImpact.MODERATE;
     return ChangeImpact.MINOR;
+  }
+
+  private mapChangeImpactToContextImpact(changeImpact: ChangeImpact): ContextImpact {
+    switch (changeImpact) {
+      case ChangeImpact.BREAKING:
+      case ChangeImpact.MAJOR:
+        return ContextImpact.HIGH;
+      case ChangeImpact.MODERATE:
+        return ContextImpact.MEDIUM;
+      case ChangeImpact.MINOR:
+      case ChangeImpact.NONE:
+      default:
+        return ContextImpact.LOW;
+    }
   }
 
   async getContextStats(): Promise<{

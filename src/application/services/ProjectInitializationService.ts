@@ -170,11 +170,18 @@ export class ProjectInitializationService {
 
       const result: ProjectDiscoveryResult = {
         exists: !!existingProject,
-        project: existingProject || undefined,
-        hasValidStructure,
-        missingDirectories: missingDirectories.length > 0 ? missingDirectories : undefined,
-        missingFiles: missingFiles.length > 0 ? missingFiles : undefined
+        hasValidStructure
       };
+
+      if (existingProject) {
+        result.project = existingProject;
+      }
+      if (missingDirectories.length > 0) {
+        result.missingDirectories = missingDirectories;
+      }
+      if (missingFiles.length > 0) {
+        result.missingFiles = missingFiles;
+      }
 
       this.logger.debug('Project discovery completed', {
         correlationId,
@@ -328,8 +335,12 @@ export class ProjectInitializationService {
       try {
         if (issue.includes('Missing required directory:')) {
           const dirPath = issue.split(': ')[1];
-          await this.fileSystem.mkdir(dirPath);
-          repairedItems.push(`Created directory: ${dirPath}`);
+          if (dirPath) {
+            await this.fileSystem.mkdir(dirPath);
+            repairedItems.push(`Created directory: ${dirPath}`);
+          } else {
+            remainingIssues.push(issue);
+          }
         } else if (issue.includes('Missing spec.json file:')) {
           const specContent = await this.templateService.generateSpecJson(project);
           await this.templateService.writeProjectFile(project, 'spec.json', specContent);
@@ -380,11 +391,16 @@ export class ProjectInitializationService {
       recommendations.push('Run sdd-init to initialize a new SDD project');
     }
 
-    return {
+    const result: { discovery: ProjectDiscoveryResult; validation?: ProjectValidationResult; recommendations: string[] } = {
       discovery,
-      validation,
       recommendations
     };
+
+    if (validation) {
+      result.validation = validation;
+    }
+
+    return result;
   }
 
   private async validateInitializationOptions(options: ProjectInitializationOptions): Promise<void> {

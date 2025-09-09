@@ -250,9 +250,12 @@ Generated on: {{timestamp}}
       backup: options?.backup ?? true,
       overwrite: options?.overwrite ?? false,
       createDirectories: options?.createDirectories ?? true,
-      permissions: options?.permissions,
       atomic: options?.atomic ?? true
     };
+
+    if (options?.permissions) {
+      (fileOptions as any).permissions = options.permissions;
+    }
 
     return this.fileGenerator.generateFile(
       filePath,
@@ -273,9 +276,12 @@ Generated on: {{timestamp}}
       backup: options?.backup ?? true,
       overwrite: options?.overwrite ?? false,
       createDirectories: options?.createDirectories ?? true,
-      permissions: options?.permissions,
       atomic: options?.atomic ?? true
     };
+
+    if (options?.permissions) {
+      (fileOptions as any).permissions = options.permissions;
+    }
 
     return this.fileGenerator.generateDirectory(
       dirPath,
@@ -307,13 +313,18 @@ Generated on: {{timestamp}}
     description?: string,
     author?: string
   ): Promise<DirectoryGenerationResult> {
+    const project: any = {
+      name: projectName,
+      id: `${projectName}-${Date.now()}`,
+      basePath: projectPath
+    };
+
+    if (description) {
+      project.description = description;
+    }
+
     const context: TemplateContext = {
-      project: {
-        name: projectName,
-        description,
-        id: `${projectName}-${Date.now()}`,
-        basePath: projectPath
-      },
+      project,
       timestamp: new Date(),
       user: {
         name: author
