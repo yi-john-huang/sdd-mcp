@@ -16,6 +16,13 @@ import type {
   TaskTracker
 } from '../../domain/ports.js';
 
+// Template ports
+import type {
+  TemplateRendererPort,
+  TemplateManagerPort,
+  FileGeneratorPort
+} from '../../domain/templates/index.js';
+
 // Infrastructure adapters
 import { InMemoryProjectRepository } from '../repositories/InMemoryProjectRepository.js';
 import { NodeFileSystemAdapter } from '../adapters/NodeFileSystemAdapter.js';
@@ -25,6 +32,11 @@ import { ConsoleLoggerAdapter } from '../adapters/ConsoleLoggerAdapter.js';
 import { AjvValidationAdapter } from '../adapters/AjvValidationAdapter.js';
 import { LinusQualityAnalyzer } from '../adapters/LinusQualityAnalyzer.js';
 import { FileBasedTaskTracker } from '../adapters/FileBasedTaskTracker.js';
+
+// Template infrastructure
+import { HandlebarsRenderer } from '../templates/HandlebarsRenderer.js';
+import { TemplateManager } from '../templates/TemplateManager.js';
+import { FileGenerator } from '../templates/FileGenerator.js';
 
 // MCP components
 import { MCPServer } from '../mcp/MCPServer.js';
@@ -60,6 +72,11 @@ export function createContainer(): Container {
   container.bind<ValidationPort>(TYPES.ValidationPort).to(AjvValidationAdapter);
   container.bind<QualityAnalyzer>(TYPES.QualityAnalyzer).to(LinusQualityAnalyzer);
   container.bind<TaskTracker>(TYPES.TaskTracker).to(FileBasedTaskTracker);
+  
+  // Bind template ports
+  container.bind<TemplateRendererPort>(TYPES.TemplateRendererPort).to(HandlebarsRenderer);
+  container.bind<TemplateManagerPort>(TYPES.TemplateManagerPort).to(TemplateManager);
+  container.bind<FileGeneratorPort>(TYPES.FileGeneratorPort).to(FileGenerator);
 
   // Bind MCP components
   container.bind<MCPServer>(TYPES.MCPServer).to(MCPServer);

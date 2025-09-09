@@ -10,6 +10,9 @@ export const TYPES = {
   ValidationPort: Symbol.for('ValidationPort'),
   QualityAnalyzer: Symbol.for('QualityAnalyzer'),
   TaskTracker: Symbol.for('TaskTracker'),
+  TemplateRendererPort: Symbol.for('TemplateRendererPort'),
+  TemplateManagerPort: Symbol.for('TemplateManagerPort'),
+  FileGeneratorPort: Symbol.for('FileGeneratorPort'),
 
   // Application services
   ProjectService: Symbol.for('ProjectService'),

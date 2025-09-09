@@ -1,17 +1,41 @@
+// Template service for coordinating template operations
+
 import { injectable, inject } from 'inversify';
 import { v4 as uuidv4 } from 'uuid';
+import type { LoggerPort } from '../../domain/ports.js';
+import type { 
+  TemplateRendererPort, 
+  TemplateManagerPort, 
+  FileGeneratorPort,
+  Template,
+  TemplateCategory,
+  TemplateData,
+  TemplateContext,
+  FileGenerationOptions,
+  FileGenerationResult,
+  DirectoryStructure,
+  DirectoryGenerationResult
+} from '../../domain/templates/index.js';
 import { TYPES } from '../../infrastructure/di/types.js';
 import { Project } from '../../domain/types.js';
 import { 
   TemplateEngine, 
-  FileSystemPort, 
-  LoggerPort 
+  FileSystemPort
 } from '../../domain/ports.js';
 
-export interface TemplateData {
+// Legacy template data interface for backward compatibility
+export interface LegacyTemplateData {
   project: Project;
   timestamp: string;
   [key: string]: unknown;
+}
+
+export interface TemplateServiceOptions {
+  readonly backup?: boolean;
+  readonly overwrite?: boolean;
+  readonly createDirectories?: boolean;
+  readonly permissions?: string;
+  readonly atomic?: boolean;
 }
 
 @injectable()
@@ -19,7 +43,10 @@ export class TemplateService {
   constructor(
     @inject(TYPES.TemplateEngine) private readonly templateEngine: TemplateEngine,
     @inject(TYPES.FileSystemPort) private readonly fileSystem: FileSystemPort,
-    @inject(TYPES.LoggerPort) private readonly logger: LoggerPort
+    @inject(TYPES.LoggerPort) private readonly logger: LoggerPort,
+    @inject(TYPES.TemplateRendererPort) private readonly renderer: TemplateRendererPort,
+    @inject(TYPES.TemplateManagerPort) private readonly templateManager: TemplateManagerPort,
+    @inject(TYPES.FileGeneratorPort) private readonly fileGenerator: FileGeneratorPort
   ) {
     this.registerCustomHelpers();
   }
@@ -55,7 +82,7 @@ export class TemplateService {
   "ready_for_implementation": {{isReadyForImplementation project}}
 }`;
 
-    const data: TemplateData = {
+    const data: LegacyTemplateData = {
       project,
       timestamp: new Date().toISOString()
     };
@@ -91,7 +118,7 @@ Generated on: {{timestamp}}
 [Additional requirements to be added...]
 `;
 
-    const data: TemplateData = {
+    const data: LegacyTemplateData = {
       project,
       timestamp: new Date().toISOString()
     };
@@ -134,7 +161,7 @@ Generated on: {{timestamp}}
 [Schema specifications]
 `;
 
-    const data: TemplateData = {
+    const data: LegacyTemplateData = {
       project,
       timestamp: new Date().toISOString()
     };
@@ -160,7 +187,7 @@ Generated on: {{timestamp}}
 [Additional tasks to be added...]
 `;
 
-    const data: TemplateData = {
+    const data: LegacyTemplateData = {
       project,
       timestamp: new Date().toISOString()
     };
@@ -195,6 +222,281 @@ Generated on: {{timestamp}}
       projectId: project.id,
       filePath
     });
+  }
+
+  // New template system methods
+  async renderTemplate(templateId: string, data: TemplateData, context: TemplateContext): Promise<string> {
+    const template = await this.templateManager.getTemplate(templateId);
+    if (!template) {
+      throw new Error(`Template '${templateId}' not found`);
+    }
+
+    return this.renderer.renderString(template.template, data, context);
+  }
+
+  async generateFile(
+    templateId: string,
+    filePath: string,
+    data: TemplateData,
+    context: TemplateContext,
+    options?: TemplateServiceOptions
+  ): Promise<FileGenerationResult> {
+    const template = await this.templateManager.getTemplate(templateId);
+    if (!template) {
+      throw new Error(`Template '${templateId}' not found`);
+    }
+
+    const fileOptions: FileGenerationOptions = {
+      backup: options?.backup ?? true,
+      overwrite: options?.overwrite ?? false,
+      createDirectories: options?.createDirectories ?? true,
+      permissions: options?.permissions,
+      atomic: options?.atomic ?? true
+    };
+
+    return this.fileGenerator.generateFile(
+      filePath,
+      template.template,
+      data,
+      context,
+      fileOptions
+    );
+  }
+
+  async generateDirectory(
+    dirPath: string,
+    structure: DirectoryStructure,
+    context: TemplateContext,
+    options?: TemplateServiceOptions
+  ): Promise<DirectoryGenerationResult> {
+    const fileOptions: FileGenerationOptions = {
+      backup: options?.backup ?? true,
+      overwrite: options?.overwrite ?? false,
+      createDirectories: options?.createDirectories ?? true,
+      permissions: options?.permissions,
+      atomic: options?.atomic ?? true
+    };
+
+    return this.fileGenerator.generateDirectory(
+      dirPath,
+      structure,
+      context,
+      fileOptions
+    );
+  }
+
+  async getTemplate(templateId: string): Promise<Template | null> {
+    return this.templateManager.getTemplate(templateId);
+  }
+
+  async getTemplatesByCategory(category: TemplateCategory): Promise<Template[]> {
+    return this.templateManager.getTemplatesByCategory(category);
+  }
+
+  async searchTemplates(query: string, tags?: string[]): Promise<Template[]> {
+    return this.templateManager.searchTemplates(query, tags);
+  }
+
+  async getAllTemplates(): Promise<Template[]> {
+    return this.templateManager.getAllTemplates();
+  }
+
+  async createProjectStructure(
+    projectPath: string,
+    projectName: string,
+    description?: string,
+    author?: string
+  ): Promise<DirectoryGenerationResult> {
+    const context: TemplateContext = {
+      project: {
+        name: projectName,
+        description,
+        id: `${projectName}-${Date.now()}`,
+        basePath: projectPath
+      },
+      timestamp: new Date(),
+      user: {
+        name: author
+      },
+      metadata: {}
+    };
+
+    const structure: DirectoryStructure = {
+      files: [
+        {
+          name: 'spec.json',
+          template: await this.getTemplateContent('spec-json'),
+          data: {
+            name: projectName,
+            description,
+            author
+          }
+        }
+      ],
+      subdirectories: {
+        '.kiro': {
+          files: [],
+          subdirectories: {
+            'steering': {
+              files: [
+                {
+                  name: 'product.md',
+                  template: await this.getTemplateContent('product-steering'),
+                  data: {
+                    productName: projectName,
+                    vision: `${projectName} vision statement`,
+                    goals: ['Define clear product goals', 'Deliver value to users']
+                  }
+                },
+                {
+                  name: 'tech.md',
+                  template: await this.getTemplateContent('tech-steering'),
+                  data: {
+                    projectName,
+                    techStack: [
+                      { category: 'Language', name: 'TypeScript' },
+                      { category: 'Runtime', name: 'Node.js' }
+                    ],
+                    architecture: 'Clean Architecture with Hexagonal pattern'
+                  }
+                },
+                {
+                  name: 'structure.md',
+                  template: await this.getTemplateContent('structure-steering'),
+                  data: {
+                    projectName,
+                    structure: {
+                      directories: [
+                        { path: 'src/', purpose: 'Source code' },
+                        { path: 'tests/', purpose: 'Test files' },
+                        { path: 'docs/', purpose: 'Documentation' }
+                      ],
+                      fileTypes: [
+                        { extension: '.ts', location: 'src/', purpose: 'TypeScript source files' },
+                        { extension: '.test.ts', location: 'tests/', purpose: 'Test files' }
+                      ]
+                    }
+                  }
+                },
+                {
+                  name: 'linus-review.md',
+                  template: await this.getTemplateContent('linus-review-steering'),
+                  data: {
+                    projectName
+                  }
+                }
+              ],
+              subdirectories: {}
+            },
+            'specs': {
+              files: [],
+              subdirectories: {
+                [projectName]: {
+                  files: [
+                    {
+                      name: 'requirements.md',
+                      template: await this.getTemplateContent('requirements-md'),
+                      data: {
+                        projectName,
+                        requirements: [
+                          {
+                            title: 'Initial requirement',
+                            description: 'Define the first requirement for this project',
+                            acceptanceCriteria: ['Criterion 1', 'Criterion 2']
+                          }
+                        ]
+                      }
+                    },
+                    {
+                      name: 'design.md',
+                      template: await this.getTemplateContent('design-md'),
+                      data: {
+                        projectName,
+                        architecture: 'System architecture to be defined',
+                        components: [
+                          {
+                            name: 'Core Component',
+                            purpose: 'Main application logic',
+                            responsibilities: ['Handle business logic', 'Coordinate operations'],
+                            interfaces: [{ name: 'API', description: 'External interface' }]
+                          }
+                        ]
+                      }
+                    },
+                    {
+                      name: 'tasks.md',
+                      template: await this.getTemplateContent('tasks-md'),
+                      data: {
+                        projectName,
+                        tasks: [
+                          {
+                            title: 'Setup project foundation',
+                            description: 'Initialize project structure and dependencies',
+                            completed: false,
+                            subtasks: [
+                              { title: 'Create project structure', completed: false },
+                              { title: 'Install dependencies', completed: false }
+                            ],
+                            dependencies: [],
+                            effort: 4
+                          }
+                        ]
+                      }
+                    }
+                  ],
+                  subdirectories: {}
+                }
+              }
+            }
+          }
+        }
+      }
+    };
+
+    return this.generateDirectory(projectPath, structure, context);
+  }
+
+  private async getTemplateContent(templateId: string): Promise<string> {
+    const template = await this.templateManager.getTemplate(templateId);
+    if (!template) {
+      throw new Error(`Template '${templateId}' not found`);
+    }
+    return template.template;
+  }
+
+  async validateTemplateFile(filePath: string): Promise<boolean> {
+    try {
+      const validation = await this.fileGenerator.validatePath(filePath);
+      return validation.isValid;
+    } catch {
+      return false;
+    }
+  }
+
+  async backupFile(filePath: string): Promise<string> {
+    return this.fileGenerator.backupFile(filePath);
+  }
+
+  async restoreBackup(backupPath: string, originalPath: string): Promise<void> {
+    return this.fileGenerator.restoreBackup(backupPath, originalPath);
+  }
+
+  async cleanupOldBackups(olderThanDays = 30): Promise<string[]> {
+    const cutoffDate = new Date();
+    cutoffDate.setDate(cutoffDate.getDate() - olderThanDays);
+    return this.fileGenerator.cleanupBackups(cutoffDate);
+  }
+
+  registerTemplateHelper(name: string, helper: (...args: unknown[]) => unknown): void {
+    this.renderer.registerHelper(name, helper);
+  }
+
+  async registerTemplatePartial(name: string, template: string): Promise<void> {
+    return this.renderer.registerPartial(name, template);
+  }
+
+  clearTemplateCache(): void {
+    this.renderer.clearCache();
   }
 
   private registerCustomHelpers(): void {

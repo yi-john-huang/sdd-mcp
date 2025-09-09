@@ -12,22 +12,27 @@
     "lint": "eslint src --ext .ts",
     "typecheck": "tsc --noEmit"
   },
-  "keywords": ["mcp", "sdd", "spec-driven-development", "ai-agent", "cli"],
+  "keywords": [
+    "mcp",
+    "sdd",
+    "spec-driven-development",
+    "ai-agent",
+    "cli"
+  ],
   "author": "SDD MCP Server",
   "license": "MIT",
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.0.4",
-    "handlebars": "^4.7.8",
     "ajv": "^8.17.1",
     "ajv-formats": "^3.0.1",
-    "reflect-metadata": "^0.2.2",
+    "handlebars": "^4.7.8",
     "inversify": "^6.0.2",
+    "reflect-metadata": "^0.2.2",
     "uuid": "^10.0.0"
   },
   "devDependencies": {
-    "@types/node": "^22.0.0",
-    "@types/handlebars": "^4.1.0",
     "@types/jest": "^29.5.0",
+    "@types/node": "^22.0.0",
     "@types/uuid": "^10.0.0",
     "@typescript-eslint/eslint-plugin": "^7.0.0",
     "@typescript-eslint/parser": "^7.0.0",
