@@ -30,6 +30,12 @@ import { FileBasedTaskTracker } from '../adapters/FileBasedTaskTracker.js';
 import { MCPServer } from '../mcp/MCPServer.js';
 import { MCPErrorHandler } from '../mcp/ErrorHandler.js';
 
+// Application services
+import { ProjectService } from '../../application/services/ProjectService.js';
+import { WorkflowService } from '../../application/services/WorkflowService.js';
+import { TemplateService } from '../../application/services/TemplateService.js';
+import { QualityService } from '../../application/services/QualityService.js';
+
 export function createContainer(): Container {
   const container = new Container();
 
@@ -46,6 +52,12 @@ export function createContainer(): Container {
   // Bind MCP components
   container.bind<MCPServer>(TYPES.MCPServer).to(MCPServer);
   container.bind<MCPErrorHandler>(TYPES.MCPErrorHandler).to(MCPErrorHandler);
+
+  // Bind application services
+  container.bind<ProjectService>(TYPES.ProjectService).to(ProjectService);
+  container.bind<WorkflowService>(TYPES.WorkflowService).to(WorkflowService);
+  container.bind<TemplateService>(TYPES.TemplateService).to(TemplateService);
+  container.bind<QualityService>(TYPES.QualityService).to(QualityService);
 
   return container;
 }
