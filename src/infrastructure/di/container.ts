@@ -67,6 +67,12 @@ import { ResourceManager } from '../mcp/ResourceManager.js';
 import { PromptManager } from '../mcp/PromptManager.js';
 import { ToolRegistry } from '../mcp/ToolRegistry.js';
 
+// Plugin system
+import { PluginManager } from '../plugins/PluginManager.js';
+import { HookSystem } from '../plugins/HookSystem.js';
+import { PluginToolRegistry } from '../plugins/PluginToolRegistry.js';
+import { PluginSteeringRegistry } from '../plugins/PluginSteeringRegistry.js';
+
 // Application services
 import { ProjectService } from '../../application/services/ProjectService.js';
 import { WorkflowService } from '../../application/services/WorkflowService.js';
@@ -105,6 +111,12 @@ export function createContainer(): Container {
   container.bind<I18nService>(TYPES.I18nService).to(I18nextService);
   container.bind<IPlatformAdapter>(TYPES.PlatformAdapter).to(PlatformAdapter);
   container.bind<I18nManagerPort>(TYPES.I18nManagerPort).to(LocalizationService);
+
+  // Bind plugin system components
+  container.bind<HookSystem>(TYPES.HookSystem).to(HookSystem);
+  container.bind<PluginToolRegistry>(TYPES.PluginToolRegistry).to(PluginToolRegistry);
+  container.bind<PluginSteeringRegistry>(TYPES.PluginSteeringRegistry).to(PluginSteeringRegistry);
+  container.bind<PluginManager>(TYPES.PluginManager).to(PluginManager);
 
   // Bind MCP components
   container.bind<MCPServer>(TYPES.MCPServer).to(MCPServer);
