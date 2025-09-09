@@ -148,7 +148,7 @@ export class SteeringDocumentService {
       // Validate document
       const validation = await this.validateSteeringDocument(content, type);
 
-      return {
+      const document: any = {
         name: fileName,
         path: filePath,
         type,
@@ -157,9 +157,14 @@ export class SteeringDocumentService {
         patterns,
         priority,
         lastModified: (stat as any).mtime || new Date(),
-        isValid: validation.isValid,
-        errors: validation.isValid ? undefined : validation.errors
+        isValid: validation.isValid
       };
+
+      if (!validation.isValid) {
+        document.errors = validation.errors;
+      }
+
+      return document;
 
     } catch (error) {
       this.logger.warn('Failed to load steering document', {
@@ -434,20 +439,29 @@ export class SteeringDocumentService {
 
     // Apply plugin steering documents
     const pluginSteeringContext: PluginSteeringContext = {
-      currentFile: currentContext.fileName,
       projectPath: steeringContext.documents[0]?.path.split('/.kiro/')[0] || process.cwd(),
       workingDirectory: process.cwd(),
-      variables: {
-        fileName: currentContext.fileName,
-        filePath: currentContext.filePath,
-        operation: currentContext.operation,
-        language: currentContext.language
-      },
+      variables: {},
       metadata: {
         correlationId,
         timestamp: new Date().toISOString()
       }
     };
+
+    // Only add optional properties if they have values
+    if (currentContext.fileName) {
+      (pluginSteeringContext as any).currentFile = currentContext.fileName;
+      (pluginSteeringContext.variables as any).fileName = currentContext.fileName;
+    }
+    if (currentContext.filePath) {
+      (pluginSteeringContext.variables as any).filePath = currentContext.filePath;
+    }
+    if (currentContext.operation) {
+      (pluginSteeringContext.variables as any).operation = currentContext.operation;
+    }
+    if (currentContext.language) {
+      (pluginSteeringContext.variables as any).language = currentContext.language;
+    }
 
     try {
       const pluginResults = await this.pluginSteeringRegistry.getApplicableSteeringDocuments(pluginSteeringContext);

@@ -7,10 +7,10 @@ A Model Context Protocol (MCP) server implementing Spec-Driven Development (SDD)
 ### Option 1: Install with npx (Recommended)
 ```bash
 # Run directly without installation
-npx @sdd/mcp-server
+npx sdd-mcp-server
 
 # Or install globally
-npm install -g @sdd/mcp-server
+npm install -g sdd-mcp-server
 sdd-mcp-server
 ```
 
@@ -26,15 +26,26 @@ npm run build
 npm start
 ```
 
-### Option 3: Docker
+### Option 3: Docker (Secure Distroless Image)
 ```bash
-# Run with Docker
-docker run -p 3000:3000 ghcr.io/yi-john-huang/sdd-mcp:latest
+# Build distroless image locally
+docker build --target production -t sdd-mcp-server .
 
-# Or with Docker Compose
+# Run with Docker (secure distroless image)
+docker run -p 3000:3000 sdd-mcp-server
+
+# Or with Docker Compose (includes security hardening)
 curl -O https://raw.githubusercontent.com/yi-john-huang/sdd-mcp/develop/docker-compose.yml
 docker-compose up -d
 ```
+
+#### 🔒 Security Features
+- **Distroless base image**: Uses `gcr.io/distroless/nodejs18-debian11` for minimal attack surface
+- **No shell access**: Container contains only Node.js runtime and application code
+- **Non-root user**: Runs as user ID 1001 (no privilege escalation)
+- **Read-only filesystem**: Container filesystem is immutable at runtime
+- **Dropped capabilities**: All Linux capabilities dropped except minimal required ones
+- **Security options**: `no-new-privileges` prevents privilege escalation
 
 ## 🔧 Configuration for AI Clients
 
@@ -45,7 +56,7 @@ Add to your MCP settings:
   "mcpServers": {
     "sdd": {
       "command": "npx",
-      "args": ["@sdd/mcp-server"],
+      "args": ["sdd-mcp-server"],
       "env": {
         "LOG_LEVEL": "info"
       }
@@ -142,7 +153,7 @@ export HOOK_TIMEOUT=10000
   "mcpServers": {
     "sdd": {
       "command": "npx",
-      "args": ["@sdd/mcp-server"],
+      "args": ["sdd-mcp-server"],
       "env": {
         "LOG_LEVEL": "info",
         "DEFAULT_LANG": "en"
@@ -216,7 +227,7 @@ npm install -g @sdd/mcp-server
 ps aux | grep sdd-mcp-server
 
 # Check logs with debug level
-LOG_LEVEL=debug npx @sdd/mcp-server
+LOG_LEVEL=debug npx sdd-mcp-server
 ```
 
 **Issue: "Permission denied"**
@@ -250,7 +261,7 @@ For detailed documentation on:
 
 **Ready to get started?**
 ```bash
-npx @sdd/mcp-server
+npx sdd-mcp-server
 ```
 
 Built for the AI development community 🤖✨

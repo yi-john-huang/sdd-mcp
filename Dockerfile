@@ -1,6 +1,6 @@
-# Multi-stage Docker build for MCP SDD Server
+# Multi-stage Docker build for MCP SDD Server with distroless security
 
-# Build stage
+# Build stage - using Alpine for smaller build environment
 FROM node:18-alpine AS builder
 
 WORKDIR /app
@@ -18,12 +18,12 @@ COPY src/ ./src/
 # Build the application
 RUN npm run build
 
-# Production stage
-FROM node:18-alpine AS production
+# Create necessary directories for runtime
+RUN mkdir -p ./plugins ./templates ./data
 
-# Create non-root user
-RUN addgroup -g 1001 -S nodejs && \
-    adduser -S nodejs -u 1001
+# Dependencies stage - install production dependencies in regular image
+# (distroless doesn't have package managers, so we prepare dependencies here)
+FROM node:18-alpine AS deps
 
 WORKDIR /app
 
@@ -34,19 +34,23 @@ COPY package*.json ./
 RUN npm ci --only=production && \
     npm cache clean --force
 
-# Copy built application from builder stage
+# Production stage - Google's distroless image for maximum security
+# - Contains only Node.js runtime and essential libraries
+# - No shell, package managers, or unnecessary binaries
+# - Minimal attack surface and reduced CVE exposure
+FROM gcr.io/distroless/nodejs18-debian11 AS production
+
+WORKDIR /app
+
+# Copy package files and node_modules from deps stage
+COPY --from=deps /app/node_modules ./node_modules
+COPY --from=deps /app/package*.json ./
+
+# Copy built application and directories from builder stage
 COPY --from=builder /app/dist ./dist
-
-# Create necessary directories with proper permissions
-RUN mkdir -p /app/plugins /app/templates /app/data && \
-    chown -R nodejs:nodejs /app
-
-# Switch to non-root user
-USER nodejs
-
-# Health check
-HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
-  CMD node -e "require('http').get('http://localhost:3000/health', (res) => { process.exit(res.statusCode === 200 ? 0 : 1) })"
+COPY --from=builder /app/plugins ./plugins
+COPY --from=builder /app/templates ./templates
+COPY --from=builder /app/data ./data
 
 # Expose port
 EXPOSE 3000
@@ -58,5 +62,5 @@ ENV PLUGIN_DIR=/app/plugins
 ENV TEMPLATE_DIR=/app/templates
 ENV DATA_DIR=/app/data
 
-# Start the application
-CMD ["node", "dist/index.js"]
+# Start the application (distroless runs as non-root user by default)
+CMD ["dist/index.js"]

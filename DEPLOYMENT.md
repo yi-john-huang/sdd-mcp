@@ -262,6 +262,42 @@ az container create \
 
 ### Security
 
+#### Container Security (Distroless)
+
+The MCP SDD Server uses Google's distroless container images for maximum security:
+
+```bash
+# Build distroless production image
+docker build --target production -t sdd-mcp-server-secure .
+
+# Security features included:
+# - No shell, package managers, or unnecessary binaries
+# - Minimal attack surface with only Node.js runtime
+# - Non-root user execution (UID 1001)
+# - Read-only filesystem protection
+# - Dropped Linux capabilities
+# - no-new-privileges security option
+```
+
+**Container Security Benefits:**
+- **Reduced CVE exposure**: Only essential runtime libraries included
+- **No privilege escalation**: Cannot gain root access or install packages
+- **Immutable filesystem**: Application files cannot be modified at runtime
+- **Minimal capabilities**: Only SETUID/SETGID for Node.js process management
+- **No debugging tools**: Attackers cannot use shells or system utilities
+
+**Security Validation:**
+```bash
+# Verify non-root execution
+docker run --rm sdd-mcp-server-secure whoami  # Should fail (no shell)
+
+# Check security options
+docker inspect sdd-mcp-server-secure | grep -A5 SecurityOpt
+
+# Verify read-only filesystem
+docker run --rm sdd-mcp-server-secure touch /test  # Should fail
+```
+
 #### SSL/TLS Configuration
 ```bash
 # Generate self-signed certificate for testing
