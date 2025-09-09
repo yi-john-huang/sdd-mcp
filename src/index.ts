@@ -27,6 +27,8 @@ async function main(): Promise<void> {
         workflow: 'WorkflowStateMachine with 5 phases',
         validation: 'Cross-phase validation system',
         initialization: 'Project setup and discovery',
+        context: 'Project memory and codebase analysis',
+        steering: 'Dynamic steering document management',
         tools: '6 SDD workflow tools',
         prompts: '5 specialized SDD prompts',
         resources: 'Project files and templates'

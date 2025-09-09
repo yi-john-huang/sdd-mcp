@@ -43,6 +43,9 @@ import { QualityService } from '../../application/services/QualityService.js';
 import { WorkflowEngineService } from '../../application/services/WorkflowEngineService.js';
 import { ProjectInitializationService } from '../../application/services/ProjectInitializationService.js';
 import { WorkflowValidationService } from '../../application/services/WorkflowValidationService.js';
+import { CodebaseAnalysisService } from '../../application/services/CodebaseAnalysisService.js';
+import { SteeringDocumentService } from '../../application/services/SteeringDocumentService.js';
+import { ProjectContextService } from '../../application/services/ProjectContextService.js';
 import { SDDToolAdapter } from '../../adapters/cli/SDDToolAdapter.js';
 
 export function createContainer(): Container {
@@ -75,6 +78,9 @@ export function createContainer(): Container {
   container.bind<WorkflowEngineService>(TYPES.WorkflowEngineService).to(WorkflowEngineService);
   container.bind<ProjectInitializationService>(TYPES.ProjectInitializationService).to(ProjectInitializationService);
   container.bind<WorkflowValidationService>(TYPES.WorkflowValidationService).to(WorkflowValidationService);
+  container.bind<CodebaseAnalysisService>(TYPES.CodebaseAnalysisService).to(CodebaseAnalysisService);
+  container.bind<SteeringDocumentService>(TYPES.SteeringDocumentService).to(SteeringDocumentService);
+  container.bind<ProjectContextService>(TYPES.ProjectContextService).to(ProjectContextService);
 
   // Bind adapters
   container.bind<SDDToolAdapter>(TYPES.SDDToolAdapter).to(SDDToolAdapter);

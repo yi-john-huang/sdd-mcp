@@ -19,6 +19,9 @@ export const TYPES = {
   WorkflowEngineService: Symbol.for('WorkflowEngineService'),
   ProjectInitializationService: Symbol.for('ProjectInitializationService'),
   WorkflowValidationService: Symbol.for('WorkflowValidationService'),
+  CodebaseAnalysisService: Symbol.for('CodebaseAnalysisService'),
+  SteeringDocumentService: Symbol.for('SteeringDocumentService'),
+  ProjectContextService: Symbol.for('ProjectContextService'),
 
   // MCP components
   MCPServer: Symbol.for('MCPServer'),
