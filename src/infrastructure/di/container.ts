@@ -40,6 +40,9 @@ import { ProjectService } from '../../application/services/ProjectService.js';
 import { WorkflowService } from '../../application/services/WorkflowService.js';
 import { TemplateService } from '../../application/services/TemplateService.js';
 import { QualityService } from '../../application/services/QualityService.js';
+import { WorkflowEngineService } from '../../application/services/WorkflowEngineService.js';
+import { ProjectInitializationService } from '../../application/services/ProjectInitializationService.js';
+import { WorkflowValidationService } from '../../application/services/WorkflowValidationService.js';
 import { SDDToolAdapter } from '../../adapters/cli/SDDToolAdapter.js';
 
 export function createContainer(): Container {
@@ -69,6 +72,9 @@ export function createContainer(): Container {
   container.bind<WorkflowService>(TYPES.WorkflowService).to(WorkflowService);
   container.bind<TemplateService>(TYPES.TemplateService).to(TemplateService);
   container.bind<QualityService>(TYPES.QualityService).to(QualityService);
+  container.bind<WorkflowEngineService>(TYPES.WorkflowEngineService).to(WorkflowEngineService);
+  container.bind<ProjectInitializationService>(TYPES.ProjectInitializationService).to(ProjectInitializationService);
+  container.bind<WorkflowValidationService>(TYPES.WorkflowValidationService).to(WorkflowValidationService);
 
   // Bind adapters
   container.bind<SDDToolAdapter>(TYPES.SDDToolAdapter).to(SDDToolAdapter);

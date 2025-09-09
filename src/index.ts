@@ -22,10 +22,16 @@ async function main(): Promise<void> {
     // Initialize MCP server with stdio transport
     await mcpServer.start();
 
-    // TODO: Set up workflow engine (task 3)
-    // TODO: Register SDD tools (task 2.3)
-
-    logger.info('MCP SDD Server ready for connections');
+    logger.info('MCP SDD Server ready for connections', {
+      components: {
+        workflow: 'WorkflowStateMachine with 5 phases',
+        validation: 'Cross-phase validation system',
+        initialization: 'Project setup and discovery',
+        tools: '6 SDD workflow tools',
+        prompts: '5 specialized SDD prompts',
+        resources: 'Project files and templates'
+      }
+    });
 
     // Handle graceful shutdown
     process.on('SIGINT', async () => {
