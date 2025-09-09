@@ -38,5 +38,11 @@ export const TYPES = {
   ResourceManager: Symbol.for('ResourceManager'),
   PromptManager: Symbol.for('PromptManager'),
   ToolRegistry: Symbol.for('ToolRegistry'),
-  SDDToolAdapter: Symbol.for('SDDToolAdapter')
+  SDDToolAdapter: Symbol.for('SDDToolAdapter'),
+
+  // Plugin system components
+  PluginManager: Symbol.for('PluginManager'),
+  HookSystem: Symbol.for('HookSystem'),
+  PluginToolRegistry: Symbol.for('PluginToolRegistry'),
+  PluginSteeringRegistry: Symbol.for('PluginSteeringRegistry')
 } as const;

@@ -14,6 +14,8 @@ import {
   SteeringMode,
   SteeringPreferences
 } from '../../domain/context/ProjectContext.js';
+import type { PluginSteeringRegistry } from '../../infrastructure/plugins/PluginSteeringRegistry.js';
+import type { SteeringContext as PluginSteeringContext, SteeringResult } from '../../infrastructure/plugins/PluginSteeringRegistry.js';
 
 export interface SteeringDocumentConfig {
   name: string;
@@ -50,7 +52,8 @@ export class SteeringDocumentService {
   constructor(
     @inject(TYPES.FileSystemPort) private readonly fileSystem: FileSystemPort,
     @inject(TYPES.LoggerPort) private readonly logger: LoggerPort,
-    @inject(TYPES.ValidationPort) private readonly validation: ValidationPort
+    @inject(TYPES.ValidationPort) private readonly validation: ValidationPort,
+    @inject(TYPES.PluginSteeringRegistry) private readonly pluginSteeringRegistry: PluginSteeringRegistry
   ) {}
 
   async loadSteeringContext(
@@ -88,12 +91,20 @@ export class SteeringDocumentService {
       // Sort documents by priority
       documents.sort((a, b) => b.priority - a.priority);
 
+      // Include plugin steering documents
+      const pluginDocuments = await this.loadPluginSteeringDocuments(projectPath, preferences);
+      documents.push(...pluginDocuments);
+
+      // Re-sort with plugin documents included
+      documents.sort((a, b) => b.priority - a.priority);
+
       const activeDocuments = this.determineActiveDocuments(documents, preferences);
 
       this.logger.info('Steering context loaded', {
         correlationId,
         documentCount: documents.length,
-        activeCount: activeDocuments.length
+        activeCount: activeDocuments.length,
+        pluginDocuments: pluginDocuments.length
       });
 
       return {
@@ -394,6 +405,7 @@ export class SteeringDocumentService {
     let contextText = '';
     const metadata: Record<string, unknown> = {};
 
+    // Apply file-based steering documents
     for (const document of steeringContext.documents) {
       let shouldApply = false;
 
@@ -418,6 +430,49 @@ export class SteeringDocumentService {
       } else {
         skippedDocuments.push(document.name);
       }
+    }
+
+    // Apply plugin steering documents
+    const pluginSteeringContext: PluginSteeringContext = {
+      currentFile: currentContext.fileName,
+      projectPath: steeringContext.documents[0]?.path.split('/.kiro/')[0] || process.cwd(),
+      workingDirectory: process.cwd(),
+      variables: {
+        fileName: currentContext.fileName,
+        filePath: currentContext.filePath,
+        operation: currentContext.operation,
+        language: currentContext.language
+      },
+      metadata: {
+        correlationId,
+        timestamp: new Date().toISOString()
+      }
+    };
+
+    try {
+      const pluginResults = await this.pluginSteeringRegistry.getApplicableSteeringDocuments(pluginSteeringContext);
+      
+      for (const result of pluginResults) {
+        if (result.applicable && result.content) {
+          const documentId = `plugin:${result.priority}`;
+          appliedDocuments.push(documentId);
+          contextText += `\n\n## Plugin Steering (Priority ${result.priority})\n\n${result.content}`;
+          metadata[documentId] = {
+            type: 'plugin',
+            priority: result.priority,
+            conflicts: result.conflictsWith
+          };
+        }
+      }
+
+      this.logger.debug('Plugin steering context applied', {
+        correlationId,
+        pluginResults: pluginResults.length
+      });
+    } catch (error) {
+      this.logger.error('Failed to apply plugin steering context', error as Error, {
+        correlationId
+      });
     }
 
     this.logger.debug('Steering context applied', {
@@ -697,6 +752,69 @@ Describe when and how this steering document should be applied.
 
 Generated on: ${timestamp}
 `;
+    }
+  }
+
+  private async loadPluginSteeringDocuments(
+    projectPath: string, 
+    preferences: SteeringPreferences
+  ): Promise<SteeringDocument[]> {
+    const documents: SteeringDocument[] = [];
+    
+    try {
+      // Get steering documents from all modes
+      const alwaysDocuments = await this.pluginSteeringRegistry.getSteeringDocumentsByMode(SteeringMode.ALWAYS);
+      const conditionalDocuments = await this.pluginSteeringRegistry.getSteeringDocumentsByMode(SteeringMode.CONDITIONAL);
+      const manualDocuments = await this.pluginSteeringRegistry.getSteeringDocumentsByMode(SteeringMode.MANUAL);
+
+      // Convert plugin documents to steering documents
+      for (const pluginDoc of [...alwaysDocuments, ...conditionalDocuments, ...manualDocuments]) {
+        const steeringDoc: SteeringDocument = {
+          name: `${pluginDoc.pluginId}:${pluginDoc.name}`,
+          path: `plugin:${pluginDoc.id}`,
+          type: this.mapPluginDocumentType(pluginDoc.type),
+          mode: pluginDoc.mode,
+          content: pluginDoc.content || pluginDoc.template,
+          patterns: pluginDoc.patterns,
+          priority: pluginDoc.priority,
+          lastModified: pluginDoc.lastUpdated,
+          isValid: true
+        };
+        documents.push(steeringDoc);
+      }
+
+      this.logger.debug('Loaded plugin steering documents', {
+        projectPath,
+        documentCount: documents.length,
+        alwaysCount: alwaysDocuments.length,
+        conditionalCount: conditionalDocuments.length,
+        manualCount: manualDocuments.length
+      });
+
+    } catch (error) {
+      this.logger.error('Failed to load plugin steering documents', error as Error, {
+        projectPath
+      });
+    }
+
+    return documents;
+  }
+
+  private mapPluginDocumentType(pluginType: any): SteeringDocumentType {
+    // Map plugin document types to steering document types
+    switch (pluginType) {
+      case 'product':
+        return SteeringDocumentType.PRODUCT;
+      case 'technical':
+        return SteeringDocumentType.TECHNICAL;
+      case 'structure':
+        return SteeringDocumentType.STRUCTURE;
+      case 'quality':
+        return SteeringDocumentType.LINUS_REVIEW;
+      case 'process':
+      case 'custom':
+      default:
+        return SteeringDocumentType.CUSTOM;
     }
   }
 
