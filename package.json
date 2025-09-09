@@ -1,6 +1,6 @@
 {
   "name": "sdd-mcp-server",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "description": "MCP server for spec-driven development workflows across AI-agent CLIs and IDEs",
   "main": "dist/index.js",
   "bin": {
