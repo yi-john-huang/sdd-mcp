@@ -23,6 +23,11 @@ import type {
   FileGeneratorPort
 } from '../../domain/templates/index.js';
 
+// Quality ports
+import type {
+  CodeQualityAnalyzerPort
+} from '../../domain/quality/index.js';
+
 // Infrastructure adapters
 import { InMemoryProjectRepository } from '../repositories/InMemoryProjectRepository.js';
 import { NodeFileSystemAdapter } from '../adapters/NodeFileSystemAdapter.js';
@@ -37,6 +42,9 @@ import { FileBasedTaskTracker } from '../adapters/FileBasedTaskTracker.js';
 import { HandlebarsRenderer } from '../templates/HandlebarsRenderer.js';
 import { TemplateManager } from '../templates/TemplateManager.js';
 import { FileGenerator } from '../templates/FileGenerator.js';
+
+// Quality infrastructure
+import { LinusCodeReviewer } from '../quality/LinusCodeReviewer.js';
 
 // MCP components
 import { MCPServer } from '../mcp/MCPServer.js';
@@ -77,6 +85,9 @@ export function createContainer(): Container {
   container.bind<TemplateRendererPort>(TYPES.TemplateRendererPort).to(HandlebarsRenderer);
   container.bind<TemplateManagerPort>(TYPES.TemplateManagerPort).to(TemplateManager);
   container.bind<FileGeneratorPort>(TYPES.FileGeneratorPort).to(FileGenerator);
+  
+  // Bind quality ports
+  container.bind<CodeQualityAnalyzerPort>(TYPES.CodeQualityAnalyzerPort).to(LinusCodeReviewer);
 
   // Bind MCP components
   container.bind<MCPServer>(TYPES.MCPServer).to(MCPServer);

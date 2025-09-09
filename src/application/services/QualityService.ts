@@ -1,8 +1,18 @@
+// Enhanced Quality Service with Linus-style code review integration
+
 import { injectable, inject } from 'inversify';
 import { v4 as uuidv4 } from 'uuid';
 import { TYPES } from '../../infrastructure/di/types.js';
-import { QualityReport, TasteScore, IssueType } from '../../domain/types.js';
+import { QualityReport as LegacyQualityReport, TasteScore, IssueType } from '../../domain/types.js';
 import { QualityAnalyzer, LoggerPort } from '../../domain/ports.js';
+import type { 
+  CodeQualityAnalyzerPort,
+  QualityReport,
+  CodeAnalysisResult,
+  QualityScore
+} from '../../domain/quality/index.js';
+import { QualityGateService, type QualityGateResult } from './QualityGateService.js';
+import type { Project, WorkflowPhase } from '../../domain/types.js';
 
 export interface QualityCheckRequest {
   code?: string;
@@ -22,13 +32,20 @@ export interface QualityRecommendation {
 export class QualityService {
   constructor(
     @inject(TYPES.QualityAnalyzer) private readonly qualityAnalyzer: QualityAnalyzer,
-    @inject(TYPES.LoggerPort) private readonly logger: LoggerPort
+    @inject(TYPES.LoggerPort) private readonly logger: LoggerPort,
+    @inject(TYPES.CodeQualityAnalyzerPort) private readonly linusAnalyzer: CodeQualityAnalyzerPort,
+    private readonly qualityGateService: QualityGateService = new QualityGateService(
+      this.logger as any,
+      null as any,  // FileSystemPort will be injected
+      this.linusAnalyzer
+    )
   ) {}
 
-  async performQualityCheck(request: QualityCheckRequest): Promise<QualityReport> {
+  // Legacy quality check method (maintained for backward compatibility)
+  async performQualityCheck(request: QualityCheckRequest): Promise<LegacyQualityReport> {
     const correlationId = uuidv4();
     
-    this.logger.info('Performing quality check', {
+    this.logger.info('Performing legacy quality check', {
       correlationId,
       hasCode: !!request.code,
       language: request.language,
@@ -36,7 +53,7 @@ export class QualityService {
       context: request.context
     });
 
-    let report: QualityReport;
+    let report: LegacyQualityReport;
 
     if (request.code) {
       report = await this.qualityAnalyzer.analyzeCode(
@@ -49,7 +66,7 @@ export class QualityService {
       throw new Error('Either code or dataStructure must be provided for quality check');
     }
 
-    this.logger.info('Quality check completed', {
+    this.logger.info('Legacy quality check completed', {
       correlationId,
       score: report.score,
       issueCount: report.issues.length,
@@ -57,6 +74,88 @@ export class QualityService {
     });
 
     return report;
+  }
+
+  // New Linus-style code analysis methods
+  async performLinusAnalysis(filePath: string, content: string): Promise<CodeAnalysisResult> {
+    const correlationId = uuidv4();
+    
+    this.logger.info('Performing Linus-style analysis', {
+      correlationId,
+      filePath
+    });
+
+    const analysis = await this.linusAnalyzer.analyzeFile(filePath, content);
+    
+    this.logger.info('Linus analysis completed', {
+      correlationId,
+      filePath,
+      overallScore: analysis.overallScore,
+      violationsCount: analysis.violations.length,
+      suggestionsCount: analysis.suggestions.length
+    });
+
+    return analysis;
+  }
+
+  async performBatchAnalysis(files: Array<{ path: string; content: string }>): Promise<QualityReport> {
+    const correlationId = uuidv4();
+    
+    this.logger.info('Performing batch quality analysis', {
+      correlationId,
+      fileCount: files.length
+    });
+
+    const analyses = await this.linusAnalyzer.analyzeBatch(files);
+    const report = await this.linusAnalyzer.getQualityReport(analyses);
+    
+    this.logger.info('Batch analysis completed', {
+      correlationId,
+      overallScore: report.overall,
+      filesAnalyzed: analyses.length,
+      technicalDebt: report.summary.technicalDebt
+    });
+
+    return report;
+  }
+
+  // Workflow integration methods
+  async validateRequirements(project: Project): Promise<QualityGateResult> {
+    return this.qualityGateService.validateRequirementsQuality(project);
+  }
+
+  async validateDesign(project: Project): Promise<QualityGateResult> {
+    return this.qualityGateService.validateDesignQuality(project);
+  }
+
+  async validateTasks(project: Project): Promise<QualityGateResult> {
+    return this.qualityGateService.validateTasksQuality(project);
+  }
+
+  async validateImplementation(project: Project): Promise<QualityGateResult> {
+    return this.qualityGateService.validateImplementationQuality(project);
+  }
+
+  async executeWorkflowGate(project: Project, phase: WorkflowPhase): Promise<QualityGateResult> {
+    const correlationId = uuidv4();
+    
+    this.logger.info('Executing quality gate for workflow phase', {
+      correlationId,
+      projectId: project.id,
+      phase
+    });
+
+    const result = await this.qualityGateService.executeQualityGate(project, phase);
+    
+    this.logger.info('Quality gate executed', {
+      correlationId,
+      projectId: project.id,
+      phase,
+      passed: result.passed,
+      blockersCount: result.blockers.length
+    });
+
+    return result;
   }
 
   async analyzeComplexity(code: string): Promise<{
@@ -110,7 +209,7 @@ export class QualityService {
     return specialCases;
   }
 
-  generateQualityRecommendations(report: QualityReport): QualityRecommendation[] {
+  generateQualityRecommendations(report: LegacyQualityReport): QualityRecommendation[] {
     const recommendations: QualityRecommendation[] = [];
 
     // Convert issues to actionable recommendations
@@ -166,7 +265,7 @@ export class QualityService {
     return recommendations;
   }
 
-  formatQualityReport(report: QualityReport): string {
+  formatQualityReport(report: LegacyQualityReport): string {
     const recommendations = this.generateQualityRecommendations(report);
     
     let output = `【Taste Score】\n`;
