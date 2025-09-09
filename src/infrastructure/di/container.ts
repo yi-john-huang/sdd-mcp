@@ -26,6 +26,10 @@ import { AjvValidationAdapter } from '../adapters/AjvValidationAdapter.js';
 import { LinusQualityAnalyzer } from '../adapters/LinusQualityAnalyzer.js';
 import { FileBasedTaskTracker } from '../adapters/FileBasedTaskTracker.js';
 
+// MCP components
+import { MCPServer } from '../mcp/MCPServer.js';
+import { MCPErrorHandler } from '../mcp/ErrorHandler.js';
+
 export function createContainer(): Container {
   const container = new Container();
 
@@ -38,6 +42,10 @@ export function createContainer(): Container {
   container.bind<ValidationPort>(TYPES.ValidationPort).to(AjvValidationAdapter);
   container.bind<QualityAnalyzer>(TYPES.QualityAnalyzer).to(LinusQualityAnalyzer);
   container.bind<TaskTracker>(TYPES.TaskTracker).to(FileBasedTaskTracker);
+
+  // Bind MCP components
+  container.bind<MCPServer>(TYPES.MCPServer).to(MCPServer);
+  container.bind<MCPErrorHandler>(TYPES.MCPErrorHandler).to(MCPErrorHandler);
 
   return container;
 }

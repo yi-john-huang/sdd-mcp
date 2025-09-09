@@ -19,6 +19,7 @@ export const TYPES = {
 
   // MCP components
   MCPServer: Symbol.for('MCPServer'),
+  MCPErrorHandler: Symbol.for('MCPErrorHandler'),
   ToolRegistry: Symbol.for('ToolRegistry'),
   SessionManager: Symbol.for('SessionManager')
 } as const;
