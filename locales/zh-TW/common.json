@@ -1,0 +1,91 @@
+{
+  "system": {
+    "name": "SDD MCP 伺服器",
+    "description": "專為 AI 代理程式 CLI 與 IDE 設計的規格驅動開發伺服器",
+    "version": "版本 {{version}}",
+    "initializing": "正在初始化系統...",
+    "ready": "系統已就緒",
+    "shutdown": "正在優雅地關閉系統...",
+    "error": "發生系統錯誤"
+  },
+  "workflow": {
+    "phases": {
+      "init": "初始化",
+      "requirements": "需求分析",
+      "design": "系統設計",
+      "tasks": "任務規劃",
+      "implementation": "實作開發"
+    },
+    "status": {
+      "pending": "待處理",
+      "in_progress": "進行中",
+      "completed": "已完成",
+      "approved": "已核准",
+      "rejected": "已拒絕"
+    },
+    "actions": {
+      "start": "開始",
+      "continue": "繼續",
+      "pause": "暫停",
+      "complete": "完成",
+      "approve": "核准",
+      "reject": "拒絕"
+    }
+  },
+  "quality": {
+    "scores": {
+      "good": "優良",
+      "passable": "尚可",
+      "garbage": "需改進"
+    },
+    "analysis": {
+      "taste": "品味分析",
+      "complexity": "複雜度分析",
+      "special_cases": "特殊情況",
+      "data_structures": "資料結構",
+      "organization": "程式碼組織"
+    },
+    "violations": {
+      "critical": "嚴重",
+      "major": "重要",
+      "minor": "輕微",
+      "suggestion": "建議"
+    }
+  },
+  "templates": {
+    "generating": "正在生成 {{type}} 範本...",
+    "generated": "範本生成完成",
+    "failed": "範本生成失敗",
+    "not_found": "找不到範本：{{id}}"
+  },
+  "files": {
+    "reading": "正在讀取檔案：{{path}}",
+    "writing": "正在寫入檔案：{{path}}",
+    "created": "已建立檔案：{{path}}",
+    "updated": "已更新檔案：{{path}}",
+    "deleted": "已刪除檔案：{{path}}",
+    "backup_created": "已建立備份：{{path}}"
+  },
+  "errors": {
+    "not_found": "找不到資源",
+    "access_denied": "存取被拒絕",
+    "invalid_input": "提供的輸入無效",
+    "network_error": "網路連線錯誤",
+    "timeout": "操作逾時",
+    "validation_failed": "驗證失敗",
+    "unexpected": "發生意外錯誤"
+  },
+  "success": {
+    "operation_completed": "操作成功完成",
+    "saved": "變更已儲存",
+    "updated": "更新成功",
+    "deleted": "刪除成功"
+  },
+  "validation": {
+    "required": "此欄位為必填項目",
+    "invalid_format": "格式無效",
+    "too_short": "值太短（最小值：{{min}}）",
+    "too_long": "值太長（最大值：{{max}}）",
+    "out_of_range": "值超出範圍（{{min}} - {{max}}）"
+  }
+}

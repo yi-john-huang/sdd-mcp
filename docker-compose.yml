@@ -1,0 +1,67 @@
+version: '3.8'
+
+services:
+  sdd-mcp-server:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: production
+    ports:
+      - "3000:3000"
+    environment:
+      - NODE_ENV=production
+      - LOG_LEVEL=info
+      - PLUGIN_DIR=/app/plugins
+      - TEMPLATE_DIR=/app/templates
+      - DATA_DIR=/app/data
+      - DEFAULT_LANG=en
+      - MAX_PLUGINS=50
+      - HOOK_TIMEOUT=10000
+    volumes:
+      # Mount volumes for persistent data
+      - ./plugins:/app/plugins:ro
+      - ./templates:/app/templates:ro
+      - sdd_data:/app/data
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "node", "-e", "require('http').get('http://localhost:3000/health', (res) => { process.exit(res.statusCode === 200 ? 0 : 1) })"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    networks:
+      - sdd-network
+
+  # Optional: Redis for session management and caching
+  redis:
+    image: redis:7-alpine
+    volumes:
+      - redis_data:/data
+    networks:
+      - sdd-network
+    restart: unless-stopped
+
+  # Optional: Nginx reverse proxy
+  nginx:
+    image: nginx:alpine
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./ssl:/etc/ssl:ro
+    depends_on:
+      - sdd-mcp-server
+    networks:
+      - sdd-network
+    restart: unless-stopped
+
+networks:
+  sdd-network:
+    driver: bridge
+
+volumes:
+  sdd_data:
+    driver: local
+  redis_data:
+    driver: local
