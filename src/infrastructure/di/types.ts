@@ -20,6 +20,10 @@ export const TYPES = {
   // MCP components
   MCPServer: Symbol.for('MCPServer'),
   MCPErrorHandler: Symbol.for('MCPErrorHandler'),
+  CapabilityNegotiator: Symbol.for('CapabilityNegotiator'),
+  SessionManager: Symbol.for('SessionManager'),
+  ResourceManager: Symbol.for('ResourceManager'),
+  PromptManager: Symbol.for('PromptManager'),
   ToolRegistry: Symbol.for('ToolRegistry'),
-  SessionManager: Symbol.for('SessionManager')
+  SDDToolAdapter: Symbol.for('SDDToolAdapter')
 } as const;

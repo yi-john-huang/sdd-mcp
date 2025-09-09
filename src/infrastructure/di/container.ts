@@ -29,12 +29,18 @@ import { FileBasedTaskTracker } from '../adapters/FileBasedTaskTracker.js';
 // MCP components
 import { MCPServer } from '../mcp/MCPServer.js';
 import { MCPErrorHandler } from '../mcp/ErrorHandler.js';
+import { CapabilityNegotiator } from '../mcp/CapabilityNegotiator.js';
+import { SessionManager } from '../mcp/SessionManager.js';
+import { ResourceManager } from '../mcp/ResourceManager.js';
+import { PromptManager } from '../mcp/PromptManager.js';
+import { ToolRegistry } from '../mcp/ToolRegistry.js';
 
 // Application services
 import { ProjectService } from '../../application/services/ProjectService.js';
 import { WorkflowService } from '../../application/services/WorkflowService.js';
 import { TemplateService } from '../../application/services/TemplateService.js';
 import { QualityService } from '../../application/services/QualityService.js';
+import { SDDToolAdapter } from '../../adapters/cli/SDDToolAdapter.js';
 
 export function createContainer(): Container {
   const container = new Container();
@@ -52,12 +58,20 @@ export function createContainer(): Container {
   // Bind MCP components
   container.bind<MCPServer>(TYPES.MCPServer).to(MCPServer);
   container.bind<MCPErrorHandler>(TYPES.MCPErrorHandler).to(MCPErrorHandler);
+  container.bind<CapabilityNegotiator>(TYPES.CapabilityNegotiator).to(CapabilityNegotiator);
+  container.bind<SessionManager>(TYPES.SessionManager).to(SessionManager);
+  container.bind<ResourceManager>(TYPES.ResourceManager).to(ResourceManager);
+  container.bind<PromptManager>(TYPES.PromptManager).to(PromptManager);
+  container.bind<ToolRegistry>(TYPES.ToolRegistry).to(ToolRegistry);
 
   // Bind application services
   container.bind<ProjectService>(TYPES.ProjectService).to(ProjectService);
   container.bind<WorkflowService>(TYPES.WorkflowService).to(WorkflowService);
   container.bind<TemplateService>(TYPES.TemplateService).to(TemplateService);
   container.bind<QualityService>(TYPES.QualityService).to(QualityService);
+
+  // Bind adapters
+  container.bind<SDDToolAdapter>(TYPES.SDDToolAdapter).to(SDDToolAdapter);
 
   return container;
 }
