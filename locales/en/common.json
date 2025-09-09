@@ -1,0 +1,91 @@
+{
+  "system": {
+    "name": "SDD MCP Server",
+    "description": "Spec-Driven Development server for AI-agent CLIs and IDEs",
+    "version": "Version {{version}}",
+    "initializing": "Initializing system...",
+    "ready": "System ready",
+    "shutdown": "Shutting down gracefully...",
+    "error": "System error occurred"
+  },
+  "workflow": {
+    "phases": {
+      "init": "Initialization",
+      "requirements": "Requirements",
+      "design": "Design", 
+      "tasks": "Tasks",
+      "implementation": "Implementation"
+    },
+    "status": {
+      "pending": "Pending",
+      "in_progress": "In Progress", 
+      "completed": "Completed",
+      "approved": "Approved",
+      "rejected": "Rejected"
+    },
+    "actions": {
+      "start": "Start",
+      "continue": "Continue",
+      "pause": "Pause",
+      "complete": "Complete",
+      "approve": "Approve",
+      "reject": "Reject"
+    }
+  },
+  "quality": {
+    "scores": {
+      "good": "Good",
+      "passable": "Passable", 
+      "garbage": "Garbage"
+    },
+    "analysis": {
+      "taste": "Taste Analysis",
+      "complexity": "Complexity Analysis",
+      "special_cases": "Special Cases",
+      "data_structures": "Data Structures",
+      "organization": "Code Organization"
+    },
+    "violations": {
+      "critical": "Critical",
+      "major": "Major",
+      "minor": "Minor",
+      "suggestion": "Suggestion"
+    }
+  },
+  "templates": {
+    "generating": "Generating {{type}} template...",
+    "generated": "Template generated successfully",
+    "failed": "Template generation failed",
+    "not_found": "Template not found: {{id}}"
+  },
+  "files": {
+    "reading": "Reading file: {{path}}",
+    "writing": "Writing file: {{path}}",
+    "created": "File created: {{path}}",
+    "updated": "File updated: {{path}}",
+    "deleted": "File deleted: {{path}}",
+    "backup_created": "Backup created: {{path}}"
+  },
+  "errors": {
+    "not_found": "Resource not found",
+    "access_denied": "Access denied",
+    "invalid_input": "Invalid input provided",
+    "network_error": "Network connection error",
+    "timeout": "Operation timed out",
+    "validation_failed": "Validation failed",
+    "unexpected": "An unexpected error occurred"
+  },
+  "success": {
+    "operation_completed": "Operation completed successfully",
+    "saved": "Changes saved",
+    "updated": "Successfully updated",
+    "deleted": "Successfully deleted"
+  },
+  "validation": {
+    "required": "This field is required",
+    "invalid_format": "Invalid format",
+    "too_short": "Value is too short (minimum: {{min}})",
+    "too_long": "Value is too long (maximum: {{max}})",
+    "out_of_range": "Value is out of range ({{min}} - {{max}})"
+  }
+}

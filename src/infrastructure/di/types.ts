@@ -14,6 +14,9 @@ export const TYPES = {
   TemplateManagerPort: Symbol.for('TemplateManagerPort'),
   FileGeneratorPort: Symbol.for('FileGeneratorPort'),
   CodeQualityAnalyzerPort: Symbol.for('CodeQualityAnalyzerPort'),
+  I18nService: Symbol.for('I18nService'),
+  I18nManagerPort: Symbol.for('I18nManagerPort'),
+  PlatformAdapter: Symbol.for('PlatformAdapter'),
 
   // Application services
   ProjectService: Symbol.for('ProjectService'),

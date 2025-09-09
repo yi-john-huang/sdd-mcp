@@ -1,0 +1,91 @@
+{
+  "system": {
+    "name": "SDD MCPサーバー",
+    "description": "AI エージェント CLI と IDE のための仕様駆動開発サーバー",
+    "version": "バージョン {{version}}",
+    "initializing": "システムを初期化しています...",
+    "ready": "システムの準備が完了しました",
+    "shutdown": "正常にシャットダウンしています...",
+    "error": "システムエラーが発生いたしました"
+  },
+  "workflow": {
+    "phases": {
+      "init": "初期化",
+      "requirements": "要件定義",
+      "design": "設計",
+      "tasks": "タスク",
+      "implementation": "実装"
+    },
+    "status": {
+      "pending": "待機中",
+      "in_progress": "進行中",
+      "completed": "完了",
+      "approved": "承認済み",
+      "rejected": "却下"
+    },
+    "actions": {
+      "start": "開始",
+      "continue": "続行",
+      "pause": "一時停止",
+      "complete": "完了",
+      "approve": "承認",
+      "reject": "却下"
+    }
+  },
+  "quality": {
+    "scores": {
+      "good": "良好",
+      "passable": "許容範囲",
+      "garbage": "要改善"
+    },
+    "analysis": {
+      "taste": "品質分析",
+      "complexity": "複雑度分析",
+      "special_cases": "特殊ケース",
+      "data_structures": "データ構造",
+      "organization": "コード構成"
+    },
+    "violations": {
+      "critical": "重大",
+      "major": "主要",
+      "minor": "軽微",
+      "suggestion": "提案"
+    }
+  },
+  "templates": {
+    "generating": "{{type}}テンプレートを生成しています...",
+    "generated": "テンプレートの生成が完了いたしました",
+    "failed": "テンプレートの生成に失敗いたしました",
+    "not_found": "テンプレートが見つかりません: {{id}}"
+  },
+  "files": {
+    "reading": "ファイルを読み込んでいます: {{path}}",
+    "writing": "ファイルに書き込んでいます: {{path}}",
+    "created": "ファイルを作成いたしました: {{path}}",
+    "updated": "ファイルを更新いたしました: {{path}}",
+    "deleted": "ファイルを削除いたしました: {{path}}",
+    "backup_created": "バックアップを作成いたしました: {{path}}"
+  },
+  "errors": {
+    "not_found": "リソースが見つかりません",
+    "access_denied": "アクセスが拒否されました",
+    "invalid_input": "無効な入力が提供されました",
+    "network_error": "ネットワーク接続エラーが発生しました",
+    "timeout": "操作がタイムアウトしました",
+    "validation_failed": "検証に失敗いたしました",
+    "unexpected": "予期しないエラーが発生いたしました"
+  },
+  "success": {
+    "operation_completed": "操作が正常に完了いたしました",
+    "saved": "変更が保存されました",
+    "updated": "正常に更新されました",
+    "deleted": "正常に削除されました"
+  },
+  "validation": {
+    "required": "この項目は必須です",
+    "invalid_format": "形式が無効です",
+    "too_short": "値が短すぎます（最小: {{min}}）",
+    "too_long": "値が長すぎます（最大: {{max}}）",
+    "out_of_range": "値が範囲外です（{{min}} - {{max}}）"
+  }
+}

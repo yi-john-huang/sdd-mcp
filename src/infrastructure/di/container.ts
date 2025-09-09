@@ -28,6 +28,13 @@ import type {
   CodeQualityAnalyzerPort
 } from '../../domain/quality/index.js';
 
+// I18n ports
+import type {
+  I18nService,
+  I18nManagerPort,
+  PlatformAdapter as IPlatformAdapter
+} from '../../domain/i18n/index.js';
+
 // Infrastructure adapters
 import { InMemoryProjectRepository } from '../repositories/InMemoryProjectRepository.js';
 import { NodeFileSystemAdapter } from '../adapters/NodeFileSystemAdapter.js';
@@ -45,6 +52,11 @@ import { FileGenerator } from '../templates/FileGenerator.js';
 
 // Quality infrastructure
 import { LinusCodeReviewer } from '../quality/LinusCodeReviewer.js';
+
+// I18n infrastructure
+import { I18nextService } from '../i18n/I18nextService.js';
+import { PlatformAdapter } from '../platform/PlatformAdapter.js';
+import { LocalizationService } from '../../application/services/LocalizationService.js';
 
 // MCP components
 import { MCPServer } from '../mcp/MCPServer.js';
@@ -88,6 +100,11 @@ export function createContainer(): Container {
   
   // Bind quality ports
   container.bind<CodeQualityAnalyzerPort>(TYPES.CodeQualityAnalyzerPort).to(LinusCodeReviewer);
+  
+  // Bind i18n ports
+  container.bind<I18nService>(TYPES.I18nService).to(I18nextService);
+  container.bind<IPlatformAdapter>(TYPES.PlatformAdapter).to(PlatformAdapter);
+  container.bind<I18nManagerPort>(TYPES.I18nManagerPort).to(LocalizationService);
 
   // Bind MCP components
   container.bind<MCPServer>(TYPES.MCPServer).to(MCPServer);
