@@ -1,7 +1,7 @@
 // File generation and directory management implementation
 
 import { injectable, inject } from 'inversify';
-import { promises as fs } from 'fs';
+import { promises as fs, Stats } from 'fs';
 import path from 'path';
 import { randomBytes } from 'crypto';
 import type { 
@@ -32,10 +32,9 @@ export class FileGenerator implements FileGeneratorPort {
 
   constructor(
     @inject(TYPES.LoggerPort) private readonly logger: LoggerPort,
-    @inject(TYPES.TemplateRendererPort) private readonly renderer: TemplateRendererPort,
-    backupDirectory = './.backups'
+    @inject(TYPES.TemplateRendererPort) private readonly renderer: TemplateRendererPort
   ) {
-    this.backupDirectory = path.resolve(backupDirectory);
+    this.backupDirectory = path.resolve('./.backups');
   }
 
   async generateFile(
@@ -110,9 +109,8 @@ export class FileGenerator implements FileGeneratorPort {
       };
 
     } catch (error) {
-      this.logger.error('File generation failed', {
-        filePath: resolvedPath,
-        error: error instanceof Error ? error.message : String(error)
+      this.logger.error('File generation failed', error instanceof Error ? error : new Error(String(error)), {
+        filePath: resolvedPath
       });
 
       return {
@@ -226,9 +224,8 @@ export class FileGenerator implements FileGeneratorPort {
 
     } catch (error) {
       const errorMessage = `Directory generation failed: ${error instanceof Error ? error.message : String(error)}`;
-      this.logger.error('Directory generation failed', {
-        dirPath: resolvedDirPath,
-        error: errorMessage
+      this.logger.error('Directory generation failed', new Error(errorMessage), {
+        dirPath: resolvedDirPath
       });
 
       return {
@@ -259,7 +256,7 @@ export class FileGenerator implements FileGeneratorPort {
       const resolvedPath = path.resolve(targetPath);
 
       // Check if path exists and get stats
-      let stats: fs.Stats | null = null;
+      let stats: Stats | null = null;
       let exists = false;
 
       try {
@@ -272,30 +269,28 @@ export class FileGenerator implements FileGeneratorPort {
       }
 
       // Check permissions if file/directory exists
-      let permissions: PathPermissions = {
-        read: false,
-        write: false,
-        execute: false
-      };
+      let read = false;
+      let write = false;
+      let execute = false;
 
       if (exists && stats) {
         try {
           await fs.access(resolvedPath, fs.constants.R_OK);
-          permissions.read = true;
+          read = true;
         } catch {
           // No read permission
         }
 
         try {
           await fs.access(resolvedPath, fs.constants.W_OK);
-          permissions.write = true;
+          write = true;
         } catch {
           // No write permission
         }
 
         try {
           await fs.access(resolvedPath, fs.constants.X_OK);
-          permissions.execute = true;
+          execute = true;
         } catch {
           // No execute permission
         }
@@ -304,7 +299,7 @@ export class FileGenerator implements FileGeneratorPort {
         const parentDir = path.dirname(resolvedPath);
         try {
           await fs.access(parentDir, fs.constants.W_OK);
-          permissions.write = true;
+          write = true;
         } catch {
           errors.push('Parent directory is not writable');
         }
@@ -315,7 +310,7 @@ export class FileGenerator implements FileGeneratorPort {
         exists,
         isFile: exists && stats?.isFile() || false,
         isDirectory: exists && stats?.isDirectory() || false,
-        permissions,
+        permissions: { read, write, execute },
         errors
       };
 
@@ -352,10 +347,9 @@ export class FileGenerator implements FileGeneratorPort {
 
       return backupPath;
     } catch (error) {
-      this.logger.error('File backup failed', {
+      this.logger.error('File backup failed', error instanceof Error ? error : new Error(String(error)), {
         filePath: resolvedPath,
-        backupPath,
-        error: error instanceof Error ? error.message : String(error)
+        backupPath
       });
       throw new Error(`Backup failed: ${error instanceof Error ? error.message : String(error)}`);
     }
@@ -370,10 +364,9 @@ export class FileGenerator implements FileGeneratorPort {
         restored: originalPath
       });
     } catch (error) {
-      this.logger.error('File restore failed', {
+      this.logger.error('File restore failed', error instanceof Error ? error : new Error(String(error)), {
         backupPath,
-        originalPath,
-        error: error instanceof Error ? error.message : String(error)
+        originalPath
       });
       throw new Error(`Restore failed: ${error instanceof Error ? error.message : String(error)}`);
     }
@@ -405,9 +398,7 @@ export class FileGenerator implements FileGeneratorPort {
 
       return deletedBackups;
     } catch (error) {
-      this.logger.error('Backup cleanup failed', {
-        error: error instanceof Error ? error.message : String(error)
-      });
+      this.logger.error('Backup cleanup failed', error instanceof Error ? error : new Error(String(error)));
       throw new Error(`Backup cleanup failed: ${error instanceof Error ? error.message : String(error)}`);
     }
   }

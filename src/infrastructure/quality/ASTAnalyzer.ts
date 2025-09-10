@@ -2,11 +2,11 @@
 
 import { injectable, inject } from 'inversify';
 import * as typescript from '@typescript-eslint/typescript-estree';
-import { parse as parseJavaScript } from 'esprima';
+// Note: Using dynamic import for esprima due to TypeScript definition issues
 import { parse as parseBabel } from '@babel/parser';
 import * as t from '@babel/types';
 import type { LoggerPort } from '../../domain/ports.js';
-import type { 
+import { 
   ProgrammingLanguage,
   CodeMetrics,
   ComplexityHotspot,
@@ -72,10 +72,9 @@ export class ASTAnalyzer {
           throw new Error(`Unsupported language for AST parsing: ${language}`);
       }
     } catch (error) {
-      this.logger.error('AST parsing failed', {
+      this.logger.error('AST parsing failed', error instanceof Error ? error : new Error(String(error)), {
         language,
-        filePath,
-        error: error instanceof Error ? error.message : String(error)
+        filePath
       });
       
       return {
@@ -83,7 +82,7 @@ export class ASTAnalyzer {
         language,
         errors: [{
           message: error instanceof Error ? error.message : String(error),
-          severity: 'error'
+          severity: 'error' as const
         }],
         metrics: this.getEmptyMetrics()
       };
@@ -105,16 +104,17 @@ export class ASTAnalyzer {
         useJSXTextNode: true
       });
 
-      const metrics = this.calculateMetrics(ast as ASTNode, content);
+      const astNode = ast as unknown as ASTNode;
+      const metrics = this.calculateMetrics(astNode, content);
       
       this.logger.debug('TypeScript AST parsed successfully', {
         filePath,
-        nodeCount: this.countNodes(ast as ASTNode),
+        nodeCount: this.countNodes(astNode),
         linesOfCode: metrics.linesOfCode
       });
 
       return {
-        ast: ast as ASTNode,
+        ast: astNode,
         language: ProgrammingLanguage.TYPESCRIPT,
         errors,
         metrics
@@ -156,54 +156,30 @@ export class ASTAnalyzer {
         ranges: true
       });
 
-      const metrics = this.calculateMetrics(ast as ASTNode, content);
+      const astNode = ast as unknown as ASTNode;
+      const metrics = this.calculateMetrics(astNode, content);
       
       this.logger.debug('JavaScript AST parsed successfully', {
         filePath,
-        nodeCount: this.countNodes(ast as ASTNode),
+        nodeCount: this.countNodes(astNode),
         linesOfCode: metrics.linesOfCode
       });
 
       return {
-        ast: ast as ASTNode,
+        ast: astNode,
         language: ProgrammingLanguage.JAVASCRIPT,
         errors,
         metrics
       };
     } catch (babelError) {
-      // Fallback to Esprima for compatibility
-      try {
-        const ast = parseJavaScript(content, {
-          loc: true,
-          range: true,
-          attachComments: true,
-          tolerant: true,
-          jsx: true
+      // If Babel fails, just throw the error since it's our primary parser
+      if (babelError instanceof Error) {
+        errors.push({
+          message: `Babel parsing failed: ${babelError.message}`,
+          severity: 'error' as const
         });
-
-        const metrics = this.calculateMetrics(ast as ASTNode, content);
-        
-        return {
-          ast: ast as ASTNode,
-          language: ProgrammingLanguage.JAVASCRIPT,
-          errors,
-          metrics
-        };
-      } catch (esprimaError) {
-        if (babelError instanceof Error) {
-          errors.push({
-            message: `Babel: ${babelError.message}`,
-            severity: 'error'
-          });
-        }
-        if (esprimaError instanceof Error) {
-          errors.push({
-            message: `Esprima: ${esprimaError.message}`,
-            severity: 'error'
-          });
-        }
-        throw babelError;
       }
+      throw babelError;
     }
   }
 

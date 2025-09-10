@@ -2,7 +2,7 @@
 
 import { injectable, inject } from 'inversify';
 import type { LoggerPort } from '../../domain/ports.js';
-import type { 
+import { 
   CodeQualityAnalyzerPort,
   CodeAnalysisResult,
   ProgrammingLanguage,
@@ -36,7 +36,8 @@ import type {
   TechnicalDebtAnalysis,
   QualitySummary,
   QualityTrend,
-  QualityRecommendation
+  QualityRecommendation,
+  MemoryUsage
 } from '../../domain/quality/index.js';
 import { ASTAnalyzer, type ParsedAST } from './ASTAnalyzer.js';
 import { TYPES } from '../di/types.js';
@@ -50,10 +51,13 @@ interface LinusReviewContext {
 
 @injectable()
 export class LinusCodeReviewer implements CodeQualityAnalyzerPort {
+  private readonly astAnalyzer: ASTAnalyzer;
+
   constructor(
-    @inject(TYPES.LoggerPort) private readonly logger: LoggerPort,
-    private readonly astAnalyzer: ASTAnalyzer = new ASTAnalyzer(this.logger as any)
-  ) {}
+    @inject(TYPES.LoggerPort) private readonly logger: LoggerPort
+  ) {
+    this.astAnalyzer = new ASTAnalyzer(this.logger);
+  }
 
   async analyzeFile(filePath: string, content: string): Promise<CodeAnalysisResult> {
     const language = this.detectLanguage(filePath);
@@ -127,9 +131,8 @@ export class LinusCodeReviewer implements CodeQualityAnalyzerPort {
 
       return result;
     } catch (error) {
-      this.logger.error('Code analysis failed', {
-        filePath,
-        error: error instanceof Error ? error.message : String(error)
+      this.logger.error('Code analysis failed', error instanceof Error ? error : new Error(String(error)), {
+        filePath
       });
       throw error;
     }
@@ -545,7 +548,7 @@ export class LinusCodeReviewer implements CodeQualityAnalyzerPort {
   private analyzeDataStructureAppropriateness = (context: LinusReviewContext) => 8;
   private analyzeDataStructureEfficiency = (context: LinusReviewContext) => 7;
   private analyzeMemoryUsage = (context: LinusReviewContext) => ({
-    usage: 'moderate' as const,
+    usage: MemoryUsage.MODERATE,
     efficiency: 7,
     leaks: [],
     optimizations: []

@@ -38,10 +38,9 @@ export class TemplateManager implements TemplateManagerPort {
 
   constructor(
     @inject(TYPES.LoggerPort) private readonly logger: LoggerPort,
-    @inject(TYPES.TemplateRendererPort) private readonly renderer: TemplateRendererPort,
-    templateDirectory = './templates'
+    @inject(TYPES.TemplateRendererPort) private readonly renderer: TemplateRendererPort
   ) {
-    this.templateDirectory = path.resolve(templateDirectory);
+    this.templateDirectory = path.resolve('./templates');
   }
 
   async getTemplate(id: string): Promise<Template | null> {
@@ -62,9 +61,8 @@ export class TemplateManager implements TemplateManagerPort {
         return template;
       }
     } catch (error) {
-      this.logger.error('Failed to load template from disk', { 
-        id, 
-        error: error instanceof Error ? error.message : String(error) 
+      this.logger.error('Failed to load template from disk', error instanceof Error ? error : new Error(String(error)), { 
+        id
       });
     }
 
@@ -168,10 +166,9 @@ export class TemplateManager implements TemplateManagerPort {
       this.templateCache.delete(id);
       this.logger.info('Template deleted', { id, name: template.name });
     } catch (error) {
-      this.logger.error('Failed to delete template file', { 
+      this.logger.error('Failed to delete template file', error instanceof Error ? error : new Error(String(error)), { 
         id, 
-        path: templatePath, 
-        error: error instanceof Error ? error.message : String(error) 
+        path: templatePath
       });
       throw new Error(`Failed to delete template: ${error instanceof Error ? error.message : String(error)}`);
     }
@@ -237,9 +234,7 @@ export class TemplateManager implements TemplateManagerPort {
       this.cacheInitialized = true;
       this.logger.debug('Template cache initialized');
     } catch (error) {
-      this.logger.error('Failed to initialize template cache', { 
-        error: error instanceof Error ? error.message : String(error) 
-      });
+      this.logger.error('Failed to initialize template cache', error instanceof Error ? error : new Error(String(error)));
       throw error;
     }
   }
@@ -269,9 +264,8 @@ export class TemplateManager implements TemplateManagerPort {
 
       this.logger.info('Templates loaded from disk', { count: this.templateCache.size });
     } catch (error) {
-      this.logger.error('Failed to scan template directory', { 
-        directory: this.templateDirectory, 
-        error: error instanceof Error ? error.message : String(error) 
+      this.logger.error('Failed to scan template directory', error instanceof Error ? error : new Error(String(error)), { 
+        directory: this.templateDirectory
       });
       
       // Create built-in templates if directory doesn't exist
@@ -299,10 +293,9 @@ export class TemplateManager implements TemplateManagerPort {
       };
     } catch (error) {
       if ((error as NodeJS.ErrnoException).code !== 'ENOENT') {
-        this.logger.error('Error loading template from disk', { 
+        this.logger.error('Error loading template from disk', error instanceof Error ? error : new Error(String(error)), { 
           id, 
-          path: templatePath, 
-          error: error instanceof Error ? error.message : String(error) 
+          path: templatePath
         });
       }
       return null;
@@ -333,10 +326,9 @@ export class TemplateManager implements TemplateManagerPort {
         fs.writeFile(templateContentPath, template.template)
       ]);
     } catch (error) {
-      this.logger.error('Failed to save template to disk', { 
+      this.logger.error('Failed to save template to disk', error instanceof Error ? error : new Error(String(error)), { 
         id: template.id, 
-        path: templatePath, 
-        error: error instanceof Error ? error.message : String(error) 
+        path: templatePath
       });
       throw error;
     }

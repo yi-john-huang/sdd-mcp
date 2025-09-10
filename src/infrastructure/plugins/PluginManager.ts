@@ -5,7 +5,7 @@ import { promises as fs } from 'fs';
 import path from 'path';
 import { EventEmitter } from 'events';
 import type { LoggerPort, FileSystemPort } from '../../domain/ports.js';
-import type {
+import {
   PluginManager as IPluginManager,
   Plugin,
   PluginDescriptor,
@@ -30,7 +30,9 @@ import type {
   PluginCrypto,
   PluginUtils,
   HookSystem,
-  ToolRegistry
+  ToolRegistry,
+  HookResult,
+  ToolResult
 } from '../../domain/plugins/index.js';
 import { TYPES } from '../di/types.js';
 import { createHash, randomBytes, createCipheriv, createDecipheriv, scryptSync } from 'crypto';
@@ -68,10 +70,9 @@ export class PluginManager implements IPluginManager {
     @inject(TYPES.FileSystemPort) private readonly fileSystem: FileSystemPort,
     @inject(TYPES.HookSystem) private readonly hookSystem: HookSystem,
     @inject(TYPES.PluginToolRegistry) private readonly toolRegistry: ToolRegistry,
-    @inject(TYPES.PluginSteeringRegistry) private readonly steeringRegistry: PluginSteeringRegistry,
-    config: Partial<PluginManagerConfig> = {}
+    @inject(TYPES.PluginSteeringRegistry) private readonly steeringRegistry: PluginSteeringRegistry
   ) {
-    this.config = { ...DEFAULT_CONFIG, ...config };
+    this.config = { ...DEFAULT_CONFIG };
   }
 
   async initialize(): Promise<void> {
@@ -113,9 +114,7 @@ export class PluginManager implements IPluginManager {
       });
 
     } catch (error) {
-      this.logger.error('Plugin manager initialization failed', {
-        error: error instanceof Error ? error.message : String(error)
-      });
+      this.logger.error('Plugin manager initialization failed', error instanceof Error ? error : new Error(String(error)));
       throw error;
     }
   }
@@ -175,9 +174,8 @@ export class PluginManager implements IPluginManager {
 
       return descriptors;
     } catch (error) {
-      this.logger.error('Plugin discovery failed', {
-        directory: searchDirectory,
-        error: error instanceof Error ? error.message : String(error)
+      this.logger.error('Plugin discovery failed', error instanceof Error ? error : new Error(String(error)), {
+        directory: searchDirectory
       });
       throw error;
     }
@@ -242,9 +240,8 @@ export class PluginManager implements IPluginManager {
 
       return instance;
     } catch (error) {
-      this.logger.error('Plugin installation failed', {
-        pluginPath,
-        error: error instanceof Error ? error.message : String(error)
+      this.logger.error('Plugin installation failed', error instanceof Error ? error : new Error(String(error)), {
+        pluginPath
       });
       throw error;
     }
@@ -282,9 +279,8 @@ export class PluginManager implements IPluginManager {
 
       this.logger.info('Plugin uninstalled successfully', { pluginId });
     } catch (error) {
-      this.logger.error('Plugin uninstallation failed', {
-        pluginId,
-        error: error instanceof Error ? error.message : String(error)
+      this.logger.error('Plugin uninstallation failed', error instanceof Error ? error : new Error(String(error)), {
+        pluginId
       });
       throw error;
     }
@@ -302,11 +298,16 @@ export class PluginManager implements IPluginManager {
     }
 
     try {
-      instance.state = PluginState.LOADING;
+      // Create updated instance with LOADING state
+      const loadingInstance = {
+        ...instance,
+        state: PluginState.LOADING
+      };
+      this.plugins.set(pluginId, loadingInstance);
       
       // Initialize plugin if not already done
       if (instance.state !== PluginState.LOADED) {
-        await instance.instance.initialize(await this.createPluginContext(instance.plugin, ''));
+        await loadingInstance.instance.initialize(await this.createPluginContext(loadingInstance.plugin, ''));
       }
 
       // Register plugin hooks
@@ -317,8 +318,15 @@ export class PluginManager implements IPluginManager {
           type: hookDeclaration.type,
           phase: hookDeclaration.phase,
           priority: hookDeclaration.priority,
-          handler: async (context: any) => {
-            return await instance.instance.executeHook(hookDeclaration.name, context);
+          handler: async (context: any): Promise<HookResult> => {
+            const result = await instance.instance.executeHook(hookDeclaration.name, context);
+            return {
+              success: true,
+              data: (typeof result === 'object' && result !== null && !Array.isArray(result)) 
+                ? result as Record<string, unknown>
+                : { result },
+              metadata: { pluginId, hookName: hookDeclaration.name }
+            };
           },
           conditions: []
         };
@@ -332,8 +340,15 @@ export class PluginManager implements IPluginManager {
           name: toolDeclaration.name,
           description: toolDeclaration.description,
           category: toolDeclaration.category,
-          handler: async (input: any, context: any) => {
-            return await instance.instance.executeTool(toolDeclaration.name, input);
+          handler: async (input: any, context: any): Promise<ToolResult> => {
+            const result = await instance.instance.executeTool(toolDeclaration.name, input);
+            return {
+              success: true,
+              data: (typeof result === 'object' && result !== null && !Array.isArray(result)) 
+                ? result as Record<string, unknown>
+                : { result },
+              metadata: { pluginId, toolName: toolDeclaration.name }
+            };
           },
           inputSchema: toolDeclaration.inputSchema,
           outputSchema: toolDeclaration.outputSchema,
@@ -348,11 +363,16 @@ export class PluginManager implements IPluginManager {
       }
 
       // Activate plugin
-      await instance.instance.activate();
+      await loadingInstance.instance.activate();
       
-      instance.state = PluginState.ACTIVE;
+      // Create final active instance
+      const activeInstance = {
+        ...loadingInstance,
+        state: PluginState.ACTIVE
+      };
+      this.plugins.set(pluginId, activeInstance);
       
-      this.eventEmitter.emit('plugin-enabled', { pluginId, instance });
+      this.eventEmitter.emit('plugin-enabled', { pluginId, instance: activeInstance });
       
       this.logger.info('Plugin enabled successfully', { 
         pluginId,
@@ -361,12 +381,16 @@ export class PluginManager implements IPluginManager {
         steeringDocuments: instance.plugin.steeringDocuments.length
       });
     } catch (error) {
-      instance.state = PluginState.ERROR;
-      instance.lastError = error instanceof Error ? error : new Error(String(error));
+      // Create error instance
+      const errorInstance = {
+        ...instance,
+        state: PluginState.ERROR,
+        lastError: error instanceof Error ? error : new Error(String(error))
+      };
+      this.plugins.set(pluginId, errorInstance);
       
-      this.logger.error('Plugin enable failed', {
-        pluginId,
-        error: error instanceof Error ? error.message : String(error)
+      this.logger.error('Plugin enable failed', error instanceof Error ? error : new Error(String(error)), {
+        pluginId
       });
       throw error;
     }
@@ -402,9 +426,14 @@ export class PluginManager implements IPluginManager {
         await this.steeringRegistry.unregisterSteeringDocument(pluginId, steeringDeclaration.name);
       }
       
-      instance.state = PluginState.INACTIVE;
+      // Create inactive instance
+      const inactiveInstance = {
+        ...instance,
+        state: PluginState.INACTIVE
+      };
+      this.plugins.set(pluginId, inactiveInstance);
       
-      this.eventEmitter.emit('plugin-disabled', { pluginId, instance });
+      this.eventEmitter.emit('plugin-disabled', { pluginId, instance: inactiveInstance });
       
       this.logger.info('Plugin disabled successfully', { 
         pluginId,
@@ -413,12 +442,16 @@ export class PluginManager implements IPluginManager {
         steeringDocuments: instance.plugin.steeringDocuments.length
       });
     } catch (error) {
-      instance.state = PluginState.ERROR;
-      instance.lastError = error instanceof Error ? error : new Error(String(error));
+      // Create error instance
+      const errorInstance = {
+        ...instance,
+        state: PluginState.ERROR,
+        lastError: error instanceof Error ? error : new Error(String(error))
+      };
+      this.plugins.set(pluginId, errorInstance);
       
-      this.logger.error('Plugin disable failed', {
-        pluginId,
-        error: error instanceof Error ? error.message : String(error)
+      this.logger.error('Plugin disable failed', error instanceof Error ? error : new Error(String(error)), {
+        pluginId
       });
       throw error;
     }
@@ -435,25 +468,39 @@ export class PluginManager implements IPluginManager {
     }
 
     try {
-      instance.state = PluginState.LOADING;
+      // Create loading instance
+      const loadingInstance = {
+        ...instance,
+        state: PluginState.LOADING
+      };
+      this.plugins.set(pluginId, loadingInstance);
       
-      const context = await this.createPluginContext(instance.plugin, '');
-      await instance.instance.initialize(context);
+      const context = await this.createPluginContext(loadingInstance.plugin, '');
+      await loadingInstance.instance.initialize(context);
       
-      instance.state = PluginState.LOADED;
+      // Create loaded instance
+      const loadedInstance = {
+        ...loadingInstance,
+        state: PluginState.LOADED
+      };
+      this.plugins.set(pluginId, loadedInstance);
       
-      this.eventEmitter.emit('plugin-loaded', { pluginId, instance });
+      this.eventEmitter.emit('plugin-loaded', { pluginId, instance: loadedInstance });
       
       this.logger.info('Plugin loaded successfully', { pluginId });
       
-      return instance;
+      return loadedInstance;
     } catch (error) {
-      instance.state = PluginState.ERROR;
-      instance.lastError = error instanceof Error ? error : new Error(String(error));
+      // Create error instance
+      const errorInstance = {
+        ...instance,
+        state: PluginState.ERROR,
+        lastError: error instanceof Error ? error : new Error(String(error))
+      };
+      this.plugins.set(pluginId, errorInstance);
       
-      this.logger.error('Plugin load failed', {
-        pluginId,
-        error: error instanceof Error ? error.message : String(error)
+      this.logger.error('Plugin load failed', error instanceof Error ? error : new Error(String(error)), {
+        pluginId
       });
       throw error;
     }
@@ -471,15 +518,20 @@ export class PluginManager implements IPluginManager {
       }
 
       await instance.instance.dispose();
-      instance.state = PluginState.INSTALLED;
       
-      this.eventEmitter.emit('plugin-unloaded', { pluginId, instance });
+      // Create unloaded instance
+      const unloadedInstance = {
+        ...instance,
+        state: PluginState.INSTALLED
+      };
+      this.plugins.set(pluginId, unloadedInstance);
+      
+      this.eventEmitter.emit('plugin-unloaded', { pluginId, instance: unloadedInstance });
       
       this.logger.info('Plugin unloaded successfully', { pluginId });
     } catch (error) {
-      this.logger.error('Plugin unload failed', {
-        pluginId,
-        error: error instanceof Error ? error.message : String(error)
+      this.logger.error('Plugin unload failed', error instanceof Error ? error : new Error(String(error)), {
+        pluginId
       });
       throw error;
     }
@@ -618,7 +670,7 @@ export class PluginManager implements IPluginManager {
         this.logger.warn(`[${pluginId}] ${message}`, data);
       },
       error: (message: string, error?: Error, data?: Record<string, unknown>) => {
-        this.logger.error(`[${pluginId}] ${message}`, { error, ...data });
+        this.logger.error(`[${pluginId}] ${message}`, error, data);
       }
     };
   }
