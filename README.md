@@ -1,6 +1,12 @@
 # MCP SDD Server
 
+[![npm version](https://badge.fury.io/js/sdd-mcp-server.svg)](https://badge.fury.io/js/sdd-mcp-server)
+[![GitHub release](https://img.shields.io/github/release/yi-john-huang/sdd-mcp.svg)](https://github.com/yi-john-huang/sdd-mcp/releases/latest)
+[![MCP Compatible](https://img.shields.io/badge/MCP-Compatible-blue.svg)](https://modelcontextprotocol.io)
+
 A Model Context Protocol (MCP) server implementing Spec-Driven Development (SDD) workflows for AI-agent CLIs and IDEs like Claude Code, Cursor, and others.
+
+> **✅ v1.1.12 Update**: Fixed MCP server connection issues with Claude Code. Health check failures have been resolved with optimized startup performance.
 
 ## 🚀 Quick Start
 
@@ -52,16 +58,27 @@ docker-compose up -d
 ### Claude Code
 Add to your MCP settings using the command line:
 ```bash
-# Add to global MCP configuration
-claude mcp add sdd "npx -y sdd-mcp-server@latest"
+# Add to local MCP configuration (recommended)
+claude mcp add sdd "npx -y sdd-mcp-server@latest" -s local
 
-# Or manually edit ~/.mcp.json:
+# Verify connection
+claude mcp list
+# Should show: sdd: ✓ Connected
+
+# For faster startup during development:
+git clone https://github.com/yi-john-huang/sdd-mcp.git
+cd sdd-mcp
+claude mcp add sdd "$(pwd)/local-mcp-server.js" -s local
+```
+
+Manual configuration in `~/.claude.json`:
+```json
 {
-  "servers": {
+  "mcpServers": {
     "sdd": {
-      "type": "stdio",
       "command": "npx",
-      "args": ["-y", "sdd-mcp-server@latest"]
+      "args": ["-y", "sdd-mcp-server@latest"],
+      "env": {}
     }
   }
 }
@@ -229,6 +246,9 @@ npm install -g sdd-mcp-server
 ```
 
 **Issue: "MCP server not responding or Failed to connect"**
+
+*Fixed in v1.1.12*: The connection issues have been resolved with optimized startup performance.
+
 ```bash
 # Test server directly
 echo '{"jsonrpc": "2.0", "method": "initialize", "params": {"protocolVersion": "2024-11-05", "capabilities": {}, "clientInfo": {"name": "test", "version": "1.0.0"}}, "id": 1}' | npx -y sdd-mcp-server@latest
@@ -236,9 +256,14 @@ echo '{"jsonrpc": "2.0", "method": "initialize", "params": {"protocolVersion": "
 # Check Claude MCP status
 claude mcp list
 
-# Re-add server to Claude MCP
-claude mcp remove sdd
-claude mcp add sdd "npx -y sdd-mcp-server@latest"
+# Re-add server to Claude MCP (forces refresh)
+claude mcp remove sdd -s local
+claude mcp add sdd "npx -y sdd-mcp-server@latest" -s local
+
+# Alternative: Use local development version for faster startup
+git clone https://github.com/yi-john-huang/sdd-mcp.git
+cd sdd-mcp
+claude mcp add sdd "$(pwd)/local-mcp-server.js" -s local
 ```
 
 **Issue: "Permission denied"**
