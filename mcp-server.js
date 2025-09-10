@@ -19,7 +19,7 @@ import {
 
 const server = new Server({
   name: 'sdd-mcp-server',
-  version: '1.1.12'
+  version: '1.1.18'
 }, {
   capabilities: {
     tools: {}

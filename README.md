@@ -6,17 +6,16 @@
 
 A Model Context Protocol (MCP) server implementing Spec-Driven Development (SDD) workflows for AI-agent CLIs and IDEs like Claude Code, Cursor, and others.
 
-> **✅ v1.1.12 Update**: Fixed MCP server connection issues with Claude Code. Health check failures have been resolved with optimized startup performance.
+> **✅ v1.1.21 Update**: Resolved MCP server connection issues. Use global installation (`npm install -g`) instead of npx for reliable Claude Code integration.
 
 ## 🚀 Quick Start
 
-### Option 1: Install with npx (Recommended)
+### Option 1: Install Globally (Recommended)
 ```bash
-# Run directly without installation
-npx sdd-mcp-server@latest
+# Install globally for reliable Claude Code integration
+npm install -g sdd-mcp-server@latest
 
-# Or install globally
-npm install -g sdd-mcp-server
+# Start the server
 sdd-mcp-server
 ```
 
@@ -58,14 +57,17 @@ docker-compose up -d
 ### Claude Code
 Add to your MCP settings using the command line:
 ```bash
+# First, install globally
+npm install -g sdd-mcp-server@latest
+
 # Add to local MCP configuration (recommended)
-claude mcp add sdd "npx -y sdd-mcp-server@latest" -s local
+claude mcp add sdd "sdd-mcp-server" -s local
 
 # Verify connection
 claude mcp list
 # Should show: sdd: ✓ Connected
 
-# For faster startup during development:
+# For development (faster startup):
 git clone https://github.com/yi-john-huang/sdd-mcp.git
 cd sdd-mcp
 claude mcp add sdd "$(pwd)/local-mcp-server.js" -s local
@@ -76,8 +78,8 @@ Manual configuration in `~/.claude.json`:
 {
   "mcpServers": {
     "sdd": {
-      "command": "npx",
-      "args": ["-y", "sdd-mcp-server@latest"],
+      "command": "sdd-mcp-server",
+      "args": [],
       "env": {}
     }
   }
@@ -168,16 +170,19 @@ export HOOK_TIMEOUT=10000
 
 ### Claude Code Integration Example
 ```bash
+# Install globally first
+npm install -g sdd-mcp-server@latest
+
 # Add to Claude Code with environment variables
-claude mcp add sdd "npx -y sdd-mcp-server@latest"
+claude mcp add sdd "sdd-mcp-server"
 
 # Manual configuration in ~/.mcp.json:
 {
   "servers": {
     "sdd": {
       "type": "stdio", 
-      "command": "npx",
-      "args": ["-y", "sdd-mcp-server@latest"],
+      "command": "sdd-mcp-server",
+      "args": [],
       "env": {
         "LOG_LEVEL": "info",
         "DEFAULT_LANG": "en"
@@ -245,20 +250,35 @@ npm cache clean --force
 npm install -g sdd-mcp-server
 ```
 
+**Issue: "Connection fails with npx"**
+
+⚠️ **Known Issue**: npx execution may have timing issues with Claude Code health checks.
+
+**Solution**: Use global installation instead:
+```bash
+# Don't use: npx -y sdd-mcp-server@latest
+# Instead, install globally:
+npm install -g sdd-mcp-server@latest
+claude mcp add sdd "sdd-mcp-server" -s local
+```
+
 **Issue: "MCP server not responding or Failed to connect"**
 
-*Fixed in v1.1.12*: The connection issues have been resolved with optimized startup performance.
+*Fixed in v1.1.21*: Use global installation instead of npx for reliable connections.
 
 ```bash
+# Install globally first
+npm install -g sdd-mcp-server@latest
+
 # Test server directly
-echo '{"jsonrpc": "2.0", "method": "initialize", "params": {"protocolVersion": "2024-11-05", "capabilities": {}, "clientInfo": {"name": "test", "version": "1.0.0"}}, "id": 1}' | npx -y sdd-mcp-server@latest
+echo '{"jsonrpc": "2.0", "method": "initialize", "params": {"protocolVersion": "2024-11-05", "capabilities": {}, "clientInfo": {"name": "test", "version": "1.0.0"}}, "id": 1}' | sdd-mcp-server
 
 # Check Claude MCP status
 claude mcp list
 
 # Re-add server to Claude MCP (forces refresh)
 claude mcp remove sdd -s local
-claude mcp add sdd "npx -y sdd-mcp-server@latest" -s local
+claude mcp add sdd "sdd-mcp-server" -s local
 
 # Alternative: Use local development version for faster startup
 git clone https://github.com/yi-john-huang/sdd-mcp.git
@@ -297,11 +317,14 @@ For detailed documentation on:
 
 **Ready to get started?**
 ```bash
+# Install globally first
+npm install -g sdd-mcp-server@latest
+
 # For Claude Code users:
-claude mcp add sdd "npx -y sdd-mcp-server@latest"
+claude mcp add sdd "sdd-mcp-server"
 
 # For direct usage:
-npx sdd-mcp-server@latest
+sdd-mcp-server
 ```
 
 Built for the AI development community 🤖✨
