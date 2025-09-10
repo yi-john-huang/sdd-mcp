@@ -1,7 +1,6 @@
 #!/usr/bin/env node
 
 // Fast startup MCP server - optimized for Claude Code health checks
-const startTime = Date.now();
 
 // Silence console output immediately
 console.log = () => {};
