@@ -7,8 +7,10 @@ import { osLocale } from 'os-locale';
 import type { LoggerPort } from '../../domain/ports.js';
 import type { 
   PlatformAdapter as IPlatformAdapter,
+  SystemInfo
+} from '../../domain/i18n/index.js';
+import { 
   SupportedLanguage,
-  SystemInfo,
   Platform,
   Architecture
 } from '../../domain/i18n/index.js';
@@ -77,7 +79,7 @@ export class PlatformAdapter implements IPlatformAdapter {
         platform: this.getPlatform(),
         arch: this.getArchitecture(),
         osVersion: release(),
-        nodeVersion: version,
+        nodeVersion: version(),
         timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
         locale: await osLocale(),
         encoding: this.getDefaultEncoding()
@@ -85,13 +87,11 @@ export class PlatformAdapter implements IPlatformAdapter {
 
       this.cachedSystemInfo = systemInfo;
       
-      this.logger.debug('System information collected', systemInfo);
+      this.logger.debug('System information collected', { systemInfo });
       
       return systemInfo;
     } catch (error) {
-      this.logger.error('Failed to collect system information', {
-        error: error instanceof Error ? error.message : String(error)
-      });
+      this.logger.error('Failed to collect system information', error instanceof Error ? error : new Error(String(error)));
       throw error;
     }
   }
@@ -126,10 +126,7 @@ export class PlatformAdapter implements IPlatformAdapter {
       
       return normalizedPath;
     } catch (error) {
-      this.logger.error('Path formatting failed', {
-        inputPath,
-        error: error instanceof Error ? error.message : String(error)
-      });
+      this.logger.error('Path formatting failed', error instanceof Error ? error : new Error(String(error)), { inputPath });
       return inputPath; // Return original path if formatting fails
     }
   }
@@ -174,9 +171,7 @@ export class PlatformAdapter implements IPlatformAdapter {
       
       return preferredLanguages;
     } catch (error) {
-      this.logger.error('Failed to determine preferred languages', {
-        error: error instanceof Error ? error.message : String(error)
-      });
+      this.logger.error('Failed to determine preferred languages', error instanceof Error ? error : new Error(String(error)));
       return [SupportedLanguage.ENGLISH];
     }
   }

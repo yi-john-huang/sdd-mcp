@@ -3,7 +3,7 @@
 import { injectable, inject } from 'inversify';
 import { EventEmitter } from 'events';
 import type { LoggerPort } from '../../domain/ports.js';
-import type {
+import {
   HookSystem as IHookSystem,
   HookRegistration,
   HookExecutionContext,
@@ -208,10 +208,19 @@ export class HookSystem implements IHookSystem {
 
           const result = await hook.handler(currentContext);
           
-          // Update internal metrics
-          (hook as HookRegistrationInternal).executionCount++;
-          (hook as HookRegistrationInternal).lastExecuted = new Date();
-          (hook as HookRegistrationInternal).successCount++;
+          // Update internal metrics - create new object to avoid mutating readonly properties
+          const updatedHook = {
+            ...hook,
+            executionCount: (hook as HookRegistrationInternal).executionCount + 1,
+            lastExecuted: new Date(),
+            successCount: (hook as HookRegistrationInternal).successCount + 1
+          } as HookRegistrationInternal;
+          
+          // Update the hook in the array
+          const hookIndex = this.hooks.get(hookName)!.indexOf(hook as HookRegistrationInternal);
+          if (hookIndex >= 0) {
+            this.hooks.get(hookName)![hookIndex] = updatedHook;
+          }
 
           if (result.success) {
             // Merge result data
@@ -228,7 +237,16 @@ export class HookSystem implements IHookSystem {
             error = result.error;
             if (result.error) {
               errors.push(result.error);
-              (hook as HookRegistrationInternal).errorCount++;
+              // Update error count - create new object to avoid mutating readonly properties
+              const updatedHook = {
+                ...hook,
+                errorCount: (hook as HookRegistrationInternal).errorCount + 1
+              } as HookRegistrationInternal;
+              
+              const hookIndex = this.hooks.get(hookName)!.indexOf(hook as HookRegistrationInternal);
+              if (hookIndex >= 0) {
+                this.hooks.get(hookName)![hookIndex] = updatedHook;
+              }
             }
           }
 
@@ -245,13 +263,21 @@ export class HookSystem implements IHookSystem {
           error = executionError instanceof Error ? executionError : new Error(String(executionError));
           errors.push(error);
           
-          (hook as HookRegistrationInternal).executionCount++;
-          (hook as HookRegistrationInternal).errorCount++;
+          // Update error metrics - create new object to avoid mutating readonly properties
+          const updatedHook = {
+            ...hook,
+            executionCount: (hook as HookRegistrationInternal).executionCount + 1,
+            errorCount: (hook as HookRegistrationInternal).errorCount + 1
+          } as HookRegistrationInternal;
+          
+          const hookIndex = this.hooks.get(hookName)!.indexOf(hook as HookRegistrationInternal);
+          if (hookIndex >= 0) {
+            this.hooks.get(hookName)![hookIndex] = updatedHook;
+          }
 
-          this.logger.error('Hook execution failed', {
+          this.logger.error('Hook execution failed', error, {
             hookName,
-            pluginId: hook.pluginId,
-            error: error.message
+            pluginId: hook.pluginId
           });
         }
 
@@ -290,9 +316,8 @@ export class HookSystem implements IHookSystem {
       };
 
     } catch (error) {
-      this.logger.error('Hook system execution failed', {
-        hookName,
-        error: error instanceof Error ? error.message : String(error)
+      this.logger.error('Hook system execution failed', error instanceof Error ? error : new Error(String(error)), {
+        hookName
       });
 
       return {

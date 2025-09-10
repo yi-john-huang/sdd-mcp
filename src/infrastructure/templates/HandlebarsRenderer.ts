@@ -78,9 +78,8 @@ export class HandlebarsRenderer implements TemplateRendererPort {
       this.logger.debug('Template compiled successfully', { name: templateName });
       return compiled;
     } catch (error) {
-      this.logger.error('Template compilation failed', { 
-        name, 
-        error: error instanceof Error ? error.message : String(error) 
+      this.logger.error('Template compilation failed', error instanceof Error ? error : new Error(String(error)), { 
+        name
       });
       throw new Error(`Template compilation failed: ${error instanceof Error ? error.message : String(error)}`);
     }
@@ -97,9 +96,8 @@ export class HandlebarsRenderer implements TemplateRendererPort {
       this.logger.debug('Template rendered successfully', { templateName });
       return result;
     } catch (error) {
-      this.logger.error('Template rendering failed', { 
-        templateName, 
-        error: error instanceof Error ? error.message : String(error) 
+      this.logger.error('Template rendering failed', error instanceof Error ? error : new Error(String(error)), { 
+        templateName
       });
       throw new Error(`Template rendering failed: ${error instanceof Error ? error.message : String(error)}`);
     }
@@ -110,9 +108,7 @@ export class HandlebarsRenderer implements TemplateRendererPort {
       const compiled = await this.compile(template);
       return compiled.render(data, context);
     } catch (error) {
-      this.logger.error('String template rendering failed', { 
-        error: error instanceof Error ? error.message : String(error) 
-      });
+      this.logger.error('String template rendering failed', error instanceof Error ? error : new Error(String(error)));
       throw error;
     }
   }
@@ -127,9 +123,8 @@ export class HandlebarsRenderer implements TemplateRendererPort {
       this.handlebarsInstance.registerPartial(name, template);
       this.logger.debug('Template partial registered', { name });
     } catch (error) {
-      this.logger.error('Template partial registration failed', { 
-        name, 
-        error: error instanceof Error ? error.message : String(error) 
+      this.logger.error('Template partial registration failed', error instanceof Error ? error : new Error(String(error)), { 
+        name
       });
       throw new Error(`Partial registration failed: ${error instanceof Error ? error.message : String(error)}`);
     }
@@ -182,7 +177,7 @@ export class HandlebarsRenderer implements TemplateRendererPort {
     // Array and object helpers
     this.registerHelper('join', (array: unknown[], separator = ', ') => {
       if (!Array.isArray(array)) return '';
-      return array.join(separator);
+      return array.join(String(separator));
     });
 
     this.registerHelper('length', (value: unknown) => {
@@ -225,7 +220,7 @@ export class HandlebarsRenderer implements TemplateRendererPort {
 
     this.registerHelper('indent', (text: string, spaces = 2) => {
       if (!text) return '';
-      const indent = ' '.repeat(spaces);
+      const indent = ' '.repeat(Number(spaces));
       return text.split('\n').map(line => indent + line).join('\n');
     });
 

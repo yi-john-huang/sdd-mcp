@@ -513,9 +513,9 @@ Generated on: {{timestamp}}
   private registerCustomHelpers(): void {
     this.templateEngine.registerHelper('isReadyForImplementation', (project: Project) => {
       const { approvals } = project.metadata;
-      return approvals.requirements.approved && 
+      return (approvals.requirements.approved && 
              approvals.design.approved && 
-             approvals.tasks.approved;
+             approvals.tasks.approved).toString();
     });
 
     this.templateEngine.registerHelper('formatDate', (date: Date) => {

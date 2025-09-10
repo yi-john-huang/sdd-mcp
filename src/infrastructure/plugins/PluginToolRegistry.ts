@@ -3,7 +3,7 @@
 import { injectable, inject } from 'inversify';
 import { EventEmitter } from 'events';
 import type { LoggerPort } from '../../domain/ports.js';
-import type {
+import {
   ToolRegistry as IToolRegistry,
   ToolRegistration,
   ToolExecutionContext,
@@ -152,7 +152,7 @@ export class PluginToolRegistry implements IToolRegistry {
     const tool = this.tools.get(toolName);
     if (!tool) {
       const error = new Error(`Tool '${toolName}' not found`);
-      this.logger.error('Tool execution failed - tool not found', { toolName });
+      this.logger.error('Tool execution failed - tool not found', error, { toolName });
       return { success: false, error };
     }
 
@@ -240,11 +240,10 @@ export class PluginToolRegistry implements IToolRegistry {
         timestamp: new Date()
       });
 
-      this.logger.error('Tool execution failed', {
+      this.logger.error('Tool execution failed', executionError, {
         toolName,
         pluginId: tool.pluginId,
-        executionTime,
-        error: executionError.message
+        executionTime
       });
 
       return {
@@ -582,18 +581,21 @@ export class PluginToolRegistry implements IToolRegistry {
   }
 
   private updateToolMetrics(tool: ToolRegistrationInternal, executionTime: number, success: boolean): void {
-    tool.executionCount++;
-    tool.lastExecuted = new Date();
+    const newExecutionCount = tool.executionCount + 1;
+    const newSuccessCount = success ? tool.successCount + 1 : tool.successCount;
+    const newErrorCount = success ? tool.errorCount : tool.errorCount + 1;
+    const newAverageExecutionTime = (tool.averageExecutionTime * tool.executionCount + executionTime) / newExecutionCount;
     
-    if (success) {
-      tool.successCount++;
-    } else {
-      tool.errorCount++;
-    }
+    const updatedTool: ToolRegistrationInternal = {
+      ...tool,
+      executionCount: newExecutionCount,
+      lastExecuted: new Date(),
+      successCount: newSuccessCount,
+      errorCount: newErrorCount,
+      averageExecutionTime: newAverageExecutionTime
+    };
     
-    // Update rolling average execution time
-    tool.averageExecutionTime = 
-      (tool.averageExecutionTime * (tool.executionCount - 1) + executionTime) / tool.executionCount;
+    this.tools.set(tool.name, updatedTool);
   }
 
   private recordExecutionMetrics(metrics: ToolExecutionMetrics): void {

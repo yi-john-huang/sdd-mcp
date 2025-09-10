@@ -7,7 +7,7 @@ A Model Context Protocol (MCP) server implementing Spec-Driven Development (SDD)
 ### Option 1: Install with npx (Recommended)
 ```bash
 # Run directly without installation
-npx sdd-mcp-server
+npx sdd-mcp-server@latest
 
 # Or install globally
 npm install -g sdd-mcp-server
@@ -50,16 +50,18 @@ docker-compose up -d
 ## 🔧 Configuration for AI Clients
 
 ### Claude Code
-Add to your MCP settings:
-```json
+Add to your MCP settings using the command line:
+```bash
+# Add to global MCP configuration
+claude mcp add sdd "npx -y sdd-mcp-server@latest"
+
+# Or manually edit ~/.mcp.json:
 {
-  "mcpServers": {
+  "servers": {
     "sdd": {
+      "type": "stdio",
       "command": "npx",
-      "args": ["sdd-mcp-server"],
-      "env": {
-        "LOG_LEVEL": "info"
-      }
+      "args": ["-y", "sdd-mcp-server@latest"]
     }
   }
 }
@@ -148,12 +150,17 @@ export HOOK_TIMEOUT=10000
 ```
 
 ### Claude Code Integration Example
-```json
+```bash
+# Add to Claude Code with environment variables
+claude mcp add sdd "npx -y sdd-mcp-server@latest"
+
+# Manual configuration in ~/.mcp.json:
 {
-  "mcpServers": {
+  "servers": {
     "sdd": {
+      "type": "stdio", 
       "command": "npx",
-      "args": ["sdd-mcp-server"],
+      "args": ["-y", "sdd-mcp-server@latest"],
       "env": {
         "LOG_LEVEL": "info",
         "DEFAULT_LANG": "en"
@@ -214,26 +221,30 @@ npm run test:coverage   # Run with coverage report
 
 ### Common Issues
 
-**Issue: "Cannot find module @sdd/mcp-server"**
+**Issue: "Cannot find module sdd-mcp-server"**
 ```bash
 # Clear npm cache and reinstall
 npm cache clean --force
-npm install -g @sdd/mcp-server
+npm install -g sdd-mcp-server
 ```
 
-**Issue: "MCP server not responding"**
+**Issue: "MCP server not responding or Failed to connect"**
 ```bash
-# Check if server is running
-ps aux | grep sdd-mcp-server
+# Test server directly
+echo '{"jsonrpc": "2.0", "method": "initialize", "params": {"protocolVersion": "2024-11-05", "capabilities": {}, "clientInfo": {"name": "test", "version": "1.0.0"}}, "id": 1}' | npx -y sdd-mcp-server@latest
 
-# Check logs with debug level
-LOG_LEVEL=debug npx sdd-mcp-server
+# Check Claude MCP status
+claude mcp list
+
+# Re-add server to Claude MCP
+claude mcp remove sdd
+claude mcp add sdd "npx -y sdd-mcp-server@latest"
 ```
 
 **Issue: "Permission denied"**
 ```bash
 # Fix permissions for global install
-sudo npm install -g @sdd/mcp-server
+sudo npm install -g sdd-mcp-server
 ```
 
 ## 📖 Advanced Documentation
@@ -252,7 +263,7 @@ For detailed documentation on:
 
 ## 🚀 Quick Links
 
-- [npm package](https://www.npmjs.com/package/@sdd/mcp-server)
+- [npm package](https://www.npmjs.com/package/sdd-mcp-server)
 - [Docker image](https://ghcr.io/yi-john-huang/sdd-mcp)
 - [Source code](https://github.com/yi-john-huang/sdd-mcp)
 - [Issues](https://github.com/yi-john-huang/sdd-mcp/issues)
@@ -261,7 +272,11 @@ For detailed documentation on:
 
 **Ready to get started?**
 ```bash
-npx sdd-mcp-server
+# For Claude Code users:
+claude mcp add sdd "npx -y sdd-mcp-server@latest"
+
+# For direct usage:
+npx sdd-mcp-server@latest
 ```
 
 Built for the AI development community 🤖✨

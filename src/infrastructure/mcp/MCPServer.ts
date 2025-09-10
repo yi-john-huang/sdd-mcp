@@ -21,6 +21,7 @@ import { ToolRegistry } from './ToolRegistry.js';
 import { SDDToolAdapter } from '../../adapters/cli/SDDToolAdapter.js';
 
 interface MCPServerConfig {
+  [x: string]: unknown;
   name: string;
   version: string;
   description: string;
@@ -75,8 +76,7 @@ export class MCPServer {
   async start(): Promise<void> {
     try {
       this.logger.info('Starting MCP server', { 
-        sessionId: this.sessionId,
-        capabilities: this.server.getCapabilities()
+        sessionId: this.sessionId
       });
 
       // Initialize tool registry with SDD tools

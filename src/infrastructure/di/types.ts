@@ -23,6 +23,7 @@ export const TYPES = {
   WorkflowService: Symbol.for('WorkflowService'),
   TemplateService: Symbol.for('TemplateService'),
   QualityService: Symbol.for('QualityService'),
+  QualityGateService: Symbol.for('QualityGateService'),
   WorkflowEngineService: Symbol.for('WorkflowEngineService'),
   ProjectInitializationService: Symbol.for('ProjectInitializationService'),
   WorkflowValidationService: Symbol.for('WorkflowValidationService'),

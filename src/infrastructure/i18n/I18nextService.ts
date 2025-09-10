@@ -69,7 +69,7 @@ const DEFAULT_I18N_CONFIG: I18nConfig = {
 export class I18nextService implements I18nService {
   private initialized = false;
   private config: I18nConfig = DEFAULT_I18N_CONFIG;
-  private i18nTranslate: TFunction = (key: string) => key as any;
+  private i18nTranslate: TFunction = ((key: string) => key) as any;
 
   constructor(
     @inject(TYPES.LoggerPort) private readonly logger: LoggerPort
@@ -141,11 +141,9 @@ export class I18nextService implements I18nService {
       });
 
     } catch (error) {
-      this.logger.error('Failed to initialize i18n service', {
-        error: error instanceof Error ? error.message : String(error)
-      });
+      this.logger.error('Failed to initialize i18n service', error instanceof Error ? error : new Error(String(error)));
       const errorMessage = error instanceof Error ? error.message : String(error);
-      throw Object.assign(new Error(`I18n initialization failed: ${errorMessage}`), { originalError: error });
+      throw new Error(`I18n initialization failed: ${errorMessage}`);
     }
   }
 
@@ -164,10 +162,9 @@ export class I18nextService implements I18nService {
       
       return translation;
     } catch (error) {
-      this.logger.error('Translation error', {
+      this.logger.error('Translation error', error instanceof Error ? error : new Error(String(error)), {
         translationKey: key,
-        translationOptions: options,
-        errorMessage: error instanceof Error ? error.message : String(error)
+        translationOptions: options
       });
       return options?.defaultValue || key;
     }
@@ -190,9 +187,8 @@ export class I18nextService implements I18nService {
         newLanguage: language
       });
     } catch (error) {
-      this.logger.error('Failed to change language', {
-        targetLanguage: language,
-        errorMessage: error instanceof Error ? error.message : String(error)
+      this.logger.error('Failed to change language', error instanceof Error ? error : new Error(String(error)), {
+        targetLanguage: language
       });
       throw error;
     }
@@ -225,10 +221,9 @@ export class I18nextService implements I18nService {
         keysCount: Object.keys(resources).length
       });
     } catch (error) {
-      this.logger.error('Failed to add resource bundle', {
+      this.logger.error('Failed to add resource bundle', error instanceof Error ? error : new Error(String(error)), {
         targetLanguage: language,
-        resourceNamespace: namespace,
-        errorMessage: error instanceof Error ? error.message : String(error)
+        resourceNamespace: namespace
       });
     }
   }
@@ -243,9 +238,8 @@ export class I18nextService implements I18nService {
       
       this.logger.debug('Namespace loaded', { namespace });
     } catch (error) {
-      this.logger.error('Failed to load namespace', {
-        targetNamespace: namespace,
-        errorMessage: error instanceof Error ? error.message : String(error)
+      this.logger.error('Failed to load namespace', error instanceof Error ? error : new Error(String(error)), {
+        targetNamespace: namespace
       });
       throw error;
     }
@@ -390,10 +384,9 @@ export class I18nextService implements I18nService {
       await i18next.reloadResources(languages, namespaces);
       this.logger.info('Resources reloaded', { languages, namespaces });
     } catch (error) {
-      this.logger.error('Failed to reload resources', {
+      this.logger.error('Failed to reload resources', error instanceof Error ? error : new Error(String(error)), {
         targetLanguages: languages,
-        targetNamespaces: namespaces,
-        errorMessage: error instanceof Error ? error.message : String(error)
+        targetNamespaces: namespaces
       });
       throw error;
     }

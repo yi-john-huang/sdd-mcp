@@ -75,10 +75,9 @@ export class QualityGateService {
   constructor(
     @inject(TYPES.LoggerPort) private readonly logger: LoggerPort,
     @inject(TYPES.FileSystemPort) private readonly fileSystem: FileSystemPort,
-    @inject(TYPES.CodeQualityAnalyzerPort) private readonly qualityAnalyzer: CodeQualityAnalyzerPort,
-    config: Partial<QualityGateConfig> = {}
+    @inject(TYPES.CodeQualityAnalyzerPort) private readonly qualityAnalyzer: CodeQualityAnalyzerPort
   ) {
-    this.config = { ...DEFAULT_QUALITY_CONFIG, ...config };
+    this.config = { ...DEFAULT_QUALITY_CONFIG };
   }
 
   async executeQualityGate(
