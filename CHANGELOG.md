@@ -5,6 +5,39 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.1.12] - 2025-09-10
+
+### Fixed
+- **Claude Code Health Check**: Fixed MCP server connection failures due to startup timeout issues
+- **Startup Performance**: Optimized server startup time from ~500ms to ~60ms for faster health checks
+- **Version Consistency**: Updated all version references across codebase to 1.1.12
+
+### Added  
+- **Local Development Wrapper**: Added `local-mcp-server.js` for ultra-fast local development
+- **Enhanced Documentation**: Updated README with connection troubleshooting and v1.1.12 fixes
+- **GitHub Release**: Automated release creation with comprehensive changelog
+
+### Changed
+- **MCP Protocol Compliance**: Added proper `InitializedNotificationSchema` handler
+- **ES Module Compatibility**: Improved module loading and entry point detection
+- **Health Check Optimization**: Reduced npx execution overhead for Claude Code compatibility
+
+## [1.1.11] - 2025-09-10
+
+### Fixed
+- **MCP Protocol**: Enhanced MCP protocol compatibility with proper notification handling
+- **Version Consistency**: Aligned version reporting across all server implementations
+
+### Added
+- **Initialized Notification**: Added proper handling for MCP `initialized` notification
+
+## [1.1.10] - 2025-09-10
+
+### Fixed
+- **ES Module Entry Point**: Fixed `import.meta.url` detection for proper ES module execution  
+- **Build Output**: Corrected TypeScript compilation output for ES module compatibility
+- **ESLint Configuration**: Renamed `.eslintrc.js` to `.eslintrc.cjs` for ES module projects
+
 ## [1.1.9] - 2025-09-10
 
 ### Fixed

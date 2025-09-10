@@ -66,7 +66,7 @@ async function createSimpleMCPServer() {
 
   const server = new Server({
     name: 'sdd-mcp-server',
-    version: '1.1.10'
+    version: '1.1.12'
   }, {
     capabilities: {
       tools: {}
