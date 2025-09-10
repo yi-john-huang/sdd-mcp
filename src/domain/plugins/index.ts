@@ -285,6 +285,7 @@ export interface HookSystem {
   execute(hookName: string, context: HookExecutionContext): Promise<HookResult>;
   getHooks(hookName: string): Promise<HookRegistration[]>;
   getAllHooks(): Promise<Record<string, HookRegistration[]>>;
+  clearHooks(pluginId?: string): Promise<void>;
 }
 
 export interface HookRegistration {
@@ -336,6 +337,7 @@ export interface ToolRegistry {
   getTool(toolName: string): Promise<ToolRegistration | null>;
   getAllTools(): Promise<Record<string, ToolRegistration>>;
   getToolsByCategory(category: ToolCategory): Promise<ToolRegistration[]>;
+  clearTools(pluginId?: string): Promise<void>;
 }
 
 export interface ToolRegistration {

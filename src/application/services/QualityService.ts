@@ -34,11 +34,7 @@ export class QualityService {
     @inject(TYPES.QualityAnalyzer) private readonly qualityAnalyzer: QualityAnalyzer,
     @inject(TYPES.LoggerPort) private readonly logger: LoggerPort,
     @inject(TYPES.CodeQualityAnalyzerPort) private readonly linusAnalyzer: CodeQualityAnalyzerPort,
-    private readonly qualityGateService: QualityGateService = new QualityGateService(
-      this.logger as any,
-      null as any,  // FileSystemPort will be injected
-      this.linusAnalyzer
-    )
+    @inject(TYPES.QualityGateService) private readonly qualityGateService: QualityGateService
   ) {}
 
   // Legacy quality check method (maintained for backward compatibility)

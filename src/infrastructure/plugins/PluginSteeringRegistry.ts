@@ -1,8 +1,9 @@
 // Plugin steering document registry for custom steering integration
 
 import { injectable, inject } from 'inversify';
+import path from 'path';
 import type { LoggerPort, FileSystemPort } from '../../domain/ports.js';
-import type {
+import {
   SteeringDocumentDeclaration,
   SteeringDocumentType,
   SteeringMode,
@@ -188,9 +189,8 @@ export class PluginSteeringRegistry {
             try {
               content = templateFn(context);
             } catch (error) {
-              this.logger.error('Failed to render steering template', {
-                documentId: document.id,
-                error: error instanceof Error ? error.message : String(error)
+              this.logger.error('Failed to render steering template', error instanceof Error ? error : new Error(String(error)), {
+                documentId: document.id
               });
               this.updateDocumentError(document.id, error instanceof Error ? error : new Error(String(error)));
               continue;
@@ -211,9 +211,8 @@ export class PluginSteeringRegistry {
           });
         }
       } catch (error) {
-        this.logger.error('Error evaluating steering document applicability', {
-          documentId: document.id,
-          error: error instanceof Error ? error.message : String(error)
+        this.logger.error('Error evaluating steering document applicability', error instanceof Error ? error : new Error(String(error)), {
+          documentId: document.id
         });
         this.updateDocumentError(document.id, error instanceof Error ? error : new Error(String(error)));
       }
@@ -373,9 +372,9 @@ export class PluginSteeringRegistry {
         // Resolve relative to plugin directory
         const pluginPath = await this.getPluginPath(pluginId);
         if (pluginPath) {
-          const templatePath = this.fileSystem.join(pluginPath, declaration.template);
+          const templatePath = path.join(pluginPath, declaration.template);
           if (await this.fileSystem.exists(templatePath)) {
-            return await this.fileSystem.readFile(templatePath, 'utf8');
+            return await this.fileSystem.readFile(templatePath);
           }
         }
       }
@@ -383,10 +382,9 @@ export class PluginSteeringRegistry {
       // Treat as inline template content
       return declaration.template;
     } catch (error) {
-      this.logger.error('Failed to load steering template', {
+      this.logger.error('Failed to load steering template', error instanceof Error ? error : new Error(String(error)), {
         pluginId,
-        template: declaration.template,
-        error: error instanceof Error ? error.message : String(error)
+        template: declaration.template
       });
       return undefined;
     }
@@ -426,9 +424,8 @@ export class PluginSteeringRegistry {
         }
       }
     } catch (error) {
-      this.logger.error('Failed to compile steering template', {
-        documentId,
-        error: error instanceof Error ? error.message : String(error)
+      this.logger.error('Failed to compile steering template', error instanceof Error ? error : new Error(String(error)), {
+        documentId
       });
     }
   }
@@ -461,9 +458,8 @@ export class PluginSteeringRegistry {
         const regex = new RegExp(pattern);
         return regex.test(currentFile);
       } catch (error) {
-        this.logger.error('Invalid pattern in steering document', {
-          pattern,
-          error: error instanceof Error ? error.message : String(error)
+        this.logger.error('Invalid pattern in steering document', error instanceof Error ? error : new Error(String(error)), {
+          pattern
         });
         return false;
       }

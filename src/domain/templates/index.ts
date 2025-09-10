@@ -115,6 +115,7 @@ export interface TemplateValidationWarning {
   readonly message: string;
   readonly line?: number;
   readonly column?: number;
+  readonly variable?: string;
   readonly suggestion?: string;
 }
 
