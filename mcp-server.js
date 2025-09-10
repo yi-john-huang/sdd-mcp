@@ -1,6 +1,9 @@
 #!/usr/bin/env node
 
-// Minimal MCP server - always uses simplified implementation
+// Fast startup MCP server - optimized for Claude Code health checks
+const startTime = Date.now();
+
+// Silence console output immediately
 console.log = () => {};
 console.info = () => {};
 console.warn = () => {};
@@ -17,7 +20,7 @@ import {
 
 const server = new Server({
   name: 'sdd-mcp-server',
-  version: '1.1.10'
+  version: '1.1.11'
 }, {
   capabilities: {
     tools: {}
