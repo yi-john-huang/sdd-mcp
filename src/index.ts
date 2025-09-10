@@ -62,11 +62,11 @@ export async function createMCPServer() {
 async function createSimpleMCPServer() {
   const { Server } = await import('@modelcontextprotocol/sdk/server/index.js');
   const { StdioServerTransport } = await import('@modelcontextprotocol/sdk/server/stdio.js');
-  const { ListToolsRequestSchema, CallToolRequestSchema } = await import('@modelcontextprotocol/sdk/types.js');
+  const { ListToolsRequestSchema, CallToolRequestSchema, InitializedNotificationSchema } = await import('@modelcontextprotocol/sdk/types.js');
 
   const server = new Server({
     name: 'sdd-mcp-server',
-    version: '1.1.6'
+    version: '1.1.10'
   }, {
     capabilities: {
       tools: {}
@@ -122,6 +122,11 @@ async function createSimpleMCPServer() {
       default:
         throw new Error(`Unknown tool: ${name}`);
     }
+  });
+
+  // Handle initialized notification
+  server.setNotificationHandler(InitializedNotificationSchema, async () => {
+    // Client has completed initialization - server is ready
   });
 
   const transport = new StdioServerTransport();

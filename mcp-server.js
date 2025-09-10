@@ -11,12 +11,13 @@ import { Server } from '@modelcontextprotocol/sdk/server/index.js';
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
 import { 
   ListToolsRequestSchema, 
-  CallToolRequestSchema 
+  CallToolRequestSchema,
+  InitializedNotificationSchema
 } from '@modelcontextprotocol/sdk/types.js';
 
 const server = new Server({
   name: 'sdd-mcp-server',
-  version: '1.1.8'
+  version: '1.1.10'
 }, {
   capabilities: {
     tools: {}
@@ -72,6 +73,11 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
     default:
       throw new Error(`Unknown tool: ${name}`);
   }
+});
+
+// Handle initialized notification
+server.setNotificationHandler(InitializedNotificationSchema, async () => {
+  // Client has completed initialization - server is ready
 });
 
 const transport = new StdioServerTransport();
