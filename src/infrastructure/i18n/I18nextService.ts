@@ -3,17 +3,16 @@
 import { injectable, inject } from 'inversify';
 import i18next, { type InitOptions, type TFunction } from 'i18next';
 import Backend from 'i18next-fs-backend';
-import osLocale from 'os-locale';
+import { osLocale } from 'os-locale';
 import path from 'path';
 import type { LoggerPort } from '../../domain/ports.js';
-import type { 
-  I18nService,
-  I18nConfig,
+import { 
+  type I18nService,
+  type I18nConfig,
   SupportedLanguage,
-  TranslationOptions,
-  InterpolationConfig,
-  DetectionConfig,
-  CacheConfig
+  type TranslationOptions,
+  DetectionMethod,
+  DetectionCacheMethod
 } from '../../domain/i18n/index.js';
 import { TYPES } from '../di/types.js';
 
@@ -51,8 +50,8 @@ const DEFAULT_I18N_CONFIG: I18nConfig = {
     }
   },
   detection: {
-    order: ['environment', 'header', 'cookie'],
-    caches: ['cookie'],
+    order: [DetectionMethod.ENVIRONMENT, DetectionMethod.HEADER, DetectionMethod.COOKIE],
+    caches: [DetectionCacheMethod.COOKIE],
     cookieName: 'sdd-language',
     sessionName: 'sdd-language',
     headerName: 'accept-language',
@@ -62,7 +61,7 @@ const DEFAULT_I18N_CONFIG: I18nConfig = {
     enabled: true,
     prefix: 'sdd-i18n',
     expirationTime: 7 * 24 * 60 * 60 * 1000, // 7 days
-    versions: {}
+    versions: {} as Record<SupportedLanguage, string>
   }
 };
 
@@ -70,7 +69,7 @@ const DEFAULT_I18N_CONFIG: I18nConfig = {
 export class I18nextService implements I18nService {
   private initialized = false;
   private config: I18nConfig = DEFAULT_I18N_CONFIG;
-  private t: TFunction = (key: string) => key;
+  private i18nTranslate: TFunction = (key: string) => key as any;
 
   constructor(
     @inject(TYPES.LoggerPort) private readonly logger: LoggerPort
@@ -98,7 +97,10 @@ export class I18nextService implements I18nService {
           prefix: this.config.interpolation.prefix,
           suffix: this.config.interpolation.suffix,
           formatSeparator: this.config.interpolation.formatSeparator,
-          format: this.config.interpolation.format
+          format: (value: unknown, format: string | undefined, language: string) => {
+            if (!format) return String(value);
+            return this.config.interpolation.format(value, format, language as SupportedLanguage);
+          }
         },
 
         backend: {
@@ -109,9 +111,9 @@ export class I18nextService implements I18nService {
 
         saveMissing: true,
         saveMissingTo: 'fallback',
-        missingKeyHandler: (lng: string[], ns: string, key: string, fallbackValue: string) => {
+        missingKeyHandler: (lngs: readonly string[], ns: string, key: string, fallbackValue: string, updateMissing: boolean, options: any) => {
           this.logger.warn('Missing translation key', {
-            languages: lng,
+            languages: Array.from(lngs),
             namespace: ns,
             key,
             fallbackValue
@@ -129,7 +131,7 @@ export class I18nextService implements I18nService {
         .use(Backend)
         .init(i18nOptions);
 
-      this.t = i18next.t;
+      this.i18nTranslate = i18next.t;
       this.initialized = true;
 
       this.logger.info('I18n service initialized', {
@@ -142,7 +144,8 @@ export class I18nextService implements I18nService {
       this.logger.error('Failed to initialize i18n service', {
         error: error instanceof Error ? error.message : String(error)
       });
-      throw new Error(`I18n initialization failed: ${error instanceof Error ? error.message : String(error)}`);
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      throw Object.assign(new Error(`I18n initialization failed: ${errorMessage}`), { originalError: error });
     }
   }
 
@@ -153,7 +156,7 @@ export class I18nextService implements I18nService {
     }
 
     try {
-      const translation = this.t(key, options);
+      const translation = this.i18nTranslate(key, options);
       
       if (translation === key && options?.defaultValue) {
         return options.defaultValue;
@@ -162,9 +165,9 @@ export class I18nextService implements I18nService {
       return translation;
     } catch (error) {
       this.logger.error('Translation error', {
-        key,
-        options,
-        error: error instanceof Error ? error.message : String(error)
+        translationKey: key,
+        translationOptions: options,
+        errorMessage: error instanceof Error ? error.message : String(error)
       });
       return options?.defaultValue || key;
     }
@@ -188,8 +191,8 @@ export class I18nextService implements I18nService {
       });
     } catch (error) {
       this.logger.error('Failed to change language', {
-        language,
-        error: error instanceof Error ? error.message : String(error)
+        targetLanguage: language,
+        errorMessage: error instanceof Error ? error.message : String(error)
       });
       throw error;
     }
@@ -223,9 +226,9 @@ export class I18nextService implements I18nService {
       });
     } catch (error) {
       this.logger.error('Failed to add resource bundle', {
-        language,
-        namespace,
-        error: error instanceof Error ? error.message : String(error)
+        targetLanguage: language,
+        resourceNamespace: namespace,
+        errorMessage: error instanceof Error ? error.message : String(error)
       });
     }
   }
@@ -241,8 +244,8 @@ export class I18nextService implements I18nService {
       this.logger.debug('Namespace loaded', { namespace });
     } catch (error) {
       this.logger.error('Failed to load namespace', {
-        namespace,
-        error: error instanceof Error ? error.message : String(error)
+        targetNamespace: namespace,
+        errorMessage: error instanceof Error ? error.message : String(error)
       });
       throw error;
     }
@@ -375,7 +378,7 @@ export class I18nextService implements I18nService {
       return {};
     }
     
-    return i18next.store.data;
+    return i18next.store.data as Record<string, Record<string, Record<string, unknown>>>;
   }
 
   async reloadResources(languages?: SupportedLanguage[], namespaces?: string[]): Promise<void> {
@@ -388,9 +391,9 @@ export class I18nextService implements I18nService {
       this.logger.info('Resources reloaded', { languages, namespaces });
     } catch (error) {
       this.logger.error('Failed to reload resources', {
-        languages,
-        namespaces,
-        error: error instanceof Error ? error.message : String(error)
+        targetLanguages: languages,
+        targetNamespaces: namespaces,
+        errorMessage: error instanceof Error ? error.message : String(error)
       });
       throw error;
     }

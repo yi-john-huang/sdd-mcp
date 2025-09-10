@@ -33,7 +33,7 @@ import type {
   ToolRegistry
 } from '../../domain/plugins/index.js';
 import { TYPES } from '../di/types.js';
-import { createHash, randomBytes, createCipher, createDecipher } from 'crypto';
+import { createHash, randomBytes, createCipheriv, createDecipheriv, scryptSync } from 'crypto';
 import type { PluginSteeringRegistry } from './PluginSteeringRegistry.js';
 
 interface PluginManagerConfig {
@@ -673,14 +673,20 @@ export class PluginManager implements IPluginManager {
     return {
       hash: (data: string, algorithm = 'sha256') => createHash(algorithm).update(data).digest('hex'),
       encrypt: (data: string, key: string) => {
-        const cipher = createCipher('aes192', key);
+        const iv = randomBytes(16);
+        const derivedKey = scryptSync(key, 'salt', 24);
+        const cipher = createCipheriv('aes-192-cbc', derivedKey, iv);
         let encrypted = cipher.update(data, 'utf8', 'hex');
         encrypted += cipher.final('hex');
-        return encrypted;
+        return iv.toString('hex') + ':' + encrypted;
       },
       decrypt: (data: string, key: string) => {
-        const decipher = createDecipher('aes192', key);
-        let decrypted = decipher.update(data, 'hex', 'utf8');
+        const parts = data.split(':');
+        const iv = Buffer.from(parts[0], 'hex');
+        const encryptedData = parts[1];
+        const derivedKey = scryptSync(key, 'salt', 24);
+        const decipher = createDecipheriv('aes-192-cbc', derivedKey, iv);
+        let decrypted = decipher.update(encryptedData, 'hex', 'utf8');
         decrypted += decipher.final('utf8');
         return decrypted;
       },
