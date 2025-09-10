@@ -7,7 +7,9 @@
 const isMCPMode = process.argv[1]?.includes('sdd-mcp-server') || 
                  process.argv[0]?.includes('sdd-mcp-server') ||
                  process.env.npm_execpath?.includes('npx') ||  // Executed via npx
-                 (process.stdin.isTTY === false); // MCP servers communicate via stdio pipes
+                 (process.stdin.isTTY === false) || // MCP servers communicate via stdio pipes
+                 process.argv.includes('--mcp-mode') || // Explicit MCP mode flag
+                 true; // Default to MCP mode for npm package
 
 if (isMCPMode) {
   // Completely silence all console output for MCP mode
