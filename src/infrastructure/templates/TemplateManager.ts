@@ -3,15 +3,16 @@
 import { injectable, inject } from 'inversify';
 import { promises as fs } from 'fs';
 import path from 'path';
-import type { 
-  TemplateManagerPort, 
-  Template, 
-  TemplateCategory, 
-  TemplateVariable,
-  TemplateValidationResult,
-  TemplateValidationError,
-  TemplateValidationWarning,
-  TemplateRendererPort
+import { 
+  type TemplateManagerPort, 
+  type Template, 
+  TemplateCategory,
+  TemplateVariableType,
+  type TemplateVariable,
+  type TemplateValidationResult,
+  type TemplateValidationError,
+  type TemplateValidationWarning,
+  type TemplateRendererPort
 } from '../../domain/templates/index.js';
 import type { LoggerPort } from '../../domain/ports.js';
 import { TYPES } from '../di/types.js';
@@ -395,9 +396,9 @@ export class TemplateManager implements TemplateManagerPort {
         description: 'SDD specification JSON template',
         template: await this.getSpecJsonTemplate(),
         variables: [
-          { name: 'name', type: 'string' as const, description: 'Project name', required: true },
-          { name: 'description', type: 'string' as const, description: 'Project description', required: false },
-          { name: 'author', type: 'string' as const, description: 'Project author', required: false }
+          { name: 'name', type: TemplateVariableType.STRING, description: 'Project name', required: true },
+          { name: 'description', type: TemplateVariableType.STRING, description: 'Project description', required: false },
+          { name: 'author', type: TemplateVariableType.STRING, description: 'Project author', required: false }
         ],
         version: '1.0.0',
         tags: ['sdd', 'specification', 'json']
@@ -408,8 +409,8 @@ export class TemplateManager implements TemplateManagerPort {
         description: 'SDD requirements document template',
         template: await this.getRequirementsTemplate(),
         variables: [
-          { name: 'projectName', type: 'string' as const, description: 'Project name', required: true },
-          { name: 'requirements', type: 'array' as const, description: 'List of requirements', required: true }
+          { name: 'projectName', type: TemplateVariableType.STRING, description: 'Project name', required: true },
+          { name: 'requirements', type: TemplateVariableType.ARRAY, description: 'List of requirements', required: true }
         ],
         version: '1.0.0',
         tags: ['sdd', 'requirements', 'markdown']
@@ -420,9 +421,9 @@ export class TemplateManager implements TemplateManagerPort {
         description: 'SDD design document template',
         template: await this.getDesignTemplate(),
         variables: [
-          { name: 'projectName', type: 'string' as const, description: 'Project name', required: true },
-          { name: 'architecture', type: 'string' as const, description: 'Architecture description', required: true },
-          { name: 'components', type: 'array' as const, description: 'System components', required: true }
+          { name: 'projectName', type: TemplateVariableType.STRING, description: 'Project name', required: true },
+          { name: 'architecture', type: TemplateVariableType.STRING, description: 'Architecture description', required: true },
+          { name: 'components', type: TemplateVariableType.ARRAY, description: 'System components', required: true }
         ],
         version: '1.0.0',
         tags: ['sdd', 'design', 'markdown']
@@ -433,8 +434,8 @@ export class TemplateManager implements TemplateManagerPort {
         description: 'SDD tasks document template',
         template: await this.getTasksTemplate(),
         variables: [
-          { name: 'projectName', type: 'string' as const, description: 'Project name', required: true },
-          { name: 'tasks', type: 'array' as const, description: 'List of tasks', required: true }
+          { name: 'projectName', type: TemplateVariableType.STRING, description: 'Project name', required: true },
+          { name: 'tasks', type: TemplateVariableType.ARRAY, description: 'List of tasks', required: true }
         ],
         version: '1.0.0',
         tags: ['sdd', 'tasks', 'markdown']
@@ -445,9 +446,9 @@ export class TemplateManager implements TemplateManagerPort {
         description: 'Product steering document template',
         template: await this.getProductSteeringTemplate(),
         variables: [
-          { name: 'productName', type: 'string' as const, description: 'Product name', required: true },
-          { name: 'vision', type: 'string' as const, description: 'Product vision', required: true },
-          { name: 'goals', type: 'array' as const, description: 'Product goals', required: true }
+          { name: 'productName', type: TemplateVariableType.STRING, description: 'Product name', required: true },
+          { name: 'vision', type: TemplateVariableType.STRING, description: 'Product vision', required: true },
+          { name: 'goals', type: TemplateVariableType.ARRAY, description: 'Product goals', required: true }
         ],
         version: '1.0.0',
         tags: ['steering', 'product', 'markdown']
@@ -458,9 +459,9 @@ export class TemplateManager implements TemplateManagerPort {
         description: 'Technical steering document template',
         template: await this.getTechSteeringTemplate(),
         variables: [
-          { name: 'projectName', type: 'string' as const, description: 'Project name', required: true },
-          { name: 'techStack', type: 'array' as const, description: 'Technology stack', required: true },
-          { name: 'architecture', type: 'string' as const, description: 'Architecture pattern', required: true }
+          { name: 'projectName', type: TemplateVariableType.STRING, description: 'Project name', required: true },
+          { name: 'techStack', type: TemplateVariableType.ARRAY, description: 'Technology stack', required: true },
+          { name: 'architecture', type: TemplateVariableType.STRING, description: 'Architecture pattern', required: true }
         ],
         version: '1.0.0',
         tags: ['steering', 'technical', 'markdown']
@@ -471,8 +472,8 @@ export class TemplateManager implements TemplateManagerPort {
         description: 'Structure steering document template',
         template: await this.getStructureSteeringTemplate(),
         variables: [
-          { name: 'projectName', type: 'string' as const, description: 'Project name', required: true },
-          { name: 'structure', type: 'object' as const, description: 'Project structure', required: true }
+          { name: 'projectName', type: TemplateVariableType.STRING, description: 'Project name', required: true },
+          { name: 'structure', type: TemplateVariableType.OBJECT, description: 'Project structure', required: true }
         ],
         version: '1.0.0',
         tags: ['steering', 'structure', 'markdown']
@@ -483,7 +484,7 @@ export class TemplateManager implements TemplateManagerPort {
         description: 'Linus-style code review steering document template',
         template: await this.getLinusReviewTemplate(),
         variables: [
-          { name: 'projectName', type: 'string' as const, description: 'Project name', required: true }
+          { name: 'projectName', type: TemplateVariableType.STRING, description: 'Project name', required: true }
         ],
         version: '1.0.0',
         tags: ['steering', 'code-review', 'linus', 'quality']

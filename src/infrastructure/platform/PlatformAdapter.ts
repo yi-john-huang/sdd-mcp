@@ -3,7 +3,7 @@
 import { injectable, inject } from 'inversify';
 import { platform, arch, release, version, homedir, tmpdir, EOL } from 'os';
 import { sep, join, normalize, resolve, posix, win32 } from 'path';
-import osLocale from 'os-locale';
+import { osLocale } from 'os-locale';
 import type { LoggerPort } from '../../domain/ports.js';
 import type { 
   PlatformAdapter as IPlatformAdapter,

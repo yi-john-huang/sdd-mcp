@@ -3,8 +3,8 @@
 // MCP SDD Server entry point
 
 import 'reflect-metadata';
-import { createContainer } from './infrastructure/di/container';
-import { TYPES } from './infrastructure/di/types';
+import { createContainer } from './infrastructure/di/container.js';
+import { TYPES } from './infrastructure/di/types.js';
 import type { LoggerPort } from './domain/ports';
 import { MCPServer } from './infrastructure/mcp/MCPServer';
 import { PluginManager } from './infrastructure/plugins/PluginManager';
