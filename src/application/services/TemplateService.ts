@@ -98,24 +98,52 @@ export class TemplateService {
   }
 
   async generateRequirementsTemplate(project: Project): Promise<string> {
+    // Analyze project for real requirements
+    const packageJson = await this.getPackageJsonAnalysis(project.path);
+    const projectAnalysis = await this.analyzeProjectStructure(project.path);
+    
     const template = `# Requirements Document
 
 ## Introduction
 {{project.name}} - Requirements specification for {{project.metadata.language}} locale.
 
+**Product Description:** ${packageJson.description || 'Product requirements specification'}
+
 Generated on: {{timestamp}}
 
-## Requirements
+## Functional Requirements
 
-### Requirement 1: [Title]
-**Objective:** [Objective statement]
+### FR-1: Core Functionality
+**Objective:** ${this.generateCoreObjective(packageJson, projectAnalysis)}
 
 #### Acceptance Criteria
-1. WHEN [condition] THEN [expected behavior]
-2. WHERE [context] THE system SHALL [requirement]
-3. IF [condition] THEN [expected result]
+${this.generateAcceptanceCriteria(packageJson, projectAnalysis).map((criteria, index) => `${index + 1}. ${criteria}`).join('\n')}
 
-[Additional requirements to be added...]
+### FR-2: Technology Integration
+**Objective:** Implement robust technology stack integration
+
+#### Acceptance Criteria
+${this.generateTechRequirements(packageJson).map((req, index) => `${index + 1}. ${req}`).join('\n')}
+
+### FR-3: Quality Standards
+**Objective:** Maintain high code quality and testing standards
+
+#### Acceptance Criteria
+${this.generateQualityRequirements(packageJson).map((req, index) => `${index + 1}. ${req}`).join('\n')}
+
+## Non-Functional Requirements
+
+### NFR-1: Performance
+- System SHALL respond within acceptable time limits
+- Memory usage SHALL remain within reasonable bounds
+
+### NFR-2: Reliability
+- System SHALL handle errors gracefully
+- System SHALL maintain data integrity
+
+### NFR-3: Maintainability
+- Code SHALL follow established conventions
+- System SHALL be well-documented
 `;
 
     const data: LegacyTemplateData = {
@@ -127,38 +155,55 @@ Generated on: {{timestamp}}
   }
 
   async generateDesignTemplate(project: Project): Promise<string> {
+    // Analyze project for real design information
+    const packageJson = await this.getPackageJsonAnalysis(project.path);
+    const projectAnalysis = await this.analyzeProjectStructure(project.path);
+    
     const template = `# Technical Design Document
 
 ## Project: {{project.name}}
+
+**Product Description:** ${packageJson.description || 'Technical design specification'}
 
 Generated on: {{timestamp}}
 
 ## Architecture Overview
 
 ### System Architecture
-[Architecture description]
+${this.generateArchitectureDescription(packageJson, projectAnalysis)}
 
 ### Key Components
-[Component descriptions]
+${this.generateComponentDescriptions(projectAnalysis).map(comp => `- **${comp.name}**: ${comp.description}`).join('\n')}
 
 ### Data Models
-[Data model definitions]
+${this.generateDataModels(packageJson, projectAnalysis).map(model => `- **${model}**: Data structure definition`).join('\n')}
 
 ## Implementation Details
 
 ### Technology Stack
-[Technology decisions]
+${this.generateDetailedTechStack(packageJson)}
 
 ### Design Patterns
-[Pattern choices and rationale]
+${this.generateDesignPatterns(packageJson, projectAnalysis).map(pattern => `- **${pattern}**: Applied for maintainability and scalability`).join('\n')}
+
+### Dependencies
+${this.generateDependencyAnalysis(packageJson)}
 
 ## Interface Specifications
 
 ### API Interfaces
-[Interface definitions]
+${this.generateAPIInterfaces(packageJson, projectAnalysis)}
 
-### Data Schemas
-[Schema specifications]
+### Module Interfaces  
+${this.generateModuleInterfaces(projectAnalysis)}
+
+## Configuration
+
+### Environment Variables
+${this.generateEnvVarSpecs(packageJson)}
+
+### Build Configuration
+${this.generateBuildConfig(packageJson)}
 `;
 
     const data: LegacyTemplateData = {
@@ -170,21 +215,43 @@ Generated on: {{timestamp}}
   }
 
   async generateTasksTemplate(project: Project): Promise<string> {
+    // Analyze project for real implementation tasks
+    const packageJson = await this.getPackageJsonAnalysis(project.path);
+    const projectAnalysis = await this.analyzeProjectStructure(project.path);
+    
+    const tasks = this.generateImplementationTasks(packageJson, projectAnalysis);
+    
     const template = `# Implementation Plan
+
+## Project: {{project.name}}
+
+**Product Description:** ${packageJson.description || 'Implementation task breakdown'}
 
 Generated on: {{timestamp}}
 
-- [ ] 1. [Main Task Title]
-  - [Subtask description]
-  - [Subtask description]
-  - _Requirements: [requirement references]_
+## Development Phase Tasks
 
-- [ ] 2. [Next Task Title]
-  - [Subtask description]
-  - [Subtask description]
-  - _Requirements: [requirement references]_
+${tasks.development.map((task, index) => `- [ ] ${index + 1}. ${task.title}
+  ${task.subtasks.map(subtask => `  - ${subtask}`).join('\n')}
+  - _Requirements: ${task.requirements}_`).join('\n\n')}
 
-[Additional tasks to be added...]
+## Integration Phase Tasks
+
+${tasks.integration.map((task, index) => `- [ ] ${index + 1}. ${task.title}
+  ${task.subtasks.map(subtask => `  - ${subtask}`).join('\n')}
+  - _Requirements: ${task.requirements}_`).join('\n\n')}
+
+## Quality Assurance Tasks
+
+${tasks.quality.map((task, index) => `- [ ] ${index + 1}. ${task.title}
+  ${task.subtasks.map(subtask => `  - ${subtask}`).join('\n')}
+  - _Requirements: ${task.requirements}_`).join('\n\n')}
+
+## Deployment Tasks
+
+${tasks.deployment.map((task, index) => `- [ ] ${index + 1}. ${task.title}
+  ${task.subtasks.map(subtask => `  - ${subtask}`).join('\n')}
+  - _Requirements: ${task.requirements}_`).join('\n\n')}
 `;
 
     const data: LegacyTemplateData = {
@@ -521,5 +588,327 @@ Generated on: {{timestamp}}
     this.templateEngine.registerHelper('formatDate', (date: Date) => {
       return date.toISOString();
     });
+  }
+
+  // Helper methods for project analysis and content generation
+  private async getPackageJsonAnalysis(projectPath: string): Promise<any> {
+    try {
+      const packagePath = `${projectPath}/package.json`;
+      if (await this.fileSystem.exists(packagePath)) {
+        const content = await this.fileSystem.readFile(packagePath);
+        return JSON.parse(content);
+      }
+    } catch (error) {
+      this.logger.warn('Failed to read package.json', { error });
+    }
+    return {};
+  }
+
+  private async analyzeProjectStructure(projectPath: string): Promise<any> {
+    try {
+      const entries = await this.fileSystem.readdir(projectPath);
+      return {
+        directories: entries.filter(entry => !entry.includes('.')),
+        files: entries.filter(entry => entry.includes('.')),
+        hasSource: entries.includes('src'),
+        hasTests: entries.includes('test') || entries.includes('__tests__'),
+        hasDocs: entries.includes('docs') || entries.includes('documentation')
+      };
+    } catch (error) {
+      this.logger.warn('Failed to analyze project structure', { error });
+    }
+    return { directories: [], files: [] };
+  }
+
+  private generateCoreObjective(packageJson: any, projectAnalysis: any): string {
+    if (packageJson.description) {
+      return `Deliver ${packageJson.description} with full functionality and reliability`;
+    }
+    if (packageJson.keywords?.length > 0) {
+      return `Implement ${packageJson.keywords.join(', ')} functionality`;
+    }
+    return 'Deliver core application functionality';
+  }
+
+  private generateAcceptanceCriteria(packageJson: any, projectAnalysis: any): string[] {
+    const criteria: string[] = [];
+    
+    if (packageJson.scripts?.test) {
+      criteria.push('WHEN tests are run THEN all tests SHALL pass');
+    }
+    if (packageJson.scripts?.build) {
+      criteria.push('WHEN build is executed THEN system SHALL compile without errors');
+    }
+    if (packageJson.scripts?.lint) {
+      criteria.push('WHERE code quality is checked THE system SHALL meet linting standards');
+    }
+    if (packageJson.main || packageJson.bin) {
+      criteria.push('WHEN application starts THEN system SHALL initialize successfully');
+    }
+    
+    criteria.push('IF errors occur THEN system SHALL handle them gracefully');
+    return criteria.length > 0 ? criteria : ['System SHALL meet functional requirements'];
+  }
+
+  private generateTechRequirements(packageJson: any): string[] {
+    const requirements: string[] = [];
+    const deps = { ...packageJson.dependencies, ...packageJson.devDependencies };
+    
+    if (deps?.typescript) {
+      requirements.push('System SHALL use TypeScript for type safety');
+    }
+    if (deps?.express || deps?.fastify) {
+      requirements.push('System SHALL implement RESTful API endpoints');
+    }
+    if (deps?.react || deps?.vue || deps?.angular) {
+      requirements.push('System SHALL provide responsive user interface');
+    }
+    if (deps?.jest || deps?.mocha || deps?.vitest) {
+      requirements.push('System SHALL include comprehensive test coverage');
+    }
+    
+    return requirements.length > 0 ? requirements : ['System SHALL integrate required technologies'];
+  }
+
+  private generateQualityRequirements(packageJson: any): string[] {
+    const requirements: string[] = [];
+    
+    if (packageJson.scripts?.lint) {
+      requirements.push('Code SHALL pass linting checks');
+    }
+    if (packageJson.scripts?.typecheck) {
+      requirements.push('Code SHALL pass type checking');
+    }
+    if (packageJson.scripts?.test) {
+      requirements.push('Code SHALL maintain test coverage standards');
+    }
+    
+    requirements.push('Code SHALL follow established conventions');
+    return requirements;
+  }
+
+  private generateArchitectureDescription(packageJson: any, projectAnalysis: any): string {
+    let description = '';
+    
+    if (packageJson.type === 'module') {
+      description += 'Modern ES Module-based architecture. ';
+    }
+    
+    if (projectAnalysis.hasSource) {
+      description += 'Modular source code organization with clear separation of concerns. ';
+    }
+    
+    if (packageJson.dependencies?.express) {
+      description += 'RESTful API server architecture using Express.js framework. ';
+    }
+    
+    if (packageJson.dependencies?.typescript || packageJson.devDependencies?.typescript) {
+      description += 'Type-safe development with TypeScript compilation. ';
+    }
+    
+    return description || 'Application architecture to be defined based on requirements.';
+  }
+
+  private generateComponentDescriptions(projectAnalysis: any): Array<{name: string, description: string}> {
+    const components: Array<{name: string, description: string}> = [];
+    
+    if (projectAnalysis.hasSource) {
+      components.push({ name: 'Core Module', description: 'Main application logic and business rules' });
+    }
+    if (projectAnalysis.hasTests) {
+      components.push({ name: 'Test Suite', description: 'Automated testing framework and test cases' });
+    }
+    if (projectAnalysis.hasDocs) {
+      components.push({ name: 'Documentation', description: 'Project documentation and API specifications' });
+    }
+    
+    return components.length > 0 ? components : [
+      { name: 'Application Core', description: 'Main application functionality' }
+    ];
+  }
+
+  private generateDataModels(packageJson: any, projectAnalysis: any): string[] {
+    const models: string[] = [];
+    
+    if (packageJson.dependencies?.mongoose || packageJson.dependencies?.mongodb) {
+      models.push('MongoDB Document Models');
+    }
+    if (packageJson.dependencies?.sequelize || packageJson.dependencies?.typeorm) {
+      models.push('Relational Database Models');
+    }
+    if (packageJson.dependencies?.graphql) {
+      models.push('GraphQL Schema Models');
+    }
+    
+    return models.length > 0 ? models : ['Application Data Models'];
+  }
+
+  private generateDetailedTechStack(packageJson: any): string {
+    const deps = { ...packageJson.dependencies, ...packageJson.devDependencies };
+    const stack: string[] = [];
+    
+    if (deps?.typescript) stack.push('- **TypeScript**: Type-safe JavaScript development');
+    if (deps?.node || packageJson.engines?.node) stack.push(`- **Node.js**: ${packageJson.engines?.node || 'Runtime environment'}`);
+    if (deps?.express) stack.push('- **Express.js**: Web application framework');
+    if (deps?.react) stack.push('- **React**: User interface library');
+    if (deps?.vue) stack.push('- **Vue.js**: Progressive frontend framework');
+    if (deps?.jest) stack.push('- **Jest**: Testing framework');
+    
+    return stack.length > 0 ? stack.join('\n') : '- Technology stack to be defined';
+  }
+
+  private generateDesignPatterns(packageJson: any, projectAnalysis: any): string[] {
+    const patterns: string[] = [];
+    
+    if (packageJson.dependencies?.inversify) {
+      patterns.push('Dependency Injection');
+    }
+    if (projectAnalysis.hasSource) {
+      patterns.push('Modular Architecture');
+    }
+    if (packageJson.dependencies?.express || packageJson.dependencies?.fastify) {
+      patterns.push('MVC Pattern');
+    }
+    
+    return patterns.length > 0 ? patterns : ['Standard Design Patterns'];
+  }
+
+  private generateDependencyAnalysis(packageJson: any): string {
+    const production = Object.keys(packageJson.dependencies || {});
+    const development = Object.keys(packageJson.devDependencies || {});
+    
+    let analysis = '';
+    if (production.length > 0) {
+      analysis += `**Production Dependencies:** ${production.length} packages\n`;
+      analysis += production.slice(0, 5).map(dep => `- ${dep}`).join('\n');
+      if (production.length > 5) analysis += `\n- ... and ${production.length - 5} more`;
+    }
+    
+    if (development.length > 0) {
+      analysis += `\n\n**Development Dependencies:** ${development.length} packages\n`;
+      analysis += development.slice(0, 5).map(dep => `- ${dep}`).join('\n');
+      if (development.length > 5) analysis += `\n- ... and ${development.length - 5} more`;
+    }
+    
+    return analysis || 'Dependencies to be analyzed';
+  }
+
+  private generateAPIInterfaces(packageJson: any, projectAnalysis: any): string {
+    if (packageJson.dependencies?.express || packageJson.dependencies?.fastify) {
+      return `RESTful API endpoints following OpenAPI specification:
+- GET /api/health - Health check endpoint
+- Authentication and authorization middleware
+- Request/response validation
+- Error handling middleware`;
+    }
+    return 'Interface specifications to be defined';
+  }
+
+  private generateModuleInterfaces(projectAnalysis: any): string {
+    if (projectAnalysis.hasSource) {
+      return `Internal module interfaces:
+- Clear module boundaries and exports
+- Consistent API patterns across modules
+- Type definitions for all public interfaces`;
+    }
+    return 'Module interfaces to be defined';
+  }
+
+  private generateEnvVarSpecs(packageJson: any): string {
+    const envVars: string[] = [];
+    
+    if (packageJson.dependencies?.express || packageJson.dependencies?.fastify) {
+      envVars.push('- `PORT`: Server port (default: 3000)');
+      envVars.push('- `NODE_ENV`: Environment mode (development/production)');
+    }
+    
+    envVars.push('- `LOG_LEVEL`: Logging level (debug/info/warn/error)');
+    
+    return envVars.join('\n');
+  }
+
+  private generateBuildConfig(packageJson: any): string {
+    let config = '';
+    
+    if (packageJson.scripts?.build) {
+      config += `Build process: \`${packageJson.scripts.build}\`\n`;
+    }
+    if (packageJson.scripts?.start) {
+      config += `Start command: \`${packageJson.scripts.start}\`\n`;
+    }
+    if (packageJson.type === 'module') {
+      config += 'Module type: ES Modules\n';
+    }
+    
+    return config || 'Build configuration to be defined';
+  }
+
+  private generateImplementationTasks(packageJson: any, projectAnalysis: any): any {
+    const tasks = {
+      development: [],
+      integration: [],
+      quality: [],
+      deployment: []
+    };
+
+    // Development tasks
+    if (projectAnalysis.hasSource) {
+      (tasks.development as any).push({
+        title: 'Implement Core Modules',
+        subtasks: ['Set up module structure', 'Implement business logic', 'Add error handling'],
+        requirements: 'FR-1, FR-2'
+      });
+    }
+
+    if (packageJson.dependencies?.express) {
+      (tasks.development as any).push({
+        title: 'Develop API Endpoints',
+        subtasks: ['Create route handlers', 'Add middleware', 'Implement validation'],
+        requirements: 'FR-2'
+      });
+    }
+
+    // Integration tasks
+    if (packageJson.dependencies?.mongodb || packageJson.dependencies?.mongoose) {
+      (tasks.integration as any).push({
+        title: 'Database Integration',
+        subtasks: ['Set up database connection', 'Create data models', 'Implement queries'],
+        requirements: 'NFR-2'
+      });
+    }
+
+    // Quality tasks
+    if (packageJson.scripts?.test) {
+      (tasks.quality as any).push({
+        title: 'Test Implementation',
+        subtasks: ['Write unit tests', 'Add integration tests', 'Ensure test coverage'],
+        requirements: 'FR-3, NFR-3'
+      });
+    }
+
+    if (packageJson.scripts?.lint) {
+      (tasks.quality as any).push({
+        title: 'Code Quality Assurance',
+        subtasks: ['Run linting checks', 'Fix code style issues', 'Add documentation'],
+        requirements: 'NFR-3'
+      });
+    }
+
+    // Deployment tasks
+    if (packageJson.scripts?.build) {
+      (tasks.deployment as any).push({
+        title: 'Build and Package',
+        subtasks: ['Run build process', 'Optimize for production', 'Create deployment artifacts'],
+        requirements: 'NFR-1'
+      });
+    }
+
+    (tasks.deployment as any).push({
+      title: 'Deployment Configuration',
+      subtasks: ['Set up environment variables', 'Configure production settings', 'Deploy to target environment'],
+      requirements: 'NFR-1, NFR-2'
+    });
+
+    return tasks;
   }
 }
