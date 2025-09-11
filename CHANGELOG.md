@@ -5,6 +5,28 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.2.0] - 2025-09-11
+
+### Added
+- **Empty Project Bootstrap**: SDD tools now work from empty directories without requiring package.json or existing files
+- **Kiro Workflow Alignment**: Complete alignment with .claude/commands/kiro/ workflow patterns and phase validation
+- **Feature Name Generation**: Automatic feature name extraction from project descriptions
+- **Spec Context Management**: .kiro/specs/[feature]/ structure with spec.json phase tracking and approval workflow
+- **EARS Requirements Generation**: Dynamic EARS-formatted acceptance criteria generated from project descriptions
+- **Phase Validation System**: Enforced workflow progression (init → requirements → design → tasks)
+
+### Changed
+- **sdd-init**: Now takes project description instead of name/path, generates feature names automatically
+- **sdd-requirements**: Uses feature name parameter, loads spec context, generates from project description
+- **sdd-design**: Validates requirements phase, creates technical design with phase enforcement
+- **sdd-tasks**: Validates design phase, generates kiro-style numbered implementation tasks
+- **Tool Schemas**: Updated SDDToolAdapter schemas for consistency with kiro workflow
+
+### Fixed
+- **Package.json Dependency**: Eliminated requirement for existing project files
+- **Static Content Generation**: Replaced with dynamic, context-aware content from project descriptions
+- **Workflow Enforcement**: Added proper phase validation and spec.json tracking
+
 ## [1.1.22] - 2025-09-11
 
 ### Added

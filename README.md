@@ -6,7 +6,7 @@
 
 A Model Context Protocol (MCP) server implementing Spec-Driven Development (SDD) workflows for AI-agent CLIs and IDEs like Claude Code, Cursor, and others.
 
-> **✅ v1.1.22 Update**: Enhanced SDD tools with context-aware content generation. All tools now analyze real project structure instead of generating static templates.
+> **✅ v1.2.0 Update**: Complete kiro workflow alignment with empty project support. SDD tools now bootstrap from project descriptions without requiring existing files.
 
 ## 🚀 Quick Start
 
