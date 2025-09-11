@@ -120,22 +120,30 @@ Once connected to your AI client, you can use these MCP tools:
 | `sdd-quality-check` | Code quality analysis | Linus-style 5-layer code review |
 | `sdd-context-load` | Load project context | Restore project memory and state |
 | `sdd-template-render` | Render templates | Generate files from templates |
+| `sdd-steering` | Create/update steering docs | Generate product.md, tech.md, structure.md |
+| `sdd-steering-custom` | Create custom steering docs | Add specialized guidance documents |
+| `sdd-validate-design` | Design quality validation | Interactive GO/NO-GO design review |
+| `sdd-validate-gap` | Implementation gap analysis | Analyze requirements vs codebase |
+| `sdd-spec-impl` | Execute tasks with TDD | Kent Beck's Red-Green-Refactor methodology |
 
 ## 💡 Basic Workflow
 
-1. **Initialize Project**
+1. **Initialize Project & Steering**
    ```
    Use sdd-init to create a new SDD project
+   Use sdd-steering to generate core steering documents
    ```
 
 2. **Generate Requirements**
    ```
    Use sdd-requirements to analyze and document requirements
+   Use sdd-validate-gap to analyze implementation feasibility
    ```
 
 3. **Create Design**
    ```
    Use sdd-design to generate technical architecture
+   Use sdd-validate-design for GO/NO-GO design review
    ```
 
 4. **Plan Tasks**
@@ -143,14 +151,17 @@ Once connected to your AI client, you can use these MCP tools:
    Use sdd-tasks to break down implementation work
    ```
 
-5. **Implement**
+5. **Implement with TDD**
    ```
-   Use sdd-implement for implementation guidance
+   Use sdd-spec-impl to execute tasks with TDD methodology
+   Use sdd-quality-check for code review and analysis
    ```
 
-6. **Quality Check**
+6. **Monitor & Manage**
    ```
-   Use sdd-quality-check for code review and analysis
+   Use sdd-status to check workflow progress
+   Use sdd-approve to approve workflow phases
+   Use sdd-context-load to restore project memory
    ```
 
 ## ⚙️ Configuration
