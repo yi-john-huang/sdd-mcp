@@ -82,14 +82,13 @@ async function createSimpleMCPServer() {
       tools: [
         {
           name: 'sdd-init',
-          description: 'Initialize a new SDD project',
+          description: 'Initialize a new SDD project from description',
           inputSchema: {
             type: 'object',
             properties: {
-              projectName: { type: 'string' },
-              description: { type: 'string' }
+              description: { type: 'string', description: 'Detailed project description' }
             },
-            required: ['projectName']
+            required: ['description']
           }
         },
         {
@@ -180,12 +179,7 @@ async function createSimpleMCPServer() {
     
     switch (name) {
       case 'sdd-init':
-        return {
-          content: [{
-            type: 'text',
-            text: `SDD project "${args?.projectName}" initialization would begin here. (Simplified MCP mode)`
-          }]
-        };
+        return await handleInitSimplified(args);
       case 'sdd-status':
         return {
           content: [{
@@ -498,90 +492,94 @@ async function handleRequirementsSimplified(args: any) {
   const path = await import('path');
   
   try {
-    const projectPath = process.cwd();
+    const { featureName } = args;
     
-    // Read package.json for project analysis
-    let packageJson: any = {};
-    try {
-      const packagePath = path.join(projectPath, 'package.json');
-      if (fs.existsSync(packagePath)) {
-        const packageContent = fs.readFileSync(packagePath, 'utf8');
-        packageJson = JSON.parse(packageContent);
+    if (!featureName || typeof featureName !== 'string') {
+      throw new Error('Feature name is required for requirements generation');
+    }
+    
+    // Load spec context
+    const { spec, requirements } = await loadSpecContext(featureName);
+    
+    if (!spec) {
+      throw new Error(`Feature "${featureName}" not found. Run sdd-init first.`);
+    }
+    
+    // Extract project description from spec
+    let projectDescription = 'Feature requirements specification';
+    if (requirements) {
+      const descMatch = requirements.match(/## Project Description \(Input\)\n([\s\S]*?)(?:\n##|$)/);
+      if (descMatch) {
+        projectDescription = descMatch[1].trim();
       }
-    } catch (error) {
-      // Ignore package.json parsing errors
-    }
-
-    // Analyze project structure
-    const projectAnalysis = analyzeProjectStructureSync(projectPath);
-    
-    // Create .kiro/specs directory if it doesn't exist
-    const specsDir = path.join(projectPath, '.kiro', 'specs');
-    if (!fs.existsSync(specsDir)) {
-      fs.mkdirSync(specsDir, { recursive: true });
     }
     
-    // Generate requirements.md with real project data
+    // Generate EARS-formatted requirements based on description
     const requirementsContent = `# Requirements Document
 
-## Project: ${packageJson.name || 'Unknown Project'}
+## Introduction
+${generateIntroductionFromDescription(projectDescription)}
 
-**Product Description:** ${packageJson.description || 'Product requirements specification'}
+## Requirements
 
-Generated on: ${new Date().toISOString()}
-
-## Functional Requirements
-
-### FR-1: Core Functionality
-**Objective:** ${generateCoreObjectiveSimplified(packageJson, projectAnalysis)}
+### Requirement 1: Core Functionality
+**Objective:** As a user, I want ${extractPrimaryObjective(projectDescription)}, so that ${extractPrimaryBenefit(projectDescription)}
 
 #### Acceptance Criteria
-${generateAcceptanceCriteriaSimplified(packageJson, projectAnalysis).map((criteria, index) => `${index + 1}. ${criteria}`).join('\n')}
+${generateEARSRequirements(projectDescription).map((req, index) => `${index + 1}. ${req}`).join('\n')}
 
-### FR-2: Technology Integration
-**Objective:** Implement robust technology stack integration
-
-#### Acceptance Criteria
-${generateTechRequirementsSimplified(packageJson).map((req, index) => `${index + 1}. ${req}`).join('\n')}
-
-### FR-3: Quality Standards
-**Objective:** Maintain high code quality and testing standards
+### Requirement 2: System Quality
+**Objective:** As a user, I want the system to be reliable and performant, so that I can depend on it for my work
 
 #### Acceptance Criteria
-${generateQualityRequirementsSimplified(packageJson).map((req, index) => `${index + 1}. ${req}`).join('\n')}
+1. WHEN the system is used THEN it SHALL respond within acceptable time limits
+2. IF errors occur THEN the system SHALL handle them gracefully and provide meaningful feedback
+3. WHILE the system is running THE system SHALL maintain data integrity and consistency
 
-## Non-Functional Requirements
+### Requirement 3: Usability
+**Objective:** As a user, I want the system to be intuitive and well-documented, so that I can use it effectively
 
-### NFR-1: Performance
-- System SHALL respond within acceptable time limits
-- Memory usage SHALL remain within reasonable bounds
-
-### NFR-2: Reliability
-- System SHALL handle errors gracefully
-- System SHALL maintain data integrity
-
-### NFR-3: Maintainability
-- Code SHALL follow established conventions
-- System SHALL be well-documented
+#### Acceptance Criteria
+1. WHEN I use the system for the first time THEN I SHALL be able to complete basic tasks without extensive training
+2. WHERE help is needed THE system SHALL provide clear documentation and guidance
+3. IF I make mistakes THEN the system SHALL provide helpful error messages and recovery options
 `;
 
-    // Write the file
-    fs.writeFileSync(path.join(specsDir, 'requirements.md'), requirementsContent);
+    // Update spec.json with phase information
+    const specDir = path.join(process.cwd(), '.kiro', 'specs', featureName);
+    const updatedSpec = {
+      ...spec,
+      phase: 'requirements-generated',
+      approvals: {
+        ...spec.approvals,
+        requirements: {
+          generated: true,
+          approved: false
+        }
+      },
+      updated_at: new Date().toISOString()
+    };
+    
+    fs.writeFileSync(path.join(specDir, 'spec.json'), JSON.stringify(updatedSpec, null, 2));
+    fs.writeFileSync(path.join(specDir, 'requirements.md'), requirementsContent);
 
     return {
       content: [{
         type: 'text',
         text: `## Requirements Document Generated
 
-**Project**: ${packageJson.name || 'Unknown'}
-**File**: \`.kiro/specs/requirements.md\`
+**Feature**: \`${featureName}\`
+**File**: \`.kiro/specs/${featureName}/requirements.md\`
 
-**Analysis**:
-- Technology stack: ${Object.keys({...packageJson.dependencies, ...packageJson.devDependencies}).length} dependencies analyzed
-- Project structure: ${projectAnalysis.directories.length} directories analyzed
-- Generated ${generateAcceptanceCriteriaSimplified(packageJson, projectAnalysis).length} functional requirements
+**Generated Requirements**:
+- Core functionality requirements with EARS format
+- System quality and reliability requirements  
+- Usability and user experience requirements
 
-Requirements document contains project-specific analysis and EARS-formatted acceptance criteria.`
+**Project Description Analyzed**: "${projectDescription.substring(0, 100)}${projectDescription.length > 100 ? '...' : ''}"
+
+**Workflow Phase**: Requirements Generated
+**Next Step**: Run \`sdd-design ${featureName}\` to create technical design (after requirements review)`
       }]
     };
     
@@ -601,94 +599,170 @@ async function handleDesignSimplified(args: any) {
   const path = await import('path');
   
   try {
-    const projectPath = process.cwd();
+    const { featureName } = args;
     
-    // Read package.json for project analysis
-    let packageJson: any = {};
-    try {
-      const packagePath = path.join(projectPath, 'package.json');
-      if (fs.existsSync(packagePath)) {
-        const packageContent = fs.readFileSync(packagePath, 'utf8');
-        packageJson = JSON.parse(packageContent);
+    if (!featureName || typeof featureName !== 'string') {
+      throw new Error('Feature name is required for design generation');
+    }
+    
+    // Load spec context
+    const { spec, requirements } = await loadSpecContext(featureName);
+    
+    if (!spec) {
+      throw new Error(`Feature "${featureName}" not found. Run sdd-init first.`);
+    }
+    
+    // Validate phase - requirements must be generated
+    if (!spec.approvals?.requirements?.generated) {
+      throw new Error(`Requirements must be generated before design. Run sdd-requirements ${featureName} first.`);
+    }
+    
+    // Extract project description from requirements
+    let projectDescription = 'Technical design specification';
+    if (requirements) {
+      const descMatch = requirements.match(/## Project Description \(Input\)\n([\s\S]*?)(?:\n##|$)/);
+      if (descMatch) {
+        projectDescription = descMatch[1].trim();
       }
-    } catch (error) {
-      // Ignore package.json parsing errors
-    }
-
-    // Analyze project structure
-    const projectAnalysis = analyzeProjectStructureSync(projectPath);
-    
-    // Create .kiro/specs directory if it doesn't exist
-    const specsDir = path.join(projectPath, '.kiro', 'specs');
-    if (!fs.existsSync(specsDir)) {
-      fs.mkdirSync(specsDir, { recursive: true });
     }
     
-    // Generate design.md with real project analysis
+    // Generate design document based on requirements
     const designContent = `# Technical Design Document
 
-## Project: ${packageJson.name || 'Unknown Project'}
+## Overview
+This design document specifies the technical implementation approach for ${spec.feature_name}. 
 
-**Product Description:** ${packageJson.description || 'Technical design specification'}
+**Purpose**: ${projectDescription}
 
-Generated on: ${new Date().toISOString()}
+**Goals**:
+- Deliver a robust and maintainable solution
+- Ensure scalability and performance
+- Follow established architectural patterns
 
-## Architecture Overview
+## Architecture
 
-### System Architecture
-${generateArchitectureDescriptionSimplified(packageJson, projectAnalysis)}
+### High-Level Architecture
+The system follows a modular architecture with clear separation of concerns:
 
-### Key Components
-${generateComponentDescriptionsSimplified(projectAnalysis).map(comp => `- **${comp.name}**: ${comp.description}`).join('\n')}
+- **Input Layer**: Handles user input validation and processing
+- **Core Logic**: Implements business logic and rules
+- **Output Layer**: Manages results presentation and formatting
+- **Error Handling**: Provides comprehensive error management
 
-### Data Models
-${generateDataModelsSimplified(packageJson, projectAnalysis).map(model => `- **${model}**: Data structure definition`).join('\n')}
+### System Flow
+1. **Input Processing**: Validate and sanitize user input
+2. **Business Logic**: Execute core functionality 
+3. **Result Generation**: Process and format outputs
+4. **Error Management**: Handle exceptions and edge cases
 
-## Implementation Details
+## Components and Interfaces
 
-### Technology Stack
-${generateDetailedTechStackSimplified(packageJson)}
+### Core Components
 
-### Design Patterns
-${generateDesignPatternsSimplified(packageJson, projectAnalysis).map(pattern => `- **${pattern}**: Applied for maintainability and scalability`).join('\n')}
+#### Input Processor
+- **Responsibility**: Input validation and sanitization
+- **Interface**: 
+  - \`validateInput(data: InputData): ValidationResult\`
+  - \`sanitizeInput(data: InputData): CleanData\`
 
-### Dependencies
-${generateDependencyAnalysisSimplified(packageJson)}
+#### Business Logic Engine  
+- **Responsibility**: Core functionality implementation
+- **Interface**:
+  - \`processRequest(input: CleanData): ProcessingResult\`
+  - \`handleBusinessRules(data: CleanData): RuleResult\`
 
-## Interface Specifications
+#### Output Formatter
+- **Responsibility**: Result formatting and presentation
+- **Interface**:
+  - \`formatResult(result: ProcessingResult): FormattedOutput\`
+  - \`handleError(error: Error): ErrorResponse\`
 
-### API Interfaces
-${generateAPIInterfacesSimplified(packageJson, projectAnalysis)}
+## Data Models
 
-### Module Interfaces  
-${generateModuleInterfacesSimplified(projectAnalysis)}
+### Input Data Model
+\`\`\`typescript
+interface InputData {
+  // Input structure based on requirements
+  payload: unknown;
+  metadata: Record<string, unknown>;
+}
+\`\`\`
 
-## Configuration
+### Processing Result Model
+\`\`\`typescript
+interface ProcessingResult {
+  success: boolean;
+  data: unknown;
+  metadata: ResultMetadata;
+}
+\`\`\`
 
-### Environment Variables
-${generateEnvVarSpecsSimplified(packageJson)}
+## Error Handling
 
-### Build Configuration
-${generateBuildConfigSimplified(packageJson)}
+### Error Categories
+- **Validation Errors**: Invalid input format or content
+- **Processing Errors**: Failures during business logic execution
+- **System Errors**: Infrastructure or dependency failures
+
+### Error Response Strategy
+- Clear error messages for user-facing issues
+- Detailed logging for system debugging
+- Graceful degradation where possible
+
+## Testing Strategy
+
+### Unit Tests
+- Input validation functions
+- Business logic components
+- Output formatting utilities
+
+### Integration Tests
+- End-to-end workflow validation
+- Error handling scenarios
+- Performance under load
+
+### Quality Assurance
+- Code coverage requirements
+- Performance benchmarks
+- Security validation
 `;
 
-    // Write the file
-    fs.writeFileSync(path.join(specsDir, 'design.md'), designContent);
+    // Update spec.json with phase information
+    const specDir = path.join(process.cwd(), '.kiro', 'specs', featureName);
+    const updatedSpec = {
+      ...spec,
+      phase: 'design-generated',
+      approvals: {
+        ...spec.approvals,
+        design: {
+          generated: true,
+          approved: false
+        }
+      },
+      updated_at: new Date().toISOString()
+    };
+    
+    fs.writeFileSync(path.join(specDir, 'spec.json'), JSON.stringify(updatedSpec, null, 2));
+    fs.writeFileSync(path.join(specDir, 'design.md'), designContent);
 
     return {
       content: [{
         type: 'text',
         text: `## Design Document Generated
 
-**Project**: ${packageJson.name || 'Unknown'}
-**File**: \`.kiro/specs/design.md\`
+**Feature**: \`${featureName}\`
+**File**: \`.kiro/specs/${featureName}/design.md\`
 
-**Analysis**:
-- Architecture: ${generateArchitectureDescriptionSimplified(packageJson, projectAnalysis).substring(0, 100)}...
-- Components: ${generateComponentDescriptionsSimplified(projectAnalysis).length} key components identified
-- Technology stack: ${Object.keys({...packageJson.dependencies, ...packageJson.devDependencies}).length} dependencies analyzed
+**Design Elements**:
+- Modular architecture with clear component separation
+- Comprehensive interface specifications
+- Data models and error handling strategy
+- Complete testing approach
 
-Design document contains project-specific architecture analysis and interface specifications.`
+**Project Description**: "${projectDescription.substring(0, 100)}${projectDescription.length > 100 ? '...' : ''}"
+
+**Workflow Phase**: Design Generated  
+**Next Step**: Run \`sdd-tasks ${featureName}\` to generate implementation tasks (after design review)`
       }]
     };
     
@@ -708,86 +782,135 @@ async function handleTasksSimplified(args: any) {
   const path = await import('path');
   
   try {
-    const projectPath = process.cwd();
+    const { featureName } = args;
     
-    // Read package.json for project analysis
-    let packageJson: any = {};
-    try {
-      const packagePath = path.join(projectPath, 'package.json');
-      if (fs.existsSync(packagePath)) {
-        const packageContent = fs.readFileSync(packagePath, 'utf8');
-        packageJson = JSON.parse(packageContent);
-      }
-    } catch (error) {
-      // Ignore package.json parsing errors
-    }
-
-    // Analyze project structure
-    const projectAnalysis = analyzeProjectStructureSync(projectPath);
-    
-    // Create .kiro/specs directory if it doesn't exist
-    const specsDir = path.join(projectPath, '.kiro', 'specs');
-    if (!fs.existsSync(specsDir)) {
-      fs.mkdirSync(specsDir, { recursive: true });
+    if (!featureName || typeof featureName !== 'string') {
+      throw new Error('Feature name is required for tasks generation');
     }
     
-    // Generate tasks breakdown
-    const tasks = generateImplementationTasksSimplified(packageJson, projectAnalysis);
+    // Load spec context
+    const { spec } = await loadSpecContext(featureName);
     
+    if (!spec) {
+      throw new Error(`Feature "${featureName}" not found. Run sdd-init first.`);
+    }
+    
+    // Validate phase - design must be generated
+    if (!spec.approvals?.design?.generated) {
+      throw new Error(`Design must be generated before tasks. Run sdd-design ${featureName} first.`);
+    }
+    
+    // Generate implementation tasks following kiro format
     const tasksContent = `# Implementation Plan
 
-## Project: ${packageJson.name || 'Unknown Project'}
+- [ ] 1. Set up project foundation and infrastructure
+- [ ] 1.1 Initialize project structure and configuration
+  - Create directory structure as per design
+  - Set up build configuration and tooling
+  - Initialize version control and documentation
+  - _Requirements: All requirements need foundational setup_
 
-**Product Description:** ${packageJson.description || 'Implementation task breakdown'}
+- [ ] 1.2 Implement core infrastructure components
+  - Set up error handling framework
+  - Create logging and monitoring utilities
+  - Establish configuration management
+  - _Requirements: System quality requirements_
 
-Generated on: ${new Date().toISOString()}
+- [ ] 2. Implement core functionality
+- [ ] 2.1 Develop input processing components
+  - Build input validation system
+  - Implement data sanitization logic
+  - Create input parsing utilities
+  - _Requirements: 1.1, 1.2_
 
-## Development Phase Tasks
+- [ ] 2.2 Build business logic engine
+  - Implement core processing algorithms
+  - Create business rule validation
+  - Develop result generation logic
+  - _Requirements: 1.1, 1.3_
 
-${tasks.development.map((task, index) => `- [ ] ${index + 1}. ${task.title}
-  ${task.subtasks.map((subtask: string) => `  - ${subtask}`).join('\n')}
-  - _Requirements: ${task.requirements}_`).join('\n\n')}
+- [ ] 2.3 Create output formatting system
+  - Build result formatting utilities
+  - Implement response generation
+  - Create output validation
+  - _Requirements: 1.2, 1.3_
 
-## Integration Phase Tasks
+- [ ] 3. Implement error handling and validation
+- [ ] 3.1 Build comprehensive error management
+  - Create error classification system
+  - Implement error recovery mechanisms
+  - Build error logging and reporting
+  - _Requirements: 2.1, 2.2_
 
-${tasks.integration.map((task, index) => `- [ ] ${index + 1}. ${task.title}
-  ${task.subtasks.map((subtask: string) => `  - ${subtask}`).join('\n')}
-  - _Requirements: ${task.requirements}_`).join('\n\n')}
+- [ ] 3.2 Add input/output validation
+  - Implement schema validation
+  - Create boundary condition checks
+  - Add security validation layers
+  - _Requirements: 2.1, 3.1_
 
-## Quality Assurance Tasks
+- [ ] 4. Develop testing and quality assurance
+- [ ] 4.1 Create unit test suite
+  - Test input processing components
+  - Test business logic functions
+  - Test output formatting utilities
+  - _Requirements: All functional requirements_
 
-${tasks.quality.map((task, index) => `- [ ] ${index + 1}. ${task.title}
-  ${task.subtasks.map((subtask: string) => `  - ${subtask}`).join('\n')}
-  - _Requirements: ${task.requirements}_`).join('\n\n')}
+- [ ] 4.2 Build integration test framework
+  - Test end-to-end workflows
+  - Test error handling scenarios
+  - Test performance benchmarks
+  - _Requirements: 2.1, 2.2, 2.3_
 
-## Deployment Tasks
+- [ ] 5. Finalize implementation and deployment
+- [ ] 5.1 Integrate all components
+  - Wire together all system components
+  - Implement final error handling
+  - Add performance optimizations
+  - _Requirements: All requirements integration_
 
-${tasks.deployment.map((task, index) => `- [ ] ${index + 1}. ${task.title}
-  ${task.subtasks.map((subtask: string) => `  - ${subtask}`).join('\n')}
-  - _Requirements: ${task.requirements}_`).join('\n\n')}
+- [ ] 5.2 Prepare for deployment
+  - Create deployment configuration
+  - Add production monitoring
+  - Finalize documentation
+  - _Requirements: System quality and deployment_
 `;
 
-    // Write the file
-    fs.writeFileSync(path.join(specsDir, 'tasks.md'), tasksContent);
-
-    const totalTasks = tasks.development.length + tasks.integration.length + tasks.quality.length + tasks.deployment.length;
+    // Update spec.json with phase information
+    const specDir = path.join(process.cwd(), '.kiro', 'specs', featureName);
+    const updatedSpec = {
+      ...spec,
+      phase: 'tasks-generated',
+      approvals: {
+        ...spec.approvals,
+        tasks: {
+          generated: true,
+          approved: false
+        }
+      },
+      ready_for_implementation: true,
+      updated_at: new Date().toISOString()
+    };
+    
+    fs.writeFileSync(path.join(specDir, 'spec.json'), JSON.stringify(updatedSpec, null, 2));
+    fs.writeFileSync(path.join(specDir, 'tasks.md'), tasksContent);
 
     return {
       content: [{
         type: 'text',
         text: `## Implementation Tasks Generated
 
-**Project**: ${packageJson.name || 'Unknown'}
-**File**: \`.kiro/specs/tasks.md\`
+**Feature**: \`${featureName}\`
+**File**: \`.kiro/specs/${featureName}/tasks.md\`
 
-**Analysis**:
-- Total tasks: ${totalTasks} implementation tasks generated
-- Development: ${tasks.development.length} tasks
-- Integration: ${tasks.integration.length} tasks  
-- Quality: ${tasks.quality.length} tasks
-- Deployment: ${tasks.deployment.length} tasks
+**Generated Tasks**:
+- 5 major task groups with 10 sub-tasks total
+- Properly sequenced with dependency tracking
+- Requirement traceability for all tasks
+- Coverage of setup, core functionality, validation, testing, and deployment
 
-Task breakdown contains project-specific implementation plan with requirement traceability.`
+**Workflow Phase**: Tasks Generated
+**Status**: Ready for Implementation
+**Next Step**: Begin implementation following the task sequence`
       }]
     };
     
@@ -1110,6 +1233,224 @@ function generateImplementationTasksSimplified(packageJson: any, projectAnalysis
   });
 
   return tasks;
+}
+
+// Helper functions for requirement generation from description
+function generateIntroductionFromDescription(description: string): string {
+  const systemName = extractSystemName(description);
+  return `This document specifies the requirements for ${systemName}. The system aims to ${description.toLowerCase()}.`;
+}
+
+function extractSystemName(description: string): string {
+  // Extract a system name from description
+  const words = description.split(' ');
+  if (words.length >= 2) {
+    return `the ${words.slice(0, 3).join(' ')}`;
+  }
+  return 'the system';
+}
+
+function extractPrimaryObjective(description: string): string {
+  // Convert description into user objective
+  if (description.toLowerCase().includes('tool') || description.toLowerCase().includes('cli')) {
+    return `use a tool that ${description.toLowerCase()}`;
+  }
+  if (description.toLowerCase().includes('system') || description.toLowerCase().includes('application')) {
+    return `access a system that ${description.toLowerCase()}`;
+  }
+  return `have functionality that ${description.toLowerCase()}`;
+}
+
+function extractPrimaryBenefit(description: string): string {
+  // Infer benefit from description
+  if (description.toLowerCase().includes('automate')) {
+    return 'I can save time and reduce manual effort';
+  }
+  if (description.toLowerCase().includes('analyze') || description.toLowerCase().includes('review')) {
+    return 'I can make better informed decisions';
+  }
+  if (description.toLowerCase().includes('manage') || description.toLowerCase().includes('organize')) {
+    return 'I can maintain better control and organization';
+  }
+  return 'I can accomplish my goals more effectively';
+}
+
+function generateEARSRequirements(description: string): string[] {
+  const requirements: string[] = [];
+  
+  // Core functional requirement
+  requirements.push(`WHEN I use the system THEN it SHALL provide ${description.toLowerCase()} functionality`);
+  
+  // Input/output handling
+  requirements.push('WHEN I provide input THEN the system SHALL validate and process it correctly');
+  
+  // Error handling
+  requirements.push('IF invalid input is provided THEN the system SHALL reject it with clear error messages');
+  
+  // Success condition
+  requirements.push('WHEN all inputs are valid THEN the system SHALL complete the requested operation successfully');
+  
+  return requirements;
+}
+
+// Helper functions for kiro-style workflow
+function generateFeatureName(description: string): string {
+  // Extract feature name from description - similar to kiro spec-init
+  const cleaned = description
+    .toLowerCase()
+    .replace(/[^a-z0-9\s]/g, '')
+    .trim()
+    .split(/\s+/)
+    .slice(0, 4) // Take first 4 words
+    .join('-');
+    
+  // Ensure it's not empty
+  return cleaned || 'new-feature';
+}
+
+function ensureUniqueFeatureName(baseName: string): string {
+  const fs = require('fs');
+  const path = require('path');
+  
+  const specsDir = path.join(process.cwd(), '.kiro', 'specs');
+  
+  if (!fs.existsSync(specsDir)) {
+    return baseName;
+  }
+  
+  let counter = 1;
+  let featureName = baseName;
+  
+  while (fs.existsSync(path.join(specsDir, featureName))) {
+    featureName = `${baseName}-${counter}`;
+    counter++;
+  }
+  
+  return featureName;
+}
+
+async function loadSpecContext(featureName: string) {
+  const fs = await import('fs');
+  const path = await import('path');
+  
+  const specDir = path.join(process.cwd(), '.kiro', 'specs', featureName);
+  const specJsonPath = path.join(specDir, 'spec.json');
+  const requirementsPath = path.join(specDir, 'requirements.md');
+  
+  let spec = null;
+  let requirements = null;
+  
+  try {
+    if (fs.existsSync(specJsonPath)) {
+      const specContent = fs.readFileSync(specJsonPath, 'utf8');
+      spec = JSON.parse(specContent);
+    }
+  } catch (error) {
+    // Ignore spec.json parse errors
+  }
+  
+  try {
+    if (fs.existsSync(requirementsPath)) {
+      requirements = fs.readFileSync(requirementsPath, 'utf8');
+    }
+  } catch (error) {
+    // Ignore requirements.md read errors
+  }
+  
+  return { spec, requirements };
+}
+
+async function handleInitSimplified(args: any) {
+  const fs = await import('fs');
+  const path = await import('path');
+  
+  try {
+    const { description } = args;
+    
+    if (!description || typeof description !== 'string') {
+      throw new Error('Description is required for project initialization');
+    }
+    
+    const projectPath = process.cwd();
+    
+    // Generate feature name from description
+    const baseFeatureName = generateFeatureName(description);
+    const featureName = ensureUniqueFeatureName(baseFeatureName);
+    
+    // Create .kiro/specs/[feature-name] directory
+    const specDir = path.join(projectPath, '.kiro', 'specs', featureName);
+    if (!fs.existsSync(specDir)) {
+      fs.mkdirSync(specDir, { recursive: true });
+    }
+    
+    // Create spec.json with metadata
+    const specContent = {
+      feature_name: featureName,
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+      language: 'en',
+      phase: 'initialized',
+      approvals: {
+        requirements: {
+          generated: false,
+          approved: false
+        },
+        design: {
+          generated: false,
+          approved: false
+        },
+        tasks: {
+          generated: false,
+          approved: false
+        }
+      },
+      ready_for_implementation: false
+    };
+    
+    fs.writeFileSync(path.join(specDir, 'spec.json'), JSON.stringify(specContent, null, 2));
+    
+    // Create requirements.md template with project description
+    const requirementsTemplate = `# Requirements Document
+
+## Project Description (Input)
+${description}
+
+## Requirements
+<!-- Will be generated in sdd-requirements phase -->
+`;
+    
+    fs.writeFileSync(path.join(specDir, 'requirements.md'), requirementsTemplate);
+    
+    return {
+      content: [{
+        type: 'text',
+        text: `## SDD Project Initialized Successfully
+
+**Feature Name**: \`${featureName}\`
+**Description**: ${description}
+
+**Created Files**:
+- \`.kiro/specs/${featureName}/spec.json\` - Project metadata and phase tracking
+- \`.kiro/specs/${featureName}/requirements.md\` - Initial requirements template
+
+**Next Steps**:
+1. Run \`sdd-requirements ${featureName}\` to generate detailed requirements
+2. Follow the SDD workflow: Requirements → Design → Tasks → Implementation
+
+**Workflow Phase**: Initialized
+**Ready for**: Requirements generation`
+      }]
+    };
+    
+  } catch (error) {
+    return {
+      content: [{
+        type: 'text',
+        text: `Error initializing SDD project: ${(error as Error).message}`
+      }],
+      isError: true
+    };
+  }
 }
 
 async function main(): Promise<void> {

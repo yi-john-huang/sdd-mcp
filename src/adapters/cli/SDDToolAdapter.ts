@@ -36,15 +36,13 @@ export class SDDToolAdapter {
         name: 'sdd-init',
         tool: {
           name: 'sdd-init',
-          description: 'Initialize a new SDD project with directory structure and spec files',
+          description: 'Initialize a new SDD project from description',
           inputSchema: {
             type: 'object',
             properties: {
-              name: { type: 'string', description: 'Project name' },
-              path: { type: 'string', description: 'Project path' },
-              language: { type: 'string', enum: ['en', 'ja', 'zh-TW'], default: 'en' }
+              description: { type: 'string', description: 'Detailed project description' }
             },
-            required: ['name', 'path']
+            required: ['description']
           }
         },
         handler: this.handleProjectInit.bind(this)
@@ -68,13 +66,13 @@ export class SDDToolAdapter {
         name: 'sdd-requirements',
         tool: {
           name: 'sdd-requirements',
-          description: 'Generate requirements document template',
+          description: 'Generate requirements doc',
           inputSchema: {
             type: 'object',
             properties: {
-              projectId: { type: 'string', description: 'Project ID' }
+              featureName: { type: 'string', description: 'Feature name' }
             },
-            required: ['projectId']
+            required: ['featureName']
           }
         },
         handler: this.handleRequirements.bind(this)
@@ -83,13 +81,13 @@ export class SDDToolAdapter {
         name: 'sdd-design',
         tool: {
           name: 'sdd-design',
-          description: 'Generate design document template',
+          description: 'Create design specifications',
           inputSchema: {
             type: 'object',
             properties: {
-              projectId: { type: 'string', description: 'Project ID' }
+              featureName: { type: 'string', description: 'Feature name' }
             },
-            required: ['projectId']
+            required: ['featureName']
           }
         },
         handler: this.handleDesign.bind(this)
@@ -98,13 +96,13 @@ export class SDDToolAdapter {
         name: 'sdd-tasks',
         tool: {
           name: 'sdd-tasks',
-          description: 'Generate implementation tasks document',
+          description: 'Generate task breakdown',
           inputSchema: {
             type: 'object',
             properties: {
-              projectId: { type: 'string', description: 'Project ID' }
+              featureName: { type: 'string', description: 'Feature name' }
             },
-            required: ['projectId']
+            required: ['featureName']
           }
         },
         handler: this.handleTasks.bind(this)
