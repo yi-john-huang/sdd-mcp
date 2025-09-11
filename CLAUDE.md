@@ -59,6 +59,8 @@ Managed by `/kiro:steering` command. Updates here reflect command changes.
 - `product.md`: Always included - Product context and business objectives
 - `tech.md`: Always included - Technology stack and architectural decisions
 - `structure.md`: Always included - File organization and code patterns
+- `linus-review.md`: Always included - Ensuring code quality of the projects
+- `commit.md`: Always included - Ensuring the commit / merge request / pull request title and message context.
 
 ### Custom Steering Files
 <!-- Added by /kiro:steering-custom command -->
