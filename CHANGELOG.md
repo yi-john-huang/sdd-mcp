@@ -5,6 +5,26 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.1.22] - 2025-09-11
+
+### Added
+- **Context-Aware Content Generation**: All SDD tools now analyze real project structure instead of generating static templates
+- **Project Analysis Engine**: 20+ helper methods for analyzing package.json, dependencies, and directory structure
+- **EARS-Formatted Requirements**: Generate acceptance criteria based on actual npm scripts and project configuration
+- **Architecture Detection**: Automatic technology stack identification and pattern recognition from codebase
+- **Simplified MCP Tools**: Enhanced versions that work directly without requiring full SDD initialization
+
+### Changed
+- **TemplateService**: Enhanced with comprehensive project analysis capabilities for real-time content generation
+- **SDDToolAdapter**: Added missing sdd-steering tools with project-specific analysis functionality
+- **Requirements Generation**: Now extracts real functional requirements from package.json and project structure
+- **Design Generation**: Architecture documentation based on actual dependencies and detected patterns
+- **Task Generation**: Implementation breakdown derived from real technology stack and project organization
+
+### Fixed
+- **Static Template Content**: Replaced generic placeholders with dynamic project-specific content
+- **Tool Integration**: Enhanced MCP tool compatibility for direct usage without complex setup
+
 ## [1.1.12] - 2025-09-10
 
 ### Fixed

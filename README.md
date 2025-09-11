@@ -6,7 +6,7 @@
 
 A Model Context Protocol (MCP) server implementing Spec-Driven Development (SDD) workflows for AI-agent CLIs and IDEs like Claude Code, Cursor, and others.
 
-> **✅ v1.1.21 Update**: Resolved MCP server connection issues. Use global installation (`npm install -g`) instead of npx for reliable Claude Code integration.
+> **✅ v1.1.22 Update**: Enhanced SDD tools with context-aware content generation. All tools now analyze real project structure instead of generating static templates.
 
 ## 🚀 Quick Start
 
@@ -111,16 +111,16 @@ Once connected to your AI client, you can use these MCP tools:
 | Tool | Description | Usage |
 |------|-------------|--------|
 | `sdd-init` | Initialize new SDD project | Creates .kiro directory structure |
-| `sdd-requirements` | Generate requirements doc | Creates requirements.md from project analysis |
-| `sdd-design` | Create design specifications | Generates design.md with architecture |
-| `sdd-tasks` | Generate task breakdown | Creates tasks.md with implementation plan |
+| `sdd-requirements` | Generate context-aware requirements | Analyzes package.json and structure to create EARS-formatted requirements |
+| `sdd-design` | Create project-specific design | Generates architecture docs based on actual tech stack and dependencies |
+| `sdd-tasks` | Generate implementation breakdown | Creates tasks derived from real project structure and technology choices |
 | `sdd-implement` | Implementation guidelines | Provides implementation steering |
 | `sdd-status` | Check workflow progress | Shows current phase and approvals |
 | `sdd-approve` | Approve workflow phases | Mark phases as approved for progression |
 | `sdd-quality-check` | Code quality analysis | Linus-style 5-layer code review |
 | `sdd-context-load` | Load project context | Restore project memory and state |
 | `sdd-template-render` | Render templates | Generate files from templates |
-| `sdd-steering` | Create/update steering docs | Generate product.md, tech.md, structure.md |
+| `sdd-steering` | Create/update steering docs | Analyzes project to generate product.md, tech.md, structure.md with real content |
 | `sdd-steering-custom` | Create custom steering docs | Add specialized guidance documents |
 | `sdd-validate-design` | Design quality validation | Interactive GO/NO-GO design review |
 | `sdd-validate-gap` | Implementation gap analysis | Analyze requirements vs codebase |
@@ -136,19 +136,19 @@ Once connected to your AI client, you can use these MCP tools:
 
 2. **Generate Requirements**
    ```
-   Use sdd-requirements to analyze and document requirements
+   Use sdd-requirements to analyze package.json and create context-aware requirements
    Use sdd-validate-gap to analyze implementation feasibility
    ```
 
 3. **Create Design**
    ```
-   Use sdd-design to generate technical architecture
+   Use sdd-design to generate architecture based on actual dependencies
    Use sdd-validate-design for GO/NO-GO design review
    ```
 
 4. **Plan Tasks**
    ```
-   Use sdd-tasks to break down implementation work
+   Use sdd-tasks to create implementation breakdown from real project structure
    ```
 
 5. **Implement with TDD**
@@ -206,9 +206,12 @@ claude mcp add sdd "sdd-mcp-server"
 ## 🏗️ Key Features
 
 - **5-Phase SDD Workflow**: INIT → REQUIREMENTS → DESIGN → TASKS → IMPLEMENTATION
+- **Context-Aware Generation**: Analyzes package.json, dependencies, and project structure for real content
+- **EARS-Formatted Requirements**: Generate acceptance criteria based on actual npm scripts and dependencies
+- **Architecture Analysis**: Technology stack detection and pattern recognition from real codebase
 - **Quality Enforcement**: Linus-style 5-layer code review system
 - **Multi-Language Support**: 10 languages with cultural adaptation
-- **Template Engine**: Handlebars-based file generation
+- **Template Engine**: Handlebars-based file generation with project-specific data
 - **Plugin System**: Extensible architecture for custom workflows
 - **MCP Protocol**: Full compatibility with AI-agent CLIs and IDEs
 
