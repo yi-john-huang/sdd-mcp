@@ -5,6 +5,19 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.3.4] - 2025-09-13
+
+### Changed
+- Version resolution: both entrypoints now report version from `package.json`
+- MCP simplified tools aligned with kiro behavior: status/approve/quality/implement parity
+- Unified doc generation: single dynamic generator to avoid drift
+
+### Added
+- Ensure static exceptions only: `.kiro/steering/linus-review.md`, `.kiro/steering/commit.md`, and `AGENTS.md` created when missing
+
+### Fixed
+- MCP mode logging detection to prevent stdio interference
+
 ## [1.3.0] - 2025-09-11
 
 ### Added

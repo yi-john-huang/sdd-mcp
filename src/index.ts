@@ -67,9 +67,23 @@ async function createSimpleMCPServer() {
   const { StdioServerTransport } = await import('@modelcontextprotocol/sdk/server/stdio.js');
   const { ListToolsRequestSchema, CallToolRequestSchema, InitializedNotificationSchema } = await import('@modelcontextprotocol/sdk/types.js');
 
+  // Resolve version dynamically from package.json when possible
+  let pkgVersion = '0.0.0';
+  try {
+    const fs = await import('fs');
+    const path = await import('path');
+    const pkgPath = path.join(process.cwd(), 'package.json');
+    if (fs.existsSync(pkgPath)) {
+      const pkg = JSON.parse(fs.readFileSync(pkgPath, 'utf8'));
+      pkgVersion = pkg.version || pkgVersion;
+    }
+  } catch {
+    // fall back to hardcoded default if needed
+  }
+
   const server = new Server({
     name: 'sdd-mcp-server',
-    version: '1.3.3'
+    version: pkgVersion
   }, {
     capabilities: {
       tools: {}
@@ -262,12 +276,7 @@ async function createSimpleMCPServer() {
       case 'sdd-init':
         return await handleInitSimplified(args);
       case 'sdd-status':
-        return {
-          content: [{
-            type: 'text', 
-            text: 'SDD project status: No active project found. Use sdd-init to create a new project.'
-          }]
-        };
+        return await handleStatusSimplified(args);
       case 'sdd-steering':
         return await handleSteeringSimplified(args);
       case 'sdd-steering-custom':
@@ -279,26 +288,11 @@ async function createSimpleMCPServer() {
       case 'sdd-tasks':
         return await handleTasksSimplified(args);
       case 'sdd-quality-check':
-        return {
-          content: [{
-            type: 'text',
-            text: 'Code quality analysis would be performed here. (Simplified MCP mode)'
-          }]
-        };
+        return await handleQualityCheckSimplified(args);
       case 'sdd-approve':
-        return {
-          content: [{
-            type: 'text',
-            text: `Phase ${args.phase} approved for feature ${args.featureName}. (Simplified MCP mode)`
-          }]
-        };
+        return await handleApproveSimplified(args);
       case 'sdd-implement':
-        return {
-          content: [{
-            type: 'text',
-            text: `Implementation guidelines for ${args.featureName}. (Simplified MCP mode)`
-          }]
-        };
+        return await handleImplementSimplified(args);
       case 'sdd-context-load':
         return {
           content: [{
@@ -356,8 +350,8 @@ async function handleSteeringSimplified(args: any) {
   try {
     const projectPath = process.cwd();
     
-    // Import and use the dynamic document generator
-    const { analyzeProject, generateProductDocument, generateTechDocument, generateStructureDocument } = await import('./utils/documentGenerator.js');
+    // Import and use the dynamic document generator (root-level for consistency)
+    const { analyzeProject, generateProductDocument, generateTechDocument, generateStructureDocument } = await import('../documentGenerator.js');
     
     // Create .kiro/steering directory if it doesn't exist
     const steeringDir = path.join(projectPath, '.kiro', 'steering');
@@ -377,6 +371,16 @@ async function handleSteeringSimplified(args: any) {
     fs.writeFileSync(path.join(steeringDir, 'product.md'), productContent);
     fs.writeFileSync(path.join(steeringDir, 'tech.md'), techContent);
     fs.writeFileSync(path.join(steeringDir, 'structure.md'), structureContent);
+
+    // Ensure static steering documents exist (exceptions to dynamic rule)
+    const linusPath = path.join(steeringDir, 'linus-review.md');
+    if (!fs.existsSync(linusPath)) {
+      fs.writeFileSync(linusPath, `# Linus Torvalds Code Review Steering Document\n\nFollow Linus-style pragmatism and simplicity. Never break userspace. Keep functions focused, minimize indentation, and eliminate special cases. Apply 5-layer analysis: Data structures, special cases, complexity, breaking changes, practicality.`);
+    }
+    const commitPath = path.join(steeringDir, 'commit.md');
+    if (!fs.existsSync(commitPath)) {
+      fs.writeFileSync(commitPath, `# Commit Message Guidelines\n\nUse conventional type prefixes (docs, chore, feat, fix, refactor, test, style, perf, ci). Format: <type>(<scope>): <subject>\n\nKeep subjects < 72 chars, imperative mood, and add body/footer when needed.`);
+    }
 
     return {
       content: [{
@@ -475,6 +479,127 @@ Generated on: ${new Date().toISOString()}
   }
 }
 
+// Status handler aligned with full server behavior
+async function handleStatusSimplified(args: any) {
+  const fs = await import('fs');
+  const path = await import('path');
+  const { featureName } = args || {};
+  const currentPath = process.cwd();
+  const kiroPath = path.join(currentPath, '.kiro');
+
+  const exists = await fs.promises.access(kiroPath).then(() => true).catch(() => false);
+  if (!exists) {
+    return { content: [{ type: 'text', text: 'SDD project status: No active project found. Use sdd-init to create a new project.' }] };
+  }
+  const specsPath = path.join(kiroPath, 'specs');
+
+  if (featureName) {
+    const featurePath = path.join(specsPath, featureName);
+    const specPath = path.join(featurePath, 'spec.json');
+    const specExists = await fs.promises.access(specPath).then(() => true).catch(() => false);
+    if (!specExists) {
+      return { content: [{ type: 'text', text: `Feature "${featureName}" not found. Use sdd-init to create it.` }] };
+    }
+    const spec = JSON.parse(fs.readFileSync(specPath, 'utf8'));
+    let status = `## SDD Project Status: ${spec.feature_name}\n\n`;
+    status += `**Current Phase**: ${spec.phase}\n`;
+    status += `**Language**: ${spec.language}\n`;
+    status += `**Created**: ${spec.created_at}\n`;
+    status += `**Updated**: ${spec.updated_at}\n\n`;
+    status += `**Phase Progress**:\n`;
+    status += `- Requirements: ${spec.approvals.requirements.generated ? '✅ Generated' : '❌ Not Generated'}${spec.approvals.requirements.approved ? ', ✅ Approved' : ', ❌ Not Approved'}\n`;
+    status += `- Design: ${spec.approvals.design.generated ? '✅ Generated' : '❌ Not Generated'}${spec.approvals.design.approved ? ', ✅ Approved' : ', ❌ Not Approved'}\n`;
+    status += `- Tasks: ${spec.approvals.tasks.generated ? '✅ Generated' : '❌ Not Generated'}${spec.approvals.tasks.approved ? ', ✅ Approved' : ', ❌ Not Approved'}\n\n`;
+    status += `**Ready for Implementation**: ${spec.ready_for_implementation ? '✅ Yes' : '❌ No'}\n\n`;
+    if (!spec.approvals.requirements.generated) status += `**Next Step**: Run \`sdd-requirements ${featureName}\``;
+    else if (!spec.approvals.design.generated) status += `**Next Step**: Run \`sdd-design ${featureName}\``;
+    else if (!spec.approvals.tasks.generated) status += `**Next Step**: Run \`sdd-tasks ${featureName}\``;
+    else status += `**Next Step**: Run \`sdd-implement ${featureName}\` to begin implementation`;
+    return { content: [{ type: 'text', text: status }] };
+  }
+  const features = await fs.promises.readdir(specsPath).catch(() => [] as string[]);
+  if (features.length === 0) {
+    return { content: [{ type: 'text', text: 'No SDD features found. Use sdd-init to create a new project.' }] };
+  }
+  let status = '## SDD Project Status - All Features\n\n';
+  for (const feature of features) {
+    const specPath = path.join(specsPath, feature, 'spec.json');
+    const specExists = await fs.promises.access(specPath).then(() => true).catch(() => false);
+    if (specExists) {
+      const spec = JSON.parse(fs.readFileSync(specPath, 'utf8'));
+      status += `**${spec.feature_name}**:\n`;
+      status += `- Phase: ${spec.phase}\n`;
+      status += `- Requirements: ${spec.approvals.requirements.generated ? '✅' : '❌'}\n`;
+      status += `- Design: ${spec.approvals.design.generated ? '✅' : '❌'}\n`;
+      status += `- Tasks: ${spec.approvals.tasks.generated ? '✅' : '❌'}\n`;
+      status += `- Ready: ${spec.ready_for_implementation ? '✅' : '❌'}\n\n`;
+    }
+  }
+  return { content: [{ type: 'text', text: status }] };
+}
+
+// Approve handler to update spec.json
+async function handleApproveSimplified(args: any) {
+  const fs = await import('fs');
+  const path = await import('path');
+  const { featureName, phase } = args || {};
+  if (!featureName || !phase) {
+    return { content: [{ type: 'text', text: 'featureName and phase are required' }], isError: true };
+  }
+  try {
+    const featurePath = path.join(process.cwd(), '.kiro', 'specs', featureName);
+    const specPath = path.join(featurePath, 'spec.json');
+    const spec = JSON.parse(fs.readFileSync(specPath, 'utf8'));
+    if (!spec.approvals?.[phase]?.generated) {
+      return { content: [{ type: 'text', text: `Error: ${phase} must be generated before approval. Run sdd-${phase} ${featureName} first.` }] };
+    }
+    spec.approvals[phase].approved = true;
+    spec.updated_at = new Date().toISOString();
+    fs.writeFileSync(specPath, JSON.stringify(spec, null, 2));
+    return { content: [{ type: 'text', text: `## Phase Approved\n\n**Feature**: ${featureName}\n**Phase**: ${phase}\n**Status**: ✅ Approved` }] };
+  } catch (error) {
+    return { content: [{ type: 'text', text: `Error approving phase: ${(error as Error).message}` }], isError: true };
+  }
+}
+
+// Simple quality check aligned with full server
+async function handleQualityCheckSimplified(args: any) {
+  const { code = '', language = 'javascript' } = args || {};
+  try {
+    const lines = String(code).split('\n');
+    const issues: string[] = [];
+    if (code.includes('console.log')) issues.push('L1: Remove debug console.log statements');
+    if (code.includes('var ')) issues.push('L1: Use let/const instead of var');
+    if (!/^[a-z]/.test(code.split('function ')[1]?.split('(')[0] || '')) {
+      if (code.includes('function ')) issues.push('L2: Function names should start with lowercase');
+    }
+    if (code.includes('for') && !code.includes('const')) issues.push('L3: Prefer const in for loops');
+    if (lines.length > 50) issues.push('L4: Consider splitting large blocks into smaller functions');
+    const report = `## Code Quality Analysis (${language})\n\n` + (issues.length ? issues.map(i => `- ${i}`).join('\n') : 'No significant issues detected');
+    return { content: [{ type: 'text', text: report }] };
+  } catch (error) {
+    return { content: [{ type: 'text', text: `Error analyzing code quality: ${(error as Error).message}` }], isError: true };
+  }
+}
+
+// Implement guidelines check
+async function handleImplementSimplified(args: any) {
+  const fs = await import('fs');
+  const path = await import('path');
+  const { featureName } = args || {};
+  if (!featureName) return { content: [{ type: 'text', text: 'featureName is required' }], isError: true };
+  try {
+    const featurePath = path.join(process.cwd(), '.kiro', 'specs', featureName);
+    const specPath = path.join(featurePath, 'spec.json');
+    const spec = JSON.parse(fs.readFileSync(specPath, 'utf8'));
+    if (!spec.ready_for_implementation) {
+      return { content: [{ type: 'text', text: 'Error: Project not ready for implementation. Complete requirements, design, and tasks phases first.' }] };
+    }
+    return { content: [{ type: 'text', text: `## Implementation Guidelines for ${featureName}\n\nFollow tasks in tasks.md, implement per design.md, and validate against requirements.md. Use sdd-quality-check during development.` }] };
+  } catch (error) {
+    return { content: [{ type: 'text', text: `Error getting implementation guidelines: ${(error as Error).message}` }], isError: true };
+  }
+}
 // Helper functions for simplified analysis
 function extractFeaturesSimplified(packageJson: any): string[] {
   const features: string[] = [];
@@ -1505,6 +1630,25 @@ ${description}
     
     fs.writeFileSync(path.join(specDir, 'requirements.md'), requirementsTemplate);
     
+    // Ensure AGENTS.md exists (static, derived from CLAUDE.md when available)
+    const agentsPath = path.join(process.cwd(), 'AGENTS.md');
+    if (!fs.existsSync(agentsPath)) {
+      const claudePath = path.join(process.cwd(), 'CLAUDE.md');
+      let agentsContent = '';
+      if (fs.existsSync(claudePath)) {
+        const claudeContent = fs.readFileSync(claudePath, 'utf8');
+        agentsContent = claudeContent
+          .replace(/# Claude Code Spec-Driven Development/g, '# AI Agent Spec-Driven Development')
+          .replace(/Claude Code/g, 'AI Agent')
+          .replace(/claude code/g, 'ai agent')
+          .replace(/Claude/g, 'AI Agent')
+          .replace(/claude/g, 'ai agent');
+      } else {
+        agentsContent = `# AI Agent Spec-Driven Development\n\nKiro-style Spec Driven Development implementation for AI agents across different CLIs and IDEs.`;
+      }
+      fs.writeFileSync(agentsPath, agentsContent);
+    }
+
     return {
       content: [{
         type: 'text',

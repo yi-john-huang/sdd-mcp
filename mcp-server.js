@@ -11,9 +11,21 @@ import {
   generateStructureDocument 
 } from './documentGenerator.js';
 
+// Resolve version dynamically from package.json when possible
+async function resolveVersion() {
+  try {
+    const pkgUrl = new URL('./package.json', import.meta.url);
+    const pkgText = await fs.readFile(pkgUrl, 'utf8');
+    const pkg = JSON.parse(pkgText);
+    return pkg.version || '0.0.0';
+  } catch {
+    return '0.0.0';
+  }
+}
+
 const server = new McpServer({
   name: 'sdd-mcp-server',
-  version: '1.3.3'
+  version: await resolveVersion()
 }, {
   instructions: 'Use this server for spec-driven development workflows'
 });
@@ -94,6 +106,27 @@ server.registerTool("sdd-init", {
     // Create requirements.md template
     const requirementsTemplate = `# Requirements Document\n\n## Project Description (Input)\n${description}\n\n## Requirements\n<!-- Will be generated in /kiro:spec-requirements phase -->`;
     await fs.writeFile(path.join(featurePath, 'requirements.md'), requirementsTemplate);
+    
+    // Ensure AGENTS.md exists based on CLAUDE.md (static exception)
+    const agentsPath = path.join(currentPath, 'AGENTS.md');
+    const claudePath = path.join(currentPath, 'CLAUDE.md');
+    const agentsExists = await fs.access(agentsPath).then(() => true).catch(() => false);
+    if (!agentsExists) {
+      let agentsContent = '';
+      const claudeExists = await fs.access(claudePath).then(() => true).catch(() => false);
+      if (claudeExists) {
+        const claude = await fs.readFile(claudePath, 'utf8');
+        agentsContent = claude
+          .replace(/# Claude Code Spec-Driven Development/g, '# AI Agent Spec-Driven Development')
+          .replace(/Claude Code/g, 'AI Agent')
+          .replace(/claude code/g, 'ai agent')
+          .replace(/Claude/g, 'AI Agent')
+          .replace(/claude/g, 'ai agent');
+      } else {
+        agentsContent = '# AI Agent Spec-Driven Development\n\nKiro-style Spec Driven Development implementation for AI agents across different CLIs and IDEs.';
+      }
+      await fs.writeFile(agentsPath, agentsContent);
+    }
     
     return {
       content: [{
@@ -736,6 +769,18 @@ server.registerTool("sdd-steering", {
     await fs.writeFile(path.join(steeringPath, 'product.md'), productContent);
     await fs.writeFile(path.join(steeringPath, 'tech.md'), techContent);
     await fs.writeFile(path.join(steeringPath, 'structure.md'), structureContent);
+    
+    // Ensure static steering docs exist (exceptions)
+    const linusPath = path.join(steeringPath, 'linus-review.md');
+    const linusExists = await fs.access(linusPath).then(() => true).catch(() => false);
+    if (!linusExists) {
+      await fs.writeFile(linusPath, `# Linus Torvalds Code Review Steering Document\n\nFollow Linus-style pragmatism and simplicity. Never break userspace. Keep functions focused, minimize indentation, and eliminate special cases. Apply 5-layer analysis: Data structures, special cases, complexity, breaking changes, practicality.`);
+    }
+    const commitPath = path.join(steeringPath, 'commit.md');
+    const commitExists = await fs.access(commitPath).then(() => true).catch(() => false);
+    if (!commitExists) {
+      await fs.writeFile(commitPath, `# Commit Message Guidelines\n\nUse conventional type prefixes (docs, chore, feat, fix, refactor, test, style, perf, ci). Format: <type>(<scope>): <subject>\n\nKeep subjects < 72 chars, imperative mood, and add body/footer when needed.`);
+    }
     
     const mode = updateMode === 'update' ? 'Updated' : 'Created';
     

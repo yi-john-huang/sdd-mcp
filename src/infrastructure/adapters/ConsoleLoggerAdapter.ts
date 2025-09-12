@@ -3,7 +3,15 @@ import { LoggerPort } from '../../domain/ports.js';
 
 @injectable()
 export class ConsoleLoggerAdapter implements LoggerPort {
-  private readonly isMCPMode = process.argv[1]?.includes('sdd-mcp-server') || false;
+  private readonly isMCPMode = (
+    // Non-TTY stdio typically indicates MCP stdio transport
+    process.stdin?.isTTY === false ||
+    // Invoked via the published MCP server entry
+    (process.argv[1] && (process.argv[1].includes('mcp-server.js') || process.argv[1].includes('sdd-mcp-server'))) ||
+    // Explicit flags or env overrides
+    process.argv.includes('--mcp-mode') ||
+    process.env.MCP_MODE === '1'
+  );
 
   info(message: string, meta?: Record<string, unknown>): void {
     if (this.isMCPMode) return; // Silence logs in MCP mode to avoid stdio interference
