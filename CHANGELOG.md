@@ -5,6 +5,24 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.3.0] - 2025-09-11
+
+### Added
+- **Static Steering Documents**: Automatic creation of `linus-review.md` with complete Linus Torvalds code review principles
+- **Commit Message Guidelines**: Automatic creation of `commit.md` with standardized commit message formatting
+- **Universal AGENTS.md**: Cross-platform AI agent configuration file generated from CLAUDE.md template
+- **Enhanced sdd-steering**: Now creates static documents (linus-review.md, commit.md) alongside codebase-analyzed content
+- **Enhanced sdd-init**: Now generates AGENTS.md for universal AI agent compatibility
+
+### Changed
+- **Steering Document Generation**: Both sdd-init and sdd-steering now ensure AGENTS.md exists for cross-platform AI support
+- **CLAUDE.md Documentation**: Updated to reflect new steering files (linus-review.md, commit.md) in active steering list
+- **Template Adaptation**: AGENTS.md intelligently adapts from existing CLAUDE.md or creates generic template
+
+### Fixed
+- **Cross-Platform Compatibility**: AGENTS.md ensures SDD workflows work across different AI agents (Claude Code, Cursor, etc.)
+- **Static Content Preservation**: Only creates static documents when missing to preserve existing customizations
+
 ## [1.2.0] - 2025-09-11
 
 ### Added

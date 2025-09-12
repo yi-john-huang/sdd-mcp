@@ -6,7 +6,7 @@
 
 A Model Context Protocol (MCP) server implementing Spec-Driven Development (SDD) workflows for AI-agent CLIs and IDEs like Claude Code, Cursor, and others.
 
-> **✅ v1.2.0 Update**: Complete kiro workflow alignment with empty project support. SDD tools now bootstrap from project descriptions without requiring existing files.
+> **✅ v1.3.0 Update**: Enhanced steering document generation with automatic static document creation and AI agent support. Includes Linus Torvalds code review guidelines, commit message standards, and universal AGENTS.md for cross-platform AI compatibility.
 
 ## 🚀 Quick Start
 
@@ -110,7 +110,7 @@ Once connected to your AI client, you can use these MCP tools:
 
 | Tool | Description | Usage |
 |------|-------------|--------|
-| `sdd-init` | Initialize new SDD project | Creates .kiro directory structure |
+| `sdd-init` | Initialize new SDD project | Creates .kiro directory structure + AGENTS.md for cross-platform AI support |
 | `sdd-requirements` | Generate context-aware requirements | Analyzes package.json and structure to create EARS-formatted requirements |
 | `sdd-design` | Create project-specific design | Generates architecture docs based on actual tech stack and dependencies |
 | `sdd-tasks` | Generate implementation breakdown | Creates tasks derived from real project structure and technology choices |
@@ -120,7 +120,7 @@ Once connected to your AI client, you can use these MCP tools:
 | `sdd-quality-check` | Code quality analysis | Linus-style 5-layer code review |
 | `sdd-context-load` | Load project context | Restore project memory and state |
 | `sdd-template-render` | Render templates | Generate files from templates |
-| `sdd-steering` | Create/update steering docs | Analyzes project to generate product.md, tech.md, structure.md with real content |
+| `sdd-steering` | Create/update steering docs | Analyzes project to generate product.md, tech.md, structure.md with real content + static linus-review.md, commit.md |
 | `sdd-steering-custom` | Create custom steering docs | Add specialized guidance documents |
 | `sdd-validate-design` | Design quality validation | Interactive GO/NO-GO design review |
 | `sdd-validate-gap` | Implementation gap analysis | Analyze requirements vs codebase |
