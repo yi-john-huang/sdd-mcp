@@ -69,7 +69,7 @@ async function createSimpleMCPServer() {
 
   const server = new Server({
     name: 'sdd-mcp-server',
-    version: '1.2.0'
+    version: '1.3.1'
   }, {
     capabilities: {
       tools: {}
@@ -226,17 +226,8 @@ async function handleSteeringSimplified(args: any) {
   try {
     const projectPath = process.cwd();
     
-    // Read package.json for project analysis
-    let packageJson: any = {};
-    try {
-      const packagePath = path.join(projectPath, 'package.json');
-      if (fs.existsSync(packagePath)) {
-        const packageContent = fs.readFileSync(packagePath, 'utf8');
-        packageJson = JSON.parse(packageContent);
-      }
-    } catch (error) {
-      // Ignore package.json parsing errors
-    }
+    // Import and use the dynamic document generator
+    const { analyzeProject, generateProductDocument, generateTechDocument, generateStructureDocument } = await import('./utils/documentGenerator.js');
     
     // Create .kiro/steering directory if it doesn't exist
     const steeringDir = path.join(projectPath, '.kiro', 'steering');
@@ -244,59 +235,15 @@ async function handleSteeringSimplified(args: any) {
       fs.mkdirSync(steeringDir, { recursive: true });
     }
     
-    // Generate product.md with real project data
-    const productContent = `# Product Overview
+    // Analyze project dynamically
+    const projectAnalysis = await analyzeProject(projectPath);
     
-## Product Description
-${packageJson.description || 'No description available'}
+    // Generate documents dynamically
+    const productContent = generateProductDocument(projectAnalysis);
+    const techContent = generateTechDocument(projectAnalysis);
+    const structureContent = generateStructureDocument(projectAnalysis);
 
-## Core Features
-${extractFeaturesSimplified(packageJson).map(feature => `- ${feature}`).join('\n')}
-
-## Target Use Case
-This product is designed for ${packageJson.keywords ? packageJson.keywords.join(', ') : 'general'} use cases.
-
-## Key Value Proposition
-${extractFeaturesSimplified(packageJson).map(feature => `- **${feature}**: Enhanced development experience`).join('\n')}
-
-## Target Users
-${generateTargetUsersSimplified(packageJson)}`;
-
-    // Generate tech.md with real dependency analysis
-    const techContent = `# Technology Overview
-
-## Technology Stack
-${generateTechStackSimplified(packageJson)}
-
-## Development Environment
-- Node.js: ${packageJson.engines?.node || 'Unknown'}
-- Package Manager: npm
-
-## Key Dependencies
-${generateDependencyListSimplified(packageJson)}
-
-## Development Commands
-${generateWorkflowSimplified(packageJson)}`;
-
-    // Generate structure.md
-    const structureContent = `# Project Structure
-
-## Directory Organization
-${generateDirectoryStructureSimplified(projectPath)}
-
-## File Naming Conventions
-- Use kebab-case for file names
-- Use PascalCase for class names
-- Use camelCase for variable names
-- Use UPPER_SNAKE_CASE for constants
-
-## Module Organization
-- Group related functionality in modules
-- Use barrel exports (index.ts files)
-- Separate business logic from infrastructure
-- Keep dependencies flowing inward`;
-
-    // Write the files
+    // Write the dynamically generated files
     fs.writeFileSync(path.join(steeringDir, 'product.md'), productContent);
     fs.writeFileSync(path.join(steeringDir, 'tech.md'), techContent);
     fs.writeFileSync(path.join(steeringDir, 'structure.md'), structureContent);
@@ -306,20 +253,27 @@ ${generateDirectoryStructureSimplified(projectPath)}
         type: 'text',
         text: `## Steering Documents Updated
 
-**Project**: ${packageJson.name || 'Unknown'}
+**Project**: ${projectAnalysis.name}
+**Version**: ${projectAnalysis.version}
+**Architecture**: ${projectAnalysis.architecture}
 **Mode**: update
 
 **Updated Files**:
-- \`.kiro/steering/product.md\` - Product overview and business context
-- \`.kiro/steering/tech.md\` - Technology stack and development environment  
-- \`.kiro/steering/structure.md\` - Project organization and architectural decisions
+- \`.kiro/steering/product.md\` - Product overview and business context (dynamically generated)
+- \`.kiro/steering/tech.md\` - Technology stack and development environment (dynamically generated)
+- \`.kiro/steering/structure.md\` - Project organization and architectural decisions (dynamically generated)
 
-**Analysis**:
-- Technology stack: ${Object.keys({...packageJson.dependencies, ...packageJson.devDependencies}).length} dependencies detected
-- Project type: ${packageJson.type || 'CommonJS'}
-- Existing steering: Updated preserving customizations
+**Dynamic Analysis Results**:
+- **Language**: ${projectAnalysis.language === 'typescript' ? 'TypeScript' : 'JavaScript'}
+- **Framework**: ${projectAnalysis.framework || 'None detected'}
+- **Dependencies**: ${projectAnalysis.dependencies.length} production, ${projectAnalysis.devDependencies.length} development
+- **Test Framework**: ${projectAnalysis.testFramework || 'None detected'}
+- **Build Tool**: ${projectAnalysis.buildTool || 'None detected'}
+- **Project Structure**: ${projectAnalysis.directories.length} directories analyzed
+- **CI/CD**: ${projectAnalysis.hasCI ? 'Configured' : 'Not configured'}
+- **Docker**: ${projectAnalysis.hasDocker ? 'Configured' : 'Not configured'}
 
-These steering documents provide consistent project context for all AI interactions and spec-driven development workflows.`
+These steering documents were dynamically generated based on actual project analysis and provide accurate, up-to-date context for AI interactions.`
       }]
     };
     
