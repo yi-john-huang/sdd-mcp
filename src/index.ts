@@ -69,7 +69,7 @@ async function createSimpleMCPServer() {
 
   const server = new Server({
     name: 'sdd-mcp-server',
-    version: '1.3.2'
+    version: '1.3.3'
   }, {
     capabilities: {
       tools: {}
@@ -169,6 +169,87 @@ async function createSimpleMCPServer() {
             },
             required: ['code']
           }
+        },
+        {
+          name: 'sdd-approve',
+          description: 'Approve workflow phases',
+          inputSchema: {
+            type: 'object',
+            properties: {
+              featureName: { type: 'string' },
+              phase: { type: 'string', enum: ['requirements', 'design', 'tasks'] }
+            },
+            required: ['featureName', 'phase']
+          }
+        },
+        {
+          name: 'sdd-implement',
+          description: 'Implementation guidelines',
+          inputSchema: {
+            type: 'object',
+            properties: {
+              featureName: { type: 'string' }
+            },
+            required: ['featureName']
+          }
+        },
+        {
+          name: 'sdd-context-load',
+          description: 'Load project context',
+          inputSchema: {
+            type: 'object',
+            properties: {
+              featureName: { type: 'string' }
+            },
+            required: ['featureName']
+          }
+        },
+        {
+          name: 'sdd-template-render',
+          description: 'Render templates',
+          inputSchema: {
+            type: 'object',
+            properties: {
+              templateType: { type: 'string', enum: ['requirements', 'design', 'tasks', 'custom'] },
+              featureName: { type: 'string' },
+              customTemplate: { type: 'string' }
+            },
+            required: ['templateType', 'featureName']
+          }
+        },
+        {
+          name: 'sdd-validate-design',
+          description: 'Validate design quality',
+          inputSchema: {
+            type: 'object',
+            properties: {
+              featureName: { type: 'string' }
+            },
+            required: ['featureName']
+          }
+        },
+        {
+          name: 'sdd-validate-gap',
+          description: 'Validate implementation gap',
+          inputSchema: {
+            type: 'object',
+            properties: {
+              featureName: { type: 'string' }
+            },
+            required: ['featureName']
+          }
+        },
+        {
+          name: 'sdd-spec-impl',
+          description: 'Execute spec tasks using TDD',
+          inputSchema: {
+            type: 'object',
+            properties: {
+              featureName: { type: 'string' },
+              taskNumbers: { type: 'string' }
+            },
+            required: ['featureName']
+          }
         }
       ]
     };
@@ -202,6 +283,55 @@ async function createSimpleMCPServer() {
           content: [{
             type: 'text',
             text: 'Code quality analysis would be performed here. (Simplified MCP mode)'
+          }]
+        };
+      case 'sdd-approve':
+        return {
+          content: [{
+            type: 'text',
+            text: `Phase ${args.phase} approved for feature ${args.featureName}. (Simplified MCP mode)`
+          }]
+        };
+      case 'sdd-implement':
+        return {
+          content: [{
+            type: 'text',
+            text: `Implementation guidelines for ${args.featureName}. (Simplified MCP mode)`
+          }]
+        };
+      case 'sdd-context-load':
+        return {
+          content: [{
+            type: 'text',
+            text: `Project context loaded for ${args.featureName}. (Simplified MCP mode)`
+          }]
+        };
+      case 'sdd-template-render':
+        return {
+          content: [{
+            type: 'text',
+            text: `Template ${args.templateType} rendered for ${args.featureName}. (Simplified MCP mode)`
+          }]
+        };
+      case 'sdd-validate-design':
+        return {
+          content: [{
+            type: 'text',
+            text: `Design validation for ${args.featureName}. (Simplified MCP mode)`
+          }]
+        };
+      case 'sdd-validate-gap':
+        return {
+          content: [{
+            type: 'text',
+            text: `Implementation gap analysis for ${args.featureName}. (Simplified MCP mode)`
+          }]
+        };
+      case 'sdd-spec-impl':
+        return {
+          content: [{
+            type: 'text',
+            text: `TDD implementation for ${args.featureName}. (Simplified MCP mode)`
           }]
         };
       default:
