@@ -5,6 +5,20 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.3.5] - 2025-09-13
+
+### Added
+- Multi-language steering support: Python (Django/FastAPI/Flask), Go (Gin/Echo), Ruby (Rails/Sinatra), PHP (Laravel/Symfony), Rust (Actix/Axum/Rocket), .NET/C#, Scala (SBT)
+- Language-aware tech docs: Proper dev commands, environment versions (JDK/Go/Python/Ruby/PHP/Rust/.NET), framework naming
+- Architecture sections for non-JS stacks with conventional layering and tooling
+- Structure overview adapts to each ecosystem’s key files (pom.xml, pyproject, go.mod, Gemfile, composer.json, Cargo.toml, *.csproj, build.sbt)
+
+### Changed
+- Node/TS detection coexists with other ecosystems without bias; module system shown only for JS/TS projects
+
+### Fixed
+- TypeScript compile issues in document generator refactor
+
 ## [1.3.4] - 2025-09-13
 
 ### Changed
