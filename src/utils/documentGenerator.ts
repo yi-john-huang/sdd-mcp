@@ -1,0 +1,953 @@
+import * as fs from 'fs';
+import * as path from 'path';
+
+export interface ProjectAnalysis {
+  name: string;
+  description: string;
+  version: string;
+  type: string;
+  architecture: string;
+  dependencies: string[];
+  devDependencies: string[];
+  scripts: Record<string, string>;
+  directories: string[];
+  files: string[];
+  hasTests: boolean;
+  hasDocker: boolean;
+  hasCI: boolean;
+  framework: string | null;
+  language: string;
+  testFramework: string | null;
+  buildTool: string | null;
+  packageManager: string;
+}
+
+/**
+ * Analyzes the project structure and returns comprehensive project information
+ */
+export async function analyzeProject(projectPath: string): Promise<ProjectAnalysis> {
+  const analysis: ProjectAnalysis = {
+    name: 'Unknown Project',
+    description: 'No description available',
+    version: '0.0.0',
+    type: 'unknown',
+    architecture: 'unknown',
+    dependencies: [],
+    devDependencies: [],
+    scripts: {},
+    directories: [],
+    files: [],
+    hasTests: false,
+    hasDocker: false,
+    hasCI: false,
+    framework: null,
+    language: 'javascript',
+    testFramework: null,
+    buildTool: null,
+    packageManager: 'npm'
+  };
+
+  try {
+    // Check for package.json
+    const packageJsonPath = path.join(projectPath, 'package.json');
+    if (fs.existsSync(packageJsonPath)) {
+      const packageJson = JSON.parse(fs.readFileSync(packageJsonPath, 'utf8'));
+      analysis.name = packageJson.name || analysis.name;
+      analysis.description = packageJson.description || analysis.description;
+      analysis.version = packageJson.version || analysis.version;
+      analysis.type = packageJson.type === 'module' ? 'ES Module' : 'CommonJS';
+      analysis.dependencies = Object.keys(packageJson.dependencies || {});
+      analysis.devDependencies = Object.keys(packageJson.devDependencies || {});
+      analysis.scripts = packageJson.scripts || {};
+
+      // Detect framework
+      if (analysis.dependencies.includes('express') || analysis.devDependencies.includes('express')) {
+        analysis.framework = 'Express.js';
+        analysis.architecture = 'REST API Server';
+      } else if (analysis.dependencies.includes('fastify')) {
+        analysis.framework = 'Fastify';
+        analysis.architecture = 'High-performance REST API';
+      } else if (analysis.dependencies.includes('react')) {
+        analysis.framework = 'React';
+        analysis.architecture = 'Frontend Application';
+      } else if (analysis.dependencies.includes('vue')) {
+        analysis.framework = 'Vue.js';
+        analysis.architecture = 'Progressive Web Application';
+      } else if (analysis.dependencies.includes('@angular/core')) {
+        analysis.framework = 'Angular';
+        analysis.architecture = 'Enterprise Frontend Application';
+      } else if (analysis.dependencies.includes('next')) {
+        analysis.framework = 'Next.js';
+        analysis.architecture = 'Full-stack React Framework';
+      } else if (analysis.dependencies.includes('@modelcontextprotocol/sdk')) {
+        analysis.framework = 'MCP SDK';
+        analysis.architecture = 'Model Context Protocol Server';
+      }
+
+      // Detect language
+      if (analysis.devDependencies.includes('typescript') || fs.existsSync(path.join(projectPath, 'tsconfig.json'))) {
+        analysis.language = 'typescript';
+      }
+
+      // Detect test framework
+      if (analysis.devDependencies.includes('jest')) {
+        analysis.testFramework = 'Jest';
+      } else if (analysis.devDependencies.includes('mocha')) {
+        analysis.testFramework = 'Mocha';
+      } else if (analysis.devDependencies.includes('vitest')) {
+        analysis.testFramework = 'Vitest';
+      }
+
+      // Detect build tool
+      if (analysis.scripts.build?.includes('webpack')) {
+        analysis.buildTool = 'Webpack';
+      } else if (analysis.scripts.build?.includes('vite')) {
+        analysis.buildTool = 'Vite';
+      } else if (analysis.scripts.build?.includes('tsc')) {
+        analysis.buildTool = 'TypeScript Compiler';
+      } else if (analysis.scripts.build?.includes('rollup')) {
+        analysis.buildTool = 'Rollup';
+      }
+    }
+
+    // Check for yarn or pnpm
+    if (fs.existsSync(path.join(projectPath, 'yarn.lock'))) {
+      analysis.packageManager = 'yarn';
+    } else if (fs.existsSync(path.join(projectPath, 'pnpm-lock.yaml'))) {
+      analysis.packageManager = 'pnpm';
+    }
+
+    // Scan directory structure
+    const items = fs.readdirSync(projectPath, { withFileTypes: true });
+    for (const item of items) {
+      if (item.isDirectory() && !item.name.startsWith('.') && item.name !== 'node_modules') {
+        analysis.directories.push(item.name);
+        
+        // Check for test directories
+        if (item.name === 'test' || item.name === 'tests' || item.name === '__tests__' || item.name === 'spec') {
+          analysis.hasTests = true;
+        }
+      } else if (item.isFile()) {
+        analysis.files.push(item.name);
+        
+        // Check for Docker
+        if (item.name === 'Dockerfile' || item.name === 'docker-compose.yml') {
+          analysis.hasDocker = true;
+        }
+        
+        // Check for CI/CD
+        if (item.name === '.gitlab-ci.yml' || item.name === '.travis.yml' || item.name === 'Jenkinsfile') {
+          analysis.hasCI = true;
+        }
+      }
+    }
+
+    // Check for GitHub Actions
+    if (fs.existsSync(path.join(projectPath, '.github', 'workflows'))) {
+      analysis.hasCI = true;
+    }
+
+    // Additional architecture detection based on directory structure
+    if (analysis.directories.includes('src')) {
+      const srcPath = path.join(projectPath, 'src');
+      const srcItems = fs.readdirSync(srcPath, { withFileTypes: true });
+      const srcDirs = srcItems.filter(item => item.isDirectory()).map(item => item.name);
+      
+      if (srcDirs.includes('domain') && srcDirs.includes('infrastructure')) {
+        analysis.architecture = 'Domain-Driven Design (DDD)';
+      } else if (srcDirs.includes('controllers') && srcDirs.includes('models')) {
+        analysis.architecture = 'MVC Architecture';
+      } else if (srcDirs.includes('components') && srcDirs.includes('pages')) {
+        analysis.architecture = 'Component-Based Architecture';
+      }
+    }
+
+  } catch (error) {
+    console.error('Error analyzing project:', error);
+  }
+
+  return analysis;
+}
+
+/**
+ * Generates dynamic product.md content based on project analysis
+ */
+export function generateProductDocument(analysis: ProjectAnalysis): string {
+  const features = extractFeatures(analysis);
+  const valueProps = generateValuePropositions(analysis);
+  const targetUsers = identifyTargetUsers(analysis);
+  
+  return `# Product Overview
+
+## Product Description
+${analysis.description}
+
+**Project**: ${analysis.name}  
+**Version**: ${analysis.version}  
+**Type**: ${analysis.architecture}
+
+## Core Features
+${features.map(f => `- ${f}`).join('\n')}
+
+## Target Use Case
+${generateUseCaseDescription(analysis)}
+
+## Key Value Proposition
+${valueProps.map(v => `- **${v.title}**: ${v.description}`).join('\n')}
+
+## Target Users
+${targetUsers.map(u => `- ${u}`).join('\n')}
+
+## Success Metrics
+${generateSuccessMetrics(analysis).map(m => `- ${m}`).join('\n')}
+
+## Technical Advantages
+${generateTechnicalAdvantages(analysis).map(a => `- ${a}`).join('\n')}
+`;
+}
+
+/**
+ * Generates dynamic tech.md content based on project analysis
+ */
+export function generateTechDocument(analysis: ProjectAnalysis): string {
+  const techStack = buildTechStack(analysis);
+  const devCommands = extractDevCommands(analysis);
+  const architecture = describeArchitecture(analysis);
+  
+  return `# Technology Stack
+
+## Architecture
+**Type**: ${analysis.architecture}  
+**Language**: ${analysis.language === 'typescript' ? 'TypeScript' : 'JavaScript'}  
+**Module System**: ${analysis.type}  
+${analysis.framework ? `**Framework**: ${analysis.framework}` : ''}  
+${analysis.buildTool ? `**Build Tool**: ${analysis.buildTool}` : ''}
+
+${architecture}
+
+## Technology Stack
+${techStack.map(t => `- **${t.name}**: ${t.description}`).join('\n')}
+
+## Development Environment
+- **Node Version**: ${getNodeVersion()}
+- **Package Manager**: ${analysis.packageManager}
+- **Language**: ${analysis.language === 'typescript' ? 'TypeScript with type safety' : 'JavaScript'}
+${analysis.testFramework ? `- **Testing**: ${analysis.testFramework}` : ''}
+
+## Dependencies Analysis
+### Production Dependencies (${analysis.dependencies.length})
+${analysis.dependencies.slice(0, 15).map(d => `- \`${d}\`: ${describeDependency(d)}`).join('\n')}
+${analysis.dependencies.length > 15 ? `\n... and ${analysis.dependencies.length - 15} more` : ''}
+
+### Development Dependencies (${analysis.devDependencies.length})
+${analysis.devDependencies.slice(0, 10).map(d => `- \`${d}\`: ${describeDependency(d)}`).join('\n')}
+${analysis.devDependencies.length > 10 ? `\n... and ${analysis.devDependencies.length - 10} more` : ''}
+
+## Development Commands
+${devCommands}
+
+## Quality Assurance
+${generateQualityAssurance(analysis)}
+
+## Deployment Configuration
+${generateDeploymentConfig(analysis)}
+`;
+}
+
+/**
+ * Generates dynamic structure.md content based on project analysis
+ */
+export function generateStructureDocument(analysis: ProjectAnalysis): string {
+  const structure = buildDirectoryTree(analysis);
+  const patterns = identifyPatterns(analysis);
+  const conventions = extractConventions(analysis);
+  
+  return `# Project Structure
+
+## Directory Organization
+\`\`\`
+${structure}
+\`\`\`
+
+## Key Directories
+${describeKeyDirectories(analysis)}
+
+## Code Organization Patterns
+${patterns.map(p => `- **${p.pattern}**: ${p.description}`).join('\n')}
+
+## File Naming Conventions
+${conventions.naming.map(c => `- ${c}`).join('\n')}
+
+## Module Organization
+${describeModuleOrganization(analysis)}
+
+## Architectural Principles
+${generateArchitecturalPrinciples(analysis).map(p => `- **${p.principle}**: ${p.description}`).join('\n')}
+
+## Development Patterns
+${generateDevelopmentPatterns(analysis).map(p => `- ${p}`).join('\n')}
+
+## Testing Structure
+${describeTestingStructure(analysis)}
+
+## Build Output
+${describeBuildOutput(analysis)}
+`;
+}
+
+// Helper functions for dynamic content generation
+
+function extractFeatures(analysis: ProjectAnalysis): string[] {
+  const features: string[] = [];
+  
+  // Based on scripts
+  if (analysis.scripts.test) features.push('Automated testing framework');
+  if (analysis.scripts.build) features.push('Build system for production deployment');
+  if (analysis.scripts.dev || analysis.scripts.start) features.push('Development server with hot reload');
+  if (analysis.scripts.lint) features.push('Code quality enforcement with linting');
+  if (analysis.scripts.typecheck) features.push('Type safety validation');
+  if (analysis.scripts.coverage) features.push('Code coverage analysis');
+  
+  // Based on dependencies
+  if (analysis.framework) features.push(`${analysis.framework} framework integration`);
+  if (analysis.hasDocker) features.push('Docker containerization support');
+  if (analysis.hasCI) features.push('Continuous Integration/Deployment pipeline');
+  if (analysis.testFramework) features.push(`${analysis.testFramework} testing suite`);
+  if (analysis.language === 'typescript') features.push('TypeScript type safety');
+  
+  // MCP specific
+  if (analysis.dependencies.includes('@modelcontextprotocol/sdk')) {
+    features.push('Model Context Protocol (MCP) server capabilities');
+    features.push('AI tool integration support');
+    features.push('Spec-driven development workflow');
+  }
+  
+  return features.length > 0 ? features : ['Core application functionality'];
+}
+
+function generateValuePropositions(analysis: ProjectAnalysis): Array<{title: string, description: string}> {
+  const props = [];
+  
+  if (analysis.language === 'typescript') {
+    props.push({
+      title: 'Type Safety',
+      description: 'Compile-time type checking reduces runtime errors'
+    });
+  }
+  
+  if (analysis.hasTests) {
+    props.push({
+      title: 'Quality Assurance',
+      description: 'Comprehensive test coverage ensures reliability'
+    });
+  }
+  
+  if (analysis.framework === 'MCP SDK') {
+    props.push({
+      title: 'AI Integration',
+      description: 'Seamless integration with AI development tools'
+    });
+  }
+  
+  if (analysis.hasDocker) {
+    props.push({
+      title: 'Deployment Flexibility',
+      description: 'Container-based deployment for any environment'
+    });
+  }
+  
+  return props;
+}
+
+function identifyTargetUsers(analysis: ProjectAnalysis): string[] {
+  const users = [];
+  
+  if (analysis.framework === 'MCP SDK' || analysis.dependencies.includes('@modelcontextprotocol/sdk')) {
+    users.push('AI developers using Claude, Cursor, or similar tools');
+    users.push('Development teams implementing spec-driven workflows');
+  }
+  
+  if (analysis.architecture.includes('API')) {
+    users.push('Backend developers building RESTful services');
+    users.push('API consumers and third-party integrators');
+  }
+  
+  if (analysis.framework?.includes('React') || analysis.framework?.includes('Vue') || analysis.framework?.includes('Angular')) {
+    users.push('Frontend developers building web applications');
+    users.push('End users accessing web interfaces');
+  }
+  
+  if (users.length === 0) {
+    users.push('Software developers');
+    users.push('System administrators');
+  }
+  
+  return users;
+}
+
+function generateUseCaseDescription(analysis: ProjectAnalysis): string {
+  if (analysis.dependencies.includes('@modelcontextprotocol/sdk')) {
+    return 'This product enables AI-powered development teams to follow structured, spec-driven development workflows with comprehensive phase management, quality gates, and AI tool integration.';
+  }
+  
+  if (analysis.architecture.includes('API')) {
+    return `This ${analysis.framework || 'application'} provides RESTful API services for client applications, enabling data exchange and business logic processing.`;
+  }
+  
+  if (analysis.architecture.includes('Frontend')) {
+    return `This ${analysis.framework || 'web'} application delivers interactive user interfaces for ${analysis.description || 'web-based services'}.`;
+  }
+  
+  return analysis.description || 'General-purpose application for various use cases.';
+}
+
+function generateSuccessMetrics(analysis: ProjectAnalysis): string[] {
+  const metrics = [];
+  
+  if (analysis.hasTests) metrics.push('Test coverage > 80%');
+  if (analysis.scripts.lint) metrics.push('Zero linting errors in production code');
+  if (analysis.language === 'typescript') metrics.push('Zero TypeScript compilation errors');
+  if (analysis.architecture.includes('API')) metrics.push('API response time < 200ms for 95% of requests');
+  if (analysis.hasCI) metrics.push('Successful CI/CD pipeline execution rate > 95%');
+  
+  return metrics.length > 0 ? metrics : ['Successful deployment and operation'];
+}
+
+function generateTechnicalAdvantages(analysis: ProjectAnalysis): string[] {
+  const advantages = [];
+  
+  if (analysis.language === 'typescript') {
+    advantages.push('Strong typing prevents common JavaScript errors');
+  }
+  
+  if (analysis.buildTool) {
+    advantages.push(`Optimized builds with ${analysis.buildTool}`);
+  }
+  
+  if (analysis.architecture.includes('DDD')) {
+    advantages.push('Domain-Driven Design ensures business alignment');
+  }
+  
+  if (analysis.dependencies.includes('inversify')) {
+    advantages.push('Dependency injection for loose coupling and testability');
+  }
+  
+  return advantages;
+}
+
+function buildTechStack(analysis: ProjectAnalysis): Array<{name: string, description: string}> {
+  const stack = [];
+  
+  // Core runtime
+  stack.push({
+    name: 'Node.js',
+    description: 'JavaScript runtime for server-side execution'
+  });
+  
+  // Language
+  if (analysis.language === 'typescript') {
+    stack.push({
+      name: 'TypeScript',
+      description: 'Typed superset of JavaScript for enhanced developer experience'
+    });
+  }
+  
+  // Framework
+  if (analysis.framework) {
+    stack.push({
+      name: analysis.framework,
+      description: getFrameworkDescription(analysis.framework)
+    });
+  }
+  
+  // Testing
+  if (analysis.testFramework) {
+    stack.push({
+      name: analysis.testFramework,
+      description: 'Testing framework for unit and integration tests'
+    });
+  }
+  
+  // Build tool
+  if (analysis.buildTool) {
+    stack.push({
+      name: analysis.buildTool,
+      description: 'Build and bundling tool for production optimization'
+    });
+  }
+  
+  // Key dependencies
+  for (const dep of analysis.dependencies.slice(0, 5)) {
+    if (!['react', 'vue', 'express', 'fastify', 'next'].includes(dep)) {
+      stack.push({
+        name: dep,
+        description: describeDependency(dep)
+      });
+    }
+  }
+  
+  return stack;
+}
+
+function extractDevCommands(analysis: ProjectAnalysis): string {
+  if (Object.keys(analysis.scripts).length === 0) {
+    return 'No npm scripts defined';
+  }
+  
+  let commands = '```bash\n';
+  
+  // Common commands in order of importance
+  const commandOrder = ['dev', 'start', 'build', 'test', 'lint', 'typecheck', 'coverage'];
+  
+  for (const cmd of commandOrder) {
+    if (analysis.scripts[cmd]) {
+      commands += `${analysis.packageManager} run ${cmd}  # ${describeCommand(cmd, analysis.scripts[cmd])}\n`;
+    }
+  }
+  
+  // Add other commands
+  for (const [cmd, script] of Object.entries(analysis.scripts)) {
+    if (!commandOrder.includes(cmd)) {
+      commands += `${analysis.packageManager} run ${cmd}  # ${script.substring(0, 50)}${script.length > 50 ? '...' : ''}\n`;
+    }
+  }
+  
+  commands += '```';
+  return commands;
+}
+
+function describeArchitecture(analysis: ProjectAnalysis): string {
+  if (analysis.architecture === 'Domain-Driven Design (DDD)') {
+    return `
+### Domain-Driven Design Architecture
+The project follows DDD principles with clear separation between:
+- **Domain Layer**: Business logic and domain models
+- **Application Layer**: Use cases and application services  
+- **Infrastructure Layer**: External dependencies and integrations
+- **Presentation Layer**: API endpoints or UI components
+`;
+  }
+  
+  if (analysis.architecture === 'MVC Architecture') {
+    return `
+### MVC Architecture Pattern
+The project implements Model-View-Controller pattern:
+- **Models**: Data structures and business logic
+- **Views**: Presentation layer and templates
+- **Controllers**: Request handling and routing
+`;
+  }
+  
+  if (analysis.architecture.includes('API')) {
+    return `
+### RESTful API Architecture
+The project provides REST API services with:
+- **Endpoints**: Resource-based URL structure
+- **Middleware**: Request processing pipeline
+- **Services**: Business logic implementation
+- **Data Access**: Database integration layer
+`;
+  }
+  
+  return '';
+}
+
+function describeDependency(dep: string): string {
+  const descriptions: Record<string, string> = {
+    '@modelcontextprotocol/sdk': 'MCP SDK for AI tool integration',
+    'express': 'Web application framework',
+    'fastify': 'High-performance web framework',
+    'react': 'UI component library',
+    'vue': 'Progressive JavaScript framework',
+    'typescript': 'TypeScript language support',
+    'inversify': 'Dependency injection container',
+    'handlebars': 'Template engine',
+    'i18next': 'Internationalization framework',
+    'jest': 'JavaScript testing framework',
+    'eslint': 'JavaScript linter',
+    'prettier': 'Code formatter',
+    'webpack': 'Module bundler',
+    'vite': 'Fast build tool',
+    'uuid': 'UUID generation library',
+    'ajv': 'JSON schema validator',
+    'axios': 'HTTP client library',
+    'lodash': 'Utility library',
+    'moment': 'Date manipulation library',
+    'dotenv': 'Environment variable loader'
+  };
+  
+  return descriptions[dep] || 'Project dependency';
+}
+
+function getFrameworkDescription(framework: string): string {
+  const descriptions: Record<string, string> = {
+    'Express.js': 'Minimal and flexible Node.js web application framework',
+    'Fastify': 'Fast and low overhead web framework for Node.js',
+    'React': 'JavaScript library for building user interfaces',
+    'Vue.js': 'Progressive framework for building user interfaces',
+    'Angular': 'Platform for building mobile and desktop web applications',
+    'Next.js': 'React framework with server-side rendering and routing',
+    'MCP SDK': 'Model Context Protocol SDK for AI agent integration'
+  };
+  
+  return descriptions[framework] || 'Application framework';
+}
+
+function describeCommand(cmd: string, script: string): string {
+  const descriptions: Record<string, string> = {
+    'dev': 'Start development server with hot reload',
+    'start': 'Start production server',
+    'build': 'Build project for production',
+    'test': 'Run test suite',
+    'lint': 'Check code quality with linter',
+    'typecheck': 'Validate TypeScript types',
+    'coverage': 'Generate test coverage report'
+  };
+  
+  return descriptions[cmd] || script.substring(0, 50);
+}
+
+function generateQualityAssurance(analysis: ProjectAnalysis): string {
+  const qa = [];
+  
+  if (analysis.scripts.lint) {
+    qa.push('- **Linting**: Automated code quality checks');
+  }
+  
+  if (analysis.scripts.typecheck) {
+    qa.push('- **Type Checking**: TypeScript compilation validation');
+  }
+  
+  if (analysis.hasTests) {
+    qa.push(`- **Testing**: ${analysis.testFramework || 'Test'} suite for unit and integration tests`);
+  }
+  
+  if (analysis.scripts.coverage) {
+    qa.push('- **Coverage**: Code coverage reporting and thresholds');
+  }
+  
+  if (analysis.hasCI) {
+    qa.push('- **CI/CD**: Automated quality gates in pipeline');
+  }
+  
+  return qa.length > 0 ? qa.join('\n') : '- Quality assurance processes to be defined';
+}
+
+function generateDeploymentConfig(analysis: ProjectAnalysis): string {
+  const config = [];
+  
+  if (analysis.hasDocker) {
+    config.push('- **Containerization**: Docker support for consistent deployments');
+  }
+  
+  if (analysis.scripts.build) {
+    config.push(`- **Build Process**: \`${analysis.packageManager} run build\` for production artifacts`);
+  }
+  
+  if (analysis.hasCI) {
+    config.push('- **CI/CD Pipeline**: Automated deployment workflows');
+  }
+  
+  if (analysis.type === 'ES Module') {
+    config.push('- **Module System**: ES modules for modern JavaScript');
+  }
+  
+  return config.length > 0 ? config.join('\n') : '- Deployment configuration to be defined';
+}
+
+function buildDirectoryTree(analysis: ProjectAnalysis): string {
+  let tree = `├── .kiro/                    # SDD workflow files
+│   ├── steering/            # Project steering documents
+│   └── specs/              # Feature specifications\n`;
+  
+  for (const dir of analysis.directories.sort()) {
+    tree += `├── ${dir}/                   # ${describeDirectory(dir)}\n`;
+  }
+  
+  if (analysis.hasDocker) {
+    tree += `├── Dockerfile              # Container configuration\n`;
+  }
+  
+  tree += `├── package.json            # Project configuration\n`;
+  
+  if (analysis.language === 'typescript') {
+    tree += `├── tsconfig.json           # TypeScript configuration\n`;
+  }
+  
+  tree += `└── README.md               # Project documentation`;
+  
+  return tree;
+}
+
+function describeDirectory(dir: string): string {
+  const descriptions: Record<string, string> = {
+    'src': 'Source code',
+    'dist': 'Build output',
+    'build': 'Build artifacts',
+    'test': 'Test files',
+    'tests': 'Test suites',
+    '__tests__': 'Jest test files',
+    'spec': 'Test specifications',
+    'docs': 'Documentation',
+    'public': 'Static assets',
+    'assets': 'Media and resources',
+    'config': 'Configuration files',
+    'scripts': 'Build and utility scripts',
+    'lib': 'Library code',
+    'bin': 'Executable scripts',
+    'examples': 'Example code',
+    'domain': 'Domain logic (DDD)',
+    'infrastructure': 'External integrations',
+    'application': 'Application services',
+    'presentation': 'UI components',
+    'controllers': 'Request handlers',
+    'models': 'Data models',
+    'views': 'View templates',
+    'services': 'Business services',
+    'utils': 'Utility functions',
+    'helpers': 'Helper functions',
+    'middleware': 'Express middleware',
+    'routes': 'API routes',
+    'api': 'API endpoints'
+  };
+  
+  return descriptions[dir] || 'Project directory';
+}
+
+function identifyPatterns(analysis: ProjectAnalysis): Array<{pattern: string, description: string}> {
+  const patterns = [];
+  
+  if (analysis.architecture.includes('DDD')) {
+    patterns.push({
+      pattern: 'Domain-Driven Design',
+      description: 'Business logic isolated in domain layer'
+    });
+  }
+  
+  if (analysis.dependencies.includes('inversify')) {
+    patterns.push({
+      pattern: 'Dependency Injection',
+      description: 'IoC container for managing dependencies'
+    });
+  }
+  
+  if (analysis.architecture.includes('MVC')) {
+    patterns.push({
+      pattern: 'Model-View-Controller',
+      description: 'Separation of concerns between data, presentation, and control'
+    });
+  }
+  
+  if (analysis.directories.includes('middleware')) {
+    patterns.push({
+      pattern: 'Middleware Pipeline',
+      description: 'Request processing through middleware chain'
+    });
+  }
+  
+  if (analysis.hasTests) {
+    patterns.push({
+      pattern: 'Test-Driven Development',
+      description: 'Tests alongside implementation code'
+    });
+  }
+  
+  return patterns;
+}
+
+function extractConventions(analysis: ProjectAnalysis): {naming: string[]} {
+  const naming = [];
+  
+  if (analysis.language === 'typescript') {
+    naming.push('TypeScript files: `.ts` extension');
+    naming.push('Type definition files: `.d.ts` extension');
+  } else {
+    naming.push('JavaScript files: `.js` extension');
+  }
+  
+  naming.push('Test files: `.test.ts` or `.spec.ts` suffix');
+  naming.push('Configuration files: `.json` or `.config.js` format');
+  
+  if (analysis.framework?.includes('React')) {
+    naming.push('React components: PascalCase (e.g., `UserProfile.tsx`)');
+  }
+  
+  naming.push('Directories: lowercase with hyphens (e.g., `user-service`)');
+  naming.push('Constants: UPPER_SNAKE_CASE');
+  naming.push('Functions/Variables: camelCase');
+  naming.push('Classes/Types: PascalCase');
+  
+  return { naming };
+}
+
+function describeKeyDirectories(analysis: ProjectAnalysis): string {
+  const descriptions = [];
+  
+  if (analysis.directories.includes('src')) {
+    descriptions.push('- **src/**: Main source code directory containing application logic');
+  }
+  
+  if (analysis.directories.includes('dist') || analysis.directories.includes('build')) {
+    descriptions.push('- **dist/build/**: Compiled output for production deployment');
+  }
+  
+  if (analysis.hasTests) {
+    const testDir = analysis.directories.find(d => ['test', 'tests', '__tests__'].includes(d));
+    if (testDir) {
+      descriptions.push(`- **${testDir}/**: Test suites and test utilities`);
+    }
+  }
+  
+  if (analysis.directories.includes('domain')) {
+    descriptions.push('- **domain/**: Core business logic and domain models');
+  }
+  
+  if (analysis.directories.includes('infrastructure')) {
+    descriptions.push('- **infrastructure/**: External service integrations and adapters');
+  }
+  
+  return descriptions.join('\n');
+}
+
+function describeModuleOrganization(analysis: ProjectAnalysis): string {
+  if (analysis.architecture.includes('DDD')) {
+    return `### Domain-Driven Modules
+- Each domain has its own module with models, services, and repositories
+- Clear boundaries between different domains
+- Dependency flow from infrastructure → application → domain`;
+  }
+  
+  if (analysis.type === 'ES Module') {
+    return `### ES Module Organization
+- ES6 module syntax with import/export
+- Barrel exports through index files
+- Tree-shaking enabled for optimized bundles`;
+  }
+  
+  return `### Module Structure
+- Logical grouping of related functionality
+- Clear import/export boundaries
+- Minimal circular dependencies`;
+}
+
+function generateArchitecturalPrinciples(analysis: ProjectAnalysis): Array<{principle: string, description: string}> {
+  const principles = [];
+  
+  principles.push({
+    principle: 'Separation of Concerns',
+    description: 'Each module handles a specific responsibility'
+  });
+  
+  if (analysis.language === 'typescript') {
+    principles.push({
+      principle: 'Type Safety',
+      description: 'Leverage TypeScript for compile-time type checking'
+    });
+  }
+  
+  if (analysis.hasTests) {
+    principles.push({
+      principle: 'Testability',
+      description: 'Code designed for easy unit and integration testing'
+    });
+  }
+  
+  if (analysis.dependencies.includes('inversify')) {
+    principles.push({
+      principle: 'Dependency Inversion',
+      description: 'Depend on abstractions, not concrete implementations'
+    });
+  }
+  
+  return principles;
+}
+
+function generateDevelopmentPatterns(analysis: ProjectAnalysis): string[] {
+  const patterns = [];
+  
+  if (analysis.scripts.dev) {
+    patterns.push('Hot module replacement for rapid development');
+  }
+  
+  if (analysis.scripts.lint) {
+    patterns.push('Automated code quality checks on commit');
+  }
+  
+  if (analysis.language === 'typescript') {
+    patterns.push('Strict TypeScript configuration for maximum safety');
+  }
+  
+  if (analysis.hasTests) {
+    patterns.push('Test files co-located with source code');
+  }
+  
+  return patterns;
+}
+
+function describeTestingStructure(analysis: ProjectAnalysis): string {
+  if (!analysis.hasTests) {
+    return 'Testing structure to be implemented';
+  }
+  
+  let structure = '';
+  
+  if (analysis.testFramework === 'Jest') {
+    structure += `### Jest Testing Framework
+- Unit tests: \`*.test.ts\` files alongside source code
+- Integration tests: \`__tests__/integration\` directory
+- Test configuration: \`jest.config.js\`
+- Coverage reports: \`coverage/\` directory`;
+  } else if (analysis.testFramework) {
+    structure += `### ${analysis.testFramework} Testing
+- Test files organized in test directory
+- Unit and integration test separation
+- Test utilities and fixtures`;
+  } else {
+    structure += `### Testing Structure
+- Test files in dedicated test directory
+- Separation between unit and integration tests`;
+  }
+  
+  return structure;
+}
+
+function describeBuildOutput(analysis: ProjectAnalysis): string {
+  if (!analysis.scripts.build) {
+    return 'No build process configured';
+  }
+  
+  let output = `### Build Process
+- Command: \`${analysis.packageManager} run build\`\n`;
+  
+  if (analysis.directories.includes('dist')) {
+    output += '- Output directory: `dist/`\n';
+  } else if (analysis.directories.includes('build')) {
+    output += '- Output directory: `build/`\n';
+  }
+  
+  if (analysis.buildTool) {
+    output += `- Build tool: ${analysis.buildTool}\n`;
+  }
+  
+  if (analysis.language === 'typescript') {
+    output += '- TypeScript compilation to JavaScript\n';
+    output += '- Source maps for debugging\n';
+  }
+  
+  return output;
+}
+
+function getNodeVersion(): string {
+  try {
+    const packageJsonPath = path.join(process.cwd(), 'package.json');
+    if (fs.existsSync(packageJsonPath)) {
+      const packageJson = JSON.parse(fs.readFileSync(packageJsonPath, 'utf8'));
+      if (packageJson.engines?.node) {
+        return packageJson.engines.node;
+      }
+    }
+  } catch (error) {
+    // Ignore
+  }
+  return '>= 18.0.0';
+}

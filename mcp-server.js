@@ -4,10 +4,16 @@ import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js"
 import { z } from "zod";
 import fs from 'fs/promises';
 import path from 'path';
+import { 
+  analyzeProject, 
+  generateProductDocument, 
+  generateTechDocument, 
+  generateStructureDocument 
+} from './documentGenerator.js';
 
 const server = new McpServer({
   name: 'sdd-mcp-server',
-  version: '1.1.21'
+  version: '1.3.1'
 }, {
   instructions: 'Use this server for spec-driven development workflows'
 });
@@ -718,141 +724,17 @@ server.registerTool("sdd-steering", {
       updateMode = (productExists || techExists || structureExists) ? 'update' : 'create';
     }
     
-    // Analyze project structure
-    const packageJsonExists = await fs.access('package.json').then(() => true).catch(() => false);
-    let projectInfo = {
-      name: 'Unknown Project',
-      description: 'No description available',
-      techStack: [],
-      structure: {}
-    };
+    // Analyze project structure dynamically
+    const projectAnalysis = await analyzeProject(currentPath);
     
-    if (packageJsonExists) {
-      const packageContent = await fs.readFile('package.json', 'utf8');
-      const packageJson = JSON.parse(packageContent);
-      projectInfo.name = packageJson.name || 'Unknown Project';
-      projectInfo.description = packageJson.description || 'No description available';
-      projectInfo.techStack = Object.keys(packageJson.dependencies || {}).slice(0, 10);
-    }
+    // Generate dynamic documents based on actual project analysis
+    const productContent = generateProductDocument(projectAnalysis);
+    const techContent = generateTechDocument(projectAnalysis);
+    const structureContent = generateStructureDocument(projectAnalysis);
     
-    // Generate product.md
-    const productContent = `# Product Overview
-    
-## Product Description
-${projectInfo.description}
-
-## Core Features
-- Spec-driven development workflow automation
-- AI-agent integration via Model Context Protocol (MCP)
-- Phase-based development with quality gates
-- Template-based document generation
-- Multi-language support and localization
-
-## Target Use Case
-This product is designed for AI-powered development teams who want to follow structured, spec-driven development workflows. It provides systematic guidance through requirements, design, tasks, and implementation phases.
-
-## Key Value Proposition
-- **Structured Development**: Enforces proven development methodologies
-- **AI Integration**: Seamless integration with AI development tools
-- **Quality Assurance**: Built-in quality gates and code review processes
-- **Template System**: Consistent document generation and project structure
-- **Flexibility**: Configurable workflows and customizable steering documents
-
-## Target Users
-- AI development teams
-- Software engineers using Claude Code, Cursor, and similar tools
-- Development teams implementing spec-driven development practices
-- Projects requiring structured documentation and workflow management`;
-
+    // Write the dynamically generated documents
     await fs.writeFile(path.join(steeringPath, 'product.md'), productContent);
-    
-    // Generate tech.md
-    const techContent = `# Technology Stack
-
-## Architecture
-- **Type**: ${packageJsonExists ? 'Node.js Application' : 'Unknown Architecture'}
-- **Runtime**: Node.js with ES modules
-- **Protocol**: Model Context Protocol (MCP) for AI integration
-- **Package Manager**: npm
-
-## Technology Stack
-${projectInfo.techStack.length > 0 ? 
-  projectInfo.techStack.map(dep => `- **${dep}**: ${dep.includes('mcp') ? 'Model Context Protocol SDK' : 'Runtime dependency'}`).join('\n') :
-  '- No major dependencies detected'}
-
-## Development Environment
-- **Node Version**: >= 18.0.0
-- **Package Manager**: npm
-- **Module System**: ES modules (type: "module")
-
-## Common Commands
-\`\`\`bash
-# Development
-npm install          # Install dependencies
-npm run build       # Build the project
-npm test           # Run tests
-npm start          # Start the application
-
-# MCP Server
-node mcp-server.js  # Run simple MCP server
-\`\`\`
-
-## Environment Variables
-- \`LOG_LEVEL\`: Logging level (debug, info, warn, error)
-- \`DEFAULT_LANG\`: Default language for generated documents (en, es, fr, etc.)
-
-## Port Configuration
-- MCP Server: Uses stdio transport (no ports)
-- Application ports: Defined by implementation requirements`;
-
     await fs.writeFile(path.join(steeringPath, 'tech.md'), techContent);
-    
-    // Generate structure.md
-    const structureContent = `# Project Structure
-
-## Root Directory Organization
-\`\`\`
-├── .kiro/                    # SDD workflow files
-│   ├── steering/            # Project steering documents
-│   └── specs/              # Feature specifications
-├── dist/                   # Compiled output (if applicable)
-├── src/                    # Source code (if applicable)
-├── node_modules/           # npm dependencies
-├── package.json           # Project configuration
-├── mcp-server.js          # Simple MCP server implementation
-└── README.md              # Project documentation
-\`\`\`
-
-## SDD Directory Structure (\`.kiro/\`)
-- **steering/**: Always-loaded project context documents
-  - \`product.md\`: Product overview and business context
-  - \`tech.md\`: Technology stack and development environment
-  - \`structure.md\`: Project organization and architectural decisions
-  - Custom steering files for specialized contexts
-- **specs/**: Feature-specific specifications
-  - \`{feature-name}/\`: Individual feature directories
-    - \`spec.json\`: Metadata and approval tracking
-    - \`requirements.md\`: EARS-format requirements
-    - \`design.md\`: Technical design document
-    - \`tasks.md\`: Implementation task breakdown
-
-## Code Organization Patterns
-- **Modular Structure**: Clear separation between different functional areas
-- **Configuration First**: Centralized configuration management
-- **Documentation Co-location**: Specs and steering documents alongside code
-
-## File Naming Conventions
-- **Steering files**: \`kebab-case.md\` (e.g., \`api-standards.md\`)
-- **Spec files**: Standard names (\`requirements.md\`, \`design.md\`, \`tasks.md\`)
-- **Feature names**: Auto-generated from descriptions using kebab-case
-
-## Key Architectural Principles
-- **Spec-Driven Development**: All features start with requirements and design
-- **Phase-Based Workflow**: Structured progression through development phases
-- **Quality Gates**: Approval requirements between phases
-- **Template-Based Generation**: Consistent document structure and formatting
-- **AI-First Design**: Optimized for AI development tool integration`;
-
     await fs.writeFile(path.join(steeringPath, 'structure.md'), structureContent);
     
     const mode = updateMode === 'update' ? 'Updated' : 'Created';
@@ -862,20 +744,27 @@ node mcp-server.js  # Run simple MCP server
         type: 'text',
         text: `## Steering Documents ${mode}
 
-**Project**: ${projectInfo.name}
+**Project**: ${projectAnalysis.name}
+**Version**: ${projectAnalysis.version}
+**Architecture**: ${projectAnalysis.architecture}
 **Mode**: ${updateMode}
 
 **${mode} Files**:
-- \`.kiro/steering/product.md\` - Product overview and business context
-- \`.kiro/steering/tech.md\` - Technology stack and development environment  
-- \`.kiro/steering/structure.md\` - Project organization and architectural decisions
+- \`.kiro/steering/product.md\` - Product overview and business context (dynamically generated)
+- \`.kiro/steering/tech.md\` - Technology stack and development environment (dynamically generated)
+- \`.kiro/steering/structure.md\` - Project organization and architectural decisions (dynamically generated)
 
-**Analysis**:
-- Technology stack: ${projectInfo.techStack.length} dependencies detected
-- Project type: ${packageJsonExists ? 'Node.js application' : 'Unknown project type'}
-- Existing steering: ${productExists || techExists || structureExists ? 'Updated preserving customizations' : 'Created from scratch'}
+**Dynamic Analysis Results**:
+- **Language**: ${projectAnalysis.language === 'typescript' ? 'TypeScript' : 'JavaScript'}
+- **Framework**: ${projectAnalysis.framework || 'None detected'}
+- **Dependencies**: ${projectAnalysis.dependencies.length} production, ${projectAnalysis.devDependencies.length} development
+- **Test Framework**: ${projectAnalysis.testFramework || 'None detected'}
+- **Build Tool**: ${projectAnalysis.buildTool || 'None detected'}
+- **Project Structure**: ${projectAnalysis.directories.length} directories analyzed
+- **CI/CD**: ${projectAnalysis.hasCI ? 'Configured' : 'Not configured'}
+- **Docker**: ${projectAnalysis.hasDocker ? 'Configured' : 'Not configured'}
 
-These steering documents provide consistent project context for all AI interactions and spec-driven development workflows.`
+These steering documents were dynamically generated based on actual project analysis and provide accurate, up-to-date context for AI interactions.`
       }]
     };
   } catch (error) {
