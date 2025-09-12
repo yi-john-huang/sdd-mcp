@@ -13,7 +13,7 @@ import {
 
 const server = new McpServer({
   name: 'sdd-mcp-server',
-  version: '1.3.1'
+  version: '1.3.2'
 }, {
   instructions: 'Use this server for spec-driven development workflows'
 });
