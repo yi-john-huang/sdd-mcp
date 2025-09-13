@@ -1,55 +1,96 @@
 # Technology Stack
 
 ## Architecture
-- **Type**: Node.js Application with TypeScript
-- **Version**: v1.2.0 (Latest: Kiro workflow alignment with empty project bootstrap)
-- **Runtime**: Node.js with ES modules
-- **Protocol**: Model Context Protocol (MCP) for AI integration
-- **Package Manager**: npm
-- **Dependency Injection**: Inversify container with decorators
+**Type**: Domain-Driven Design (DDD)  
+**Language**: TypeScript  
+**Module System**: ES Module  
+**Framework**: MCP SDK  
+**Build Tool**: TypeScript Compiler
 
-## Core Dependencies
-- **@modelcontextprotocol/sdk** (^1.0.4): MCP protocol implementation
-- **inversify** (^6.0.2): Dependency injection container
-- **handlebars** (^4.7.8): Template engine for document generation
-- **i18next** (^25.5.2): Internationalization framework
-- **ajv** (^8.17.1): JSON schema validation
-- **TypeScript**: Full type safety with strict configuration
 
-## Code Analysis Stack
-- **@babel/parser** (^7.28.4): JavaScript/TypeScript parsing
-- **@typescript-eslint/typescript-estree** (^8.43.0): TypeScript AST analysis
-- **acorn** (^8.15.0): JavaScript parser for code analysis
-- **esprima** (^4.0.1): ECMAScript parsing utilities
+### Domain-Driven Design Architecture
+The project follows DDD principles with clear separation between:
+- **Domain Layer**: Business logic and domain models
+- **Application Layer**: Use cases and application services  
+- **Infrastructure Layer**: External dependencies and integrations
+- **Presentation Layer**: API endpoints or UI components
+
+
+## Technology Stack
+- **Node.js**: JavaScript runtime for server-side execution
+- **TypeScript**: Typed superset of JavaScript for enhanced developer experience
+- **MCP SDK**: Model Context Protocol SDK for AI agent integration
+- **Jest**: Testing framework for unit and integration tests
+- **TypeScript Compiler**: Build and bundling tool for production optimization
+- **@babel/parser**: Project dependency
+- **@babel/types**: Project dependency
+- **@modelcontextprotocol/sdk**: MCP SDK for AI tool integration
+- **@typescript-eslint/typescript-estree**: Project dependency
+- **acorn**: Project dependency
 
 ## Development Environment
-- **Node Version**: >= 18.0.0
-- **Package Manager**: npm
-- **Module System**: ES modules (type: "module")
+- **Node Version**: >=18.0.0
+- **Package Manager/Build**: npm
+- **Language**: TypeScript with type safety
+- **Testing**: Jest
 
-## Common Commands
+## Dependencies Analysis
+### Production Dependencies (16)
+- `@babel/parser`: Project dependency
+- `@babel/types`: Project dependency
+- `@modelcontextprotocol/sdk`: MCP SDK for AI tool integration
+- `@typescript-eslint/typescript-estree`: Project dependency
+- `acorn`: Project dependency
+- `ajv`: JSON schema validator
+- `ajv-formats`: Project dependency
+- `esprima`: Project dependency
+- `handlebars`: Template engine
+- `i18next`: Internationalization framework
+- `i18next-fs-backend`: Project dependency
+- `i18next-http-middleware`: Project dependency
+- `inversify`: Dependency injection container
+- `os-locale`: Project dependency
+- `reflect-metadata`: Project dependency
+
+... and 1 more
+
+### Development Dependencies (16)
+- `@types/esprima`: Project dependency
+- `@types/handlebars`: Project dependency
+- `@types/jest`: Project dependency
+- `@types/node`: Project dependency
+- `@types/sinon`: Project dependency
+- `@types/supertest`: Project dependency
+- `@types/uuid`: Project dependency
+- `@typescript-eslint/eslint-plugin`: Project dependency
+- `@typescript-eslint/parser`: Project dependency
+- `eslint`: JavaScript linter
+
+... and 6 more
+
+## Development Commands
 ```bash
-# Development
-npm install          # Install dependencies
-npm run build       # Build the project
-npm test           # Run tests
-npm start          # Start the application
-
-# MCP Server
-node mcp-server.js  # Run simple MCP server
-
-# SDD Workflow (via MCP tools)
-sdd-init "project description"     # Initialize spec from description (empty projects supported)
-sdd-requirements feature-name      # Generate EARS-formatted requirements
-sdd-design feature-name           # Create technical design (validates requirements)
-sdd-tasks feature-name            # Generate implementation tasks (validates design)
-sdd-status feature-name           # Check workflow progress
+npm run dev  # Start development server with hot reload
+npm run start  # Start production server
+npm run build  # Build project for production
+npm run test  # Run test suite
+npm run lint  # Check code quality with linter
+npm run typecheck  # Validate TypeScript types
+npm run test:unit  # jest --testPathPattern=__tests__.*\.test\.ts$ --te...
+npm run test:integration  # jest --testPathPattern=integration.*\.test\.ts$
+npm run test:e2e  # jest --testPathPattern=e2e.*\.test\.ts$
+npm run test:watch  # jest --watch
+npm run test:coverage  # jest --coverage
+npm run test:ci  # jest --coverage --ci --watchAll=false --passWithNo...
+npm run lint:fix  # eslint src --ext .ts --fix
+npm run validate  # npm run typecheck && npm run lint && npm run test:...
 ```
 
-## Environment Variables
-- `LOG_LEVEL`: Logging level (debug, info, warn, error)
-- `DEFAULT_LANG`: Default language for generated documents (en, es, fr, etc.)
+## Quality Assurance
+- **Linting**: Automated code quality checks
+- **Type Checking**: TypeScript compilation validation
 
-## Port Configuration
-- MCP Server: Uses stdio transport (no ports)
-- Application ports: Defined by implementation requirements
+## Deployment Configuration
+- **Containerization**: Docker support for consistent deployments
+- **Build Process**: `npm run build` for production artifacts
+- **Module System**: ES modules for modern JavaScript

@@ -6,20 +6,32 @@
 
 A Model Context Protocol (MCP) server implementing Spec-Driven Development (SDD) workflows for AI-agent CLIs and IDEs like Claude Code, Cursor, and others.
 
-> **✅ v1.3.0 Update**: Enhanced steering document generation with automatic static document creation and AI agent support. Includes Linus Torvalds code review guidelines, commit message standards, and universal AGENTS.md for cross-platform AI compatibility.
+> **✅ v1.3.11 Update**: AI-driven MCP server with language-agnostic workflow tools. CRITICAL FIX: sdd-steering now generates actual analyzed content instead of instruction templates. Fixed all hardcoded templates, made tools truly universal for any programming language/framework. Perfect for Spring Boot, React, Python, Go, and any other project!
 
 ## 🚀 Quick Start
 
-### Option 1: Install Globally (Recommended)
+### Option 1: Direct NPX Usage (Recommended)
 ```bash
-# Install globally for reliable Claude Code integration
+# No installation required - use directly with npx
+npx -y sdd-mcp-server@latest
+
+# For Claude Code MCP integration, add to your configuration:
+# "sdd-mcp-server": {
+#   "command": "npx",
+#   "args": ["-y", "sdd-mcp-server@latest"]
+# }
+```
+
+### Option 2: Install Globally
+```bash
+# Install globally for persistent usage
 npm install -g sdd-mcp-server@latest
 
 # Start the server
 sdd-mcp-server
 ```
 
-### Option 2: Clone and Run
+### Option 3: Clone and Run
 ```bash
 # Clone the repository
 git clone https://github.com/yi-john-huang/sdd-mcp.git

@@ -1,0 +1,22 @@
+{
+  "feature_name": "mcp-steering-fix",
+  "created_at": "2025-09-13T06:09:44Z",
+  "updated_at": "2025-09-13T06:52:05Z",
+  "language": "en",
+  "phase": "tasks-generated",
+  "approvals": {
+    "requirements": {
+      "generated": true,
+      "approved": true
+    },
+    "design": {
+      "generated": true,
+      "approved": true
+    },
+    "tasks": {
+      "generated": true,
+      "approved": false
+    }
+  },
+  "ready_for_implementation": true
+}

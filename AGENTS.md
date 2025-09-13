@@ -1,13 +1,13 @@
-# Claude Code Spec-Driven Development
+# AI Agent Spec-Driven Development
 
-Kiro-style Spec Driven Development implementation using claude code slash commands, hooks and agents.
+Kiro-style Spec Driven Development implementation using ai agent slash commands, hooks and agents.
 
 ## Project Context
 
 ### Paths
 - Steering: `.kiro/steering/`
 - Specs: `.kiro/specs/`
-- Commands: `.claude/commands/`
+- Commands: `.ai agent/commands/`
 
 ### Steering vs Specification
 

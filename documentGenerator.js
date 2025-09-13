@@ -30,14 +30,24 @@ export async function analyzeProject(projectPath) {
     // Check for package.json
     const packageJsonPath = path.join(projectPath, 'package.json');
     if (fs.existsSync(packageJsonPath)) {
-      const packageJson = JSON.parse(fs.readFileSync(packageJsonPath, 'utf8'));
-      analysis.name = packageJson.name || analysis.name;
-      analysis.description = packageJson.description || analysis.description;
-      analysis.version = packageJson.version || analysis.version;
-      analysis.type = packageJson.type === 'module' ? 'ES Module' : 'CommonJS';
-      analysis.dependencies = Object.keys(packageJson.dependencies || {});
-      analysis.devDependencies = Object.keys(packageJson.devDependencies || {});
-      analysis.scripts = packageJson.scripts || {};
+      try {
+        const packageJsonContent = fs.readFileSync(packageJsonPath, 'utf8');
+        const packageJson = JSON.parse(packageJsonContent);
+
+        // Extract project information with better fallbacks
+        analysis.name = packageJson.name || getDirectoryBasedName(projectPath);
+        analysis.description = packageJson.description || generateSmartDescription(analysis.name);
+        analysis.version = packageJson.version || '1.0.0';
+        analysis.type = packageJson.type === 'module' ? 'ES Module' : 'CommonJS';
+        analysis.dependencies = Object.keys(packageJson.dependencies || {});
+        analysis.devDependencies = Object.keys(packageJson.devDependencies || {});
+        analysis.scripts = packageJson.scripts || {};
+
+      } catch (parseError) {
+        // Use fallbacks if package.json is malformed
+        analysis.name = getDirectoryBasedName(projectPath);
+        analysis.description = generateSmartDescription(analysis.name);
+      }
 
       // Detect framework
       if (analysis.dependencies.includes('express') || analysis.devDependencies.includes('express')) {
@@ -87,6 +97,10 @@ export async function analyzeProject(projectPath) {
       } else if (analysis.scripts.build?.includes('rollup')) {
         analysis.buildTool = 'Rollup';
       }
+    } else {
+      // No package.json found, use directory-based fallbacks
+      analysis.name = getDirectoryBasedName(projectPath);
+      analysis.description = generateSmartDescription(analysis.name);
     }
 
     // Check for yarn or pnpm
@@ -101,19 +115,31 @@ export async function analyzeProject(projectPath) {
     for (const item of items) {
       if (item.isDirectory() && !item.name.startsWith('.') && item.name !== 'node_modules') {
         analysis.directories.push(item.name);
+<<<<<<< HEAD
+
+=======
         
+>>>>>>> master
         // Check for test directories
         if (item.name === 'test' || item.name === 'tests' || item.name === '__tests__' || item.name === 'spec') {
           analysis.hasTests = true;
         }
       } else if (item.isFile()) {
         analysis.files.push(item.name);
+<<<<<<< HEAD
+
+=======
         
+>>>>>>> master
         // Check for Docker
         if (item.name === 'Dockerfile' || item.name === 'docker-compose.yml') {
           analysis.hasDocker = true;
         }
+<<<<<<< HEAD
+
+=======
         
+>>>>>>> master
         // Check for CI/CD
         if (item.name === '.gitlab-ci.yml' || item.name === '.travis.yml' || item.name === 'Jenkinsfile') {
           analysis.hasCI = true;
@@ -121,6 +147,99 @@ export async function analyzeProject(projectPath) {
       }
     }
 
+<<<<<<< HEAD
+    // Check for Java/Maven/Gradle projects (including multi-module projects)
+    const pomPath = path.join(projectPath, 'pom.xml');
+    const gradlePath = path.join(projectPath, 'build.gradle');
+    const gradleKtsPath = path.join(projectPath, 'build.gradle.kts');
+
+    // Also check for Maven/Gradle projects in subdirectories (multi-module projects)
+    const hasSubmodulePom = analysis.directories.some(dir =>
+      fs.existsSync(path.join(projectPath, dir, 'pom.xml'))
+    );
+    const hasSubmoduleGradle = analysis.directories.some(dir =>
+      fs.existsSync(path.join(projectPath, dir, 'build.gradle')) ||
+      fs.existsSync(path.join(projectPath, dir, 'build.gradle.kts'))
+    );
+
+    if (fs.existsSync(pomPath) || fs.existsSync(gradlePath) || fs.existsSync(gradleKtsPath) || hasSubmodulePom || hasSubmoduleGradle) {
+      analysis.language = 'java';
+      if (fs.existsSync(pomPath)) {
+        analysis.packageManager = 'maven';
+        analysis.buildTool = 'Maven';
+        try {
+          const pom = fs.readFileSync(pomPath, 'utf8');
+          if (/spring-boot/i.test(pom) || /org\.springframework\.boot/i.test(pom)) {
+            analysis.framework = 'Spring Boot';
+            analysis.architecture = 'Spring Boot Application';
+          }
+          // Detect modules in aggregator POM
+          const moduleMatches = pom.match(/<module>[^<]+<\/module>/g) || [];
+          if (moduleMatches.length > 1) {
+            analysis.architecture = 'Microservices (Spring Boot)';
+          }
+          if (/junit|jupiter/i.test(pom)) {
+            analysis.testFramework = 'JUnit';
+            analysis.hasTests = true;
+          }
+        } catch {}
+      } else if (hasSubmodulePom) {
+        // Analyze submodule pom.xml files for multi-module projects
+        analysis.packageManager = 'maven';
+        analysis.buildTool = 'Maven';
+        let foundSpringBoot = false;
+        let foundJUnit = false;
+
+        for (const dir of analysis.directories) {
+          const subPomPath = path.join(projectPath, dir, 'pom.xml');
+          if (fs.existsSync(subPomPath)) {
+            try {
+              const pom = fs.readFileSync(subPomPath, 'utf8');
+              if (/spring-boot/i.test(pom) || /org\.springframework\.boot/i.test(pom)) {
+                foundSpringBoot = true;
+              }
+              if (/junit|jupiter/i.test(pom)) {
+                foundJUnit = true;
+              }
+            } catch {}
+          }
+        }
+
+        if (foundSpringBoot) {
+          analysis.framework = 'Spring Boot';
+          analysis.architecture = 'Microservices (Spring Boot)';
+        }
+        if (foundJUnit) {
+          analysis.testFramework = 'JUnit';
+          analysis.hasTests = true;
+        }
+      } else {
+        analysis.packageManager = 'gradle';
+        analysis.buildTool = 'Gradle';
+        try {
+          const gradle = fs.readFileSync(fs.existsSync(gradlePath) ? gradlePath : gradleKtsPath, 'utf8');
+          if (/org\.springframework\.boot|spring-boot/i.test(gradle)) {
+            analysis.framework = 'Spring Boot';
+            analysis.architecture = 'Spring Boot Application';
+          }
+          if (/subprojects\s*\{|include\s+\(/i.test(gradle)) {
+            analysis.architecture = 'Microservices (Spring Boot)';
+          }
+          if (/junit|jupiter|testImplementation\s+['"]org\.junit/i.test(gradle)) {
+            analysis.testFramework = 'JUnit';
+            analysis.hasTests = true;
+          }
+        } catch {}
+      }
+      // Detect conventional test dirs
+      if (fs.existsSync(path.join(projectPath, 'src', 'test', 'java'))) {
+        analysis.hasTests = true;
+        if (!analysis.testFramework) analysis.testFramework = 'JUnit';
+      }
+    }
+
+=======
+>>>>>>> master
     // Check for GitHub Actions
     if (fs.existsSync(path.join(projectPath, '.github', 'workflows'))) {
       analysis.hasCI = true;
@@ -143,8 +262,106 @@ export async function analyzeProject(projectPath) {
 
   } catch (error) {
     console.error('Error analyzing project:', error);
+<<<<<<< HEAD
+    // Even if analysis fails, provide meaningful fallbacks
+    analysis.name = getDirectoryBasedName(projectPath);
+    analysis.description = generateSmartDescription(analysis.name);
   }
 
+  // Validate and improve analysis results before returning
+  const finalAnalysis = validateAndImproveAnalysis(analysis, projectPath);
+
+  return finalAnalysis;
+}
+
+/**
+ * Extract project name from directory path
+ */
+function getDirectoryBasedName(projectPath) {
+  const dirName = path.basename(projectPath);
+  // Convert kebab-case, snake_case to proper names
+  return dirName
+    .replace(/[-_]/g, ' ')
+    .split(' ')
+    .map(word => word.charAt(0).toUpperCase() + word.slice(1))
+    .join(' ');
+}
+
+/**
+ * Generate smart description based on project name and structure
+ */
+function generateSmartDescription(projectName) {
+  const name = projectName.toLowerCase();
+
+  if (name.includes('microservices') && name.includes('spring')) {
+    return 'Spring Boot microservices application demonstrating distributed architecture patterns and service communication';
+  }
+  if (name.includes('microservices')) {
+    return 'Microservices architecture demonstration with multiple independent services';
+  }
+  if (name.includes('spring') && name.includes('boot')) {
+    return 'Spring Boot application built with modern Java frameworks and best practices';
+  }
+  if (name.includes('api')) {
+    return `RESTful API service for ${projectName.replace(/api/i, '').trim()} application`;
+  }
+  if (name.includes('server')) {
+    return `Server application for ${projectName.replace(/server/i, '').trim()} services`;
+  }
+  if (name.includes('client')) {
+    return `Client application for ${projectName.replace(/client/i, '').trim()} interaction`;
+  }
+  if (name.includes('mcp')) {
+    return 'Model Context Protocol (MCP) server for AI tool integration';
+  }
+  if (name.includes('bot')) {
+    return `Bot application for automated ${projectName.replace(/bot/i, '').trim()} tasks`;
+  }
+  if (name.includes('web')) {
+    return `Web application for ${projectName.replace(/web/i, '').trim()} services`;
+  }
+  if (name.includes('tool')) {
+    return `Development tool for ${projectName.replace(/tool/i, '').trim()} workflows`;
+  }
+
+  return `${projectName} application providing core functionality and services`;
+}
+
+/**
+ * Validate analysis results and improve them with smart fallbacks
+ */
+function validateAndImproveAnalysis(analysis, projectPath) {
+  // Improve architecture detection based on available information
+  if (analysis.architecture === 'unknown') {
+    if (analysis.dependencies.includes('@modelcontextprotocol/sdk')) {
+      analysis.architecture = 'Model Context Protocol Server';
+    } else if (analysis.dependencies.includes('express')) {
+      analysis.architecture = 'REST API Server';
+    } else if (analysis.dependencies.includes('react')) {
+      analysis.architecture = 'Frontend Application';
+    } else if (analysis.hasTests && analysis.directories.length > 3) {
+      analysis.architecture = 'Full-stack Application';
+    } else if (analysis.scripts.build) {
+      analysis.architecture = 'Build-based Application';
+    } else {
+      analysis.architecture = 'Node.js Application';
+    }
+  }
+  
+  // Ensure version is meaningful
+  if (analysis.version === '0.0.0' && analysis.dependencies.length > 0) {
+    analysis.version = '1.0.0';
+  }
+  
+  // Ensure type is meaningful  
+  if (analysis.type === 'unknown' && analysis.dependencies.length > 0) {
+    analysis.type = 'Application';
+  }
+  
+=======
+  }
+
+>>>>>>> master
   return analysis;
 }
 
@@ -152,6 +369,14 @@ export async function analyzeProject(projectPath) {
  * Generates dynamic product.md content based on project analysis
  */
 export function generateProductDocument(analysis) {
+<<<<<<< HEAD
+  // Validate analysis has meaningful content
+  if (isAnalysisGeneric(analysis)) {
+      analysis = enhanceGenericAnalysis(analysis);
+  }
+  
+=======
+>>>>>>> master
   const features = extractFeatures(analysis);
   const valueProps = generateValuePropositions(analysis);
   const targetUsers = identifyTargetUsers(analysis);
@@ -186,6 +411,57 @@ ${generateTechnicalAdvantages(analysis).map(a => `- ${a}`).join('\n')}
 }
 
 /**
+<<<<<<< HEAD
+ * Check if analysis contains only generic/default values
+ */
+function isAnalysisGeneric(analysis) {
+  return analysis.name === 'Unknown Project' || 
+         analysis.description === 'No description available' ||
+         analysis.version === '0.0.0' ||
+         analysis.architecture === 'unknown';
+}
+
+/**
+ * Enhance generic analysis with intelligent defaults
+ */
+function enhanceGenericAnalysis(analysis) {
+  const enhanced = { ...analysis };
+  
+  // If still using defaults, make educated guesses based on directory structure and files
+  if (enhanced.name === 'Unknown Project') {
+    enhanced.name = getDirectoryBasedName(process.cwd());
+  }
+  
+  if (enhanced.description === 'No description available') {
+    enhanced.description = generateSmartDescription(enhanced.name);
+  }
+  
+  if (enhanced.version === '0.0.0') {
+    enhanced.version = '1.0.0';
+  }
+  
+  if (enhanced.architecture === 'unknown') {
+    // Make intelligent architecture guesses
+    const name = enhanced.name.toLowerCase();
+    if (name.includes('server') || name.includes('api')) {
+      enhanced.architecture = 'Server Application';
+    } else if (name.includes('client') || name.includes('frontend')) {
+      enhanced.architecture = 'Frontend Application';
+    } else if (name.includes('mcp')) {
+      enhanced.architecture = 'Model Context Protocol Server';
+    } else if (enhanced.directories.includes('src')) {
+      enhanced.architecture = 'Source-based Application';
+    } else {
+      enhanced.architecture = 'Node.js Application';
+    }
+  }
+  
+  return enhanced;
+}
+
+/**
+=======
+>>>>>>> master
  * Generates dynamic tech.md content based on project analysis
  */
 export function generateTechDocument(analysis) {
@@ -197,8 +473,13 @@ export function generateTechDocument(analysis) {
 
 ## Architecture
 **Type**: ${analysis.architecture}  
+<<<<<<< HEAD
+**Language**: ${analysis.language === 'typescript' ? 'TypeScript' : analysis.language === 'java' ? 'Java' : analysis.language === 'python' ? 'Python' : analysis.language === 'go' ? 'Go' : analysis.language === 'ruby' ? 'Ruby' : analysis.language === 'php' ? 'PHP' : analysis.language === 'rust' ? 'Rust' : analysis.language === 'csharp' ? 'C#' : analysis.language === 'scala' ? 'Scala' : 'JavaScript'}  
+${(analysis.language === 'javascript' || analysis.language === 'typescript') ? `**Module System**: ${analysis.type}  ` : ''}
+=======
 **Language**: ${analysis.language === 'typescript' ? 'TypeScript' : 'JavaScript'}  
 **Module System**: ${analysis.type}  
+>>>>>>> master
 ${analysis.framework ? `**Framework**: ${analysis.framework}` : ''}  
 ${analysis.buildTool ? `**Build Tool**: ${analysis.buildTool}` : ''}
 
@@ -208,9 +489,14 @@ ${architecture}
 ${techStack.map(t => `- **${t.name}**: ${t.description}`).join('\n')}
 
 ## Development Environment
+<<<<<<< HEAD
+${analysis.language === 'java' ? `- **JDK**: ${getJavaVersion(projectPathFromCwd())}\n` : analysis.language === 'go' ? `- **Go**: ${getGoVersion(projectPathFromCwd())}\n` : analysis.language === 'python' ? `- **Python**: ${getPythonVersion(projectPathFromCwd())}\n` : analysis.language === 'ruby' ? `- **Ruby**: ${getRubyVersion(projectPathFromCwd())}\n` : analysis.language === 'php' ? `- **PHP**: ${getPhpVersion(projectPathFromCwd())}\n` : analysis.language === 'rust' ? `- **Rust**: ${getRustToolchain(projectPathFromCwd())}\n` : analysis.language === 'csharp' ? `- **.NET SDK**: ${getDotnetTarget(projectPathFromCwd())}\n` : `- **Node Version**: ${getNodeVersion()}\n`}- **Package Manager/Build**: ${analysis.packageManager}
+- **Language**: ${analysis.language === 'typescript' ? 'TypeScript with type safety' : analysis.language ? analysis.language[0].toUpperCase() + analysis.language.slice(1) : 'JavaScript'}
+=======
 - **Node Version**: ${getNodeVersion()}
 - **Package Manager**: ${analysis.packageManager}
 - **Language**: ${analysis.language === 'typescript' ? 'TypeScript with type safety' : 'JavaScript'}
+>>>>>>> master
 ${analysis.testFramework ? `- **Testing**: ${analysis.testFramework}` : ''}
 
 ## Dependencies Analysis
@@ -301,7 +587,35 @@ function extractFeatures(analysis) {
     features.push('Spec-driven development workflow');
   }
   
+<<<<<<< HEAD
+  // Ensure we always have meaningful features
+  if (features.length === 0) {
+    // Add intelligent default features based on project characteristics
+    features.push('Core application functionality');
+    
+    if (analysis.architecture.includes('Server')) {
+      features.push('Server-side request processing');
+      features.push('API endpoint management');
+    }
+    
+    if (analysis.architecture.includes('Frontend')) {
+      features.push('User interface components');
+      features.push('Client-side interaction handling');
+    }
+    
+    if (analysis.directories.includes('src')) {
+      features.push('Modular source code organization');
+    }
+    
+    if (analysis.language === 'typescript' || analysis.language === 'javascript') {
+      features.push('JavaScript/Node.js runtime environment');
+    }
+  }
+  
+  return features;
+=======
   return features.length > 0 ? features : ['Core application functionality'];
+>>>>>>> master
 }
 
 function generateValuePropositions(analysis) {
@@ -335,6 +649,31 @@ function generateValuePropositions(analysis) {
     });
   }
   
+<<<<<<< HEAD
+  // Ensure we always have meaningful value propositions
+  if (props.length === 0) {
+    props.push({
+      title: 'Development Efficiency',
+      description: 'Streamlined development process with modern tooling'
+    });
+    
+    if (analysis.architecture.includes('Server')) {
+      props.push({
+        title: 'Scalable Architecture',
+        description: 'Server-based design supports multiple clients and scaling'
+      });
+    }
+    
+    if (analysis.directories.includes('src')) {
+      props.push({
+        title: 'Maintainable Codebase',
+        description: 'Organized source structure facilitates long-term maintenance'
+      });
+    }
+  }
+  
+=======
+>>>>>>> master
   return props;
 }
 
@@ -416,6 +755,27 @@ function generateTechnicalAdvantages(analysis) {
 
 function buildTechStack(analysis) {
   const stack = [];
+<<<<<<< HEAD
+  // Core runtime
+  if (analysis.language === 'java') stack.push({ name: 'Java', description: 'JDK runtime for backend services' });
+  else if (analysis.language === 'python') stack.push({ name: 'Python', description: 'Python runtime for applications and APIs' });
+  else if (analysis.language === 'go') stack.push({ name: 'Go', description: 'Go toolchain for building static binaries' });
+  else if (analysis.language === 'ruby') stack.push({ name: 'Ruby', description: 'Ruby runtime for web applications' });
+  else if (analysis.language === 'php') stack.push({ name: 'PHP', description: 'PHP runtime for web applications' });
+  else if (analysis.language === 'rust') stack.push({ name: 'Rust', description: 'Rust toolchain for systems and APIs' });
+  else if (analysis.language === 'csharp') stack.push({ name: 'C#/.NET', description: '.NET runtime and SDK' });
+  else if (analysis.language === 'scala') stack.push({ name: 'Scala', description: 'JVM language for backend systems' });
+  else stack.push({ name: 'Node.js', description: 'JavaScript runtime for server-side execution' });
+  
+  // Language/Framework highlights
+  if (analysis.language === 'typescript') {
+    stack.push({ name: 'TypeScript', description: 'Typed superset of JavaScript for enhanced developer experience' });
+  } else if (analysis.language === 'java') {
+    stack.push({ name: 'Spring Boot', description: 'Opinionated framework for building production-ready services' });
+  }
+  if (analysis.framework) {
+    stack.push({ name: analysis.framework, description: getFrameworkDescription(analysis.framework) });
+=======
   
   // Core runtime
   stack.push({
@@ -437,6 +797,7 @@ function buildTechStack(analysis) {
       name: analysis.framework,
       description: getFrameworkDescription(analysis.framework)
     });
+>>>>>>> master
   }
   
   // Testing
@@ -469,6 +830,67 @@ function buildTechStack(analysis) {
 }
 
 function extractDevCommands(analysis) {
+<<<<<<< HEAD
+  let commands = '```bash\n';
+  switch (analysis.language) {
+    case 'java':
+      if (analysis.packageManager === 'maven') {
+        commands += 'mvn clean install   # Build project\n';
+        commands += 'mvn test            # Run tests\n';
+        if (analysis.framework === 'Spring Boot') commands += 'mvn spring-boot:run # Run application\n';
+      } else {
+        commands += 'gradle build        # Build project\n';
+        commands += 'gradle test         # Run tests\n';
+        if (analysis.framework === 'Spring Boot') commands += 'gradle bootRun      # Run application\n';
+      }
+      break;
+    case 'python':
+      commands += 'pip install -r requirements.txt   # Install deps\n';
+      commands += (analysis.framework === 'Django') ? 'python manage.py runserver        # Run server\n' :
+                   (analysis.framework === 'FastAPI' || analysis.framework === 'Flask') ? 'uvicorn app:app --reload         # Run dev server\n' : '';
+      commands += 'pytest                           # Run tests\n';
+      break;
+    case 'go':
+      commands += 'go build ./...        # Build\n';
+      commands += 'go test ./...         # Tests\n';
+      commands += 'go run ./cmd/...      # Run (example)\n';
+      break;
+    case 'ruby':
+      commands += 'bundle install        # Install deps\n';
+      commands += (analysis.framework === 'Rails') ? 'rails server           # Run server\n' : '';
+      commands += (analysis.testFramework === 'RSpec') ? 'rspec                 # Run tests\n' : 'rake test             # Run tests\n';
+      break;
+    case 'php':
+      commands += 'composer install      # Install deps\n';
+      commands += (analysis.framework === 'Laravel') ? 'php artisan serve      # Run server\n' : '';
+      commands += 'vendor/bin/phpunit    # Run tests\n';
+      break;
+    case 'rust':
+      commands += 'cargo build           # Build\n';
+      commands += 'cargo test            # Tests\n';
+      commands += 'cargo run             # Run\n';
+      break;
+    case 'csharp':
+      commands += 'dotnet build          # Build\n';
+      commands += 'dotnet test           # Tests\n';
+      commands += 'dotnet run            # Run\n';
+      break;
+    case 'scala':
+      commands += 'sbt compile           # Build\n';
+      commands += 'sbt test              # Tests\n';
+      commands += 'sbt run               # Run\n';
+      break;
+    default:
+      if (Object.keys(analysis.scripts).length === 0) return 'No npm scripts defined';
+      const order = ['dev', 'start', 'build', 'test', 'lint', 'typecheck', 'coverage'];
+      for (const cmd of order) {
+        if (analysis.scripts[cmd]) commands += `${analysis.packageManager} run ${cmd}  # ${describeCommand(cmd, analysis.scripts[cmd])}\n`;
+      }
+      for (const [cmd, script] of Object.entries(analysis.scripts)) {
+        if (!order.includes(cmd)) commands += `${analysis.packageManager} run ${cmd}  # ${script.substring(0, 50)}${script.length > 50 ? '...' : ''}\n`;
+      }
+  }
+=======
   if (Object.keys(analysis.scripts).length === 0) {
     return 'No npm scripts defined';
   }
@@ -491,11 +913,24 @@ function extractDevCommands(analysis) {
     }
   }
   
+>>>>>>> master
   commands += '```';
   return commands;
 }
 
 function describeArchitecture(analysis) {
+<<<<<<< HEAD
+  if (analysis.architecture.includes('Spring Boot')) {
+    return `
+### Spring Boot Service Architecture
+The project uses Spring Boot conventions:
+- **Configuration**: application.yml/properties per service
+- **Layers**: Controller → Service → Repository
+- **Build**: ${analysis.buildTool || 'Maven/Gradle'} with ${analysis.testFramework || 'JUnit'} tests
+${analysis.architecture.includes('Microservices') ? '- **Topology**: Multiple modules/services (microservices)\n' : ''}`;
+  }
+=======
+>>>>>>> master
   if (analysis.architecture === 'Domain-Driven Design (DDD)') {
     return `
 ### Domain-Driven Design Architecture
@@ -647,7 +1082,19 @@ function buildDirectoryTree(analysis) {
     tree += `├── Dockerfile              # Container configuration\n`;
   }
   
+<<<<<<< HEAD
+  if (analysis.language === 'java') tree += `├── pom.xml or build.gradle # Build configuration\n`;
+  else if (analysis.language === 'python') tree += `├── pyproject.toml / requirements.txt # Python config\n`;
+  else if (analysis.language === 'go') tree += `├── go.mod                  # Go modules\n`;
+  else if (analysis.language === 'ruby') tree += `├── Gemfile                 # Ruby dependencies\n`;
+  else if (analysis.language === 'php') tree += `├── composer.json           # PHP dependencies\n`;
+  else if (analysis.language === 'rust') tree += `├── Cargo.toml              # Rust package config\n`;
+  else if (analysis.language === 'csharp') tree += `├── *.csproj                # .NET project file\n`;
+  else if (analysis.language === 'scala') tree += `├── build.sbt               # SBT build\n`;
+  else tree += `├── package.json            # Project configuration\n`;
+=======
   tree += `├── package.json            # Project configuration\n`;
+>>>>>>> master
   
   if (analysis.language === 'typescript') {
     tree += `├── tsconfig.json           # TypeScript configuration\n`;
@@ -929,4 +1376,105 @@ function getNodeVersion() {
     // Ignore
   }
   return '>= 18.0.0';
+<<<<<<< HEAD
 }
+function getGoVersion(projectPath) {
+  try {
+    const gomod = path.join(projectPath, 'go.mod');
+    if (fs.existsSync(gomod)) {
+      const content = fs.readFileSync(gomod, 'utf8');
+      const m = content.match(/^go\s+([0-9.]+)/m);
+      if (m) return `Go ${m[1]}`;
+    }
+  } catch {}
+  return 'Go (version unknown)';
+}
+function getPythonVersion(projectPath) {
+  try {
+    const pyproject = path.join(projectPath, 'pyproject.toml');
+    if (fs.existsSync(pyproject)) {
+      const txt = fs.readFileSync(pyproject, 'utf8');
+      const m = txt.match(/python\s*[=><~!]*\s*['"]([^'"]+)['"]/i);
+      if (m) return `Python ${m[1]}`;
+    }
+    const vfile = path.join(projectPath, '.python-version');
+    if (fs.existsSync(vfile)) {
+      return `Python ${fs.readFileSync(vfile, 'utf8').trim()}`;
+    }
+  } catch {}
+  return 'Python (version unknown)';
+}
+function getRubyVersion(projectPath) {
+  try {
+    const rv = path.join(projectPath, '.ruby-version');
+    if (fs.existsSync(rv)) return `Ruby ${fs.readFileSync(rv, 'utf8').trim()}`;
+    const gem = path.join(projectPath, 'Gemfile');
+    if (fs.existsSync(gem)) {
+      const txt = fs.readFileSync(gem, 'utf8');
+      const m = txt.match(/ruby\s+['"]([^'"]+)['"]/i);
+      if (m) return `Ruby ${m[1]}`;
+    }
+  } catch {}
+  return 'Ruby (version unknown)';
+}
+function getPhpVersion(projectPath) {
+  try {
+    const composer = path.join(projectPath, 'composer.json');
+    if (fs.existsSync(composer)) {
+      const pkg = JSON.parse(fs.readFileSync(composer, 'utf8'));
+      const req = pkg.require || {};
+      if (req.php) return `PHP ${req.php}`;
+    }
+  } catch {}
+  return 'PHP (version unknown)';
+}
+function getRustToolchain(projectPath) {
+  try {
+    const tool = path.join(projectPath, 'rust-toolchain');
+    if (fs.existsSync(tool)) return `Rust ${fs.readFileSync(tool, 'utf8').trim()}`;
+    const cargo = path.join(projectPath, 'Cargo.toml');
+    if (fs.existsSync(cargo)) {
+      const txt = fs.readFileSync(cargo, 'utf8');
+      const m = txt.match(/edition\s*=\s*"(\d{4})"/);
+      if (m) return `Rust (edition ${m[1]})`;
+    }
+  } catch {}
+  return 'Rust (toolchain unknown)';
+}
+function getDotnetTarget(projectPath) {
+  try {
+    const files = fs.readdirSync(projectPath).filter(f => f.endsWith('.csproj'));
+    for (const f of files) {
+      const txt = fs.readFileSync(path.join(projectPath, f), 'utf8');
+      const m = txt.match(/<TargetFramework>([^<]+)<\/TargetFramework>/);
+      if (m) return m[1];
+    }
+  } catch {}
+  return '.NET (target unknown)';
+}
+
+function projectPathFromCwd() {
+  try { return process.cwd(); } catch { return '.'; }
+}
+
+function getJavaVersion(projectPath) {
+  try {
+    const pomPath = path.join(projectPath, 'pom.xml');
+    if (fs.existsSync(pomPath)) {
+      const pom = fs.readFileSync(pomPath, 'utf8');
+      const m = pom.match(/<maven\.compiler\.source>([^<]+)<\/maven\.compiler\.source>/);
+      const v = m?.[1] || (pom.match(/<java\.version>([^<]+)<\/java\.version>/)?.[1]);
+      if (v) return `JDK ${v}`;
+    }
+    const gradlePath = fs.existsSync(path.join(projectPath, 'build.gradle.kts')) ? path.join(projectPath, 'build.gradle.kts') : path.join(projectPath, 'build.gradle');
+    if (fs.existsSync(gradlePath)) {
+      const gradle = fs.readFileSync(gradlePath, 'utf8');
+      const m = gradle.match(/sourceCompatibility\s*=\s*['"]([^'"]+)['"]/i) || gradle.match(/sourceCompatibility\s+['"]([^'"]+)['"]/i);
+      if (m?.[1]) return `JDK ${m[1]}`;
+    }
+  } catch {}
+  return 'JDK (version unknown)';
+}
+=======
+}
+>>>>>>> master

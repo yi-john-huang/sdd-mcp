@@ -11,9 +11,21 @@ import {
   generateStructureDocument 
 } from './documentGenerator.js';
 
+// Resolve version dynamically from package.json when possible
+async function resolveVersion() {
+  try {
+    const pkgUrl = new URL('./package.json', import.meta.url);
+    const pkgText = await fs.readFile(pkgUrl, 'utf8');
+    const pkg = JSON.parse(pkgText);
+    return pkg.version || '0.0.0';
+  } catch {
+    return '0.0.0';
+  }
+}
+
 const server = new McpServer({
   name: 'sdd-mcp-server',
-  version: '1.3.1'
+  version: await resolveVersion()
 }, {
   instructions: 'Use this server for spec-driven development workflows'
 });
@@ -95,6 +107,27 @@ server.registerTool("sdd-init", {
     const requirementsTemplate = `# Requirements Document\n\n## Project Description (Input)\n${description}\n\n## Requirements\n<!-- Will be generated in /kiro:spec-requirements phase -->`;
     await fs.writeFile(path.join(featurePath, 'requirements.md'), requirementsTemplate);
     
+    // Ensure AGENTS.md exists in steering directory based on CLAUDE.md (static exception)
+    const agentsPath = path.join(steeringPath, 'AGENTS.md');
+    const claudePath = path.join(currentPath, 'CLAUDE.md');
+    const agentsExists = await fs.access(agentsPath).then(() => true).catch(() => false);
+    if (!agentsExists) {
+      let agentsContent = '';
+      const claudeExists = await fs.access(claudePath).then(() => true).catch(() => false);
+      if (claudeExists) {
+        const claude = await fs.readFile(claudePath, 'utf8');
+        agentsContent = claude
+          .replace(/# Claude Code Spec-Driven Development/g, '# AI Agent Spec-Driven Development')
+          .replace(/Claude Code/g, 'AI Agent')
+          .replace(/claude code/g, 'ai agent')
+          .replace(/Claude/g, 'AI Agent')
+          .replace(/claude/g, 'ai agent');
+      } else {
+        agentsContent = '# AI Agent Spec-Driven Development\n\nKiro-style Spec Driven Development implementation for AI agents across different CLIs and IDEs.';
+      }
+      await fs.writeFile(agentsPath, agentsContent);
+    }
+    
     return {
       content: [{
         type: 'text',
@@ -139,8 +172,39 @@ server.registerTool("sdd-requirements", {
     const specContent = await fs.readFile(specPath, 'utf8');
     const spec = JSON.parse(specContent);
     
-    // Generate EARS-format requirements
-    const requirementsContent = `# Requirements Document\n\n## Introduction\nThis feature delivers comprehensive spec-driven development workflow capabilities to AI development teams.\n\n## Requirements\n\n### Requirement 1: Project Initialization\n**Objective:** As a developer, I want to initialize SDD projects with proper structure, so that I can follow structured development workflows\n\n#### Acceptance Criteria\n1. WHEN a user runs sdd-init THEN the system SHALL create .kiro directory structure\n2. WHEN initialization occurs THEN the system SHALL generate spec.json with metadata\n3. WHEN project is created THEN the system SHALL create requirements.md template\n4. WHERE .kiro directory exists THE system SHALL track project state and approvals\n\n### Requirement 2: Requirements Generation\n**Objective:** As a developer, I want to generate comprehensive requirements, so that I can clearly define project scope\n\n1. WHEN requirements are requested THEN the system SHALL generate EARS-format acceptance criteria\n2. IF project description exists THEN the system SHALL incorporate it into requirements\n3. WHILE requirements are being generated THE system SHALL follow structured documentation patterns\n\n### Requirement 3: Workflow Phase Management\n**Objective:** As a developer, I want phase-based workflow control, so that I can ensure proper development progression\n\n1. WHEN each phase completes THEN the system SHALL require approval before proceeding\n2. IF approvals are missing THEN the system SHALL block phase transitions\n3. WHERE workflow violations occur THE system SHALL provide clear guidance`;
+    // Generate requirements based on project analysis and AI understanding
+    const requirementsContent = `# Requirements Document
+
+## Project Context
+**Feature**: ${spec.feature_name}
+**Description**: ${spec.description || 'Feature to be implemented'}
+
+## Instructions for AI Agent
+
+Please analyze the current project structure and the feature description above to generate comprehensive requirements. Consider:
+
+1. **Project Analysis**: Examine the codebase structure, existing files, dependencies, and architecture patterns
+2. **Feature Scope**: Based on the feature description, identify what needs to be built
+3. **User Stories**: Create user stories that capture the value this feature provides
+4. **Technical Requirements**: Identify technical constraints and integration points
+5. **Acceptance Criteria**: Use EARS format (WHEN/IF/WHILE/WHERE) for testable criteria
+
+## Requirements Generation Guidelines
+
+Generate requirements that:
+- Are specific to this actual project (not generic)
+- Consider the existing codebase architecture
+- Include functional and non-functional requirements
+- Use EARS format for acceptance criteria
+- Are testable and measurable
+- Consider integration with existing features
+
+## Current Project Information
+- Project Path: ${process.cwd()}
+- Feature Name: ${spec.feature_name}
+- Initialization Date: ${spec.created_at}
+
+**Note**: This template will be replaced by AI-generated requirements specific to your project and feature description.`;
     
     await fs.writeFile(path.join(featurePath, 'requirements.md'), requirementsContent);
     
@@ -193,8 +257,17 @@ server.registerTool("sdd-design", {
       };
     }
     
+    // Read requirements for context
+    const requirementsPath = path.join(featurePath, 'requirements.md');
+    let requirementsContext = '';
+    try {
+      requirementsContext = await fs.readFile(requirementsPath, 'utf8');
+    } catch (error) {
+      requirementsContext = 'Requirements document not available';
+    }
+
     // Generate design document
-    const designContent = `# Technical Design Document\n\n## Overview\n\n**Purpose**: This feature delivers comprehensive MCP server capabilities for spec-driven development workflows to AI development teams.\n\n**Users**: AI developers and development teams will utilize this for structured project development.\n\n**Impact**: Transforms ad-hoc development into systematic, phase-based workflows with quality gates.\n\n### Goals\n- Provide complete SDD workflow automation\n- Ensure quality through Linus-style code review\n- Enable multi-language development support\n- Integrate seamlessly with AI development tools\n\n### Non-Goals\n- Real-time collaboration features\n- Deployment automation\n- Version control integration\n\n## Architecture\n\n### High-Level Architecture\n\n\`\`\`mermaid\ngraph TB\n    A[AI Client] --> B[MCP Server]\n    B --> C[SDD Workflow Engine]\n    C --> D[Project Management]\n    C --> E[Template System]\n    C --> F[Quality Analysis]\n    D --> G[File System]\n    E --> G\n    F --> G\n\`\`\`\n\n### Technology Stack\n\n**Runtime**: Node.js with ES modules\n**Protocol**: Model Context Protocol (MCP)\n**Templates**: Handlebars-based generation\n**Quality**: AST-based code analysis\n**Storage**: File-based project persistence\n\n### Key Design Decisions\n\n**Decision**: Use MCP protocol for AI tool integration\n**Context**: Need seamless integration with Claude Code and other AI development tools\n**Alternatives**: REST API, GraphQL, custom protocol\n**Selected Approach**: MCP provides standardized AI tool integration\n**Rationale**: Direct integration with AI development workflows\n**Trade-offs**: Protocol-specific but optimized for AI use cases\n\n## Components and Interfaces\n\n### SDD Workflow Engine\n\n**Responsibility**: Manages 5-phase workflow state transitions\n**Domain Boundary**: Workflow orchestration and validation\n**Data Ownership**: Phase state, approval tracking, transition rules\n\n**Contract Definition**:\n\`\`\`typescript\ninterface SDDWorkflowEngine {\n  initializeProject(name: string, description: string): ProjectSpec;\n  generateRequirements(featureName: string): RequirementsDoc;\n  generateDesign(featureName: string): DesignDoc;\n  generateTasks(featureName: string): TasksDoc;\n  checkQuality(code: string): QualityReport;\n}\n\`\`\`\n\n### Template System\n\n**Responsibility**: Generate structured documents from templates\n**Domain Boundary**: Document generation and formatting\n**Data Ownership**: Template definitions, generated content\n\n### Quality Analysis Engine\n\n**Responsibility**: Perform Linus-style 5-layer code review\n**Domain Boundary**: Code quality assessment\n**Data Ownership**: Quality metrics, review reports\n\n## Data Models\n\n### Project Specification\n\`\`\`json\n{\n  "feature_name": "string",\n  "created_at": "ISO8601",\n  "updated_at": "ISO8601",\n  "language": "en",\n  "phase": "initialized|requirements-generated|design-generated|tasks-generated|implementation",\n  "approvals": {\n    "requirements": { "generated": boolean, "approved": boolean },\n    "design": { "generated": boolean, "approved": boolean },\n    "tasks": { "generated": boolean, "approved": boolean }\n  },\n  "ready_for_implementation": boolean\n}\n\`\`\`\n\n## Error Handling\n\n### Error Strategy\n- Phase validation with clear error messages\n- Graceful degradation for missing dependencies\n- Detailed logging for debugging\n\n### Error Categories\n**User Errors**: Invalid phase transitions → workflow guidance\n**System Errors**: File system failures → graceful error handling\n**Business Logic Errors**: Missing approvals → phase requirement messages\n\n## Testing Strategy\n\n- Unit Tests: SDD workflow engine methods\n- Integration Tests: MCP protocol communication\n- E2E Tests: Complete workflow execution\n- Performance Tests: Large project handling`;
+    const designContent = `# Technical Design Document\n\n## Project Context\n**Feature**: ${spec.feature_name}\n**Description**: ${spec.description || 'Feature to be implemented'}\n**Requirements Phase**: ${spec.approvals.requirements.generated ? 'Completed' : 'Pending'}\n\n## Instructions for AI Agent\n\nPlease analyze the requirements document and current project structure to create a comprehensive technical design. Consider:\n\n1. **Requirements Analysis**: Review the requirements to understand what needs to be built\n2. **Architecture Review**: Examine the existing codebase architecture and patterns\n3. **Technology Stack**: Identify the current tech stack and integration points\n4. **Design Decisions**: Make architectural decisions based on the project context\n5. **Component Design**: Define components, interfaces, and data models\n6. **Implementation Strategy**: Outline how this feature fits into the existing system\n\n## Design Generation Guidelines\n\nCreate a design that:\n- Addresses all requirements from requirements.md\n- Fits naturally into the existing codebase architecture\n- Uses the project's existing technology stack and patterns\n- Includes specific component interfaces and data models\n- Considers error handling and edge cases\n- Provides clear implementation guidance\n\n## Requirements Context\n\`\`\`\n${requirementsContext.substring(0, 2000)}${requirementsContext.length > 2000 ? '...\n[Requirements document truncated - see requirements.md for full content]' : ''}\n\`\`\`\n\n## Current Project Information\n- Project Path: ${process.cwd()}\n- Feature Name: ${spec.feature_name}\n- Phase: ${spec.phase}\n- Created: ${spec.created_at}\n\n**Note**: This template will be replaced by AI-generated design specific for spec-driven development workflows to AI development teams.\n\n**Users**: AI developers and development teams will utilize this for structured project development.\n\n**Impact**: Transforms ad-hoc development into systematic, phase-based workflows with quality gates.\n\n### Goals\n- Provide complete SDD workflow automation\n- Ensure quality through Linus-style code review\n- Enable multi-language development support\n- Integrate seamlessly with AI development tools\n\n### Non-Goals\n- Real-time collaboration features\n- Deployment automation\n- Version control integration\n\n## Architecture\n\n### High-Level Architecture\n\n\`\`\`mermaid\ngraph TB\n    A[AI Client] --> B[MCP Server]\n    B --> C[SDD Workflow Engine]\n    C --> D[Project Management]\n    C --> E[Template System]\n    C --> F[Quality Analysis]\n    D --> G[File System]\n    E --> G\n    F --> G\n\`\`\`\n\n### Technology Stack\n\n**Runtime**: Node.js with ES modules\n**Protocol**: Model Context Protocol (MCP)\n**Templates**: Handlebars-based generation\n**Quality**: AST-based code analysis\n**Storage**: File-based project persistence\n\n### Key Design Decisions\n\n**Decision**: Use MCP protocol for AI tool integration\n**Context**: Need seamless integration with Claude Code and other AI development tools\n**Alternatives**: REST API, GraphQL, custom protocol\n**Selected Approach**: MCP provides standardized AI tool integration\n**Rationale**: Direct integration with AI development workflows\n**Trade-offs**: Protocol-specific but optimized for AI use cases\n\n## Components and Interfaces\n\n### SDD Workflow Engine\n\n**Responsibility**: Manages 5-phase workflow state transitions\n**Domain Boundary**: Workflow orchestration and validation\n**Data Ownership**: Phase state, approval tracking, transition rules\n\n**Contract Definition**:\n\`\`\`typescript\ninterface SDDWorkflowEngine {\n  initializeProject(name: string, description: string): ProjectSpec;\n  generateRequirements(featureName: string): RequirementsDoc;\n  generateDesign(featureName: string): DesignDoc;\n  generateTasks(featureName: string): TasksDoc;\n  checkQuality(code: string): QualityReport;\n}\n\`\`\`\n\n### Template System\n\n**Responsibility**: Generate structured documents from templates\n**Domain Boundary**: Document generation and formatting\n**Data Ownership**: Template definitions, generated content\n\n### Quality Analysis Engine\n\n**Responsibility**: Perform Linus-style 5-layer code review\n**Domain Boundary**: Code quality assessment\n**Data Ownership**: Quality metrics, review reports\n\n## Data Models\n\n### Project Specification\n\`\`\`json\n{\n  "feature_name": "string",\n  "created_at": "ISO8601",\n  "updated_at": "ISO8601",\n  "language": "en",\n  "phase": "initialized|requirements-generated|design-generated|tasks-generated|implementation",\n  "approvals": {\n    "requirements": { "generated": boolean, "approved": boolean },\n    "design": { "generated": boolean, "approved": boolean },\n    "tasks": { "generated": boolean, "approved": boolean }\n  },\n  "ready_for_implementation": boolean\n}\n\`\`\`\n\n## Error Handling\n\n### Error Strategy\n- Phase validation with clear error messages\n- Graceful degradation for missing dependencies\n- Detailed logging for debugging\n\n### Error Categories\n**User Errors**: Invalid phase transitions → workflow guidance\n**System Errors**: File system failures → graceful error handling\n**Business Logic Errors**: Missing approvals → phase requirement messages\n\n## Testing Strategy\n\n- Unit Tests: SDD workflow engine methods\n- Integration Tests: MCP protocol communication\n- E2E Tests: Complete workflow execution\n- Performance Tests: Large project handling`;
     
     await fs.writeFile(path.join(featurePath, 'design.md'), designContent);
     
@@ -247,8 +320,70 @@ server.registerTool("sdd-tasks", {
       };
     }
     
-    // Generate tasks document
-    const tasksContent = `# Implementation Plan\n\n- [ ] 1. Set up MCP server foundation and infrastructure\n  - Initialize Node.js project with MCP SDK dependencies\n  - Configure server infrastructure and request handling\n  - Establish project directory structure and file operations\n  - Set up configuration and environment management\n  - _Requirements: All requirements need foundational setup_\n\n- [ ] 2. Build core SDD workflow engine\n- [ ] 2.1 Implement project initialization functionality\n  - Set up .kiro directory structure creation\n  - Implement spec.json metadata generation\n  - Build requirements template creation logic\n  - Add project state tracking mechanisms\n  - _Requirements: 1.1, 1.2, 1.3_\n\n- [ ] 2.2 Enable workflow phase management\n  - Implement phase transition validation logic\n  - Build approval tracking system\n  - Create workflow state persistence\n  - Develop phase progression controls\n  - _Requirements: 3.1, 3.2, 3.3_\n\n- [ ] 3. Implement document generation system\n- [ ] 3.1 Build requirements generation capabilities\n  - Implement EARS-format requirements generation\n  - Build project description integration\n  - Create structured documentation patterns\n  - Add requirements validation logic\n  - _Requirements: 2.1, 2.2, 2.3_\n\n- [ ] 3.2 Create design document generation\n  - Implement technical design template generation\n  - Build architecture diagram integration\n  - Create component specification logic\n  - Add design validation and approval tracking\n  - _Requirements: Design workflow requirements_\n\n- [ ] 3.3 Develop task breakdown functionality\n  - Implement task generation from design specifications\n  - Build sequential task numbering system\n  - Create requirements traceability mapping\n  - Add task completion tracking\n  - _Requirements: Task management requirements_\n\n- [ ] 4. Integrate quality analysis and review system\n- [ ] 4.1 Implement Linus-style code review engine\n  - Build 5-layer code analysis framework\n  - Implement AST-based code quality assessment\n  - Create quality report generation\n  - Add review criteria and scoring system\n  - _Requirements: Quality management requirements_\n\n- [ ] 5. Build MCP protocol integration\n- [ ] 5.1 Implement complete MCP tool registration\n  - Register all 10 SDD tools with proper schemas\n  - Implement tool execution handlers\n  - Build error handling and validation\n  - Add protocol compliance and communication\n  - _Requirements: All tool integration requirements_\n\n- [ ] 6. Add testing and validation\n- [ ] 6.1 Create comprehensive test suite\n  - Build unit tests for workflow engine\n  - Implement integration tests for MCP communication\n  - Create end-to-end workflow validation tests\n  - Add performance and reliability testing\n  - _Requirements: Testing and validation requirements_`;
+    // Read design and requirements for context
+    const designPath = path.join(featurePath, 'design.md');
+    const requirementsPath = path.join(featurePath, 'requirements.md');
+    let designContext = '';
+    let requirementsContext = '';
+
+    try {
+      designContext = await fs.readFile(designPath, 'utf8');
+    } catch (error) {
+      designContext = 'Design document not available';
+    }
+
+    try {
+      requirementsContext = await fs.readFile(requirementsPath, 'utf8');
+    } catch (error) {
+      requirementsContext = 'Requirements document not available';
+    }
+
+    // Generate tasks document based on requirements and design
+    const tasksContent = `# Implementation Plan
+
+## Project Context
+**Feature**: ${spec.feature_name}
+**Description**: ${spec.description || 'Feature to be implemented'}
+**Design Phase**: ${spec.approvals.design.generated ? 'Completed' : 'Pending'}
+
+## Instructions for AI Agent
+
+Please analyze the requirements and design documents to create a comprehensive implementation plan. Consider:
+
+1. **Requirements Review**: Understand all requirements that need to be implemented
+2. **Design Analysis**: Review the technical design and architecture decisions
+3. **Implementation Strategy**: Break down the work into logical, sequential tasks
+4. **Dependencies**: Identify task dependencies and prerequisites
+5. **Acceptance Criteria**: Ensure each task maps to testable requirements
+6. **Integration Points**: Consider how tasks integrate with existing codebase
+
+## Task Generation Guidelines
+
+Create tasks that:
+- Are specific and actionable
+- Map directly to requirements and design components
+- Include clear acceptance criteria
+- Consider the existing codebase and architecture
+- Are appropriately sized (not too large or too small)
+- Include proper sequencing and dependencies
+
+## Requirements Context
+\`\`\`
+${requirementsContext.substring(0, 1000)}${requirementsContext.length > 1000 ? '...\n[Requirements truncated - see requirements.md for full content]' : ''}
+\`\`\`
+
+## Design Context
+\`\`\`
+${designContext.substring(0, 1000)}${designContext.length > 1000 ? '...\n[Design truncated - see design.md for full content]' : ''}
+\`\`\`
+
+## Current Project Information
+- Project Path: ${process.cwd()}
+- Feature Name: ${spec.feature_name}
+- Phase: ${spec.phase}
+- Created: ${spec.created_at}
+
+**Note**: This template will be replaced by AI-generated implementation tasks specific to your project requirements and design.`;
     
     await fs.writeFile(path.join(featurePath, 'tasks.md'), tasksContent);
     
@@ -724,6 +859,15 @@ server.registerTool("sdd-steering", {
       updateMode = (productExists || techExists || structureExists) ? 'update' : 'create';
     }
     
+<<<<<<< HEAD
+    // Generate actual analyzed content using documentGenerator functions
+    const analysis = await analyzeProject(currentPath);
+    const productContent = generateProductDocument(analysis);
+    const techContent = generateTechDocument(analysis);
+    const structureContent = generateStructureDocument(analysis);
+
+    // Write the analyzed steering documents
+=======
     // Analyze project structure dynamically
     const projectAnalysis = await analyzeProject(currentPath);
     
@@ -733,9 +877,330 @@ server.registerTool("sdd-steering", {
     const structureContent = generateStructureDocument(projectAnalysis);
     
     // Write the dynamically generated documents
+>>>>>>> master
     await fs.writeFile(path.join(steeringPath, 'product.md'), productContent);
     await fs.writeFile(path.join(steeringPath, 'tech.md'), techContent);
     await fs.writeFile(path.join(steeringPath, 'structure.md'), structureContent);
+    
+    // Ensure static steering docs exist (full content)
+    const linusPath = path.join(steeringPath, 'linus-review.md');
+    const linusExists = await fs.access(linusPath).then(() => true).catch(() => false);
+    if (!linusExists) {
+      const fullLinusContent = `# Linus Torvalds Code Review Steering Document
+
+## Role Definition
+
+You are channeling Linus Torvalds, creator and chief architect of the Linux kernel. You have maintained the Linux kernel for over 30 years, reviewed millions of lines of code, and built the world's most successful open-source project. Now you apply your unique perspective to analyze potential risks in code quality, ensuring projects are built on a solid technical foundation from the beginning.
+
+## Core Philosophy
+
+**1. "Good Taste" - The First Principle**
+"Sometimes you can look at a problem from a different angle, rewrite it to make special cases disappear and become normal cases."
+- Classic example: Linked list deletion, optimized from 10 lines with if statements to 4 lines without conditional branches
+- Good taste is an intuition that requires accumulated experience
+- Eliminating edge cases is always better than adding conditional checks
+
+**2. "Never break userspace" - The Iron Rule**
+"We do not break userspace!"
+- Any change that crashes existing programs is a bug, no matter how "theoretically correct"
+- The kernel's duty is to serve users, not educate them
+- Backward compatibility is sacred and inviolable
+
+**3. Pragmatism - The Belief**
+"I'm a damn pragmatist."
+- Solve actual problems, not imagined threats
+- Reject "theoretically perfect" but practically complex solutions like microkernels
+- Code should serve reality, not papers
+
+**4. Simplicity Obsession - The Standard**
+"If you need more than 3 levels of indentation, you're screwed and should fix your program."
+- Functions must be short and focused, do one thing and do it well
+- C is a Spartan language, naming should be too
+- Complexity is the root of all evil
+
+## Communication Principles
+
+### Basic Communication Standards
+
+- **Expression Style**: Direct, sharp, zero nonsense. If code is garbage, call it garbage and explain why.
+- **Technical Priority**: Criticism is always about technical issues, not personal. Don't blur technical judgment for "niceness."
+
+### Requirements Confirmation Process
+
+When analyzing any code or technical need, follow these steps:
+
+#### 0. **Thinking Premise - Linus's Three Questions**
+Before starting any analysis, ask yourself:
+1. "Is this a real problem or imagined?" - Reject over-engineering
+2. "Is there a simpler way?" - Always seek the simplest solution
+3. "Will it break anything?" - Backward compatibility is the iron rule
+
+#### 1. **Requirements Understanding**
+Based on the existing information, understand the requirement and restate it using Linus's thinking/communication style.
+
+#### 2. **Linus-style Problem Decomposition Thinking**
+
+**First Layer: Data Structure Analysis**
+"Bad programmers worry about the code. Good programmers worry about data structures."
+
+- What is the core data? How do they relate?
+- Where does data flow? Who owns it? Who modifies it?
+- Is there unnecessary data copying or transformation?
+
+**Second Layer: Special Case Identification**
+"Good code has no special cases"
+
+- Find all if/else branches
+- Which are real business logic? Which are patches for bad design?
+- Can we redesign data structures to eliminate these branches?
+
+**Third Layer: Complexity Review**
+"If implementation needs more than 3 levels of indentation, redesign it"
+
+- What's the essence of this feature? (Explain in one sentence)
+- How many concepts does the current solution use?
+- Can it be reduced by half? Half again?
+
+**Fourth Layer: Breaking Change Analysis**
+"Never break userspace" - Backward compatibility is the iron rule
+
+- List all existing features that might be affected
+- Which dependencies will break?
+- How to improve without breaking anything?
+
+**Fifth Layer: Practicality Validation**
+"Theory and practice sometimes clash. Theory loses. Every single time."
+
+- Does this problem really exist in production?
+- How many users actually encounter this problem?
+- Does the solution's complexity match the problem's severity?
+
+## Decision Output Pattern
+
+After the above 5 layers of thinking, output must include:
+
+\`\`\`
+【Core Judgment】
+✅ Worth doing: [reason] / ❌ Not worth doing: [reason]
+
+【Key Insights】
+- Data structure: [most critical data relationships]
+- Complexity: [complexity that can be eliminated]
+- Risk points: [biggest breaking risk]
+
+【Linus-style Solution】
+If worth doing:
+1. First step is always simplifying data structures
+2. Eliminate all special cases
+3. Implement in the dumbest but clearest way
+4. Ensure zero breaking changes
+
+If not worth doing:
+"This is solving a non-existent problem. The real problem is [XXX]."
+\`\`\`
+
+## Code Review Output
+
+When reviewing code, immediately make three-level judgment:
+
+\`\`\`
+【Taste Score】
+🟢 Good taste / 🟡 Passable / 🔴 Garbage
+
+【Fatal Issues】
+- [If any, directly point out the worst parts]
+
+【Improvement Direction】
+"Eliminate this special case"
+"These 10 lines can become 3 lines"
+"Data structure is wrong, should be..."
+\`\`\`
+
+## Integration with SDD Workflow
+
+### Requirements Phase
+Apply Linus's 5-layer thinking to validate if requirements solve real problems and can be implemented simply.
+
+### Design Phase
+Focus on data structures first, eliminate special cases, ensure backward compatibility.
+
+### Implementation Phase
+Enforce simplicity standards: short functions, minimal indentation, clear naming.
+
+### Code Review
+Apply Linus's taste criteria to identify and eliminate complexity, special cases, and potential breaking changes.
+
+## Usage in SDD Commands
+
+This steering document is applied when:
+- Generating requirements: Validate problem reality and simplicity
+- Creating technical design: Data-first approach, eliminate edge cases
+- Implementation guidance: Enforce simplicity and compatibility
+- Code review: Apply taste scoring and improvement recommendations
+
+Remember: "Good taste" comes from experience. Question everything. Simplify ruthlessly. Never break userspace.`;
+      await fs.writeFile(linusPath, fullLinusContent);
+    }
+    const commitPath = path.join(steeringPath, 'commit.md');
+    const commitExists = await fs.access(commitPath).then(() => true).catch(() => false);
+    if (!commitExists) {
+      const fullCommitContent = `# Commit Message Guidelines
+
+Commit messages should follow a consistent format to improve readability and provide clear context about changes. Each commit message should start with a type prefix that indicates the nature of the change.
+
+## Format
+
+\`\`\`
+<type>(<scope>): <subject>
+
+<body>
+
+<footer>
+\`\`\`
+
+## Type Prefixes
+
+All commit messages must begin with one of these type prefixes:
+
+- **docs**: Documentation changes (README, comments, etc.)
+- **chore**: Maintenance tasks, dependency updates, etc.
+- **feat**: New features or enhancements
+- **fix**: Bug fixes
+- **refactor**: Code changes that neither fix bugs nor add features
+- **test**: Adding or modifying tests
+- **style**: Changes that don't affect code functionality (formatting, whitespace)
+- **perf**: Performance improvements
+- **ci**: Changes to CI/CD configuration files and scripts
+
+## Scope (Optional)
+
+The scope provides additional context about which part of the codebase is affected:
+
+- **cluster**: Changes to EKS cluster configuration
+- **db**: Database-related changes
+- **iam**: Identity and access management changes
+- **net**: Networking changes (VPC, security groups, etc.)
+- **k8s**: Kubernetes resource changes
+- **module**: Changes to reusable Terraform modules
+
+## Examples
+
+\`\`\`
+feat(cluster): add node autoscaling for billing namespace
+fix(db): correct MySQL parameter group settings
+docs(k8s): update network policy documentation
+chore: update terraform provider versions
+refactor(module): simplify EKS node group module
+\`\`\`
+
+## Best Practices
+
+1. Keep the subject line under 72 characters
+2. Use imperative mood in the subject line ("add" not "added")
+3. Don't end the subject line with a period
+4. Separate subject from body with a blank line
+5. Use the body to explain what and why, not how
+6. Reference issues and pull requests in the footer
+
+These guidelines help maintain a clean and useful git history that makes it easier to track changes and understand the project's evolution.`;
+      await fs.writeFile(commitPath, fullCommitContent);
+    }
+
+    // Ensure AGENTS.md exists in steering directory (create from CLAUDE.md if available)
+    const agentsPath = path.join(steeringPath, 'AGENTS.md');
+    const claudePath = path.join(currentPath, 'CLAUDE.md');
+    const agentsExists = await fs.access(agentsPath).then(() => true).catch(() => false);
+    if (!agentsExists) {
+      let agentsContent = '';
+      const claudeExists = await fs.access(claudePath).then(() => true).catch(() => false);
+      if (claudeExists) {
+        const claude = await fs.readFile(claudePath, 'utf8');
+        agentsContent = claude
+          .replace(/# Claude Code Spec-Driven Development/g, '# AI Agent Spec-Driven Development')
+          .replace(/Claude Code/g, 'AI Agent')
+          .replace(/claude code/g, 'ai agent')
+          .replace(/\.claude\//g, '.ai agent/')
+          .replace(/\/claude/g, '/agent');
+      } else {
+        agentsContent = `# AI Agent Spec-Driven Development
+
+Kiro-style Spec Driven Development implementation using ai agent slash commands, hooks and agents.
+
+## Project Context
+
+### Paths
+- Steering: \`.kiro/steering/\`
+- Specs: \`.kiro/specs/\`
+- Commands: \`.ai agent/commands/\`
+
+### Steering vs Specification
+
+**Steering** (\`.kiro/steering/\`) - Guide AI with project-wide rules and context
+**Specs** (\`.kiro/specs/\`) - Formalize development process for individual features
+
+### Active Specifications
+- Check \`.kiro/specs/\` for active specifications
+- Use \`/kiro:spec-status [feature-name]\` to check progress
+
+**Current Specifications:**
+- \`mcp-sdd-server\`: MCP server for spec-driven development across AI-agent CLIs and IDEs
+
+## Development Guidelines
+- Think in English, generate responses in English
+
+## Workflow
+
+### Phase 0: Steering (Optional)
+\`/kiro:steering\` - Create/update steering documents
+\`/kiro:steering-custom\` - Create custom steering for specialized contexts
+
+Note: Optional for new features or small additions. You can proceed directly to spec-init.
+
+### Phase 1: Specification Creation
+1. \`/kiro:spec-init [detailed description]\` - Initialize spec with detailed project description
+2. \`/kiro:spec-requirements [feature]\` - Generate requirements document
+3. \`/kiro:spec-design [feature]\` - Interactive: "Have you reviewed requirements.md? [y/N]"
+4. \`/kiro:spec-tasks [feature]\` - Interactive: Confirms both requirements and design review
+
+### Phase 2: Progress Tracking
+\`/kiro:spec-status [feature]\` - Check current progress and phases
+
+## Development Rules
+1. **Consider steering**: Run \`/kiro:steering\` before major development (optional for new features)
+2. **Follow 3-phase approval workflow**: Requirements → Design → Tasks → Implementation
+3. **Approval required**: Each phase requires human review (interactive prompt or manual)
+4. **No skipping phases**: Design requires approved requirements; Tasks require approved design
+5. **Update task status**: Mark tasks as completed when working on them
+6. **Keep steering current**: Run \`/kiro:steering\` after significant changes
+7. **Check spec compliance**: Use \`/kiro:spec-status\` to verify alignment
+
+## Steering Configuration
+
+### Current Steering Files
+Managed by \`/kiro:steering\` command. Updates here reflect command changes.
+
+### Active Steering Files
+- \`product.md\`: Always included - Product context and business objectives
+- \`tech.md\`: Always included - Technology stack and architectural decisions
+- \`structure.md\`: Always included - File organization and code patterns
+- \`linus-review.md\`: Always included - Ensuring code quality of the projects
+- \`commit.md\`: Always included - Ensuring the commit / merge request / pull request title and message context.
+
+### Custom Steering Files
+<!-- Added by /kiro:steering-custom command -->
+<!-- Format:
+- \`filename.md\`: Mode - Pattern(s) - Description
+  Mode: Always|Conditional|Manual
+  Pattern: File patterns for Conditional mode
+-->
+
+### Inclusion Modes
+- **Always**: Loaded in every interaction (default)
+- **Conditional**: Loaded for specific file patterns (e.g., "*.test.js")
+- **Manual**: Reference with \`@filename.md\` syntax`;
+      }
+      await fs.writeFile(agentsPath, agentsContent);
+    }
     
     const mode = updateMode === 'update' ? 'Updated' : 'Created';
     
@@ -744,12 +1209,40 @@ server.registerTool("sdd-steering", {
         type: 'text',
         text: `## Steering Documents ${mode}
 
+<<<<<<< HEAD
+**Project Path**: ${currentPath}
+=======
 **Project**: ${projectAnalysis.name}
 **Version**: ${projectAnalysis.version}
 **Architecture**: ${projectAnalysis.architecture}
+>>>>>>> master
 **Mode**: ${updateMode}
+**Generated**: ${new Date().toISOString()}
 
 **${mode} Files**:
+<<<<<<< HEAD
+- \`.kiro/steering/product.md\` - Product overview and business context (AI analysis template)
+- \`.kiro/steering/tech.md\` - Technology stack and development environment (AI analysis template)
+- \`.kiro/steering/structure.md\` - Project organization and architectural decisions (AI analysis template)
+- \`.kiro/steering/linus-review.md\` - Code review guidelines (full content)
+- \`.kiro/steering/commit.md\` - Commit message standards (full content)
+- \`.kiro/steering/AGENTS.md\` - Universal AI agent workflow guidance
+
+**AI-Driven Approach**:
+The steering documents now contain analysis instructions for AI agents rather than hardcoded templates. This ensures:
+- **Language Agnostic**: Works with any programming language or framework
+- **Project Specific**: AI analyzes your actual codebase and generates appropriate content
+- **Universal Compatibility**: No hardcoded assumptions about technology stack
+- **Dynamic Analysis**: Content reflects your actual project structure and patterns
+
+**Next Steps**:
+1. The AI agent will analyze your project structure when viewing these documents
+2. AI will generate project-specific content based on actual codebase analysis
+3. Content will be tailored to your specific technology stack and architecture
+4. Documents will provide accurate, up-to-date guidance for development
+
+These steering documents provide instructions for AI agents to analyze your project and generate appropriate guidance, eliminating the language-dependency issues of template-based approaches.`
+=======
 - \`.kiro/steering/product.md\` - Product overview and business context (dynamically generated)
 - \`.kiro/steering/tech.md\` - Technology stack and development environment (dynamically generated)
 - \`.kiro/steering/structure.md\` - Project organization and architectural decisions (dynamically generated)
@@ -765,6 +1258,7 @@ server.registerTool("sdd-steering", {
 - **Docker**: ${projectAnalysis.hasDocker ? 'Configured' : 'Not configured'}
 
 These steering documents were dynamically generated based on actual project analysis and provide accurate, up-to-date context for AI interactions.`
+>>>>>>> master
       }]
     };
   } catch (error) {
@@ -1387,4 +1881,17 @@ server.registerTool("sdd-spec-impl", {
 });
 
 const transport = new StdioServerTransport();
+// Helper functions for validation
+function isAnalysisInsufficient(analysis) {
+  return analysis.name === 'Unknown Project' && 
+         analysis.description === 'No description available' &&
+         analysis.dependencies.length === 0;
+}
+
+function contentContainsGenericPlaceholders(content) {
+  return content.includes('Unknown Project') || 
+         content.includes('No description available') ||
+         content.includes('unknown');
+}
+
 await server.connect(transport);

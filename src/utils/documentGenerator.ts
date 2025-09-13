@@ -110,6 +110,160 @@ export async function analyzeProject(projectPath: string): Promise<ProjectAnalys
       }
     }
 
+    // Check for Java/Maven/Gradle projects
+    const pomPath = path.join(projectPath, 'pom.xml');
+    const gradlePath = path.join(projectPath, 'build.gradle');
+    const gradleKtsPath = path.join(projectPath, 'build.gradle.kts');
+    if (fs.existsSync(pomPath) || fs.existsSync(gradlePath) || fs.existsSync(gradleKtsPath)) {
+      analysis.language = 'java';
+      if (fs.existsSync(pomPath)) {
+        analysis.packageManager = 'maven';
+        analysis.buildTool = 'Maven';
+        try {
+          const pom = fs.readFileSync(pomPath, 'utf8');
+          if (/spring-boot/i.test(pom) || /org\.springframework\.boot/i.test(pom)) {
+            analysis.framework = 'Spring Boot';
+            analysis.architecture = 'Spring Boot Application';
+          }
+          const moduleMatches = pom.match(/<module>[^<]+<\/module>/g) || [];
+          if (moduleMatches.length > 1) {
+            analysis.architecture = 'Microservices (Spring Boot)';
+          }
+          if (/junit|jupiter/i.test(pom)) {
+            analysis.testFramework = 'JUnit';
+            analysis.hasTests = true;
+          }
+        } catch {}
+      } else {
+        analysis.packageManager = 'gradle';
+        analysis.buildTool = 'Gradle';
+        try {
+          const gradle = fs.readFileSync(fs.existsSync(gradlePath) ? gradlePath : gradleKtsPath, 'utf8');
+          if (/org\.springframework\.boot|spring-boot/i.test(gradle)) {
+            analysis.framework = 'Spring Boot';
+            analysis.architecture = 'Spring Boot Application';
+          }
+          if (/subprojects\s*\{|include\s+\(/i.test(gradle)) {
+            analysis.architecture = 'Microservices (Spring Boot)';
+          }
+          if (/junit|jupiter|testImplementation\s+['"]org\.junit/i.test(gradle)) {
+            analysis.testFramework = 'JUnit';
+            analysis.hasTests = true;
+          }
+        } catch {}
+      }
+      if (fs.existsSync(path.join(projectPath, 'src', 'test', 'java'))) {
+        analysis.hasTests = true;
+        if (!analysis.testFramework) analysis.testFramework = 'JUnit';
+      }
+    }
+
+    // Detect Python projects
+    const pyproject = path.join(projectPath, 'pyproject.toml');
+    const requirements = path.join(projectPath, 'requirements.txt');
+    const pipfile = path.join(projectPath, 'Pipfile');
+    const setupPy = path.join(projectPath, 'setup.py');
+    if (fs.existsSync(pyproject) || fs.existsSync(requirements) || fs.existsSync(pipfile) || fs.existsSync(setupPy)) {
+      analysis.language = 'python';
+      analysis.packageManager = fs.existsSync(pyproject) ? 'poetry/pip' : (fs.existsSync(pipfile) ? 'pipenv' : 'pip');
+      analysis.buildTool = fs.existsSync(pyproject) ? 'Poetry' : 'Pip';
+      try {
+        const req = fs.existsSync(pyproject) ? fs.readFileSync(pyproject, 'utf8') : (fs.existsSync(requirements) ? fs.readFileSync(requirements, 'utf8') : '');
+        if (/django/i.test(req)) { analysis.framework = 'Django'; analysis.architecture = 'Django Web Application'; }
+        else if (/fastapi/i.test(req)) { analysis.framework = 'FastAPI'; analysis.architecture = 'REST API Server'; }
+        else if (/flask/i.test(req)) { analysis.framework = 'Flask'; analysis.architecture = 'REST API Server'; }
+        if (/pytest/i.test(req)) { analysis.testFramework = 'pytest'; analysis.hasTests = true; }
+      } catch {}
+      if (fs.existsSync(path.join(projectPath, 'tests')) || fs.existsSync(path.join(projectPath, 'test'))) {
+        analysis.hasTests = true;
+        if (!analysis.testFramework) analysis.testFramework = 'pytest/unittest';
+      }
+    }
+
+    // Detect Go projects
+    const goMod = path.join(projectPath, 'go.mod');
+    if (fs.existsSync(goMod)) {
+      analysis.language = 'go';
+      analysis.packageManager = 'go';
+      analysis.buildTool = 'Go Toolchain';
+      try {
+        const gomod = fs.readFileSync(goMod, 'utf8');
+        if (/github.com\/(gin-gonic\/gin)/i.test(gomod)) { analysis.framework = 'Gin'; analysis.architecture = 'REST API Server'; }
+        else if (/github.com\/(labstack\/echo)/i.test(gomod)) { analysis.framework = 'Echo'; analysis.architecture = 'REST API Server'; }
+        else { analysis.architecture = analysis.architecture === 'unknown' ? 'Go Application' : analysis.architecture; }
+      } catch {}
+      analysis.hasTests = analysis.hasTests || false;
+      analysis.testFramework = analysis.testFramework || 'go test';
+    }
+
+    // Detect Ruby projects
+    const gemfile = path.join(projectPath, 'Gemfile');
+    if (fs.existsSync(gemfile)) {
+      analysis.language = 'ruby';
+      analysis.packageManager = 'bundler';
+      analysis.buildTool = 'Rake';
+      try {
+        const gem = fs.readFileSync(gemfile, 'utf8');
+        if (/rails/i.test(gem)) { analysis.framework = 'Rails'; analysis.architecture = 'Rails MVC Application'; }
+        else if (/sinatra/i.test(gem)) { analysis.framework = 'Sinatra'; analysis.architecture = 'Web Application'; }
+        if (/rspec/i.test(gem)) { analysis.testFramework = 'RSpec'; analysis.hasTests = true; }
+      } catch {}
+    }
+
+    // Detect PHP projects
+    const composerJsonPath = path.join(projectPath, 'composer.json');
+    if (fs.existsSync(composerJsonPath)) {
+      analysis.language = 'php';
+      analysis.packageManager = 'composer';
+      analysis.buildTool = 'Composer';
+      try {
+        const composer = JSON.parse(fs.readFileSync(composerJsonPath, 'utf8'));
+        const require = composer.require || {};
+        if (require['laravel/framework']) { analysis.framework = 'Laravel'; analysis.architecture = 'Laravel MVC Application'; }
+        else if (require['symfony/symfony'] || require['symfony/framework-bundle']) { analysis.framework = 'Symfony'; analysis.architecture = 'Symfony Application'; }
+        if (require['phpunit/phpunit']) { analysis.testFramework = 'PHPUnit'; analysis.hasTests = true; }
+      } catch {}
+    }
+
+    // Detect Rust projects
+    const cargoToml = path.join(projectPath, 'Cargo.toml');
+    if (fs.existsSync(cargoToml)) {
+      analysis.language = 'rust';
+      analysis.packageManager = 'cargo';
+      analysis.buildTool = 'Cargo';
+      try {
+        const cargo = fs.readFileSync(cargoToml, 'utf8');
+        if (/actix-web/i.test(cargo)) { analysis.framework = 'Actix Web'; analysis.architecture = 'REST API Server'; }
+        else if (/rocket =/i.test(cargo)) { analysis.framework = 'Rocket'; analysis.architecture = 'Web Application'; }
+        else if (/axum/i.test(cargo)) { analysis.framework = 'Axum'; analysis.architecture = 'REST API Server'; }
+      } catch {}
+      analysis.testFramework = 'cargo test';
+    }
+
+    // Detect .NET projects
+    const entries = fs.readdirSync(projectPath);
+    const csproj = entries.find(f => f.endsWith('.csproj')) || null;
+    const sln = entries.find(f => f.endsWith('.sln')) || null;
+    if (csproj || sln) {
+      analysis.language = 'csharp';
+      analysis.packageManager = 'dotnet';
+      analysis.buildTool = '.NET SDK';
+      analysis.framework = 'ASP.NET Core';
+      analysis.architecture = analysis.architecture === 'unknown' ? 'ASP.NET Application' : analysis.architecture;
+      analysis.testFramework = analysis.testFramework || 'xUnit/NUnit/MSTest';
+    }
+
+    // Detect Scala projects
+    const sbtBuild = path.join(projectPath, 'build.sbt');
+    if (fs.existsSync(sbtBuild)) {
+      analysis.language = 'scala';
+      analysis.packageManager = 'sbt';
+      analysis.buildTool = 'SBT';
+      analysis.framework = analysis.framework || 'Play?/Akka?';
+      analysis.architecture = analysis.architecture === 'unknown' ? 'Scala Application' : analysis.architecture;
+      analysis.testFramework = analysis.testFramework || 'ScalaTest';
+    }
+
     // Check for yarn or pnpm
     if (fs.existsSync(path.join(projectPath, 'yarn.lock'))) {
       analysis.packageManager = 'yarn';
@@ -218,8 +372,8 @@ export function generateTechDocument(analysis: ProjectAnalysis): string {
 
 ## Architecture
 **Type**: ${analysis.architecture}  
-**Language**: ${analysis.language === 'typescript' ? 'TypeScript' : 'JavaScript'}  
-**Module System**: ${analysis.type}  
+**Language**: ${analysis.language === 'typescript' ? 'TypeScript' : analysis.language === 'java' ? 'Java' : analysis.language === 'python' ? 'Python' : analysis.language === 'go' ? 'Go' : analysis.language === 'ruby' ? 'Ruby' : analysis.language === 'php' ? 'PHP' : analysis.language === 'rust' ? 'Rust' : analysis.language === 'csharp' ? 'C#' : analysis.language === 'scala' ? 'Scala' : 'JavaScript'}  
+${(analysis.language === 'javascript' || analysis.language === 'typescript') ? `**Module System**: ${analysis.type}  ` : ''}
 ${analysis.framework ? `**Framework**: ${analysis.framework}` : ''}  
 ${analysis.buildTool ? `**Build Tool**: ${analysis.buildTool}` : ''}
 
@@ -229,9 +383,8 @@ ${architecture}
 ${techStack.map(t => `- **${t.name}**: ${t.description}`).join('\n')}
 
 ## Development Environment
-- **Node Version**: ${getNodeVersion()}
-- **Package Manager**: ${analysis.packageManager}
-- **Language**: ${analysis.language === 'typescript' ? 'TypeScript with type safety' : 'JavaScript'}
+${analysis.language === 'java' ? `- **JDK**: ${getJavaVersion(projectPathFromCwd())}\n` : analysis.language === 'go' ? `- **Go**: ${getGoVersion(projectPathFromCwd())}\n` : analysis.language === 'python' ? `- **Python**: ${getPythonVersion(projectPathFromCwd())}\n` : analysis.language === 'ruby' ? `- **Ruby**: ${getRubyVersion(projectPathFromCwd())}\n` : analysis.language === 'php' ? `- **PHP**: ${getPhpVersion(projectPathFromCwd())}\n` : analysis.language === 'rust' ? `- **Rust**: ${getRustToolchain(projectPathFromCwd())}\n` : analysis.language === 'csharp' ? `- **.NET SDK**: ${getDotnetTarget(projectPathFromCwd())}\n` : `- **Node Version**: ${getNodeVersion()}\n`}- **Package Manager/Build**: ${analysis.packageManager}
+- **Language**: ${analysis.language === 'typescript' ? 'TypeScript with type safety' : analysis.language ? analysis.language[0].toUpperCase() + analysis.language.slice(1) : 'JavaScript'}
 ${analysis.testFramework ? `- **Testing**: ${analysis.testFramework}` : ''}
 
 ## Dependencies Analysis
@@ -439,10 +592,25 @@ function buildTechStack(analysis: ProjectAnalysis): Array<{name: string, descrip
   const stack = [];
   
   // Core runtime
-  stack.push({
-    name: 'Node.js',
-    description: 'JavaScript runtime for server-side execution'
-  });
+  if (analysis.language === 'java') {
+    stack.push({ name: 'Java', description: 'JDK runtime for backend services' });
+  } else if (analysis.language === 'python') {
+    stack.push({ name: 'Python', description: 'Python runtime for applications and APIs' });
+  } else if (analysis.language === 'go') {
+    stack.push({ name: 'Go', description: 'Go toolchain for building static binaries' });
+  } else if (analysis.language === 'ruby') {
+    stack.push({ name: 'Ruby', description: 'Ruby runtime for web applications' });
+  } else if (analysis.language === 'php') {
+    stack.push({ name: 'PHP', description: 'PHP runtime for web applications' });
+  } else if (analysis.language === 'rust') {
+    stack.push({ name: 'Rust', description: 'Rust toolchain for systems and APIs' });
+  } else if (analysis.language === 'csharp') {
+    stack.push({ name: 'C#/.NET', description: '.NET runtime and SDK' });
+  } else if (analysis.language === 'scala') {
+    stack.push({ name: 'Scala', description: 'JVM language for backend systems' });
+  } else {
+    stack.push({ name: 'Node.js', description: 'JavaScript runtime for server-side execution' });
+  }
   
   // Language
   if (analysis.language === 'typescript') {
@@ -450,6 +618,8 @@ function buildTechStack(analysis: ProjectAnalysis): Array<{name: string, descrip
       name: 'TypeScript',
       description: 'Typed superset of JavaScript for enhanced developer experience'
     });
+  } else if (analysis.language === 'java') {
+    stack.push({ name: 'Spring Boot', description: 'Opinionated framework for building production-ready services' });
   }
   
   // Framework
@@ -489,34 +659,143 @@ function buildTechStack(analysis: ProjectAnalysis): Array<{name: string, descrip
   return stack;
 }
 
-function extractDevCommands(analysis: ProjectAnalysis): string {
-  if (Object.keys(analysis.scripts).length === 0) {
-    return 'No npm scripts defined';
-  }
-  
+export function extractDevCommands(analysis: ProjectAnalysis): string {
   let commands = '```bash\n';
-  
-  // Common commands in order of importance
-  const commandOrder = ['dev', 'start', 'build', 'test', 'lint', 'typecheck', 'coverage'];
-  
-  for (const cmd of commandOrder) {
-    if (analysis.scripts[cmd]) {
-      commands += `${analysis.packageManager} run ${cmd}  # ${describeCommand(cmd, analysis.scripts[cmd])}\n`;
-    }
+  switch (analysis.language) {
+    case 'java':
+      if (analysis.packageManager === 'maven') {
+        commands += 'mvn clean install   # Build project\n';
+        commands += 'mvn test            # Run tests\n';
+        if (analysis.framework === 'Spring Boot') commands += 'mvn spring-boot:run # Run application\n';
+      } else {
+        commands += 'gradle build        # Build project\n';
+        commands += 'gradle test         # Run tests\n';
+        if (analysis.framework === 'Spring Boot') commands += 'gradle bootRun      # Run application\n';
+      }
+      commands += '```';
+      return commands;
+    case 'python':
+      commands += 'pip install -r requirements.txt   # Install deps\n';
+      commands += (analysis.framework === 'Django') ? 'python manage.py runserver        # Run server\n' :
+                   (analysis.framework === 'FastAPI' || analysis.framework === 'Flask') ? 'uvicorn app:app --reload         # Run dev server\n' : '';
+      commands += 'pytest                           # Run tests\n';
+      commands += '```';
+      return commands;
+    case 'go':
+      commands += 'go build ./...        # Build\n';
+      commands += 'go test ./...         # Tests\n';
+      commands += 'go run ./cmd/...      # Run (example)\n';
+      commands += '```';
+      return commands;
+    case 'ruby':
+      commands += 'bundle install        # Install deps\n';
+      commands += (analysis.framework === 'Rails') ? 'rails server           # Run server\n' : '';
+      commands += (analysis.testFramework === 'RSpec') ? 'rspec                 # Run tests\n' : 'rake test             # Run tests\n';
+      commands += '```';
+      return commands;
+    case 'php':
+      commands += 'composer install      # Install deps\n';
+      commands += (analysis.framework === 'Laravel') ? 'php artisan serve      # Run server\n' : '';
+      commands += 'vendor/bin/phpunit    # Run tests\n';
+      commands += '```';
+      return commands;
+    case 'rust':
+      commands += 'cargo build           # Build\n';
+      commands += 'cargo test            # Tests\n';
+      commands += 'cargo run             # Run\n';
+      commands += '```';
+      return commands;
+    case 'csharp':
+      commands += 'dotnet build          # Build\n';
+      commands += 'dotnet test           # Tests\n';
+      commands += 'dotnet run            # Run\n';
+      commands += '```';
+      return commands;
+    case 'scala':
+      commands += 'sbt compile           # Build\n';
+      commands += 'sbt test              # Tests\n';
+      commands += 'sbt run               # Run\n';
+      commands += '```';
+      return commands;
+    default:
+      if (Object.keys(analysis.scripts).length === 0) {
+        return 'No npm scripts defined';
+      }
+      const commandOrder = ['dev', 'start', 'build', 'test', 'lint', 'typecheck', 'coverage'];
+      for (const cmd of commandOrder) {
+        if ((analysis.scripts as any)[cmd]) {
+          commands += `${analysis.packageManager} run ${cmd}  # ${describeCommand(cmd, (analysis.scripts as any)[cmd])}\n`;
+        }
+      }
+      for (const [cmd, script] of Object.entries(analysis.scripts)) {
+        if (!commandOrder.includes(cmd)) {
+          commands += `${analysis.packageManager} run ${cmd}  # ${script.substring(0, 50)}${script.length > 50 ? '...' : ''}\n`;
+        }
+      }
+      commands += '```';
+      return commands;
   }
-  
-  // Add other commands
-  for (const [cmd, script] of Object.entries(analysis.scripts)) {
-    if (!commandOrder.includes(cmd)) {
-      commands += `${analysis.packageManager} run ${cmd}  # ${script.substring(0, 50)}${script.length > 50 ? '...' : ''}\n`;
-    }
-  }
-  
-  commands += '```';
-  return commands;
 }
 
 function describeArchitecture(analysis: ProjectAnalysis): string {
+  if (analysis.architecture.includes('Spring Boot')) {
+    return `
+### Spring Boot Service Architecture
+The project uses Spring Boot conventions:
+- **Configuration**: application.yml/properties per service
+- **Layers**: Controller → Service → Repository
+- **Build**: ${analysis.buildTool || 'Maven/Gradle'} with ${analysis.testFramework || 'JUnit'} tests
+${analysis.architecture.includes('Microservices') ? '- **Topology**: Multiple modules/services (microservices)\n' : ''}`;
+  }
+  if (analysis.framework === 'Django') {
+    return `
+### Django MVC Architecture
+- **Apps**: Modular apps with models, views, templates
+- **ORM**: Django ORM for database access
+- **Routing**: URLconf-based routing`;
+  }
+  if (analysis.framework === 'FastAPI' || analysis.framework === 'Flask') {
+    return `
+### Python REST API Architecture
+- **Routing**: Decorator-based route handlers
+- **Middleware**: Request processing chain
+- **Data**: Pydantic/Marshmallow schemas`;
+  }
+  if (analysis.framework === 'Rails') {
+    return `
+### Rails MVC Architecture
+- **Models**: ActiveRecord ORM
+- **Controllers/Views**: Conventional structure with routing
+- **Tasks**: Rake-based automation`;
+  }
+  if (analysis.framework === 'Laravel' || analysis.framework === 'Symfony') {
+    return `
+### PHP Web Architecture
+- **MVC**: Controllers, models, views
+- **Routing**: Framework router
+- **Artisan/Console**: CLI tooling`;
+  }
+  if (analysis.language === 'go') {
+    return `
+### Go Service Architecture
+- **Handlers**: HTTP handlers with router (Gin/Echo/net/http)
+- **Services**: Business logic in packages
+- **Build**: Single binary via go build`;
+  }
+  if (analysis.language === 'rust') {
+    return `
+### Rust Web Service Architecture
+- **Framework**: ${analysis.framework || 'Actix/Axum/Rocket'}
+- **Async**: Tokio runtime
+- **Testing**: cargo test`;
+  }
+  if (analysis.language === 'csharp') {
+    return `
+### ASP.NET Core Architecture
+- **Controllers**: MVC/Web API controllers
+- **Dependency Injection**: Built-in DI
+- **Configuration**: appsettings.json per environment`;
+  }
   if (analysis.architecture === 'Domain-Driven Design (DDD)') {
     return `
 ### Domain-Driven Design Architecture
@@ -668,7 +947,31 @@ function buildDirectoryTree(analysis: ProjectAnalysis): string {
     tree += `├── Dockerfile              # Container configuration\n`;
   }
   
-  tree += `├── package.json            # Project configuration\n`;
+  if (analysis.language === 'java') {
+    tree += `├── pom.xml or build.gradle # Build configuration\n`;
+  } else {
+    tree += `├── package.json            # Project configuration\n`;
+  }
+  
+  if (analysis.language === 'java') {
+    tree += `├── pom.xml or build.gradle # Build configuration\n`;
+  } else if (analysis.language === 'python') {
+    tree += `├── pyproject.toml / requirements.txt # Python config\n`;
+  } else if (analysis.language === 'go') {
+    tree += `├── go.mod                  # Go modules\n`;
+  } else if (analysis.language === 'ruby') {
+    tree += `├── Gemfile                 # Ruby dependencies\n`;
+  } else if (analysis.language === 'php') {
+    tree += `├── composer.json           # PHP dependencies\n`;
+  } else if (analysis.language === 'rust') {
+    tree += `├── Cargo.toml              # Rust package config\n`;
+  } else if (analysis.language === 'csharp') {
+    tree += `├── *.csproj                # .NET project file\n`;
+  } else if (analysis.language === 'scala') {
+    tree += `├── build.sbt               # SBT build\n`;
+  } else {
+    tree += `├── package.json            # Project configuration\n`;
+  }
   
   if (analysis.language === 'typescript') {
     tree += `├── tsconfig.json           # TypeScript configuration\n`;
@@ -950,4 +1253,107 @@ function getNodeVersion(): string {
     // Ignore
   }
   return '>= 18.0.0';
+}
+
+function projectPathFromCwd(): string {
+  try { return process.cwd(); } catch { return '.'; }
+}
+
+function getGoVersion(projectPath: string): string {
+  try {
+    const gomod = path.join(projectPath, 'go.mod');
+    if (fs.existsSync(gomod)) {
+      const content = fs.readFileSync(gomod, 'utf8');
+      const m = content.match(/^go\s+([0-9.]+)/m);
+      if (m) return `Go ${m[1]}`;
+    }
+  } catch {}
+  return 'Go (version unknown)';
+}
+
+function getPythonVersion(projectPath: string): string {
+  try {
+    const pyproject = path.join(projectPath, 'pyproject.toml');
+    if (fs.existsSync(pyproject)) {
+      const txt = fs.readFileSync(pyproject, 'utf8');
+      const m = txt.match(/python\s*[=><~!]*\s*['"]([^'"]+)['"]/i);
+      if (m) return `Python ${m[1]}`;
+    }
+    const vfile = path.join(projectPath, '.python-version');
+    if (fs.existsSync(vfile)) {
+      return `Python ${fs.readFileSync(vfile, 'utf8').trim()}`;
+    }
+  } catch {}
+  return 'Python (version unknown)';
+}
+
+function getRubyVersion(projectPath: string): string {
+  try {
+    const rv = path.join(projectPath, '.ruby-version');
+    if (fs.existsSync(rv)) return `Ruby ${fs.readFileSync(rv, 'utf8').trim()}`;
+    const gem = path.join(projectPath, 'Gemfile');
+    if (fs.existsSync(gem)) {
+      const txt = fs.readFileSync(gem, 'utf8');
+      const m = txt.match(/ruby\s+['"]([^'"]+)['"]/i);
+      if (m) return `Ruby ${m[1]}`;
+    }
+  } catch {}
+  return 'Ruby (version unknown)';
+}
+
+function getPhpVersion(projectPath: string): string {
+  try {
+    const composer = path.join(projectPath, 'composer.json');
+    if (fs.existsSync(composer)) {
+      const pkg = JSON.parse(fs.readFileSync(composer, 'utf8'));
+      const req = pkg.require || {};
+      if (req.php) return `PHP ${req.php}`;
+    }
+  } catch {}
+  return 'PHP (version unknown)';
+}
+
+function getRustToolchain(projectPath: string): string {
+  try {
+    const tool = path.join(projectPath, 'rust-toolchain');
+    if (fs.existsSync(tool)) return `Rust ${fs.readFileSync(tool, 'utf8').trim()}`;
+    const cargo = path.join(projectPath, 'Cargo.toml');
+    if (fs.existsSync(cargo)) {
+      const txt = fs.readFileSync(cargo, 'utf8');
+      const m = txt.match(/edition\s*=\s*"(\d{4})"/);
+      if (m) return `Rust (edition ${m[1]})`;
+    }
+  } catch {}
+  return 'Rust (toolchain unknown)';
+}
+
+function getDotnetTarget(projectPath: string): string {
+  try {
+    const files = fs.readdirSync(projectPath).filter(f => f.endsWith('.csproj'));
+    for (const f of files) {
+      const txt = fs.readFileSync(path.join(projectPath, f), 'utf8');
+      const m = txt.match(/<TargetFramework>([^<]+)<\/TargetFramework>/);
+      if (m) return m[1];
+    }
+  } catch {}
+  return '.NET (target unknown)';
+}
+
+function getJavaVersion(projectPath: string): string {
+  try {
+    const pomPath = path.join(projectPath, 'pom.xml');
+    if (fs.existsSync(pomPath)) {
+      const pom = fs.readFileSync(pomPath, 'utf8');
+      const m = pom.match(/<maven\.compiler\.source>([^<]+)<\/maven\.compiler\.source>/);
+      const v = m?.[1] || (pom.match(/<java\.version>([^<]+)<\/java\.version>/)?.[1]);
+      if (v) return `JDK ${v}`;
+    }
+    const gradlePath = fs.existsSync(path.join(projectPath, 'build.gradle.kts')) ? path.join(projectPath, 'build.gradle.kts') : path.join(projectPath, 'build.gradle');
+    if (fs.existsSync(gradlePath)) {
+      const gradle = fs.readFileSync(gradlePath, 'utf8');
+      const m = gradle.match(/sourceCompatibility\s*=\s*['"]([^'"]+)['"]/i) || gradle.match(/sourceCompatibility\s+['"]([^'"]+)['"]/i);
+      if (m?.[1]) return `JDK ${m[1]}`;
+    }
+  } catch {}
+  return 'JDK (version unknown)';
 }
