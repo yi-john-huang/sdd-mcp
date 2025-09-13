@@ -335,6 +335,14 @@ claude mcp add sdd "$(pwd)/local-mcp-server.js" -s local
 sudo npm install -g sdd-mcp-server
 ```
 
+**Issue: "sdd-steering generates template content instead of analyzed content"**
+
+If `sdd-steering` only generates template content, prompt your AI agent to analyze the actual codebase:
+```
+"Please update product.md / structure.md / tech.md based on codebase."
+```
+This will trigger the AI to analyze your actual project structure, dependencies, and technology stack to generate meaningful, project-specific content instead of generic templates.
+
 ## 📖 Advanced Documentation
 
 For detailed documentation on:
