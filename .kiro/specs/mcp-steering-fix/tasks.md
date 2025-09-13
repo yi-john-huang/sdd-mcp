@@ -13,22 +13,22 @@
   - Log attempted import paths for debugging
   - _Requirements: 3.1, 3.2, 3.4_
 
-- [ ] 2. Create self-contained tool implementations
-- [ ] 2.1 Implement core SDD workflow tools (Phase 1: Essential)
+- [x] 2. Create self-contained tool implementations
+- [x] 2.1 Implement core SDD workflow tools (Phase 1: Essential)
   - Create sdd-steering tool that replicates /kiro:steering exactly
   - Create sdd-init tool that matches /kiro:spec-init behavior
   - Create sdd-status tool for workflow progress checking
   - Embed all documentGenerator functionality internally
   - _Requirements: 4.1, 4.2, 4.3_
 
-- [ ] 2.2 Implement remaining workflow tools (Phase 2: Complete Suite)
+- [x] 2.2 Implement remaining workflow tools (Phase 2: Complete Suite)
   - Create sdd-requirements tool (replicates /kiro:spec-requirements)
   - Create sdd-design tool (replicates /kiro:spec-design)
   - Create sdd-tasks tool (replicates /kiro:spec-tasks)
   - Create sdd-implement tool (replicates /kiro:spec-impl)
   - _Requirements: 4.1, 4.4, 4.5_
 
-- [ ] 2.3 Implement validation and custom tools (Phase 3: Advanced Features)
+- [x] 2.3 Implement validation and custom tools (Phase 3: Advanced Features)
   - Create sdd-validate-design tool (replicates /kiro:validate-design)
   - Create sdd-validate-gap tool (replicates /kiro:validate-gap)
   - Create sdd-steering-custom tool (replicates /kiro:steering-custom)
