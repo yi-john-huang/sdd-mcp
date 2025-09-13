@@ -12,7 +12,6 @@
 ├── src/                   # Source code
 ├── Dockerfile              # Container configuration
 ├── package.json            # Project configuration
-├── package.json            # Project configuration
 ├── tsconfig.json           # TypeScript configuration
 └── README.md               # Project documentation
 ```
