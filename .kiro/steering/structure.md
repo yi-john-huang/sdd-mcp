@@ -1,55 +1,63 @@
 # Project Structure
 
-## Root Directory Organization
+## Directory Organization
 ```
 ├── .kiro/                    # SDD workflow files
 │   ├── steering/            # Project steering documents
 │   └── specs/              # Feature specifications
-├── dist/                   # Compiled output (if applicable)
-├── src/                    # Source code (if applicable)
-├── node_modules/           # npm dependencies
-├── package.json           # Project configuration
-├── mcp-server.js          # Simple MCP server implementation
-└── README.md              # Project documentation
+├── data/                   # Project directory
+├── dist/                   # Build output
+├── locales/                   # Project directory
+├── plugins/                   # Project directory
+├── src/                   # Source code
+├── Dockerfile              # Container configuration
+├── package.json            # Project configuration
+├── tsconfig.json           # TypeScript configuration
+└── README.md               # Project documentation
 ```
 
-## SDD Directory Structure (`.kiro/`)
-- **steering/**: Always-loaded project context documents
-  - `product.md`: Product overview and business context
-  - `tech.md`: Technology stack and development environment
-  - `structure.md`: Project organization and architectural decisions
-  - Custom steering files for specialized contexts
-- **specs/**: Feature-specific specifications
-  - `{feature-name}/`: Individual feature directories
-    - `spec.json`: Metadata and approval tracking
-    - `requirements.md`: EARS-format requirements
-    - `design.md`: Technical design document
-    - `tasks.md`: Implementation task breakdown
+## Key Directories
+- **src/**: Main source code directory containing application logic
+- **dist/build/**: Compiled output for production deployment
 
 ## Code Organization Patterns
-- **Modular Structure**: Clear separation between different functional areas
-- **Configuration First**: Centralized configuration management
-- **Documentation Co-location**: Specs and steering documents alongside code
+- **Domain-Driven Design**: Business logic isolated in domain layer
+- **Dependency Injection**: IoC container for managing dependencies
 
 ## File Naming Conventions
-- **Steering files**: `kebab-case.md` (e.g., `api-standards.md`)
-- **Spec files**: Standard names (`requirements.md`, `design.md`, `tasks.md`)
-- **Feature names**: Auto-generated from descriptions using kebab-case (supports empty projects)
+- TypeScript files: `.ts` extension
+- Type definition files: `.d.ts` extension
+- Test files: `.test.ts` or `.spec.ts` suffix
+- Configuration files: `.json` or `.config.js` format
+- Directories: lowercase with hyphens (e.g., `user-service`)
+- Constants: UPPER_SNAKE_CASE
+- Functions/Variables: camelCase
+- Classes/Types: PascalCase
 
-## Workflow Phases (v1.2.0)
-```
-sdd-init → sdd-requirements → sdd-design → sdd-tasks → implementation
-    ↓           ↓               ↓            ↓
-initialized  requirements-  design-    tasks-generated
-             generated      generated   (ready_for_implementation)
-```
+## Module Organization
+### Domain-Driven Modules
+- Each domain has its own module with models, services, and repositories
+- Clear boundaries between different domains
+- Dependency flow from infrastructure → application → domain
 
-## Key Architectural Principles
-- **Empty Project Bootstrap**: Specs can be generated from project descriptions without existing files
-- **Kiro Workflow Alignment**: Complete compatibility with .claude/commands/kiro/ workflow patterns
-- **Spec-Driven Development**: All features start with requirements and design
-- **Phase-Based Workflow**: Enforced progression through development phases with validation
-- **Quality Gates**: Approval requirements and phase validation between workflow stages
-- **Context-Aware Generation**: Dynamic content creation from project analysis, not static templates
-- **EARS Compliance**: Professional requirements format for acceptance criteria
-- **AI-First Design**: Optimized for AI development tool integration via MCP protocol
+## Architectural Principles
+- **Separation of Concerns**: Each module handles a specific responsibility
+- **Type Safety**: Leverage TypeScript for compile-time type checking
+- **Dependency Inversion**: Depend on abstractions, not concrete implementations
+
+## Development Patterns
+- Hot module replacement for rapid development
+- Automated code quality checks on commit
+- Strict TypeScript configuration for maximum safety
+
+## Testing Structure
+Testing structure to be implemented
+
+## Build Output
+### Build Process
+- Command: `npm run build`
+- Output directory: `dist/`
+- Build tool: TypeScript Compiler
+- TypeScript compilation to JavaScript
+- Source maps for debugging
+

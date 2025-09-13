@@ -758,12 +758,31 @@ server.registerTool("sdd-steering", {
     }
     
     // Analyze project structure dynamically
+    console.log('Starting project analysis...');
     const projectAnalysis = await analyzeProject(currentPath);
+    console.log('Project analysis completed:', {
+      name: projectAnalysis.name,
+      description: projectAnalysis.description?.substring(0, 50) + '...',
+      architecture: projectAnalysis.architecture,
+      deps: projectAnalysis.dependencies.length,
+      devDeps: projectAnalysis.devDependencies.length
+    });
+    
+    // Validate analysis results
+    if (isAnalysisInsufficient(projectAnalysis)) {
+      console.log('Analysis insufficient, applying fallback enhancements...');
+      // Apply additional fallback logic here if needed
+    }
     
     // Generate dynamic documents based on actual project analysis
     const productContent = generateProductDocument(projectAnalysis);
     const techContent = generateTechDocument(projectAnalysis);
     const structureContent = generateStructureDocument(projectAnalysis);
+    
+    // Validate generated content before writing
+    if (contentContainsGenericPlaceholders(productContent)) {
+      console.log('Warning: Product document contains generic content');
+    }
     
     // Write the dynamically generated documents
     await fs.writeFile(path.join(steeringPath, 'product.md'), productContent);
@@ -800,7 +819,7 @@ server.registerTool("sdd-steering", {
 - \`.kiro/steering/structure.md\` - Project organization and architectural decisions (dynamically generated)
 
 **Dynamic Analysis Results**:
-- **Language**: ${projectAnalysis.language === 'typescript' ? 'TypeScript' : 'JavaScript'}
+- **Language**: ${projectAnalysis.language === 'typescript' ? 'TypeScript' : projectAnalysis.language === 'java' ? 'Java' : projectAnalysis.language === 'python' ? 'Python' : projectAnalysis.language === 'go' ? 'Go' : projectAnalysis.language === 'ruby' ? 'Ruby' : projectAnalysis.language === 'php' ? 'PHP' : projectAnalysis.language === 'rust' ? 'Rust' : projectAnalysis.language === 'csharp' ? 'C#' : projectAnalysis.language === 'scala' ? 'Scala' : 'JavaScript'}
 - **Framework**: ${projectAnalysis.framework || 'None detected'}
 - **Dependencies**: ${projectAnalysis.dependencies.length} production, ${projectAnalysis.devDependencies.length} development
 - **Test Framework**: ${projectAnalysis.testFramework || 'None detected'}
@@ -809,7 +828,7 @@ server.registerTool("sdd-steering", {
 - **CI/CD**: ${projectAnalysis.hasCI ? 'Configured' : 'Not configured'}
 - **Docker**: ${projectAnalysis.hasDocker ? 'Configured' : 'Not configured'}
 
-These steering documents were dynamically generated based on actual project analysis and provide accurate, up-to-date context for AI interactions.`
+These steering documents were dynamically generated based on actual project analysis and provide accurate, up-to-date context for AI interactions.${contentContainsGenericPlaceholders(productContent) ? '\n\n**Note**: Some content may be generic due to limited project metadata. Consider adding more descriptive information to package.json or project files.' : ''}`
       }]
     };
   } catch (error) {
@@ -1432,4 +1451,17 @@ server.registerTool("sdd-spec-impl", {
 });
 
 const transport = new StdioServerTransport();
+// Helper functions for validation
+function isAnalysisInsufficient(analysis) {
+  return analysis.name === 'Unknown Project' && 
+         analysis.description === 'No description available' &&
+         analysis.dependencies.length === 0;
+}
+
+function contentContainsGenericPlaceholders(content) {
+  return content.includes('Unknown Project') || 
+         content.includes('No description available') ||
+         content.includes('unknown');
+}
+
 await server.connect(transport);

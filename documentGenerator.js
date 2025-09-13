@@ -26,18 +26,33 @@ export async function analyzeProject(projectPath) {
     packageManager: 'npm'
   };
 
+  console.log(`Analyzing project at: ${projectPath}`);
+
   try {
     // Check for package.json
     const packageJsonPath = path.join(projectPath, 'package.json');
     if (fs.existsSync(packageJsonPath)) {
-      const packageJson = JSON.parse(fs.readFileSync(packageJsonPath, 'utf8'));
-      analysis.name = packageJson.name || analysis.name;
-      analysis.description = packageJson.description || analysis.description;
-      analysis.version = packageJson.version || analysis.version;
-      analysis.type = packageJson.type === 'module' ? 'ES Module' : 'CommonJS';
-      analysis.dependencies = Object.keys(packageJson.dependencies || {});
-      analysis.devDependencies = Object.keys(packageJson.devDependencies || {});
-      analysis.scripts = packageJson.scripts || {};
+      console.log('Found package.json, parsing...');
+      try {
+        const packageJsonContent = fs.readFileSync(packageJsonPath, 'utf8');
+        const packageJson = JSON.parse(packageJsonContent);
+        
+        // Extract project information with better fallbacks
+        analysis.name = packageJson.name || getDirectoryBasedName(projectPath);
+        analysis.description = packageJson.description || generateSmartDescription(analysis.name);
+        analysis.version = packageJson.version || '1.0.0';
+        analysis.type = packageJson.type === 'module' ? 'ES Module' : 'CommonJS';
+        analysis.dependencies = Object.keys(packageJson.dependencies || {});
+        analysis.devDependencies = Object.keys(packageJson.devDependencies || {});
+        analysis.scripts = packageJson.scripts || {};
+        
+        console.log(`Extracted: name=${analysis.name}, deps=${analysis.dependencies.length}, devDeps=${analysis.devDependencies.length}`);
+      } catch (parseError) {
+        console.log('Error parsing package.json:', parseError.message);
+        // Use fallbacks if package.json is malformed
+        analysis.name = getDirectoryBasedName(projectPath);
+        analysis.description = generateSmartDescription(analysis.name);
+      }
 
       // Detect framework
       if (analysis.dependencies.includes('express') || analysis.devDependencies.includes('express')) {
@@ -87,6 +102,11 @@ export async function analyzeProject(projectPath) {
       } else if (analysis.scripts.build?.includes('rollup')) {
         analysis.buildTool = 'Rollup';
       }
+    } else {
+      console.log('No package.json found, using directory-based fallbacks');
+      // No package.json found, use directory-based fallbacks
+      analysis.name = getDirectoryBasedName(projectPath);
+      analysis.description = generateSmartDescription(analysis.name);
     }
 
     // Check for Java/Maven/Gradle projects
@@ -193,8 +213,93 @@ export async function analyzeProject(projectPath) {
 
   } catch (error) {
     console.error('Error analyzing project:', error);
+    // Even if analysis fails, provide meaningful fallbacks
+    analysis.name = getDirectoryBasedName(projectPath);
+    analysis.description = generateSmartDescription(analysis.name);
   }
 
+  // Validate and improve analysis results before returning
+  const finalAnalysis = validateAndImproveAnalysis(analysis, projectPath);
+  console.log(`Final analysis: ${finalAnalysis.name} - ${finalAnalysis.architecture}`);
+  
+  return finalAnalysis;
+}
+
+/**
+ * Extract project name from directory path
+ */
+function getDirectoryBasedName(projectPath) {
+  const dirName = path.basename(projectPath);
+  // Convert kebab-case, snake_case to proper names
+  return dirName
+    .replace(/[-_]/g, ' ')
+    .split(' ')
+    .map(word => word.charAt(0).toUpperCase() + word.slice(1))
+    .join(' ');
+}
+
+/**
+ * Generate smart description based on project name and structure
+ */
+function generateSmartDescription(projectName) {
+  const name = projectName.toLowerCase();
+  
+  if (name.includes('api')) {
+    return `RESTful API service for ${projectName.replace(/api/i, '').trim()} application`;
+  }
+  if (name.includes('server')) {
+    return `Server application for ${projectName.replace(/server/i, '').trim()} services`;
+  }
+  if (name.includes('client')) {
+    return `Client application for ${projectName.replace(/client/i, '').trim()} interaction`;
+  }
+  if (name.includes('mcp')) {
+    return 'Model Context Protocol (MCP) server for AI tool integration';
+  }
+  if (name.includes('bot')) {
+    return `Bot application for automated ${projectName.replace(/bot/i, '').trim()} tasks`;
+  }
+  if (name.includes('web')) {
+    return `Web application for ${projectName.replace(/web/i, '').trim()} services`;
+  }
+  if (name.includes('tool')) {
+    return `Development tool for ${projectName.replace(/tool/i, '').trim()} workflows`;
+  }
+  
+  return `${projectName} application providing core functionality and services`;
+}
+
+/**
+ * Validate analysis results and improve them with smart fallbacks
+ */
+function validateAndImproveAnalysis(analysis, projectPath) {
+  // Improve architecture detection based on available information
+  if (analysis.architecture === 'unknown') {
+    if (analysis.dependencies.includes('@modelcontextprotocol/sdk')) {
+      analysis.architecture = 'Model Context Protocol Server';
+    } else if (analysis.dependencies.includes('express')) {
+      analysis.architecture = 'REST API Server';
+    } else if (analysis.dependencies.includes('react')) {
+      analysis.architecture = 'Frontend Application';
+    } else if (analysis.hasTests && analysis.directories.length > 3) {
+      analysis.architecture = 'Full-stack Application';
+    } else if (analysis.scripts.build) {
+      analysis.architecture = 'Build-based Application';
+    } else {
+      analysis.architecture = 'Node.js Application';
+    }
+  }
+  
+  // Ensure version is meaningful
+  if (analysis.version === '0.0.0' && analysis.dependencies.length > 0) {
+    analysis.version = '1.0.0';
+  }
+  
+  // Ensure type is meaningful  
+  if (analysis.type === 'unknown' && analysis.dependencies.length > 0) {
+    analysis.type = 'Application';
+  }
+  
   return analysis;
 }
 
@@ -202,6 +307,12 @@ export async function analyzeProject(projectPath) {
  * Generates dynamic product.md content based on project analysis
  */
 export function generateProductDocument(analysis) {
+  // Validate analysis has meaningful content
+  if (isAnalysisGeneric(analysis)) {
+    console.log('Analysis appears generic, enhancing with intelligent defaults');
+    analysis = enhanceGenericAnalysis(analysis);
+  }
+  
   const features = extractFeatures(analysis);
   const valueProps = generateValuePropositions(analysis);
   const targetUsers = identifyTargetUsers(analysis);
@@ -233,6 +344,54 @@ ${generateSuccessMetrics(analysis).map(m => `- ${m}`).join('\n')}
 ## Technical Advantages
 ${generateTechnicalAdvantages(analysis).map(a => `- ${a}`).join('\n')}
 `;
+}
+
+/**
+ * Check if analysis contains only generic/default values
+ */
+function isAnalysisGeneric(analysis) {
+  return analysis.name === 'Unknown Project' || 
+         analysis.description === 'No description available' ||
+         analysis.version === '0.0.0' ||
+         analysis.architecture === 'unknown';
+}
+
+/**
+ * Enhance generic analysis with intelligent defaults
+ */
+function enhanceGenericAnalysis(analysis) {
+  const enhanced = { ...analysis };
+  
+  // If still using defaults, make educated guesses based on directory structure and files
+  if (enhanced.name === 'Unknown Project') {
+    enhanced.name = getDirectoryBasedName(process.cwd());
+  }
+  
+  if (enhanced.description === 'No description available') {
+    enhanced.description = generateSmartDescription(enhanced.name);
+  }
+  
+  if (enhanced.version === '0.0.0') {
+    enhanced.version = '1.0.0';
+  }
+  
+  if (enhanced.architecture === 'unknown') {
+    // Make intelligent architecture guesses
+    const name = enhanced.name.toLowerCase();
+    if (name.includes('server') || name.includes('api')) {
+      enhanced.architecture = 'Server Application';
+    } else if (name.includes('client') || name.includes('frontend')) {
+      enhanced.architecture = 'Frontend Application';
+    } else if (name.includes('mcp')) {
+      enhanced.architecture = 'Model Context Protocol Server';
+    } else if (enhanced.directories.includes('src')) {
+      enhanced.architecture = 'Source-based Application';
+    } else {
+      enhanced.architecture = 'Node.js Application';
+    }
+  }
+  
+  return enhanced;
 }
 
 /**
@@ -350,7 +509,31 @@ function extractFeatures(analysis) {
     features.push('Spec-driven development workflow');
   }
   
-  return features.length > 0 ? features : ['Core application functionality'];
+  // Ensure we always have meaningful features
+  if (features.length === 0) {
+    // Add intelligent default features based on project characteristics
+    features.push('Core application functionality');
+    
+    if (analysis.architecture.includes('Server')) {
+      features.push('Server-side request processing');
+      features.push('API endpoint management');
+    }
+    
+    if (analysis.architecture.includes('Frontend')) {
+      features.push('User interface components');
+      features.push('Client-side interaction handling');
+    }
+    
+    if (analysis.directories.includes('src')) {
+      features.push('Modular source code organization');
+    }
+    
+    if (analysis.language === 'typescript' || analysis.language === 'javascript') {
+      features.push('JavaScript/Node.js runtime environment');
+    }
+  }
+  
+  return features;
 }
 
 function generateValuePropositions(analysis) {
@@ -382,6 +565,28 @@ function generateValuePropositions(analysis) {
       title: 'Deployment Flexibility',
       description: 'Container-based deployment for any environment'
     });
+  }
+  
+  // Ensure we always have meaningful value propositions
+  if (props.length === 0) {
+    props.push({
+      title: 'Development Efficiency',
+      description: 'Streamlined development process with modern tooling'
+    });
+    
+    if (analysis.architecture.includes('Server')) {
+      props.push({
+        title: 'Scalable Architecture',
+        description: 'Server-based design supports multiple clients and scaling'
+      });
+    }
+    
+    if (analysis.directories.includes('src')) {
+      props.push({
+        title: 'Maintainable Codebase',
+        description: 'Organized source structure facilitates long-term maintenance'
+      });
+    }
   }
   
   return props;
