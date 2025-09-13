@@ -1649,24 +1649,24 @@ function generateFeatureName(description: string): string {
   return cleaned || 'new-feature';
 }
 
-function ensureUniqueFeatureName(baseName: string): string {
-  const fs = require('fs');
-  const path = require('path');
-  
+async function ensureUniqueFeatureName(baseName: string): Promise<string> {
+  const fs = await import('fs');
+  const path = await import('path');
+
   const specsDir = path.join(process.cwd(), '.kiro', 'specs');
-  
+
   if (!fs.existsSync(specsDir)) {
     return baseName;
   }
-  
+
   let counter = 1;
   let featureName = baseName;
-  
+
   while (fs.existsSync(path.join(specsDir, featureName))) {
     featureName = `${baseName}-${counter}`;
     counter++;
   }
-  
+
   return featureName;
 }
 
@@ -1716,7 +1716,7 @@ async function handleInitSimplified(args: any) {
     
     // Generate feature name from description
     const baseFeatureName = generateFeatureName(description);
-    const featureName = ensureUniqueFeatureName(baseFeatureName);
+    const featureName = await ensureUniqueFeatureName(baseFeatureName);
     
     // Create .kiro/specs/[feature-name] directory
     const specDir = path.join(projectPath, '.kiro', 'specs', featureName);
