@@ -1253,6 +1253,9 @@ Kiro-style Spec Driven Development implementation using ai agent slash commands,
 - Check \`.kiro/specs/\` for active specifications
 - Use \`/kiro:spec-status [feature-name]\` to check progress
 
+**Current Specifications:**
+- \`mcp-sdd-server\`: MCP server for spec-driven development across AI-agent CLIs and IDEs
+
 ## Development Guidelines
 - Think in English, generate responses in English
 
@@ -1280,7 +1283,32 @@ Note: Optional for new features or small additions. You can proceed directly to 
 4. **No skipping phases**: Design requires approved requirements; Tasks require approved design
 5. **Update task status**: Mark tasks as completed when working on them
 6. **Keep steering current**: Run \`/kiro:steering\` after significant changes
-7. **Check spec compliance**: Use \`/kiro:spec-status\` to verify alignment`;
+7. **Check spec compliance**: Use \`/kiro:spec-status\` to verify alignment
+
+## Steering Configuration
+
+### Current Steering Files
+Managed by \`/kiro:steering\` command. Updates here reflect command changes.
+
+### Active Steering Files
+- \`product.md\`: Always included - Product context and business objectives
+- \`tech.md\`: Always included - Technology stack and architectural decisions
+- \`structure.md\`: Always included - File organization and code patterns
+- \`linus-review.md\`: Always included - Ensuring code quality of the projects
+- \`commit.md\`: Always included - Ensuring the commit / merge request / pull request title and message context.
+
+### Custom Steering Files
+<!-- Added by /kiro:steering-custom command -->
+<!-- Format:
+- \`filename.md\`: Mode - Pattern(s) - Description
+  Mode: Always|Conditional|Manual
+  Pattern: File patterns for Conditional mode
+-->
+
+### Inclusion Modes
+- **Always**: Loaded in every interaction (default)
+- **Conditional**: Loaded for specific file patterns (e.g., "*.test.js")
+- **Manual**: Reference with \`@filename.md\` syntax`;
       }
       await fs.writeFile(agentsPath, agentsContent);
     }
