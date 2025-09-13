@@ -69,10 +69,11 @@ docker-compose up -d
 ### Claude Code
 Add to your MCP settings using the command line:
 ```bash
-# First, install globally
-npm install -g sdd-mcp-server@latest
+# Option 1: Use npx (no installation required)
+claude mcp add sdd -s local -- npx -y sdd-mcp-server@latest
 
-# Add to local MCP configuration (recommended)
+# Option 2: Install globally first
+npm install -g sdd-mcp-server@latest
 claude mcp add sdd "sdd-mcp-server" -s local
 
 # Verify connection
@@ -98,8 +99,19 @@ Manual configuration in `~/.claude.json`:
 }
 ```
 
-### Cursor IDE  
+### Cursor IDE
 Add to your MCP configuration:
+```json
+{
+  "sdd-server": {
+    "command": "npx",
+    "args": ["-y", "sdd-mcp-server@latest"],
+    "env": {}
+  }
+}
+```
+
+Or with global installation:
 ```json
 {
   "sdd-server": {
@@ -113,6 +125,11 @@ Add to your MCP configuration:
 ### Other MCP Clients
 Any MCP-compatible client can connect using stdio transport:
 ```bash
+# Use npx (no installation required)
+npx -y sdd-mcp-server@latest
+
+# Or install globally first
+npm install -g sdd-mcp-server@latest
 sdd-mcp-server
 ```
 
