@@ -6,7 +6,7 @@
 
 A Model Context Protocol (MCP) server implementing Spec-Driven Development (SDD) workflows for AI-agent CLIs and IDEs like Claude Code, Cursor, and others.
 
-> **✅ v1.3.6 Update**: Complete self-contained MCP server with 15 SDD workflow tools. Features fixed steering document generation, universal AI agent compatibility, and easy installation via `npx -y sdd-mcp-server@latest`. No custom commands required!
+> **✅ v1.3.7 Update**: Complete self-contained MCP server with 15 SDD workflow tools. Features fixed steering document generation, universal AI agent compatibility, and easy installation via `npx -y sdd-mcp-server@latest`. No custom commands required!
 
 ## 🚀 Quick Start
 
