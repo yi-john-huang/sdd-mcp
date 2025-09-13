@@ -50,15 +50,15 @@
   - Test with various project types (TypeScript, MCP SDK, etc.)
   - _Requirements: 2.1, 2.2, 2.3_
 
-- [ ] 4. Implement universal agent compatibility
-- [ ] 4.1 Enhance NPX entry point and MCP protocol handling
+- [x] 4. Implement universal agent compatibility
+- [x] 4.1 Enhance NPX entry point and MCP protocol handling
   - Improve MCP mode detection for universal agent compatibility
   - Implement standard MCP SDK patterns that work across agents
   - Add graceful handling of MCP protocol variations
   - Ensure immediate startup without configuration
   - _Requirements: 6.1, 6.2, 6.4, 6.5_
 
-- [ ] 4.2 Fix and enhance AGENTS.md generation
+- [x] 4.2 Fix and enhance AGENTS.md generation
   - Fix AGENTS.md creation logic in sdd-init tool
   - Implement CLAUDE.md to AGENTS.md transformation
   - Replace agent-specific references (Claude Code → AI Agent, /claude → /agent)
