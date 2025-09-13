@@ -859,7 +859,6 @@ server.registerTool("sdd-steering", {
       updateMode = (productExists || techExists || structureExists) ? 'update' : 'create';
     }
     
-<<<<<<< HEAD
     // Generate actual analyzed content using documentGenerator functions
     const analysis = await analyzeProject(currentPath);
     const productContent = generateProductDocument(analysis);
@@ -867,17 +866,6 @@ server.registerTool("sdd-steering", {
     const structureContent = generateStructureDocument(analysis);
 
     // Write the analyzed steering documents
-=======
-    // Analyze project structure dynamically
-    const projectAnalysis = await analyzeProject(currentPath);
-    
-    // Generate dynamic documents based on actual project analysis
-    const productContent = generateProductDocument(projectAnalysis);
-    const techContent = generateTechDocument(projectAnalysis);
-    const structureContent = generateStructureDocument(projectAnalysis);
-    
-    // Write the dynamically generated documents
->>>>>>> master
     await fs.writeFile(path.join(steeringPath, 'product.md'), productContent);
     await fs.writeFile(path.join(steeringPath, 'tech.md'), techContent);
     await fs.writeFile(path.join(steeringPath, 'structure.md'), structureContent);
@@ -1209,18 +1197,11 @@ Managed by \`/kiro:steering\` command. Updates here reflect command changes.
         type: 'text',
         text: `## Steering Documents ${mode}
 
-<<<<<<< HEAD
 **Project Path**: ${currentPath}
-=======
-**Project**: ${projectAnalysis.name}
-**Version**: ${projectAnalysis.version}
-**Architecture**: ${projectAnalysis.architecture}
->>>>>>> master
 **Mode**: ${updateMode}
 **Generated**: ${new Date().toISOString()}
 
 **${mode} Files**:
-<<<<<<< HEAD
 - \`.kiro/steering/product.md\` - Product overview and business context (AI analysis template)
 - \`.kiro/steering/tech.md\` - Technology stack and development environment (AI analysis template)
 - \`.kiro/steering/structure.md\` - Project organization and architectural decisions (AI analysis template)
@@ -1242,23 +1223,6 @@ The steering documents now contain analysis instructions for AI agents rather th
 4. Documents will provide accurate, up-to-date guidance for development
 
 These steering documents provide instructions for AI agents to analyze your project and generate appropriate guidance, eliminating the language-dependency issues of template-based approaches.`
-=======
-- \`.kiro/steering/product.md\` - Product overview and business context (dynamically generated)
-- \`.kiro/steering/tech.md\` - Technology stack and development environment (dynamically generated)
-- \`.kiro/steering/structure.md\` - Project organization and architectural decisions (dynamically generated)
-
-**Dynamic Analysis Results**:
-- **Language**: ${projectAnalysis.language === 'typescript' ? 'TypeScript' : 'JavaScript'}
-- **Framework**: ${projectAnalysis.framework || 'None detected'}
-- **Dependencies**: ${projectAnalysis.dependencies.length} production, ${projectAnalysis.devDependencies.length} development
-- **Test Framework**: ${projectAnalysis.testFramework || 'None detected'}
-- **Build Tool**: ${projectAnalysis.buildTool || 'None detected'}
-- **Project Structure**: ${projectAnalysis.directories.length} directories analyzed
-- **CI/CD**: ${projectAnalysis.hasCI ? 'Configured' : 'Not configured'}
-- **Docker**: ${projectAnalysis.hasDocker ? 'Configured' : 'Not configured'}
-
-These steering documents were dynamically generated based on actual project analysis and provide accurate, up-to-date context for AI interactions.`
->>>>>>> master
       }]
     };
   } catch (error) {

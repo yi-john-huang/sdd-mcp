@@ -26,6 +26,7 @@ export async function analyzeProject(projectPath) {
     packageManager: 'npm'
   };
 
+
   try {
     // Check for package.json
     const packageJsonPath = path.join(projectPath, 'package.json');
@@ -33,7 +34,7 @@ export async function analyzeProject(projectPath) {
       try {
         const packageJsonContent = fs.readFileSync(packageJsonPath, 'utf8');
         const packageJson = JSON.parse(packageJsonContent);
-
+        
         // Extract project information with better fallbacks
         analysis.name = packageJson.name || getDirectoryBasedName(projectPath);
         analysis.description = packageJson.description || generateSmartDescription(analysis.name);
@@ -42,7 +43,7 @@ export async function analyzeProject(projectPath) {
         analysis.dependencies = Object.keys(packageJson.dependencies || {});
         analysis.devDependencies = Object.keys(packageJson.devDependencies || {});
         analysis.scripts = packageJson.scripts || {};
-
+        
       } catch (parseError) {
         // Use fallbacks if package.json is malformed
         analysis.name = getDirectoryBasedName(projectPath);
@@ -103,6 +104,8 @@ export async function analyzeProject(projectPath) {
       analysis.description = generateSmartDescription(analysis.name);
     }
 
+
+
     // Check for yarn or pnpm
     if (fs.existsSync(path.join(projectPath, 'yarn.lock'))) {
       analysis.packageManager = 'yarn';
@@ -115,31 +118,19 @@ export async function analyzeProject(projectPath) {
     for (const item of items) {
       if (item.isDirectory() && !item.name.startsWith('.') && item.name !== 'node_modules') {
         analysis.directories.push(item.name);
-<<<<<<< HEAD
 
-=======
-        
->>>>>>> master
         // Check for test directories
         if (item.name === 'test' || item.name === 'tests' || item.name === '__tests__' || item.name === 'spec') {
           analysis.hasTests = true;
         }
       } else if (item.isFile()) {
         analysis.files.push(item.name);
-<<<<<<< HEAD
 
-=======
-        
->>>>>>> master
         // Check for Docker
         if (item.name === 'Dockerfile' || item.name === 'docker-compose.yml') {
           analysis.hasDocker = true;
         }
-<<<<<<< HEAD
 
-=======
-        
->>>>>>> master
         // Check for CI/CD
         if (item.name === '.gitlab-ci.yml' || item.name === '.travis.yml' || item.name === 'Jenkinsfile') {
           analysis.hasCI = true;
@@ -147,7 +138,6 @@ export async function analyzeProject(projectPath) {
       }
     }
 
-<<<<<<< HEAD
     // Check for Java/Maven/Gradle projects (including multi-module projects)
     const pomPath = path.join(projectPath, 'pom.xml');
     const gradlePath = path.join(projectPath, 'build.gradle');
@@ -238,8 +228,6 @@ export async function analyzeProject(projectPath) {
       }
     }
 
-=======
->>>>>>> master
     // Check for GitHub Actions
     if (fs.existsSync(path.join(projectPath, '.github', 'workflows'))) {
       analysis.hasCI = true;
@@ -262,7 +250,6 @@ export async function analyzeProject(projectPath) {
 
   } catch (error) {
     console.error('Error analyzing project:', error);
-<<<<<<< HEAD
     // Even if analysis fails, provide meaningful fallbacks
     analysis.name = getDirectoryBasedName(projectPath);
     analysis.description = generateSmartDescription(analysis.name);
@@ -358,10 +345,6 @@ function validateAndImproveAnalysis(analysis, projectPath) {
     analysis.type = 'Application';
   }
   
-=======
-  }
-
->>>>>>> master
   return analysis;
 }
 
@@ -369,14 +352,11 @@ function validateAndImproveAnalysis(analysis, projectPath) {
  * Generates dynamic product.md content based on project analysis
  */
 export function generateProductDocument(analysis) {
-<<<<<<< HEAD
   // Validate analysis has meaningful content
   if (isAnalysisGeneric(analysis)) {
       analysis = enhanceGenericAnalysis(analysis);
   }
   
-=======
->>>>>>> master
   const features = extractFeatures(analysis);
   const valueProps = generateValuePropositions(analysis);
   const targetUsers = identifyTargetUsers(analysis);
@@ -411,7 +391,6 @@ ${generateTechnicalAdvantages(analysis).map(a => `- ${a}`).join('\n')}
 }
 
 /**
-<<<<<<< HEAD
  * Check if analysis contains only generic/default values
  */
 function isAnalysisGeneric(analysis) {
@@ -460,8 +439,6 @@ function enhanceGenericAnalysis(analysis) {
 }
 
 /**
-=======
->>>>>>> master
  * Generates dynamic tech.md content based on project analysis
  */
 export function generateTechDocument(analysis) {
@@ -473,13 +450,8 @@ export function generateTechDocument(analysis) {
 
 ## Architecture
 **Type**: ${analysis.architecture}  
-<<<<<<< HEAD
 **Language**: ${analysis.language === 'typescript' ? 'TypeScript' : analysis.language === 'java' ? 'Java' : analysis.language === 'python' ? 'Python' : analysis.language === 'go' ? 'Go' : analysis.language === 'ruby' ? 'Ruby' : analysis.language === 'php' ? 'PHP' : analysis.language === 'rust' ? 'Rust' : analysis.language === 'csharp' ? 'C#' : analysis.language === 'scala' ? 'Scala' : 'JavaScript'}  
 ${(analysis.language === 'javascript' || analysis.language === 'typescript') ? `**Module System**: ${analysis.type}  ` : ''}
-=======
-**Language**: ${analysis.language === 'typescript' ? 'TypeScript' : 'JavaScript'}  
-**Module System**: ${analysis.type}  
->>>>>>> master
 ${analysis.framework ? `**Framework**: ${analysis.framework}` : ''}  
 ${analysis.buildTool ? `**Build Tool**: ${analysis.buildTool}` : ''}
 
@@ -489,14 +461,8 @@ ${architecture}
 ${techStack.map(t => `- **${t.name}**: ${t.description}`).join('\n')}
 
 ## Development Environment
-<<<<<<< HEAD
 ${analysis.language === 'java' ? `- **JDK**: ${getJavaVersion(projectPathFromCwd())}\n` : analysis.language === 'go' ? `- **Go**: ${getGoVersion(projectPathFromCwd())}\n` : analysis.language === 'python' ? `- **Python**: ${getPythonVersion(projectPathFromCwd())}\n` : analysis.language === 'ruby' ? `- **Ruby**: ${getRubyVersion(projectPathFromCwd())}\n` : analysis.language === 'php' ? `- **PHP**: ${getPhpVersion(projectPathFromCwd())}\n` : analysis.language === 'rust' ? `- **Rust**: ${getRustToolchain(projectPathFromCwd())}\n` : analysis.language === 'csharp' ? `- **.NET SDK**: ${getDotnetTarget(projectPathFromCwd())}\n` : `- **Node Version**: ${getNodeVersion()}\n`}- **Package Manager/Build**: ${analysis.packageManager}
 - **Language**: ${analysis.language === 'typescript' ? 'TypeScript with type safety' : analysis.language ? analysis.language[0].toUpperCase() + analysis.language.slice(1) : 'JavaScript'}
-=======
-- **Node Version**: ${getNodeVersion()}
-- **Package Manager**: ${analysis.packageManager}
-- **Language**: ${analysis.language === 'typescript' ? 'TypeScript with type safety' : 'JavaScript'}
->>>>>>> master
 ${analysis.testFramework ? `- **Testing**: ${analysis.testFramework}` : ''}
 
 ## Dependencies Analysis
@@ -587,7 +553,6 @@ function extractFeatures(analysis) {
     features.push('Spec-driven development workflow');
   }
   
-<<<<<<< HEAD
   // Ensure we always have meaningful features
   if (features.length === 0) {
     // Add intelligent default features based on project characteristics
@@ -613,9 +578,6 @@ function extractFeatures(analysis) {
   }
   
   return features;
-=======
-  return features.length > 0 ? features : ['Core application functionality'];
->>>>>>> master
 }
 
 function generateValuePropositions(analysis) {
@@ -649,7 +611,6 @@ function generateValuePropositions(analysis) {
     });
   }
   
-<<<<<<< HEAD
   // Ensure we always have meaningful value propositions
   if (props.length === 0) {
     props.push({
@@ -672,8 +633,6 @@ function generateValuePropositions(analysis) {
     }
   }
   
-=======
->>>>>>> master
   return props;
 }
 
@@ -755,7 +714,6 @@ function generateTechnicalAdvantages(analysis) {
 
 function buildTechStack(analysis) {
   const stack = [];
-<<<<<<< HEAD
   // Core runtime
   if (analysis.language === 'java') stack.push({ name: 'Java', description: 'JDK runtime for backend services' });
   else if (analysis.language === 'python') stack.push({ name: 'Python', description: 'Python runtime for applications and APIs' });
@@ -775,29 +733,6 @@ function buildTechStack(analysis) {
   }
   if (analysis.framework) {
     stack.push({ name: analysis.framework, description: getFrameworkDescription(analysis.framework) });
-=======
-  
-  // Core runtime
-  stack.push({
-    name: 'Node.js',
-    description: 'JavaScript runtime for server-side execution'
-  });
-  
-  // Language
-  if (analysis.language === 'typescript') {
-    stack.push({
-      name: 'TypeScript',
-      description: 'Typed superset of JavaScript for enhanced developer experience'
-    });
-  }
-  
-  // Framework
-  if (analysis.framework) {
-    stack.push({
-      name: analysis.framework,
-      description: getFrameworkDescription(analysis.framework)
-    });
->>>>>>> master
   }
   
   // Testing
@@ -830,7 +765,6 @@ function buildTechStack(analysis) {
 }
 
 function extractDevCommands(analysis) {
-<<<<<<< HEAD
   let commands = '```bash\n';
   switch (analysis.language) {
     case 'java':
@@ -890,36 +824,11 @@ function extractDevCommands(analysis) {
         if (!order.includes(cmd)) commands += `${analysis.packageManager} run ${cmd}  # ${script.substring(0, 50)}${script.length > 50 ? '...' : ''}\n`;
       }
   }
-=======
-  if (Object.keys(analysis.scripts).length === 0) {
-    return 'No npm scripts defined';
-  }
-  
-  let commands = '```bash\n';
-  
-  // Common commands in order of importance
-  const commandOrder = ['dev', 'start', 'build', 'test', 'lint', 'typecheck', 'coverage'];
-  
-  for (const cmd of commandOrder) {
-    if (analysis.scripts[cmd]) {
-      commands += `${analysis.packageManager} run ${cmd}  # ${describeCommand(cmd, analysis.scripts[cmd])}\n`;
-    }
-  }
-  
-  // Add other commands
-  for (const [cmd, script] of Object.entries(analysis.scripts)) {
-    if (!commandOrder.includes(cmd)) {
-      commands += `${analysis.packageManager} run ${cmd}  # ${script.substring(0, 50)}${script.length > 50 ? '...' : ''}\n`;
-    }
-  }
-  
->>>>>>> master
   commands += '```';
   return commands;
 }
 
 function describeArchitecture(analysis) {
-<<<<<<< HEAD
   if (analysis.architecture.includes('Spring Boot')) {
     return `
 ### Spring Boot Service Architecture
@@ -929,8 +838,6 @@ The project uses Spring Boot conventions:
 - **Build**: ${analysis.buildTool || 'Maven/Gradle'} with ${analysis.testFramework || 'JUnit'} tests
 ${analysis.architecture.includes('Microservices') ? '- **Topology**: Multiple modules/services (microservices)\n' : ''}`;
   }
-=======
->>>>>>> master
   if (analysis.architecture === 'Domain-Driven Design (DDD)') {
     return `
 ### Domain-Driven Design Architecture
@@ -1082,7 +989,6 @@ function buildDirectoryTree(analysis) {
     tree += `├── Dockerfile              # Container configuration\n`;
   }
   
-<<<<<<< HEAD
   if (analysis.language === 'java') tree += `├── pom.xml or build.gradle # Build configuration\n`;
   else if (analysis.language === 'python') tree += `├── pyproject.toml / requirements.txt # Python config\n`;
   else if (analysis.language === 'go') tree += `├── go.mod                  # Go modules\n`;
@@ -1092,9 +998,6 @@ function buildDirectoryTree(analysis) {
   else if (analysis.language === 'csharp') tree += `├── *.csproj                # .NET project file\n`;
   else if (analysis.language === 'scala') tree += `├── build.sbt               # SBT build\n`;
   else tree += `├── package.json            # Project configuration\n`;
-=======
-  tree += `├── package.json            # Project configuration\n`;
->>>>>>> master
   
   if (analysis.language === 'typescript') {
     tree += `├── tsconfig.json           # TypeScript configuration\n`;
@@ -1376,7 +1279,6 @@ function getNodeVersion() {
     // Ignore
   }
   return '>= 18.0.0';
-<<<<<<< HEAD
 }
 function getGoVersion(projectPath) {
   try {
@@ -1475,6 +1377,3 @@ function getJavaVersion(projectPath) {
   } catch {}
   return 'JDK (version unknown)';
 }
-=======
-}
->>>>>>> master
