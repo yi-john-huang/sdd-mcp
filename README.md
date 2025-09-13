@@ -6,7 +6,7 @@
 
 A Model Context Protocol (MCP) server implementing Spec-Driven Development (SDD) workflows for AI-agent CLIs and IDEs like Claude Code, Cursor, and others.
 
-> **✅ v1.3.10 Update**: AI-driven MCP server with language-agnostic workflow tools. Fixed all hardcoded templates, made tools truly universal for any programming language/framework, and added comprehensive AGENTS.md support with complete steering file descriptions and inclusion modes. Perfect for Spring Boot, React, Python, Go, and any other project!
+> **✅ v1.3.11 Update**: AI-driven MCP server with language-agnostic workflow tools. CRITICAL FIX: sdd-steering now generates actual analyzed content instead of instruction templates. Fixed all hardcoded templates, made tools truly universal for any programming language/framework. Perfect for Spring Boot, React, Python, Go, and any other project!
 
 ## 🚀 Quick Start
 

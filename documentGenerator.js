@@ -26,13 +26,11 @@ export async function analyzeProject(projectPath) {
     packageManager: 'npm'
   };
 
-  console.log(`Analyzing project at: ${projectPath}`);
 
   try {
     // Check for package.json
     const packageJsonPath = path.join(projectPath, 'package.json');
     if (fs.existsSync(packageJsonPath)) {
-      console.log('Found package.json, parsing...');
       try {
         const packageJsonContent = fs.readFileSync(packageJsonPath, 'utf8');
         const packageJson = JSON.parse(packageJsonContent);
@@ -46,9 +44,7 @@ export async function analyzeProject(projectPath) {
         analysis.devDependencies = Object.keys(packageJson.devDependencies || {});
         analysis.scripts = packageJson.scripts || {};
         
-        console.log(`Extracted: name=${analysis.name}, deps=${analysis.dependencies.length}, devDeps=${analysis.devDependencies.length}`);
       } catch (parseError) {
-        console.log('Error parsing package.json:', parseError.message);
         // Use fallbacks if package.json is malformed
         analysis.name = getDirectoryBasedName(projectPath);
         analysis.description = generateSmartDescription(analysis.name);
@@ -103,17 +99,60 @@ export async function analyzeProject(projectPath) {
         analysis.buildTool = 'Rollup';
       }
     } else {
-      console.log('No package.json found, using directory-based fallbacks');
       // No package.json found, use directory-based fallbacks
       analysis.name = getDirectoryBasedName(projectPath);
       analysis.description = generateSmartDescription(analysis.name);
     }
 
-    // Check for Java/Maven/Gradle projects
+
+
+    // Check for yarn or pnpm
+    if (fs.existsSync(path.join(projectPath, 'yarn.lock'))) {
+      analysis.packageManager = 'yarn';
+    } else if (fs.existsSync(path.join(projectPath, 'pnpm-lock.yaml'))) {
+      analysis.packageManager = 'pnpm';
+    }
+
+    // Scan directory structure
+    const items = fs.readdirSync(projectPath, { withFileTypes: true });
+    for (const item of items) {
+      if (item.isDirectory() && !item.name.startsWith('.') && item.name !== 'node_modules') {
+        analysis.directories.push(item.name);
+
+        // Check for test directories
+        if (item.name === 'test' || item.name === 'tests' || item.name === '__tests__' || item.name === 'spec') {
+          analysis.hasTests = true;
+        }
+      } else if (item.isFile()) {
+        analysis.files.push(item.name);
+
+        // Check for Docker
+        if (item.name === 'Dockerfile' || item.name === 'docker-compose.yml') {
+          analysis.hasDocker = true;
+        }
+
+        // Check for CI/CD
+        if (item.name === '.gitlab-ci.yml' || item.name === '.travis.yml' || item.name === 'Jenkinsfile') {
+          analysis.hasCI = true;
+        }
+      }
+    }
+
+    // Check for Java/Maven/Gradle projects (including multi-module projects)
     const pomPath = path.join(projectPath, 'pom.xml');
     const gradlePath = path.join(projectPath, 'build.gradle');
     const gradleKtsPath = path.join(projectPath, 'build.gradle.kts');
-    if (fs.existsSync(pomPath) || fs.existsSync(gradlePath) || fs.existsSync(gradleKtsPath)) {
+
+    // Also check for Maven/Gradle projects in subdirectories (multi-module projects)
+    const hasSubmodulePom = analysis.directories.some(dir =>
+      fs.existsSync(path.join(projectPath, dir, 'pom.xml'))
+    );
+    const hasSubmoduleGradle = analysis.directories.some(dir =>
+      fs.existsSync(path.join(projectPath, dir, 'build.gradle')) ||
+      fs.existsSync(path.join(projectPath, dir, 'build.gradle.kts'))
+    );
+
+    if (fs.existsSync(pomPath) || fs.existsSync(gradlePath) || fs.existsSync(gradleKtsPath) || hasSubmodulePom || hasSubmoduleGradle) {
       analysis.language = 'java';
       if (fs.existsSync(pomPath)) {
         analysis.packageManager = 'maven';
@@ -134,6 +173,36 @@ export async function analyzeProject(projectPath) {
             analysis.hasTests = true;
           }
         } catch {}
+      } else if (hasSubmodulePom) {
+        // Analyze submodule pom.xml files for multi-module projects
+        analysis.packageManager = 'maven';
+        analysis.buildTool = 'Maven';
+        let foundSpringBoot = false;
+        let foundJUnit = false;
+
+        for (const dir of analysis.directories) {
+          const subPomPath = path.join(projectPath, dir, 'pom.xml');
+          if (fs.existsSync(subPomPath)) {
+            try {
+              const pom = fs.readFileSync(subPomPath, 'utf8');
+              if (/spring-boot/i.test(pom) || /org\.springframework\.boot/i.test(pom)) {
+                foundSpringBoot = true;
+              }
+              if (/junit|jupiter/i.test(pom)) {
+                foundJUnit = true;
+              }
+            } catch {}
+          }
+        }
+
+        if (foundSpringBoot) {
+          analysis.framework = 'Spring Boot';
+          analysis.architecture = 'Microservices (Spring Boot)';
+        }
+        if (foundJUnit) {
+          analysis.testFramework = 'JUnit';
+          analysis.hasTests = true;
+        }
       } else {
         analysis.packageManager = 'gradle';
         analysis.buildTool = 'Gradle';
@@ -156,38 +225,6 @@ export async function analyzeProject(projectPath) {
       if (fs.existsSync(path.join(projectPath, 'src', 'test', 'java'))) {
         analysis.hasTests = true;
         if (!analysis.testFramework) analysis.testFramework = 'JUnit';
-      }
-    }
-
-    // Check for yarn or pnpm
-    if (fs.existsSync(path.join(projectPath, 'yarn.lock'))) {
-      analysis.packageManager = 'yarn';
-    } else if (fs.existsSync(path.join(projectPath, 'pnpm-lock.yaml'))) {
-      analysis.packageManager = 'pnpm';
-    }
-
-    // Scan directory structure
-    const items = fs.readdirSync(projectPath, { withFileTypes: true });
-    for (const item of items) {
-      if (item.isDirectory() && !item.name.startsWith('.') && item.name !== 'node_modules') {
-        analysis.directories.push(item.name);
-        
-        // Check for test directories
-        if (item.name === 'test' || item.name === 'tests' || item.name === '__tests__' || item.name === 'spec') {
-          analysis.hasTests = true;
-        }
-      } else if (item.isFile()) {
-        analysis.files.push(item.name);
-        
-        // Check for Docker
-        if (item.name === 'Dockerfile' || item.name === 'docker-compose.yml') {
-          analysis.hasDocker = true;
-        }
-        
-        // Check for CI/CD
-        if (item.name === '.gitlab-ci.yml' || item.name === '.travis.yml' || item.name === 'Jenkinsfile') {
-          analysis.hasCI = true;
-        }
       }
     }
 
@@ -220,8 +257,7 @@ export async function analyzeProject(projectPath) {
 
   // Validate and improve analysis results before returning
   const finalAnalysis = validateAndImproveAnalysis(analysis, projectPath);
-  console.log(`Final analysis: ${finalAnalysis.name} - ${finalAnalysis.architecture}`);
-  
+
   return finalAnalysis;
 }
 
@@ -243,7 +279,16 @@ function getDirectoryBasedName(projectPath) {
  */
 function generateSmartDescription(projectName) {
   const name = projectName.toLowerCase();
-  
+
+  if (name.includes('microservices') && name.includes('spring')) {
+    return 'Spring Boot microservices application demonstrating distributed architecture patterns and service communication';
+  }
+  if (name.includes('microservices')) {
+    return 'Microservices architecture demonstration with multiple independent services';
+  }
+  if (name.includes('spring') && name.includes('boot')) {
+    return 'Spring Boot application built with modern Java frameworks and best practices';
+  }
   if (name.includes('api')) {
     return `RESTful API service for ${projectName.replace(/api/i, '').trim()} application`;
   }
@@ -265,7 +310,7 @@ function generateSmartDescription(projectName) {
   if (name.includes('tool')) {
     return `Development tool for ${projectName.replace(/tool/i, '').trim()} workflows`;
   }
-  
+
   return `${projectName} application providing core functionality and services`;
 }
 
@@ -309,8 +354,7 @@ function validateAndImproveAnalysis(analysis, projectPath) {
 export function generateProductDocument(analysis) {
   // Validate analysis has meaningful content
   if (isAnalysisGeneric(analysis)) {
-    console.log('Analysis appears generic, enhancing with intelligent defaults');
-    analysis = enhanceGenericAnalysis(analysis);
+      analysis = enhanceGenericAnalysis(analysis);
   }
   
   const features = extractFeatures(analysis);
