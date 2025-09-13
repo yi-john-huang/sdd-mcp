@@ -107,8 +107,8 @@ server.registerTool("sdd-init", {
     const requirementsTemplate = `# Requirements Document\n\n## Project Description (Input)\n${description}\n\n## Requirements\n<!-- Will be generated in /kiro:spec-requirements phase -->`;
     await fs.writeFile(path.join(featurePath, 'requirements.md'), requirementsTemplate);
     
-    // Ensure AGENTS.md exists based on CLAUDE.md (static exception)
-    const agentsPath = path.join(currentPath, 'AGENTS.md');
+    // Ensure AGENTS.md exists in steering directory based on CLAUDE.md (static exception)
+    const agentsPath = path.join(steeringPath, 'AGENTS.md');
     const claudePath = path.join(currentPath, 'CLAUDE.md');
     const agentsExists = await fs.access(agentsPath).then(() => true).catch(() => false);
     if (!agentsExists) {
@@ -1217,8 +1217,8 @@ These guidelines help maintain a clean and useful git history that makes it easi
       await fs.writeFile(commitPath, fullCommitContent);
     }
 
-    // Ensure AGENTS.md exists (create from CLAUDE.md if available)
-    const agentsPath = path.join(currentPath, 'AGENTS.md');
+    // Ensure AGENTS.md exists in steering directory (create from CLAUDE.md if available)
+    const agentsPath = path.join(steeringPath, 'AGENTS.md');
     const claudePath = path.join(currentPath, 'CLAUDE.md');
     const agentsExists = await fs.access(agentsPath).then(() => true).catch(() => false);
     if (!agentsExists) {
@@ -1302,7 +1302,7 @@ Note: Optional for new features or small additions. You can proceed directly to 
 - \`.kiro/steering/structure.md\` - Project organization and architectural decisions (AI analysis template)
 - \`.kiro/steering/linus-review.md\` - Code review guidelines (full content)
 - \`.kiro/steering/commit.md\` - Commit message standards (full content)
-- \`AGENTS.md\` - Universal AI agent workflow guidance
+- \`.kiro/steering/AGENTS.md\` - Universal AI agent workflow guidance
 
 **AI-Driven Approach**:
 The steering documents now contain analysis instructions for AI agents rather than hardcoded templates. This ensures:
