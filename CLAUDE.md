@@ -20,6 +20,7 @@ Kiro-style Spec Driven Development implementation using claude code slash comman
 
 **Current Specifications:**
 - `mcp-sdd-server`: MCP server for spec-driven development across AI-agent CLIs and IDEs
+- `mcp-steering-fix`: Fix MCP server steering document generation functionality
 
 ## Development Guidelines
 - Think in English, generate responses in English
