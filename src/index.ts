@@ -349,23 +349,155 @@ async function handleSteeringSimplified(args: any) {
   
   try {
     const projectPath = process.cwd();
-    
-    // Import and use the dynamic document generator (root-level for consistency)
-    const { analyzeProject, generateProductDocument, generateTechDocument, generateStructureDocument } = await import('../documentGenerator.js');
-    
+
     // Create .kiro/steering directory if it doesn't exist
     const steeringDir = path.join(projectPath, '.kiro', 'steering');
     if (!fs.existsSync(steeringDir)) {
       fs.mkdirSync(steeringDir, { recursive: true });
     }
-    
-    // Analyze project dynamically
-    const projectAnalysis = await analyzeProject(projectPath);
-    
-    // Generate documents dynamically
-    const productContent = generateProductDocument(projectAnalysis);
-    const techContent = generateTechDocument(projectAnalysis);
-    const structureContent = generateStructureDocument(projectAnalysis);
+
+    let productContent: string;
+    let techContent: string;
+    let structureContent: string;
+    let projectAnalysis: any;
+
+    try {
+      // Attempt to import and use the dynamic document generator (from utils directory)
+      console.error('[SDD-DEBUG] Attempting to import documentGenerator from ./utils/documentGenerator.js');
+      const { analyzeProject, generateProductDocument, generateTechDocument, generateStructureDocument } = await import('./utils/documentGenerator.js');
+
+      console.error('[SDD-DEBUG] DocumentGenerator imported successfully, analyzing project...');
+
+      // Analyze project dynamically
+      projectAnalysis = await analyzeProject(projectPath);
+
+      console.error('[SDD-DEBUG] Project analysis completed, generating documents...');
+
+      // Generate documents dynamically
+      productContent = generateProductDocument(projectAnalysis);
+      techContent = generateTechDocument(projectAnalysis);
+      structureContent = generateStructureDocument(projectAnalysis);
+
+      console.error('[SDD-DEBUG] Dynamic document generation completed successfully');
+
+    } catch (importError) {
+      console.error('[SDD-DEBUG] Failed to import or use documentGenerator:', (importError as Error).message);
+      console.error('[SDD-DEBUG] Attempted import path: ./utils/documentGenerator.js');
+      console.error('[SDD-DEBUG] Falling back to basic templates with warning...');
+
+      // Fallback to basic templates
+      const packageJsonPath = path.join(projectPath, 'package.json');
+      let projectName = 'Unknown Project';
+      let projectVersion = '0.0.0';
+
+      try {
+        if (fs.existsSync(packageJsonPath)) {
+          const packageJson = JSON.parse(fs.readFileSync(packageJsonPath, 'utf8'));
+          projectName = packageJson.name || projectName;
+          projectVersion = packageJson.version || projectVersion;
+        }
+      } catch (pkgError) {
+        console.error('[SDD-DEBUG] Could not read package.json, using defaults');
+      }
+
+      productContent = `# Product Overview
+
+⚠️ **Warning**: This document was generated using fallback templates due to documentGenerator import failure.
+Error: ${(importError as Error).message}
+
+## Product Description
+${projectName}
+
+**Project**: ${projectName}
+**Version**: ${projectVersion}
+**Type**: MCP Server Application
+
+## Core Features
+- Basic MCP server functionality
+- Spec-driven development workflow support
+
+## Target Use Case
+This project provides MCP server capabilities for AI agent integration.
+
+## Key Value Proposition
+- MCP protocol compatibility
+- AI agent integration support
+
+Generated on: ${new Date().toISOString()}
+`;
+
+      techContent = `# Technology Stack
+
+⚠️ **Warning**: This document was generated using fallback templates due to documentGenerator import failure.
+Error: ${(importError as Error).message}
+
+## Architecture
+**Type**: MCP Server Application
+**Language**: TypeScript
+**Module System**: ES Module
+**Framework**: MCP SDK
+**Build Tool**: TypeScript Compiler
+
+## Technology Stack
+- **Node.js**: JavaScript runtime for server-side execution
+- **TypeScript**: Typed superset of JavaScript for enhanced developer experience
+- **MCP SDK**: Model Context Protocol SDK for AI agent integration
+
+## Development Environment
+- **Node Version**: >=18.0.0
+- **Package Manager**: npm
+- **Language**: TypeScript with type safety
+
+Generated on: ${new Date().toISOString()}
+`;
+
+      structureContent = `# Project Structure
+
+⚠️ **Warning**: This document was generated using fallback templates due to documentGenerator import failure.
+Error: ${(importError as Error).message}
+
+## Directory Organization
+\`\`\`
+├── .kiro/                    # SDD workflow files
+│   ├── steering/            # Project steering documents
+│   └── specs/              # Feature specifications
+├── src/                     # Source code
+├── dist/                    # Build output
+├── package.json            # Project configuration
+├── tsconfig.json           # TypeScript configuration
+└── README.md               # Project documentation
+\`\`\`
+
+## Key Directories
+- **src/**: Main source code directory containing application logic
+- **dist/**: Compiled output for production deployment
+
+## Code Organization Patterns
+- **Domain-Driven Design**: Business logic isolated in domain layer
+- **Dependency Injection**: IoC container for managing dependencies
+
+Generated on: ${new Date().toISOString()}
+`;
+
+      // Create fallback project analysis for return message
+      const fallbackAnalysis = {
+        name: projectName,
+        version: projectVersion,
+        architecture: 'MCP Server Application',
+        language: 'typescript',
+        framework: 'MCP SDK',
+        dependencies: [],
+        devDependencies: [],
+        testFramework: null,
+        buildTool: 'TypeScript Compiler',
+        directories: ['src', 'dist'],
+        hasCI: false,
+        hasDocker: false
+      };
+
+      // Use fallback analysis for the return message
+      projectAnalysis = fallbackAnalysis;
+    }
 
     // Write the dynamically generated files
     fs.writeFileSync(path.join(steeringDir, 'product.md'), productContent);
