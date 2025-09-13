@@ -35,15 +35,15 @@
   - Ensure all 10 tools provide identical functionality to custom commands
   - _Requirements: 4.1, 4.4, 4.5_
 
-- [ ] 3. Embed complete workflow engine
-- [ ] 3.1 Create internal workflow state management
+- [x] 3. Embed complete workflow engine
+- [x] 3.1 Create internal workflow state management
   - Implement .kiro/specs/ directory management
   - Create spec.json tracking and phase validation
   - Build workflow state machine (init → requirements → design → tasks → implementation)
   - Add phase gate validation and approval tracking
   - _Requirements: 4.5, 5.1, 5.2_
 
-- [ ] 3.2 Embed project analysis capabilities
+- [x] 3.2 Embed project analysis capabilities
   - Move analyzeProject function into utils/projectAnalyzer.ts
   - Embed generateProductDocument, generateTechDocument, generateStructureDocument
   - Ensure dynamic project analysis matches custom command quality
