@@ -43,7 +43,7 @@ npm run build
 npm start
 ```
 
-### Option 3: Docker (Secure Distroless Image)
+### Option 4: Docker (Secure Distroless Image)
 ```bash
 # Build distroless image locally
 docker build --target production -t sdd-mcp-server .
@@ -80,10 +80,11 @@ claude mcp add sdd "sdd-mcp-server" -s local
 claude mcp list
 # Should show: sdd: ✓ Connected
 
-# For development (faster startup):
+# For development (local repo):
 git clone https://github.com/yi-john-huang/sdd-mcp.git
 cd sdd-mcp
-claude mcp add sdd "$(pwd)/local-mcp-server.js" -s local
+# Use the dedicated MCP entry
+claude mcp add sdd "$(pwd)/mcp-server.js" -s local
 ```
 
 Manual configuration in `~/.claude.json`:
@@ -337,7 +338,7 @@ claude mcp add sdd "sdd-mcp-server" -s local
 # Alternative: Use local development version for faster startup
 git clone https://github.com/yi-john-huang/sdd-mcp.git
 cd sdd-mcp
-claude mcp add sdd "$(pwd)/local-mcp-server.js" -s local
+claude mcp add sdd "$(pwd)/mcp-server.js" -s local
 ```
 
 **Issue: "Permission denied"**
@@ -346,13 +347,11 @@ claude mcp add sdd "$(pwd)/local-mcp-server.js" -s local
 sudo npm install -g sdd-mcp-server
 ```
 
-**Issue: "sdd-steering generates template content instead of analyzed content"**
+**Issue: "Only template content generated" (Resolved in v1.4.0)**
 
-If `sdd-steering` only generates template content, prompt your AI agent to analyze the actual codebase:
-```
-"Please update product.md / structure.md / tech.md based on codebase."
-```
-This will trigger the AI to analyze your actual project structure, dependencies, and technology stack to generate meaningful, project-specific content instead of generic templates.
+As of 1.4.0, `sdd-requirements`, `sdd-design`, `sdd-tasks`, and `sdd-steering` generate analysis-based documents on first run. If you still see a template:
+- Check the top warning header in the file — it includes the error that triggered fallback.
+- Fix the indicated issue (e.g., permission/path), then rerun the tool.
 
 ## 📖 Advanced Documentation
 
