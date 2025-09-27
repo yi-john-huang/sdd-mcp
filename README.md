@@ -43,7 +43,7 @@ npm run build
 npm start
 ```
 
-### Option 3: Docker (Secure Distroless Image)
+### Option 4: Docker (Secure Distroless Image)
 ```bash
 # Build distroless image locally
 docker build --target production -t sdd-mcp-server .
@@ -80,10 +80,11 @@ claude mcp add sdd "sdd-mcp-server" -s local
 claude mcp list
 # Should show: sdd: ✓ Connected
 
-# For development (faster startup):
+# For development (local repo):
 git clone https://github.com/yi-john-huang/sdd-mcp.git
 cd sdd-mcp
-claude mcp add sdd "$(pwd)/local-mcp-server.js" -s local
+# Use the dedicated MCP entry
+claude mcp add sdd "$(pwd)/mcp-server.js" -s local
 ```
 
 Manual configuration in `~/.claude.json`:
@@ -183,15 +184,26 @@ Once connected to your AI client, you can use these MCP tools:
 5. **Implement with TDD**
    ```
    Use sdd-spec-impl to execute tasks with TDD methodology
-   Use sdd-quality-check for code review and analysis
-   ```
+  Use sdd-quality-check for code review and analysis
+  ```
 
 6. **Monitor & Manage**
-   ```
-   Use sdd-status to check workflow progress
-   Use sdd-approve to approve workflow phases
-   Use sdd-context-load to restore project memory
-   ```
+  ```
+  Use sdd-status to check workflow progress
+  Use sdd-approve to approve workflow phases
+  Use sdd-context-load to restore project memory
+  ```
+
+## Upgrading to 1.4.0
+
+- What changed: In MCP mode, `sdd-requirements`, `sdd-design`, and `sdd-tasks` now generate analysis‑based documents on the first run (no more template‑first step). Steering remains analysis‑backed with static exceptions (`linus-review.md`, `commit.md`).
+- Upgrade commands:
+  - Prefer npx: `npx -y sdd-mcp-server@latest` (no install), or
+  - Global: `npm i -g sdd-mcp-server@1.4.0` and run `sdd-mcp-server`.
+- If you pinned a version in your MCP config, update it to `@latest` or `@1.4.0`.
+- If you previously scripted a second “update documents based on codebase” step, you can remove it — documents are analyzed on first generation now.
+- Fallbacks: If dynamic analysis fails, tools still write a minimal template with a clear warning header and error message; rerun after fixing the issue.
+- Requirements: Node.js >= 18.
 
 ## ⚙️ Configuration
 
@@ -326,7 +338,7 @@ claude mcp add sdd "sdd-mcp-server" -s local
 # Alternative: Use local development version for faster startup
 git clone https://github.com/yi-john-huang/sdd-mcp.git
 cd sdd-mcp
-claude mcp add sdd "$(pwd)/local-mcp-server.js" -s local
+claude mcp add sdd "$(pwd)/mcp-server.js" -s local
 ```
 
 **Issue: "Permission denied"**
@@ -335,13 +347,11 @@ claude mcp add sdd "$(pwd)/local-mcp-server.js" -s local
 sudo npm install -g sdd-mcp-server
 ```
 
-**Issue: "sdd-steering generates template content instead of analyzed content"**
+**Issue: "Only template content generated" (Resolved in v1.4.0)**
 
-If `sdd-steering` only generates template content, prompt your AI agent to analyze the actual codebase:
-```
-"Please update product.md / structure.md / tech.md based on codebase."
-```
-This will trigger the AI to analyze your actual project structure, dependencies, and technology stack to generate meaningful, project-specific content instead of generic templates.
+As of 1.4.0, `sdd-requirements`, `sdd-design`, `sdd-tasks`, and `sdd-steering` generate analysis-based documents on first run. If you still see a template:
+- Check the top warning header in the file — it includes the error that triggered fallback.
+- Fix the indicated issue (e.g., permission/path), then rerun the tool.
 
 ## 📖 Advanced Documentation
 
