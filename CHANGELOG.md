@@ -7,6 +7,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [1.3.5] - 2025-09-13
 
+## [1.4.0] - 2025-09-27
+
+### Added
+- Analysis-backed generation for `sdd-requirements`, `sdd-design`, and `sdd-tasks` in MCP mode
+- New generators: `src/utils/specGenerator.ts` and runtime `specGenerator.js`
+- Smoke scripts: `scripts/smoke-mcp.js` (startup) and `scripts/mcp-tools-list.js` (tools/list probe)
+
+### Changed
+- `mcp-server.js` and MCP simplified handlers now use analysis-first with robust fallbacks
+- Published files include `specGenerator.js`
+
+### Fixed
+- Steering vs specification doc generation parity in MCP clients; no more template-first behavior
+
 ### Added
 - Multi-language steering support: Python (Django/FastAPI/Flask), Go (Gin/Echo), Ruby (Rails/Sinatra), PHP (Laravel/Symfony), Rust (Actix/Axum/Rocket), .NET/C#, Scala (SBT)
 - Language-aware tech docs: Proper dev commands, environment versions (JDK/Go/Python/Ruby/PHP/Rust/.NET), framework naming

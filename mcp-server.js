@@ -11,6 +11,26 @@ import {
   generateStructureDocument 
 } from './documentGenerator.js';
 
+// Best-effort dynamic loader for spec generators (requirements/design/tasks)
+async function loadSpecGenerator() {
+  const tried = [];
+  const attempts = [
+    './specGenerator.js',                 // root-level JS (dev/runtime)
+    './dist/utils/specGenerator.js',      // compiled TS output
+    './utils/specGenerator.js'            // TS runtime (when transpiled on-the-fly)
+  ];
+  for (const p of attempts) {
+    try {
+      // eslint-disable-next-line no-await-in-loop
+      const mod = await import(p);
+      return { mod, path: p };
+    } catch (e) {
+      tried.push(`${p}: ${(e && e.message) || e}`);
+    }
+  }
+  throw new Error(`Unable to load specGenerator from known paths. Tried: \n- ${tried.join('\n- ')}`);
+}
+
 // Resolve version dynamically from package.json when possible
 async function resolveVersion() {
   try {
@@ -172,39 +192,14 @@ server.registerTool("sdd-requirements", {
     const specContent = await fs.readFile(specPath, 'utf8');
     const spec = JSON.parse(specContent);
     
-    // Generate requirements based on project analysis and AI understanding
-    const requirementsContent = `# Requirements Document
-
-## Project Context
-**Feature**: ${spec.feature_name}
-**Description**: ${spec.description || 'Feature to be implemented'}
-
-## Instructions for AI Agent
-
-Please analyze the current project structure and the feature description above to generate comprehensive requirements. Consider:
-
-1. **Project Analysis**: Examine the codebase structure, existing files, dependencies, and architecture patterns
-2. **Feature Scope**: Based on the feature description, identify what needs to be built
-3. **User Stories**: Create user stories that capture the value this feature provides
-4. **Technical Requirements**: Identify technical constraints and integration points
-5. **Acceptance Criteria**: Use EARS format (WHEN/IF/WHILE/WHERE) for testable criteria
-
-## Requirements Generation Guidelines
-
-Generate requirements that:
-- Are specific to this actual project (not generic)
-- Consider the existing codebase architecture
-- Include functional and non-functional requirements
-- Use EARS format for acceptance criteria
-- Are testable and measurable
-- Consider integration with existing features
-
-## Current Project Information
-- Project Path: ${process.cwd()}
-- Feature Name: ${spec.feature_name}
-- Initialization Date: ${spec.created_at}
-
-**Note**: This template will be replaced by AI-generated requirements specific to your project and feature description.`;
+    // Generate requirements using specGenerator with fallback
+    let requirementsContent;
+    try {
+      const { mod } = await loadSpecGenerator();
+      requirementsContent = await mod.generateRequirementsDocument(currentPath, featureName);
+    } catch (e) {
+      requirementsContent = `# Requirements Document\n\n<!-- Warning: Analysis-backed generation failed. Using fallback template. -->\n<!-- Error: ${e && e.message ? e.message : String(e)} -->\n\n## Project Context\n**Feature**: ${spec.feature_name}\n**Description**: ${spec.description || 'Feature to be implemented'}\n`;
+    }
     
     await fs.writeFile(path.join(featurePath, 'requirements.md'), requirementsContent);
     
@@ -266,8 +261,14 @@ server.registerTool("sdd-design", {
       requirementsContext = 'Requirements document not available';
     }
 
-    // Generate design document
-    const designContent = `# Technical Design Document\n\n## Project Context\n**Feature**: ${spec.feature_name}\n**Description**: ${spec.description || 'Feature to be implemented'}\n**Requirements Phase**: ${spec.approvals.requirements.generated ? 'Completed' : 'Pending'}\n\n## Instructions for AI Agent\n\nPlease analyze the requirements document and current project structure to create a comprehensive technical design. Consider:\n\n1. **Requirements Analysis**: Review the requirements to understand what needs to be built\n2. **Architecture Review**: Examine the existing codebase architecture and patterns\n3. **Technology Stack**: Identify the current tech stack and integration points\n4. **Design Decisions**: Make architectural decisions based on the project context\n5. **Component Design**: Define components, interfaces, and data models\n6. **Implementation Strategy**: Outline how this feature fits into the existing system\n\n## Design Generation Guidelines\n\nCreate a design that:\n- Addresses all requirements from requirements.md\n- Fits naturally into the existing codebase architecture\n- Uses the project's existing technology stack and patterns\n- Includes specific component interfaces and data models\n- Considers error handling and edge cases\n- Provides clear implementation guidance\n\n## Requirements Context\n\`\`\`\n${requirementsContext.substring(0, 2000)}${requirementsContext.length > 2000 ? '...\n[Requirements document truncated - see requirements.md for full content]' : ''}\n\`\`\`\n\n## Current Project Information\n- Project Path: ${process.cwd()}\n- Feature Name: ${spec.feature_name}\n- Phase: ${spec.phase}\n- Created: ${spec.created_at}\n\n**Note**: This template will be replaced by AI-generated design specific for spec-driven development workflows to AI development teams.\n\n**Users**: AI developers and development teams will utilize this for structured project development.\n\n**Impact**: Transforms ad-hoc development into systematic, phase-based workflows with quality gates.\n\n### Goals\n- Provide complete SDD workflow automation\n- Ensure quality through Linus-style code review\n- Enable multi-language development support\n- Integrate seamlessly with AI development tools\n\n### Non-Goals\n- Real-time collaboration features\n- Deployment automation\n- Version control integration\n\n## Architecture\n\n### High-Level Architecture\n\n\`\`\`mermaid\ngraph TB\n    A[AI Client] --> B[MCP Server]\n    B --> C[SDD Workflow Engine]\n    C --> D[Project Management]\n    C --> E[Template System]\n    C --> F[Quality Analysis]\n    D --> G[File System]\n    E --> G\n    F --> G\n\`\`\`\n\n### Technology Stack\n\n**Runtime**: Node.js with ES modules\n**Protocol**: Model Context Protocol (MCP)\n**Templates**: Handlebars-based generation\n**Quality**: AST-based code analysis\n**Storage**: File-based project persistence\n\n### Key Design Decisions\n\n**Decision**: Use MCP protocol for AI tool integration\n**Context**: Need seamless integration with Claude Code and other AI development tools\n**Alternatives**: REST API, GraphQL, custom protocol\n**Selected Approach**: MCP provides standardized AI tool integration\n**Rationale**: Direct integration with AI development workflows\n**Trade-offs**: Protocol-specific but optimized for AI use cases\n\n## Components and Interfaces\n\n### SDD Workflow Engine\n\n**Responsibility**: Manages 5-phase workflow state transitions\n**Domain Boundary**: Workflow orchestration and validation\n**Data Ownership**: Phase state, approval tracking, transition rules\n\n**Contract Definition**:\n\`\`\`typescript\ninterface SDDWorkflowEngine {\n  initializeProject(name: string, description: string): ProjectSpec;\n  generateRequirements(featureName: string): RequirementsDoc;\n  generateDesign(featureName: string): DesignDoc;\n  generateTasks(featureName: string): TasksDoc;\n  checkQuality(code: string): QualityReport;\n}\n\`\`\`\n\n### Template System\n\n**Responsibility**: Generate structured documents from templates\n**Domain Boundary**: Document generation and formatting\n**Data Ownership**: Template definitions, generated content\n\n### Quality Analysis Engine\n\n**Responsibility**: Perform Linus-style 5-layer code review\n**Domain Boundary**: Code quality assessment\n**Data Ownership**: Quality metrics, review reports\n\n## Data Models\n\n### Project Specification\n\`\`\`json\n{\n  "feature_name": "string",\n  "created_at": "ISO8601",\n  "updated_at": "ISO8601",\n  "language": "en",\n  "phase": "initialized|requirements-generated|design-generated|tasks-generated|implementation",\n  "approvals": {\n    "requirements": { "generated": boolean, "approved": boolean },\n    "design": { "generated": boolean, "approved": boolean },\n    "tasks": { "generated": boolean, "approved": boolean }\n  },\n  "ready_for_implementation": boolean\n}\n\`\`\`\n\n## Error Handling\n\n### Error Strategy\n- Phase validation with clear error messages\n- Graceful degradation for missing dependencies\n- Detailed logging for debugging\n\n### Error Categories\n**User Errors**: Invalid phase transitions → workflow guidance\n**System Errors**: File system failures → graceful error handling\n**Business Logic Errors**: Missing approvals → phase requirement messages\n\n## Testing Strategy\n\n- Unit Tests: SDD workflow engine methods\n- Integration Tests: MCP protocol communication\n- E2E Tests: Complete workflow execution\n- Performance Tests: Large project handling`;
+    // Generate design using specGenerator with fallback
+    let designContent;
+    try {
+      const { mod } = await loadSpecGenerator();
+      designContent = await mod.generateDesignDocument(currentPath, featureName);
+    } catch (e) {
+      designContent = `# Technical Design Document\n\n<!-- Warning: Analysis-backed generation failed. Using fallback template. -->\n<!-- Error: ${e && e.message ? e.message : String(e)} -->\n\n## Project Context\n**Feature**: ${spec.feature_name}\n**Phase**: ${spec.phase}`;
+    }
     
     await fs.writeFile(path.join(featurePath, 'design.md'), designContent);
     
@@ -384,6 +385,14 @@ ${designContext.substring(0, 1000)}${designContext.length > 1000 ? '...\n[Design
 - Created: ${spec.created_at}
 
 **Note**: This template will be replaced by AI-generated implementation tasks specific to your project requirements and design.`;
+
+    // Try to replace template with analysis-backed tasks
+    try {
+      const { mod } = await loadSpecGenerator();
+      tasksContent = await mod.generateTasksDocument(currentPath, featureName);
+    } catch (e) {
+      // Keep template; include debug info in file header already
+    }
     
     await fs.writeFile(path.join(featurePath, 'tasks.md'), tasksContent);
     

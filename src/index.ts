@@ -855,8 +855,16 @@ async function handleRequirementsSimplified(args: any) {
       }
     }
     
-    // Generate EARS-formatted requirements based on description
-    const requirementsContent = `# Requirements Document
+    // Generate analysis-backed requirements; fallback to template on error
+    let requirementsContent: string;
+    try {
+      const { generateRequirementsDocument } = await import('./utils/specGenerator.js');
+      requirementsContent = await generateRequirementsDocument(process.cwd(), featureName);
+    } catch (genErr) {
+      requirementsContent = `# Requirements Document
+
+<!-- Warning: Analysis-backed generation failed. Using fallback template. -->
+<!-- Error: ${(genErr as Error).message} -->
 
 ## Introduction
 ${generateIntroductionFromDescription(projectDescription)}
@@ -885,6 +893,7 @@ ${generateEARSRequirements(projectDescription).map((req, index) => `${index + 1}
 2. WHERE help is needed THE system SHALL provide clear documentation and guidance
 3. IF I make mistakes THEN the system SHALL provide helpful error messages and recovery options
 `;
+    }
 
     // Update spec.json with phase information
     const specDir = path.join(process.cwd(), '.kiro', 'specs', featureName);
@@ -967,106 +976,30 @@ async function handleDesignSimplified(args: any) {
       }
     }
     
-    // Generate design document based on requirements
-    const designContent = `# Technical Design Document
+    // Generate analysis-backed design
+    let designContent: string;
+    try {
+      const { generateDesignDocument } = await import('./utils/specGenerator.js');
+      designContent = await generateDesignDocument(process.cwd(), featureName);
+    } catch (genErr) {
+      // Fallback to previous template on error with warning header
+      designContent = `# Technical Design Document
+
+<!-- Warning: Analysis-backed generation failed. Using fallback template. -->
+<!-- Error: ${(genErr as Error).message} -->
 
 ## Overview
 This design document specifies the technical implementation approach for ${spec.feature_name}. 
 
 **Purpose**: ${projectDescription}
 
-**Goals**:
-- Deliver a robust and maintainable solution
-- Ensure scalability and performance
-- Follow established architectural patterns
-
-## Architecture
-
-### High-Level Architecture
-The system follows a modular architecture with clear separation of concerns:
-
-- **Input Layer**: Handles user input validation and processing
-- **Core Logic**: Implements business logic and rules
-- **Output Layer**: Manages results presentation and formatting
-- **Error Handling**: Provides comprehensive error management
-
 ### System Flow
-1. **Input Processing**: Validate and sanitize user input
-2. **Business Logic**: Execute core functionality 
-3. **Result Generation**: Process and format outputs
-4. **Error Management**: Handle exceptions and edge cases
-
-## Components and Interfaces
-
-### Core Components
-
-#### Input Processor
-- **Responsibility**: Input validation and sanitization
-- **Interface**: 
-  - \`validateInput(data: InputData): ValidationResult\`
-  - \`sanitizeInput(data: InputData): CleanData\`
-
-#### Business Logic Engine  
-- **Responsibility**: Core functionality implementation
-- **Interface**:
-  - \`processRequest(input: CleanData): ProcessingResult\`
-  - \`handleBusinessRules(data: CleanData): RuleResult\`
-
-#### Output Formatter
-- **Responsibility**: Result formatting and presentation
-- **Interface**:
-  - \`formatResult(result: ProcessingResult): FormattedOutput\`
-  - \`handleError(error: Error): ErrorResponse\`
-
-## Data Models
-
-### Input Data Model
-\`\`\`typescript
-interface InputData {
-  // Input structure based on requirements
-  payload: unknown;
-  metadata: Record<string, unknown>;
-}
-\`\`\`
-
-### Processing Result Model
-\`\`\`typescript
-interface ProcessingResult {
-  success: boolean;
-  data: unknown;
-  metadata: ResultMetadata;
-}
-\`\`\`
-
-## Error Handling
-
-### Error Categories
-- **Validation Errors**: Invalid input format or content
-- **Processing Errors**: Failures during business logic execution
-- **System Errors**: Infrastructure or dependency failures
-
-### Error Response Strategy
-- Clear error messages for user-facing issues
-- Detailed logging for system debugging
-- Graceful degradation where possible
-
-## Testing Strategy
-
-### Unit Tests
-- Input validation functions
-- Business logic components
-- Output formatting utilities
-
-### Integration Tests
-- End-to-end workflow validation
-- Error handling scenarios
-- Performance under load
-
-### Quality Assurance
-- Code coverage requirements
-- Performance benchmarks
-- Security validation
+1. Input Processing
+2. Business Logic
+3. Result Generation
+4. Error Management
 `;
+    }
 
     // Update spec.json with phase information
     const specDir = path.join(process.cwd(), '.kiro', 'specs', featureName);
@@ -1141,80 +1074,24 @@ async function handleTasksSimplified(args: any) {
       throw new Error(`Design must be generated before tasks. Run sdd-design ${featureName} first.`);
     }
     
-    // Generate implementation tasks following kiro format
-    const tasksContent = `# Implementation Plan
+    // Generate analysis-backed tasks
+    let tasksContent: string;
+    try {
+      const { generateTasksDocument } = await import('./utils/specGenerator.js');
+      tasksContent = await generateTasksDocument(process.cwd(), featureName);
+    } catch (genErr) {
+      tasksContent = `# Implementation Plan
+
+<!-- Warning: Analysis-backed generation failed. Using fallback template. -->
+<!-- Error: ${(genErr as Error).message} -->
 
 - [ ] 1. Set up project foundation and infrastructure
-- [ ] 1.1 Initialize project structure and configuration
-  - Create directory structure as per design
-  - Set up build configuration and tooling
-  - Initialize version control and documentation
-  - _Requirements: All requirements need foundational setup_
-
-- [ ] 1.2 Implement core infrastructure components
-  - Set up error handling framework
-  - Create logging and monitoring utilities
-  - Establish configuration management
-  - _Requirements: System quality requirements_
-
 - [ ] 2. Implement core functionality
-- [ ] 2.1 Develop input processing components
-  - Build input validation system
-  - Implement data sanitization logic
-  - Create input parsing utilities
-  - _Requirements: 1.1, 1.2_
-
-- [ ] 2.2 Build business logic engine
-  - Implement core processing algorithms
-  - Create business rule validation
-  - Develop result generation logic
-  - _Requirements: 1.1, 1.3_
-
-- [ ] 2.3 Create output formatting system
-  - Build result formatting utilities
-  - Implement response generation
-  - Create output validation
-  - _Requirements: 1.2, 1.3_
-
 - [ ] 3. Implement error handling and validation
-- [ ] 3.1 Build comprehensive error management
-  - Create error classification system
-  - Implement error recovery mechanisms
-  - Build error logging and reporting
-  - _Requirements: 2.1, 2.2_
-
-- [ ] 3.2 Add input/output validation
-  - Implement schema validation
-  - Create boundary condition checks
-  - Add security validation layers
-  - _Requirements: 2.1, 3.1_
-
 - [ ] 4. Develop testing and quality assurance
-- [ ] 4.1 Create unit test suite
-  - Test input processing components
-  - Test business logic functions
-  - Test output formatting utilities
-  - _Requirements: All functional requirements_
-
-- [ ] 4.2 Build integration test framework
-  - Test end-to-end workflows
-  - Test error handling scenarios
-  - Test performance benchmarks
-  - _Requirements: 2.1, 2.2, 2.3_
-
 - [ ] 5. Finalize implementation and deployment
-- [ ] 5.1 Integrate all components
-  - Wire together all system components
-  - Implement final error handling
-  - Add performance optimizations
-  - _Requirements: All requirements integration_
-
-- [ ] 5.2 Prepare for deployment
-  - Create deployment configuration
-  - Add production monitoring
-  - Finalize documentation
-  - _Requirements: System quality and deployment_
 `;
+    }
 
     // Update spec.json with phase information
     const specDir = path.join(process.cwd(), '.kiro', 'specs', featureName);
