@@ -183,15 +183,26 @@ Once connected to your AI client, you can use these MCP tools:
 5. **Implement with TDD**
    ```
    Use sdd-spec-impl to execute tasks with TDD methodology
-   Use sdd-quality-check for code review and analysis
-   ```
+  Use sdd-quality-check for code review and analysis
+  ```
 
 6. **Monitor & Manage**
-   ```
-   Use sdd-status to check workflow progress
-   Use sdd-approve to approve workflow phases
-   Use sdd-context-load to restore project memory
-   ```
+  ```
+  Use sdd-status to check workflow progress
+  Use sdd-approve to approve workflow phases
+  Use sdd-context-load to restore project memory
+  ```
+
+## Upgrading to 1.4.0
+
+- What changed: In MCP mode, `sdd-requirements`, `sdd-design`, and `sdd-tasks` now generate analysis‑based documents on the first run (no more template‑first step). Steering remains analysis‑backed with static exceptions (`linus-review.md`, `commit.md`).
+- Upgrade commands:
+  - Prefer npx: `npx -y sdd-mcp-server@latest` (no install), or
+  - Global: `npm i -g sdd-mcp-server@1.4.0` and run `sdd-mcp-server`.
+- If you pinned a version in your MCP config, update it to `@latest` or `@1.4.0`.
+- If you previously scripted a second “update documents based on codebase” step, you can remove it — documents are analyzed on first generation now.
+- Fallbacks: If dynamic analysis fails, tools still write a minimal template with a clear warning header and error message; rerun after fixing the issue.
+- Requirements: Node.js >= 18.
 
 ## ⚙️ Configuration
 
