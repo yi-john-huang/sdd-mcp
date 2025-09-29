@@ -1227,9 +1227,9 @@ Use this checklist during code generation and review. Avoid OWASP Top 10 issues 
 - Disable debug modes in prod; set secure headers (CSP, HSTS, X-Content-Type-Options)
 - Pin dependencies and lock versions; no default credentials
 
-## A06: Vulnerable & Outdated Components
-- Track SBOM/dependencies; run \\`npm audit\\`/scanners and patch regularly
-- Prefer maintained libraries; remove unused deps
+    ## A06: Vulnerable & Outdated Components
+    - Track SBOM/dependencies; run npm audit or a scanner regularly and patch
+    - Prefer maintained libraries; remove unused deps
 
 ## A07: Identification & Authentication Failures
 - Use vetted auth (OIDC/OAuth2); enforce MFA where applicable
