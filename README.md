@@ -150,7 +150,7 @@ Once connected to your AI client, you can use these MCP tools:
 | `sdd-quality-check` | Code quality analysis | Linus-style 5-layer code review |
 | `sdd-context-load` | Load project context | Restore project memory and state |
 | `sdd-template-render` | Render templates | Generate files from templates |
-| `sdd-steering` | Create/update steering docs | Analyzes project to generate product.md, tech.md, structure.md with real content + static linus-review.md, commit.md |
+| `sdd-steering` | Create/update steering docs | Analyzes project to generate product.md, tech.md, structure.md with real content + static linus-review.md, commit.md, security-check.md |
 | `sdd-steering-custom` | Create custom steering docs | Add specialized guidance documents |
 | `sdd-validate-design` | Design quality validation | Interactive GO/NO-GO design review |
 | `sdd-validate-gap` | Implementation gap analysis | Analyze requirements vs codebase |
