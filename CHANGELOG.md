@@ -1,4 +1,10 @@
-# Changelog
+
+## [1.4.1] - 2025-09-30
+
+### Added
+- Always-generate static security-check.md (OWASP Top 10 aligned) during sdd-steering
+  - Present in both MCP paths (simplified + legacy server)
+  - Use during code generation and code review to avoid common vulnerabilities# Changelog
 
 All notable changes to this project will be documented in this file.
 
