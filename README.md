@@ -6,7 +6,7 @@
 
 A Model Context Protocol (MCP) server implementing Spec-Driven Development (SDD) workflows for AI-agent CLIs and IDEs like Claude Code, Cursor, and others.
 
-> ✅ v1.4.0 Update: Requirements, Design, and Tasks are now analysis-based on first run in MCP mode — no more template-first step. Steering remains analysis-backed with static exceptions (linus-review.md, commit.md). Works across JS/TS, Java, Python, Go, Ruby, PHP, Rust, .NET, and more.
+> ✅ v1.4.1 Update: Adds a static security-check.md (OWASP Top 10) steering document to use during code generation and reviews. v1.4.0 introduced analysis-first generation for requirements/design/tasks in MCP mode (no template-first step). Steering remains analysis-backed with static exceptions (linus-review.md, commit.md, security-check.md). Works across JS/TS, Java, Python, Go, Ruby, PHP, Rust, .NET, and more.
 
 ## 🚀 Quick Start
 
@@ -14,6 +14,9 @@ A Model Context Protocol (MCP) server implementing Spec-Driven Development (SDD)
 ```bash
 # No installation required - use directly with npx
 npx -y sdd-mcp-server@latest
+
+# Pin exact version (optional)
+npx -y sdd-mcp-server@1.4.1
 
 # For Claude Code MCP integration, add to your configuration:
 # "sdd-mcp-server": {
@@ -26,6 +29,9 @@ npx -y sdd-mcp-server@latest
 ```bash
 # Install globally for persistent usage
 npm install -g sdd-mcp-server@latest
+
+# Pin exact version (optional)
+npm install -g sdd-mcp-server@1.4.1
 
 # Start the server
 sdd-mcp-server
@@ -193,6 +199,14 @@ Once connected to your AI client, you can use these MCP tools:
   Use sdd-approve to approve workflow phases
   Use sdd-context-load to restore project memory
   ```
+
+## Upgrading to 1.4.1
+
+- New in 1.4.1: `security-check.md` is generated with sdd-steering and aligned to OWASP Top 10. Use it during code gen and code reviews.
+- Upgrade commands:
+  - Prefer npx: `npx -y sdd-mcp-server@latest` (or `@1.4.1` to pin), or
+  - Global: `npm i -g sdd-mcp-server@latest` (or `@1.4.1` to pin) and run `sdd-mcp-server`.
+- If you pinned a version in your MCP config, update it to `@latest` or `@1.4.1`.
 
 ## Upgrading to 1.4.0
 
