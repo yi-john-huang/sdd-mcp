@@ -1,15 +1,21 @@
-
-## [1.4.1] - 2025-09-30
-
-### Added
-- Always-generate static security-check.md (OWASP Top 10 aligned) during sdd-steering
-  - Present in both MCP paths (simplified + legacy server)
-  - Use during code generation and code review to avoid common vulnerabilities# Changelog
+# Changelog
 
 All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
+
+## [1.4.2] - 2025-10-02
+
+### Fixed
+- `sdd-steering` CLI entry now always creates `.kiro/steering/tdd-guideline.md`, keeping TDD enforcement consistent with the TypeScript build output.
+
+## [1.4.1] - 2025-09-30
+
+### Added
+- Always-generate static `security-check.md` (OWASP Top 10 aligned) during `sdd-steering`
+  - Present in both MCP paths (simplified + legacy server)
+  - Use during code generation and code review to avoid common vulnerabilities
 
 ## [1.3.5] - 2025-09-13
 
