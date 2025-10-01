@@ -1,6 +1,6 @@
 {
   "name": "sdd-mcp-server",
-  "version": "1.4.1",
+  "version": "1.4.2",
   "description": "MCP server for spec-driven development workflows across AI-agent CLIs and IDEs",
   "main": "dist/index.js",
   "bin": {
@@ -44,7 +44,7 @@
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "https://github.com/yi-john-huang/sdd-mcp.git"
+    "url": "git+https://github.com/yi-john-huang/sdd-mcp.git"
   },
   "bugs": {
     "url": "https://github.com/yi-john-huang/sdd-mcp/issues"
