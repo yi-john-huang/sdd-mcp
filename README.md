@@ -6,7 +6,7 @@
 
 A Model Context Protocol (MCP) server implementing Spec-Driven Development (SDD) workflows for AI-agent CLIs and IDEs like Claude Code, Cursor, and others.
 
-> ✅ v1.4.1 Update: Adds a static security-check.md (OWASP Top 10) steering document to use during code generation and reviews. v1.4.0 introduced analysis-first generation for requirements/design/tasks in MCP mode (no template-first step). Steering remains analysis-backed with static exceptions (linus-review.md, commit.md, security-check.md). Works across JS/TS, Java, Python, Go, Ruby, PHP, Rust, .NET, and more.
+> ✅ v1.4.2 Update: The CLI (`mcp-server.js`) now auto-creates the TDD steering guideline so spec implementation stays test-first in every workflow. Security-check.md (added in 1.4.1) and other static steering docs remain enforced across stacks (JS/TS, Java, Python, Go, Ruby, PHP, Rust, .NET, and more).
 
 ## 🚀 Quick Start
 
@@ -16,7 +16,7 @@ A Model Context Protocol (MCP) server implementing Spec-Driven Development (SDD)
 npx -y sdd-mcp-server@latest
 
 # Pin exact version (optional)
-npx -y sdd-mcp-server@1.4.1
+npx -y sdd-mcp-server@1.4.2
 
 # For Claude Code MCP integration, add to your configuration:
 # "sdd-mcp-server": {
@@ -31,7 +31,7 @@ npx -y sdd-mcp-server@1.4.1
 npm install -g sdd-mcp-server@latest
 
 # Pin exact version (optional)
-npm install -g sdd-mcp-server@1.4.1
+npm install -g sdd-mcp-server@1.4.2
 
 # Start the server
 sdd-mcp-server
@@ -200,13 +200,13 @@ Once connected to your AI client, you can use these MCP tools:
   Use sdd-context-load to restore project memory
   ```
 
-## Upgrading to 1.4.1
+## Upgrading to 1.4.2
 
-- New in 1.4.1: `security-check.md` is generated with sdd-steering and aligned to OWASP Top 10. Use it during code gen and code reviews.
+- New in 1.4.2: The standalone CLI entry now writes the `tdd-guideline.md` steering document, keeping TDD enforcement consistent for all workflows.
 - Upgrade commands:
-  - Prefer npx: `npx -y sdd-mcp-server@latest` (or `@1.4.1` to pin), or
-  - Global: `npm i -g sdd-mcp-server@latest` (or `@1.4.1` to pin) and run `sdd-mcp-server`.
-- If you pinned a version in your MCP config, update it to `@latest` or `@1.4.1`.
+  - Prefer npx: `npx -y sdd-mcp-server@latest` (or `@1.4.2` to pin), or
+  - Global: `npm i -g sdd-mcp-server@latest` (or `@1.4.2` to pin) and run `sdd-mcp-server`.
+- If you pinned a version in your MCP config, update it to `@latest` or `@1.4.2`.
 
 ## Upgrading to 1.4.0
 
