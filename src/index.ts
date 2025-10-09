@@ -859,16 +859,26 @@ async function handleRequirementsSimplified(args: any) {
       }
     }
     
-    // Generate analysis-backed requirements; fallback to template on error
+    // Generate analysis-backed requirements with proper error handling
     let requirementsContent: string;
+    let analysisUsed = false;
+
     try {
+      console.error('[SDD-DEBUG] Attempting to import specGenerator for comprehensive analysis...');
       const { generateRequirementsDocument } = await import('./utils/specGenerator.js');
+      console.error('[SDD-DEBUG] specGenerator imported successfully, generating requirements...');
+
       requirementsContent = await generateRequirementsDocument(process.cwd(), featureName);
+      analysisUsed = true;
+      console.error('[SDD-DEBUG] ✅ Requirements generated using comprehensive codebase analysis');
     } catch (genErr) {
+      console.error('[SDD-DEBUG] ⚠️ Comprehensive analysis failed, using fallback template');
+      console.error('[SDD-DEBUG] Error details:', (genErr as Error).message);
+      console.error('[SDD-DEBUG] Stack:', (genErr as Error).stack);
+
       requirementsContent = `# Requirements Document
 
-<!-- Warning: Analysis-backed generation failed. Using fallback template. -->
-<!-- Error: ${(genErr as Error).message} -->
+<!-- Note: Using basic template due to analysis error: ${(genErr as Error).message} -->
 
 ## Introduction
 ${generateIntroductionFromDescription(projectDescription)}
@@ -925,12 +935,14 @@ ${generateEARSRequirements(projectDescription).map((req, index) => `${index + 1}
 **Feature**: \`${featureName}\`
 **File**: \`.kiro/specs/${featureName}/requirements.md\`
 
+**Analysis Method**: ${analysisUsed ? '✅ Comprehensive codebase analysis (multi-language support)' : '⚠️ Basic template (analysis failed)'}
+
 **Generated Requirements**:
 - Core functionality requirements with EARS format
-- System quality and reliability requirements  
+- System quality and reliability requirements
 - Usability and user experience requirements
 
-**Project Description Analyzed**: "${projectDescription.substring(0, 100)}${projectDescription.length > 100 ? '...' : ''}"
+**Project Description**: "${projectDescription.substring(0, 100)}${projectDescription.length > 100 ? '...' : ''}"
 
 **Workflow Phase**: Requirements Generated
 **Next Step**: Run \`sdd-design ${featureName}\` to create technical design (after requirements review)`
@@ -980,20 +992,28 @@ async function handleDesignSimplified(args: any) {
       }
     }
     
-    // Generate analysis-backed design
+    // Generate analysis-backed design with proper error handling
     let designContent: string;
+    let analysisUsed = false;
+
     try {
+      console.error('[SDD-DEBUG] Attempting to import specGenerator for comprehensive design analysis...');
       const { generateDesignDocument } = await import('./utils/specGenerator.js');
+      console.error('[SDD-DEBUG] specGenerator imported successfully, generating design...');
+
       designContent = await generateDesignDocument(process.cwd(), featureName);
+      analysisUsed = true;
+      console.error('[SDD-DEBUG] ✅ Design generated using comprehensive codebase analysis');
     } catch (genErr) {
-      // Fallback to previous template on error with warning header
+      console.error('[SDD-DEBUG] ⚠️ Comprehensive analysis failed, using fallback template');
+      console.error('[SDD-DEBUG] Error details:', (genErr as Error).message);
+
       designContent = `# Technical Design Document
 
-<!-- Warning: Analysis-backed generation failed. Using fallback template. -->
-<!-- Error: ${(genErr as Error).message} -->
+<!-- Note: Using basic template due to analysis error: ${(genErr as Error).message} -->
 
 ## Overview
-This design document specifies the technical implementation approach for ${spec.feature_name}. 
+This design document specifies the technical implementation approach for ${spec.feature_name}.
 
 **Purpose**: ${projectDescription}
 
@@ -1031,6 +1051,8 @@ This design document specifies the technical implementation approach for ${spec.
 **Feature**: \`${featureName}\`
 **File**: \`.kiro/specs/${featureName}/design.md\`
 
+**Analysis Method**: ${analysisUsed ? '✅ Comprehensive codebase analysis (architecture patterns detected)' : '⚠️ Basic template (analysis failed)'}
+
 **Design Elements**:
 - Modular architecture with clear component separation
 - Comprehensive interface specifications
@@ -1039,7 +1061,7 @@ This design document specifies the technical implementation approach for ${spec.
 
 **Project Description**: "${projectDescription.substring(0, 100)}${projectDescription.length > 100 ? '...' : ''}"
 
-**Workflow Phase**: Design Generated  
+**Workflow Phase**: Design Generated
 **Next Step**: Run \`sdd-tasks ${featureName}\` to generate implementation tasks (after design review)`
       }]
     };
@@ -1078,16 +1100,25 @@ async function handleTasksSimplified(args: any) {
       throw new Error(`Design must be generated before tasks. Run sdd-design ${featureName} first.`);
     }
     
-    // Generate analysis-backed tasks
+    // Generate analysis-backed tasks with proper error handling
     let tasksContent: string;
+    let analysisUsed = false;
+
     try {
+      console.error('[SDD-DEBUG] Attempting to import specGenerator for comprehensive task analysis...');
       const { generateTasksDocument } = await import('./utils/specGenerator.js');
+      console.error('[SDD-DEBUG] specGenerator imported successfully, generating tasks...');
+
       tasksContent = await generateTasksDocument(process.cwd(), featureName);
+      analysisUsed = true;
+      console.error('[SDD-DEBUG] ✅ Tasks generated using comprehensive codebase analysis');
     } catch (genErr) {
+      console.error('[SDD-DEBUG] ⚠️ Comprehensive analysis failed, using fallback template');
+      console.error('[SDD-DEBUG] Error details:', (genErr as Error).message);
+
       tasksContent = `# Implementation Plan
 
-<!-- Warning: Analysis-backed generation failed. Using fallback template. -->
-<!-- Error: ${(genErr as Error).message} -->
+<!-- Note: Using basic template due to analysis error: ${(genErr as Error).message} -->
 
 - [ ] 1. Set up project foundation and infrastructure
 - [ ] 2. Implement core functionality
@@ -1124,11 +1155,13 @@ async function handleTasksSimplified(args: any) {
 **Feature**: \`${featureName}\`
 **File**: \`.kiro/specs/${featureName}/tasks.md\`
 
+**Analysis Method**: ${analysisUsed ? '✅ Comprehensive codebase analysis (tech stack-aware tasks)' : '⚠️ Basic template (analysis failed)'}
+
 **Generated Tasks**:
-- 5 major task groups with 10 sub-tasks total
-- Properly sequenced with dependency tracking
+- Development, integration, quality, and deployment phases
+- Sequenced with dependency tracking
 - Requirement traceability for all tasks
-- Coverage of setup, core functionality, validation, testing, and deployment
+- Coverage based on detected tech stack
 
 **Workflow Phase**: Tasks Generated
 **Status**: Ready for Implementation
