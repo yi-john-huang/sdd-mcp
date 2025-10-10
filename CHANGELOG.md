@@ -5,6 +5,47 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.4.4] - 2025-10-10
+
+### Added
+- **Coding Principles Steering Document**: New `.kiro/steering/principles.md` with comprehensive SOLID, DRY, KISS, YAGNI, Separation of Concerns, and Modularity guidance
+  - 641 lines of comprehensive principles with code examples
+  - Multi-language examples (TypeScript, Python, Java, Go, Ruby, PHP, Rust, C#)
+  - Code review checklist for principle enforcement
+  - Anti-patterns and common pitfalls to avoid
+- **TDD Task Generation**: Rewrote task generation to follow Test-Driven Development workflow
+  - Phase 1: Test Setup (🔴 RED - Write Failing Tests First)
+  - Phase 2: Implementation (🟢 GREEN - Make Tests Pass)
+  - Phase 3: Refactoring (🔵 REFACTOR - Improve Code Quality)
+  - Phase 4: Integration & Documentation
+  - Framework-specific test tasks (MCP SDK, API endpoints, database operations)
+
+### Changed
+- **Task Document Format**: Implementation tasks now follow TDD methodology with clear phase separation
+- **Steering Document Count**: Now generates 8 steering documents (added principles.md to the 7 existing)
+- **Documentation Updates**: Enhanced README.md, CLAUDE.md, and AGENTS.md with principles and TDD workflow references
+
+### Fixed
+- Task generation order now enforces test-first development
+- All documentation now consistently references 8 steering documents
+
+## [1.4.3] - 2025-10-10
+
+### Fixed
+- **Document Generation**: Simplified mode (MCP) now properly uses comprehensive codebase analysis instead of falling back to templates
+  - Enhanced error handling with detailed debug logging
+  - Added `analysisUsed` flag to track successful comprehensive analysis
+  - Improved user feedback showing "✅ Comprehensive codebase analysis" or "⚠️ Basic template"
+- **Multi-Language Detection**: Comprehensive analysis now properly detects TypeScript, JavaScript, Java, Python, Go, Ruby, PHP, Rust, C#, Scala
+- **Framework Detection**: Enhanced detection for 20+ frameworks (Spring Boot, Django, FastAPI, Rails, Laravel, Express, React, Vue, Angular, Next.js, etc.)
+- **Build Tool & Test Framework Detection**: Better identification of Maven, Gradle, npm, pip, cargo, Jest, pytest, JUnit, Mocha, etc.
+- **Architecture Pattern Recognition**: Improved detection of DDD, MVC, Microservices, Clean Architecture patterns
+
+### Changed
+- **Error Reporting**: Added comprehensive debug logging throughout document generation process
+- **User Feedback**: Clear messaging about which analysis method was used (comprehensive vs fallback)
+- **Documentation**: Updated README.md to highlight v1.4.3 comprehensive analysis improvements
+
 ## [1.4.2] - 2025-10-02
 
 ### Fixed
