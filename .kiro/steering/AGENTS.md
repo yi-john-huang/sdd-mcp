@@ -38,7 +38,14 @@ AI agents that help with requirements gathering, design decisions, and task brea
 
 ### Context Sharing
 All agents must:
-1. Load project steering documents at interaction start
+1. Load project steering documents at interaction start:
+   - `product.md` - Product context and business objectives
+   - `tech.md` - Technology stack and architectural decisions
+   - `structure.md` - File organization and code patterns
+   - `linus-review.md` - Code quality review principles
+   - `commit.md` - Commit message standards
+   - **`tdd-guideline.md` - Test-Driven Development workflow (REQUIRED for all new features)**
+   - **`principles.md` - Core coding principles (SOLID, DRY, KISS, YAGNI, Separation of Concerns, Modularity)**
 2. Check current workflow phase before proceeding
 3. Validate approvals before phase transitions
 4. Update spec.json with progress tracking
@@ -173,7 +180,11 @@ await sdd-implement(featureName);
 ### 3. Quality Focus
 - Run quality checks after each significant change
 - Address issues immediately rather than accumulating debt
-- Follow TDD principles: Red → Green → Refactor
+- **Follow TDD principles strictly: Red → Green → Refactor**
+  - **RED**: Write failing tests BEFORE any implementation
+  - **GREEN**: Write minimal code to make tests pass
+  - **REFACTOR**: Improve code quality while keeping tests green
+  - Refer to `.kiro/steering/tdd-guideline.md` for complete TDD workflow
 
 ### 4. Communication Clarity
 - Provide clear explanations for design decisions

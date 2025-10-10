@@ -61,8 +61,10 @@ Managed by `/kiro:steering` command. Updates here reflect command changes.
 - `tech.md`: Always included - Technology stack and architectural decisions
 - `structure.md`: Always included - File organization and code patterns
 - `linus-review.md`: Always included - Ensuring code quality of the projects
-- `commit.md`: Always included - Ensuring the commit / merge request / pull request title and message context.
+- `commit.md`: Always included - Ensuring the commit / merge request / pull request title and message context
+- `tdd-guideline.md`: Always included - Test-Driven Development workflow (REQUIRED for all new features)
 - `security-check.md`: Always included - OWASP Top 10 aligned security checklist for code gen and review
+- `principles.md`: Always included - Core coding principles (SOLID, DRY, KISS, YAGNI, Separation of Concerns, Modularity)
 
 ### Custom Steering Files
 <!-- Added by /kiro:steering-custom command -->

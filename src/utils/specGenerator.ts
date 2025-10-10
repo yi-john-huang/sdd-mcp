@@ -114,26 +114,40 @@ export async function generateTasksDocument(projectPath: string, featureName: st
   ${task.subtasks.map(s => `  - ${s}`).join('\n')}
   - _Requirements: ${task.requirements}_`).join('\n\n');
 
-  return `# Implementation Plan
+  return `# Implementation Plan (TDD Approach)
 
 ## Project: ${featureName}
 
 **Project Name:** ${analysis.name}
 **Detected Stack:** ${[analysis.language, analysis.framework || '', analysis.buildTool || ''].filter(Boolean).join(' / ')}
+**Test Framework:** ${analysis.testFramework || 'Not detected - needs setup'}
 
 Generated on: ${new Date().toISOString()}
 
-## Development Phase Tasks
+**TDD Workflow**: 🔴 RED (Failing Tests) → 🟢 GREEN (Passing Implementation) → 🔵 REFACTOR (Code Quality)
 
-${section('Development', tasks.development)}
+---
 
-## Integration Phase Tasks
+## Phase 1: Test Setup (🔴 RED - Write Failing Tests First)
+
+${section('Test Setup', tasks.testSetup)}
+
+## Phase 2: Implementation (🟢 GREEN - Make Tests Pass)
+
+${section('Implementation', tasks.implementation)}
+
+## Phase 3: Refactoring (🔵 REFACTOR - Improve Code Quality)
+
+${section('Refactoring', tasks.refactoring)}
+
+## Phase 4: Integration & Documentation
 
 ${section('Integration', tasks.integration)}
 
-## Quality & Testing Tasks
+---
 
-${section('Quality', tasks.quality)}
+**Note**: Follow TDD principles strictly. Never write production code without a failing test first.
+Refer to \`.kiro/steering/tdd-guideline.md\` for detailed TDD guidance.
 `;
 }
 
@@ -233,32 +247,180 @@ function generateBuildConfig(analysis: any): string {
 }
 
 function generateImplementationTasks(analysis: any) {
-  const dev = [
-    { title: 'Set up project scaffolding', subtasks: ['Initialize directories', 'Configure scripts'], requirements: 'FR-1' },
-    { title: 'Implement core feature logic', subtasks: ['Add modules', 'Wire integrations'], requirements: 'FR-1' }
-  ];
-  const integ = [
-    { title: 'Integrate with stack', subtasks: ['Validate build', 'Run dev server'], requirements: 'FR-2' }
-  ];
-  const quality = [
-    { title: 'Add tests and quality checks', subtasks: ['Unit tests', 'Lint/typecheck', 'Quality review'], requirements: 'FR-3' }
+  // Phase 1: Test Setup (RED - Write Failing Tests First)
+  const testSetup = [
+    {
+      title: 'Set up test infrastructure',
+      subtasks: [
+        `Install/configure ${analysis.testFramework || 'Jest/pytest/JUnit'} test framework`,
+        'Create test directory structure (__tests__, test/, spec/)',
+        'Configure test runner and coverage tools',
+        'Set up test utilities and helpers'
+      ],
+      requirements: 'NFR-3 (Quality Standards)'
+    },
+    {
+      title: 'Write failing tests for core functionality',
+      subtasks: [
+        'Write unit tests for main feature components',
+        'Write integration tests for component interactions',
+        'Write edge case and error handling tests',
+        'Confirm all tests fail (RED phase) - no implementation yet'
+      ],
+      requirements: 'FR-1 (Core Functionality)'
+    }
   ];
 
-  // Tailor tasks if MCP or API
+  // Phase 2: Implementation (GREEN - Make Tests Pass)
+  const implementation = [
+    {
+      title: 'Set up project scaffolding',
+      subtasks: [
+        'Initialize directories following project structure',
+        'Configure build scripts and package.json',
+        'Set up environment configuration'
+      ],
+      requirements: 'FR-1, NFR-3'
+    },
+    {
+      title: 'Implement minimal code to pass tests',
+      subtasks: [
+        'Implement core feature logic to satisfy tests',
+        'Add necessary dependencies and modules',
+        'Ensure all tests pass (GREEN phase)',
+        'Do not add extra features beyond test requirements'
+      ],
+      requirements: 'FR-1 (Core Functionality)'
+    },
+    {
+      title: 'Verify test coverage',
+      subtasks: [
+        'Run coverage report (aim for 80%+ coverage)',
+        'Identify uncovered code paths',
+        'Add tests for uncovered branches',
+        'Document any intentionally untested code'
+      ],
+      requirements: 'NFR-3 (Quality Standards)'
+    }
+  ];
+
+  // Phase 3: Refactoring (REFACTOR - Improve Code Quality)
+  const refactoring = [
+    {
+      title: 'Refactor for code quality and maintainability',
+      subtasks: [
+        'Extract reusable components/functions (DRY principle)',
+        'Improve naming (variables, functions, classes)',
+        'Remove code duplication',
+        'Apply design patterns where appropriate',
+        'All tests must still pass after refactoring'
+      ],
+      requirements: 'NFR-3 (Maintainability)'
+    },
+    {
+      title: 'Code quality validation',
+      subtasks: [
+        'Run linter and fix all issues',
+        analysis.language === 'typescript' ? 'Run type checker (tsc --noEmit)' : 'Run static analysis',
+        'Apply Linus-style code review principles (see linus-review.md)',
+        'Peer review or self-review checklist'
+      ],
+      requirements: 'NFR-3 (Quality Standards)'
+    }
+  ];
+
+  // Phase 4: Integration & Documentation
+  const integration = [
+    {
+      title: 'Integration with existing system',
+      subtasks: [
+        'Integrate with build system',
+        'Update configuration files',
+        'Test in development environment',
+        'Verify compatibility with existing code'
+      ],
+      requirements: 'FR-2, NFR-2 (Technology Integration, Reliability)'
+    },
+    {
+      title: 'Documentation and deployment preparation',
+      subtasks: [
+        'Update API documentation',
+        'Add inline code comments for complex logic',
+        'Update README/CHANGELOG if needed',
+        'Prepare deployment configuration'
+      ],
+      requirements: 'NFR-3 (Maintainability)'
+    }
+  ];
+
+  // Tailor tasks based on detected framework/architecture
   if (analysis.framework === 'MCP SDK') {
-    dev.unshift({ title: 'Expose MCP tools', subtasks: ['Register tools', 'Handle stdio transport'], requirements: 'FR-2' });
+    testSetup.push({
+      title: 'Write tests for MCP tool handlers',
+      subtasks: [
+        'Test tool registration and discovery',
+        'Test stdio transport communication',
+        'Test tool argument validation',
+        'Test tool response formatting'
+      ],
+      requirements: 'FR-2 (MCP Integration)'
+    });
+
+    implementation.splice(1, 0, {
+      title: 'Implement MCP tool handlers to pass tests',
+      subtasks: [
+        'Register MCP tools with server',
+        'Handle stdio transport communication',
+        'Implement tool argument validation',
+        'Format tool responses per MCP spec'
+      ],
+      requirements: 'FR-2 (MCP Integration)'
+    });
   }
+
   if (analysis.architecture.includes('API')) {
-    dev.unshift({ title: 'Add HTTP endpoints', subtasks: ['Define routes', 'Implement handlers'], requirements: 'FR-1' });
+    testSetup.push({
+      title: 'Write tests for HTTP endpoints',
+      subtasks: [
+        'Test route definitions and HTTP methods',
+        'Test request validation and error responses',
+        'Test successful response formats',
+        'Test authentication/authorization if needed'
+      ],
+      requirements: 'FR-1, FR-2 (API Functionality)'
+    });
+
+    implementation.splice(1, 0, {
+      title: 'Implement HTTP endpoints to pass tests',
+      subtasks: [
+        'Define routes and HTTP methods',
+        'Implement request handlers',
+        'Add input validation middleware',
+        'Implement error handling middleware'
+      ],
+      requirements: 'FR-1, FR-2 (API Functionality)'
+    });
   }
 
-  if (analysis.testFramework) {
-    quality[0].subtasks.unshift(`Set up ${analysis.testFramework}`);
-  }
-  if (analysis.language === 'typescript') {
-    quality[0].subtasks.push('Ensure type safety (tsc)');
+  // Add database tests if database framework detected
+  if (analysis.dependencies?.some((d: string) => ['mongoose', 'sequelize', 'typeorm', 'prisma'].includes(d))) {
+    testSetup.push({
+      title: 'Write tests for data persistence',
+      subtasks: [
+        'Set up test database or mocks',
+        'Test CRUD operations',
+        'Test data validation rules',
+        'Test error handling for DB failures'
+      ],
+      requirements: 'FR-2, NFR-2 (Data Integration, Reliability)'
+    });
   }
 
-  return { development: dev, integration: integ, quality };
+  return {
+    testSetup,
+    implementation,
+    refactoring,
+    integration
+  };
 }
 
