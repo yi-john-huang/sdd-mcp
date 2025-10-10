@@ -6,7 +6,7 @@
 
 A Model Context Protocol (MCP) server implementing Spec-Driven Development (SDD) workflows for AI-agent CLIs and IDEs like Claude Code, Cursor, and others.
 
-> ✅ v1.4.2 Update: The CLI (`mcp-server.js`) now auto-creates the TDD steering guideline so spec implementation stays test-first in every workflow. Security-check.md (added in 1.4.1) and other static steering docs remain enforced across stacks (JS/TS, Java, Python, Go, Ruby, PHP, Rust, .NET, and more).
+> ✅ **v1.4.3 Update**: Comprehensive codebase analysis now works automatically! Documents are generated with real multi-language detection (TypeScript, Java, Python, Go, Ruby, PHP, Rust, C#, Scala), framework detection (Spring Boot, Django, FastAPI, Rails, Laravel, Express, React, etc.), and architecture pattern recognition. New `principles.md` steering document enforces SOLID, DRY, KISS, YAGNI, Separation of Concerns, and Modularity across all development.
 
 ## 🚀 Quick Start
 
@@ -16,7 +16,7 @@ A Model Context Protocol (MCP) server implementing Spec-Driven Development (SDD)
 npx -y sdd-mcp-server@latest
 
 # Pin exact version (optional)
-npx -y sdd-mcp-server@1.4.2
+npx -y sdd-mcp-server@1.4.3
 
 # For Claude Code MCP integration, add to your configuration:
 # "sdd-mcp-server": {
@@ -31,7 +31,7 @@ npx -y sdd-mcp-server@1.4.2
 npm install -g sdd-mcp-server@latest
 
 # Pin exact version (optional)
-npm install -g sdd-mcp-server@1.4.2
+npm install -g sdd-mcp-server@1.4.3
 
 # Start the server
 sdd-mcp-server
@@ -147,16 +147,16 @@ Once connected to your AI client, you can use these MCP tools:
 | Tool | Description | Usage |
 |------|-------------|--------|
 | `sdd-init` | Initialize new SDD project | Creates .kiro directory structure + AGENTS.md for cross-platform AI support |
-| `sdd-requirements` | Generate context-aware requirements | Analyzes package.json and structure to create EARS-formatted requirements |
-| `sdd-design` | Create project-specific design | Generates architecture docs based on actual tech stack and dependencies |
-| `sdd-tasks` | Generate implementation breakdown | Creates tasks derived from real project structure and technology choices |
+| `sdd-requirements` | Generate context-aware requirements | Analyzes package.json and structure to create EARS-formatted requirements with comprehensive multi-language analysis |
+| `sdd-design` | Create project-specific design | Generates architecture docs based on actual tech stack, dependencies, and framework detection |
+| `sdd-tasks` | Generate TDD-focused task breakdown | Creates test-first implementation tasks following RED-GREEN-REFACTOR workflow |
 | `sdd-implement` | Implementation guidelines | Provides implementation steering |
 | `sdd-status` | Check workflow progress | Shows current phase and approvals |
 | `sdd-approve` | Approve workflow phases | Mark phases as approved for progression |
 | `sdd-quality-check` | Code quality analysis | Linus-style 5-layer code review |
 | `sdd-context-load` | Load project context | Restore project memory and state |
 | `sdd-template-render` | Render templates | Generate files from templates |
-| `sdd-steering` | Create/update steering docs | Analyzes project to generate product.md, tech.md, structure.md with real content + static linus-review.md, commit.md, security-check.md |
+| `sdd-steering` | Create/update steering docs | Analyzes project to generate product.md, tech.md, structure.md + static docs: linus-review.md, commit.md, security-check.md, tdd-guideline.md, principles.md (SOLID/DRY/KISS/YAGNI/SoC/Modularity) |
 | `sdd-steering-custom` | Create custom steering docs | Add specialized guidance documents |
 | `sdd-validate-design` | Design quality validation | Interactive GO/NO-GO design review |
 | `sdd-validate-gap` | Implementation gap analysis | Analyze requirements vs codebase |
@@ -167,57 +167,90 @@ Once connected to your AI client, you can use these MCP tools:
 1. **Initialize Project & Steering**
    ```
    Use sdd-init to create a new SDD project
-   Use sdd-steering to generate core steering documents
+   Use sdd-steering to generate 8 steering documents:
+     - product.md, tech.md, structure.md (dynamic, analyzed from codebase)
+     - linus-review.md, commit.md, security-check.md (static quality standards)
+     - tdd-guideline.md (Test-Driven Development workflow)
+     - principles.md (SOLID, DRY, KISS, YAGNI, SoC, Modularity)
    ```
 
 2. **Generate Requirements**
    ```
-   Use sdd-requirements to analyze package.json and create context-aware requirements
+   Use sdd-requirements to analyze your project with comprehensive multi-language detection
+   Automatically detects: language, framework, build tools, test frameworks, architecture patterns
+   Creates EARS-formatted requirements based on actual project context
    Use sdd-validate-gap to analyze implementation feasibility
    ```
 
 3. **Create Design**
    ```
-   Use sdd-design to generate architecture based on actual dependencies
+   Use sdd-design to generate architecture based on detected tech stack
+   Includes: component structure, data models, API design, tech stack details
    Use sdd-validate-design for GO/NO-GO design review
    ```
 
-4. **Plan Tasks**
+4. **Plan Tasks with TDD**
    ```
-   Use sdd-tasks to create implementation breakdown from real project structure
+   Use sdd-tasks to create TDD-focused implementation breakdown
+   Tasks follow RED-GREEN-REFACTOR workflow automatically
+   Phases: Test Setup → Implementation → Refactoring → Integration
    ```
 
 5. **Implement with TDD**
    ```
-   Use sdd-spec-impl to execute tasks with TDD methodology
-  Use sdd-quality-check for code review and analysis
-  ```
+   Use sdd-spec-impl to execute tasks with Test-Driven Development
+   Follow the generated TDD workflow from tdd-guideline.md
+   Use sdd-quality-check for Linus-style code review and SOLID principles validation
+   ```
 
 6. **Monitor & Manage**
-  ```
-  Use sdd-status to check workflow progress
-  Use sdd-approve to approve workflow phases
-  Use sdd-context-load to restore project memory
-  ```
+   ```
+   Use sdd-status to check workflow progress and phase approvals
+   Use sdd-approve to mark phases as approved
+   Use sdd-context-load to restore project memory
+   ```
 
-## Upgrading to 1.4.2
+## Upgrading to 1.4.3
 
-- New in 1.4.2: The standalone CLI entry now writes the `tdd-guideline.md` steering document, keeping TDD enforcement consistent for all workflows.
-- Upgrade commands:
-  - Prefer npx: `npx -y sdd-mcp-server@latest` (or `@1.4.2` to pin), or
-  - Global: `npm i -g sdd-mcp-server@latest` (or `@1.4.2` to pin) and run `sdd-mcp-server`.
-- If you pinned a version in your MCP config, update it to `@latest` or `@1.4.2`.
+**What's New in v1.4.3**:
+- ✅ **Comprehensive Codebase Analysis**: Documents now generated with full multi-language detection (TypeScript, Java, Python, Go, Ruby, PHP, Rust, C#, Scala)
+- ✅ **Framework Detection**: Automatic recognition of Spring Boot, Django, FastAPI, Rails, Laravel, Express, React, Vue, Angular, Next.js, and 20+ frameworks
+- ✅ **Build Tool & Test Framework Detection**: Identifies Maven, Gradle, npm, pip, cargo, Jest, pytest, JUnit, Mocha, and more
+- ✅ **Architecture Pattern Recognition**: Detects DDD, MVC, Microservices, and Clean Architecture patterns
+- ✅ **New Steering Document**: `principles.md` added with comprehensive SOLID, DRY, KISS, YAGNI, Separation of Concerns, and Modularity guidance
+- ✅ **TDD Task Generation**: All implementation tasks now follow Test-Driven Development (RED-GREEN-REFACTOR) workflow
+- ✅ **Improved Error Handling**: Better logging and debug messages for analysis failures
+- ✅ **User Feedback**: Clear indication whether comprehensive analysis or fallback template was used
 
-## Upgrading to 1.4.0
+**Upgrade Commands**:
+```bash
+# Prefer npx (no installation required)
+npx -y sdd-mcp-server@latest
 
-- What changed: In MCP mode, `sdd-requirements`, `sdd-design`, and `sdd-tasks` now generate analysis‑based documents on the first run (no more template‑first step). Steering remains analysis‑backed with static exceptions (`linus-review.md`, `commit.md`).
-- Upgrade commands:
-  - Prefer npx: `npx -y sdd-mcp-server@latest` (no install), or
-  - Global: `npm i -g sdd-mcp-server@1.4.0` and run `sdd-mcp-server`.
-- If you pinned a version in your MCP config, update it to `@latest` or `@1.4.0`.
-- If you previously scripted a second “update documents based on codebase” step, you can remove it — documents are analyzed on first generation now.
-- Fallbacks: If dynamic analysis fails, tools still write a minimal template with a clear warning header and error message; rerun after fixing the issue.
-- Requirements: Node.js >= 18.
+# Or pin to specific version
+npx -y sdd-mcp-server@1.4.3
+
+# Global installation
+npm install -g sdd-mcp-server@latest
+# Or pin: npm install -g sdd-mcp-server@1.4.3
+```
+
+**Migration Notes**:
+- If you pinned a version in your MCP config, update it to `@latest` or `@1.4.3`
+- All steering documents now include `principles.md` and `tdd-guideline.md` automatically
+- TDD task generation is now default - tasks will follow RED-GREEN-REFACTOR order
+- No code changes needed - all improvements are backward compatible
+
+## Previous Versions
+
+### v1.4.2
+- Added `tdd-guideline.md` steering document for TDD enforcement
+- Security-check.md (OWASP Top 10) included in static steering docs
+
+### v1.4.0
+- Analysis-based document generation on first run (no more template-first step)
+- Dynamic steering with static exceptions (`linus-review.md`, `commit.md`)
+- Node.js >= 18 required
 
 ## ⚙️ Configuration
 
@@ -261,11 +294,16 @@ claude mcp add sdd "sdd-mcp-server"
 ## 🏗️ Key Features
 
 - **5-Phase SDD Workflow**: INIT → REQUIREMENTS → DESIGN → TASKS → IMPLEMENTATION
-- **Context-Aware Generation**: Analyzes package.json, dependencies, and project structure for real content
+- **Comprehensive Multi-Language Analysis**: Automatic detection of TypeScript, JavaScript, Java, Python, Go, Ruby, PHP, Rust, C#, Scala projects with framework-specific insights
+- **Framework Detection**: Recognizes Spring Boot, Django, FastAPI, Flask, Rails, Laravel, Express, React, Vue, Angular, Next.js, and 20+ other frameworks
+- **TDD-First Task Generation**: All implementation tasks follow Test-Driven Development (RED-GREEN-REFACTOR) methodology
+- **Coding Principles Enforcement**: Built-in SOLID, DRY, KISS, YAGNI, Separation of Concerns, and Modularity guidance
+- **Context-Aware Generation**: Analyzes package.json, dependencies, build tools, test frameworks, and project structure for real content
 - **EARS-Formatted Requirements**: Generate acceptance criteria based on actual npm scripts and dependencies
-- **Architecture Analysis**: Technology stack detection and pattern recognition from real codebase
-- **Quality Enforcement**: Linus-style 5-layer code review system
-- **Multi-Language Support**: 10 languages with cultural adaptation
+- **Architecture Pattern Recognition**: Detects DDD, MVC, Microservices, Clean Architecture patterns in your codebase
+- **Quality Enforcement**: Linus-style 5-layer code review system with security (OWASP Top 10) checks
+- **Comprehensive Steering Documents**: 8 auto-generated guidance docs (product, tech, structure, linus-review, commit, tdd-guideline, security-check, principles)
+- **Multi-Language Support**: 10 languages with cultural adaptation (en, es, fr, de, it, pt, ru, ja, zh, ko)
 - **Template Engine**: Handlebars-based file generation with project-specific data
 - **Plugin System**: Extensible architecture for custom workflows
 - **MCP Protocol**: Full compatibility with AI-agent CLIs and IDEs
@@ -276,22 +314,40 @@ Here's how to use the MCP SDD Server in your AI client:
 
 ```bash
 # 1. Initialize a new project
-"Use the sdd-init tool to create a project called 'my-web-app'"
+"Use the sdd-init tool to create a project called 'my-web-app'
+ for a React/TypeScript application with user authentication"
 
-# 2. Generate requirements
+# 2. Generate steering documents
+"Use sdd-steering to analyze my codebase and generate all steering documents"
+# Result: 8 steering documents created including principles.md and tdd-guideline.md
+
+# 3. Generate requirements with comprehensive analysis
 "Use sdd-requirements to analyze the project and create requirements.md"
+# Result: Detects TypeScript, React, npm, Jest, and generates EARS-formatted requirements
 
-# 3. Create technical design
-"Use sdd-design to generate architecture and design specifications"
+# 4. Create technical design
+"Use sdd-design to generate architecture based on my React/TypeScript stack"
+# Result: Component structure, state management design, API integration patterns
 
-# 4. Plan implementation tasks
-"Use sdd-tasks to break down the work into implementable tasks"
+# 5. Validate design quality
+"Use sdd-validate-design to review the architecture for potential issues"
+# Result: GO/NO-GO assessment with improvement recommendations
 
-# 5. Get implementation guidance
-"Use sdd-implement to provide implementation steering and best practices"
+# 6. Plan TDD-focused implementation tasks
+"Use sdd-tasks to break down the work into TDD implementation phases"
+# Result: Tasks organized as RED (tests) → GREEN (implementation) → REFACTOR (quality)
 
-# 6. Review code quality
-"Use sdd-quality-check to perform Linus-style code review on my components"
+# 7. Implement with TDD
+"Use sdd-spec-impl to execute the authentication tasks with TDD methodology"
+# Result: Test-first development following principles.md and tdd-guideline.md
+
+# 8. Review code quality
+"Use sdd-quality-check to perform Linus-style code review with SOLID principles check"
+# Result: 5-layer analysis + SOLID/DRY/KISS validation + security checks
+
+# 9. Check workflow status
+"Use sdd-status to see current progress and approvals"
+# Result: Phase completion status and approval tracking
 ```
 
 ## 🛠️ Development & Troubleshooting
@@ -361,19 +417,24 @@ claude mcp add sdd "$(pwd)/mcp-server.js" -s local
 sudo npm install -g sdd-mcp-server
 ```
 
-**Issue: "Only template content generated" (Resolved in v1.4.0)**
+**Issue: "Only template content generated" (Improved in v1.4.3)**
 
-As of 1.4.0, `sdd-requirements`, `sdd-design`, `sdd-tasks`, and `sdd-steering` generate analysis-based documents on first run. If you still see a template:
-- Check the top warning header in the file — it includes the error that triggered fallback.
-- Fix the indicated issue (e.g., permission/path), then rerun the tool.
+As of v1.4.3, comprehensive codebase analysis is automatic with multi-language detection. Documents include real framework, build tool, and architecture information. If you still see a basic template:
+- Check the tool response message — it shows "✅ Comprehensive codebase analysis" or "⚠️ Basic template (analysis failed)"
+- Check the top of the generated file for warning headers with error details
+- Common causes: missing package.json, permissions issues, or unsupported project structure
+- Fix the issue and rerun the tool to get comprehensive analysis
 
 ## 📖 Advanced Documentation
 
 For detailed documentation on:
-- Plugin Development: See [DEPLOYMENT.md](DEPLOYMENT.md)
-- Docker Deployment: See [Dockerfile](Dockerfile) and [docker-compose.yml](docker-compose.yml)
-- Architecture Details: Explore the `/src` directory structure
-- Quality Analysis: Review `.kiro/steering/linus-review.md`
+- **Plugin Development**: See [DEPLOYMENT.md](DEPLOYMENT.md)
+- **Docker Deployment**: See [Dockerfile](Dockerfile) and [docker-compose.yml](docker-compose.yml)
+- **Architecture Details**: Explore the `/src` directory structure
+- **Code Quality Standards**: Review `.kiro/steering/linus-review.md`
+- **TDD Guidelines**: See `.kiro/steering/tdd-guideline.md` for complete Test-Driven Development workflow
+- **Coding Principles**: Review `.kiro/steering/principles.md` for SOLID, DRY, KISS, YAGNI, SoC, and Modularity guidance
+- **Security Checklist**: Check `.kiro/steering/security-check.md` for OWASP Top 10 aligned security practices
 
 ## 🐛 Support & Issues
 
