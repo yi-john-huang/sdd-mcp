@@ -6,7 +6,7 @@
 
 A Model Context Protocol (MCP) server implementing Spec-Driven Development (SDD) workflows for AI-agent CLIs and IDEs like Claude Code, Cursor, and others.
 
-> ✅ **v1.4.3 Update**: Comprehensive codebase analysis now works automatically! Documents are generated with real multi-language detection (TypeScript, Java, Python, Go, Ruby, PHP, Rust, C#, Scala), framework detection (Spring Boot, Django, FastAPI, Rails, Laravel, Express, React, etc.), and architecture pattern recognition. New `principles.md` steering document enforces SOLID, DRY, KISS, YAGNI, Separation of Concerns, and Modularity across all development.
+> ✅ **v1.4.4 Update**: Comprehensive codebase analysis + TDD workflow! Documents are generated with real multi-language detection (TypeScript, Java, Python, Go, Ruby, PHP, Rust, C#, Scala), framework detection (Spring Boot, Django, FastAPI, Rails, Laravel, Express, React, etc.), and architecture pattern recognition. New `principles.md` steering document enforces SOLID, DRY, KISS, YAGNI, Separation of Concerns, and Modularity. Task generation now follows Test-Driven Development (RED-GREEN-REFACTOR) workflow.
 
 ## 🚀 Quick Start
 
@@ -16,7 +16,7 @@ A Model Context Protocol (MCP) server implementing Spec-Driven Development (SDD)
 npx -y sdd-mcp-server@latest
 
 # Pin exact version (optional)
-npx -y sdd-mcp-server@1.4.3
+npx -y sdd-mcp-server@1.4.4
 
 # For Claude Code MCP integration, add to your configuration:
 # "sdd-mcp-server": {
@@ -31,7 +31,7 @@ npx -y sdd-mcp-server@1.4.3
 npm install -g sdd-mcp-server@latest
 
 # Pin exact version (optional)
-npm install -g sdd-mcp-server@1.4.3
+npm install -g sdd-mcp-server@1.4.4
 
 # Start the server
 sdd-mcp-server
@@ -210,9 +210,9 @@ Once connected to your AI client, you can use these MCP tools:
    Use sdd-context-load to restore project memory
    ```
 
-## Upgrading to 1.4.3
+## Upgrading to 1.4.4
 
-**What's New in v1.4.3**:
+**What's New in v1.4.4**:
 - ✅ **Comprehensive Codebase Analysis**: Documents now generated with full multi-language detection (TypeScript, Java, Python, Go, Ruby, PHP, Rust, C#, Scala)
 - ✅ **Framework Detection**: Automatic recognition of Spring Boot, Django, FastAPI, Rails, Laravel, Express, React, Vue, Angular, Next.js, and 20+ frameworks
 - ✅ **Build Tool & Test Framework Detection**: Identifies Maven, Gradle, npm, pip, cargo, Jest, pytest, JUnit, Mocha, and more
@@ -228,20 +228,25 @@ Once connected to your AI client, you can use these MCP tools:
 npx -y sdd-mcp-server@latest
 
 # Or pin to specific version
-npx -y sdd-mcp-server@1.4.3
+npx -y sdd-mcp-server@1.4.4
 
 # Global installation
 npm install -g sdd-mcp-server@latest
-# Or pin: npm install -g sdd-mcp-server@1.4.3
+# Or pin: npm install -g sdd-mcp-server@1.4.4
 ```
 
 **Migration Notes**:
-- If you pinned a version in your MCP config, update it to `@latest` or `@1.4.3`
+- If you pinned a version in your MCP config, update it to `@latest` or `@1.4.4`
 - All steering documents now include `principles.md` and `tdd-guideline.md` automatically
 - TDD task generation is now default - tasks will follow RED-GREEN-REFACTOR order
 - No code changes needed - all improvements are backward compatible
 
 ## Previous Versions
+
+### v1.4.3
+- Comprehensive codebase analysis fix for document generation
+- Enhanced multi-language and framework detection
+- Better error reporting and user feedback
 
 ### v1.4.2
 - Added `tdd-guideline.md` steering document for TDD enforcement
