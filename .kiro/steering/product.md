@@ -3,8 +3,8 @@
 ## Product Description
 MCP server for spec-driven development workflows across AI-agent CLIs and IDEs
 
-**Project**: sdd-mcp-server  
-**Version**: 1.3.6  
+**Project**: sdd-mcp-server
+**Version**: 1.4.4
 **Type**: Domain-Driven Design (DDD)
 
 ## Core Features
@@ -20,6 +20,12 @@ MCP server for spec-driven development workflows across AI-agent CLIs and IDEs
 - Model Context Protocol (MCP) server capabilities
 - AI tool integration support
 - Spec-driven development workflow
+- Comprehensive multi-language codebase analysis (TypeScript, Java, Python, Go, Ruby, PHP, Rust, C#, Scala)
+- Framework detection (Spring Boot, Django, FastAPI, Rails, Laravel, Express, React, Vue, Angular, Next.js, 20+ frameworks)
+- Test-Driven Development (TDD) task generation with RED-GREEN-REFACTOR workflow
+- SOLID, DRY, KISS, YAGNI coding principles enforcement
+- OWASP Top 10 security checklist integration
+- 8 comprehensive steering documents for AI agent guidance
 
 ## Target Use Case
 This product enables AI-powered development teams to follow structured, spec-driven development workflows with comprehensive phase management, quality gates, and AI tool integration.

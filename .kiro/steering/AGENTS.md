@@ -44,6 +44,7 @@ All agents must:
    - `structure.md` - File organization and code patterns
    - `linus-review.md` - Code quality review principles
    - `commit.md` - Commit message standards
+   - **`security-check.md` - OWASP Top 10 security checklist (REQUIRED for code generation and review)**
    - **`tdd-guideline.md` - Test-Driven Development workflow (REQUIRED for all new features)**
    - **`principles.md` - Core coding principles (SOLID, DRY, KISS, YAGNI, Separation of Concerns, Modularity)**
 2. Check current workflow phase before proceeding
