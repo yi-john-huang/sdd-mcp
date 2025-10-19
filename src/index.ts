@@ -32,6 +32,7 @@ import { PluginManager } from './infrastructure/plugins/PluginManager';
 import { HookSystem } from './infrastructure/plugins/HookSystem';
 import { PluginToolRegistry } from './infrastructure/plugins/PluginToolRegistry';
 import { PluginSteeringRegistry } from './infrastructure/plugins/PluginSteeringRegistry';
+import { ensureStaticSteeringDocuments } from './application/services/staticSteering.js';
 
 export async function createMCPServer() {
   const container = createContainer();
@@ -346,10 +347,38 @@ async function createSimpleMCPServer() {
 async function handleSteeringSimplified(args: any) {
   const fs = await import('fs');
   const path = await import('path');
+  const fsPromises = fs.promises;
+  const projectPath = process.cwd();
+  const stubSteeringService = {
+    async createSteeringDocument(
+      projectDir: string,
+      config: {
+        name: string;
+        type: string;
+        mode: string;
+        content: string;
+        patterns?: string[];
+        priority?: number;
+      }
+    ) {
+      const docPath = path.join(projectDir, '.kiro', 'steering', config.name);
+      await fsPromises.mkdir(path.dirname(docPath), { recursive: true });
+      await fsPromises.writeFile(docPath, config.content, 'utf8');
+      return {
+        name: config.name,
+        path: docPath,
+        type: config.type,
+        mode: config.mode,
+        content: config.content,
+        patterns: config.patterns ?? [],
+        priority: config.priority ?? 50,
+        lastModified: new Date(),
+        isValid: true
+      } as any;
+    }
+  };
   
   try {
-    const projectPath = process.cwd();
-
     // Create .kiro/steering directory if it doesn't exist
     const steeringDir = path.join(projectPath, '.kiro', 'steering');
     if (!fs.existsSync(steeringDir)) {
@@ -504,22 +533,105 @@ Generated on: ${new Date().toISOString()}
     fs.writeFileSync(path.join(steeringDir, 'tech.md'), techContent);
     fs.writeFileSync(path.join(steeringDir, 'structure.md'), structureContent);
 
-    // Ensure static steering documents exist (exceptions to dynamic rule)
-    const linusPath = path.join(steeringDir, 'linus-review.md');
-    if (!fs.existsSync(linusPath)) {
-      fs.writeFileSync(linusPath, `# Linus Torvalds Code Review Steering Document\n\nFollow Linus-style pragmatism and simplicity. Never break userspace. Keep functions focused, minimize indentation, and eliminate special cases. Apply 5-layer analysis: Data structures, special cases, complexity, breaking changes, practicality.`);
-    }
-    const commitPath = path.join(steeringDir, 'commit.md');
-    if (!fs.existsSync(commitPath)) {
-      fs.writeFileSync(commitPath, `# Commit Message Guidelines\n\nUse conventional type prefixes (docs, chore, feat, fix, refactor, test, style, perf, ci). Format: <type>(<scope>): <subject>\n\nKeep subjects < 72 chars, imperative mood, and add body/footer when needed.`);
-    }
-    const securityPath = path.join(steeringDir, 'security-check.md');
-    if (!fs.existsSync(securityPath)) {
-      fs.writeFileSync(securityPath, `# Security Check (OWASP Top 10 Aligned)\n\nUse this checklist during code generation and review. Avoid OWASP Top 10 issues by design.\n\n## A01: Broken Access Control\n- Enforce least privilege; validate authorization on every request/path\n- No client-side trust; never rely on hidden fields or disabled UI\n\n## A02: Cryptographic Failures\n- Use HTTPS/TLS; do not roll your own crypto\n- Store secrets in env vars/secret stores; never commit secrets\n\n## A03: Injection\n- Use parameterized queries/ORM and safe template APIs\n- Sanitize/validate untrusted input; avoid string concatenation in queries\n\n## A04: Insecure Design\n- Threat model critical flows; add security requirements to design\n- Fail secure; disable features by default until explicitly enabled\n\n## A05: Security Misconfiguration\n- Disable debug modes in prod; set secure headers (CSP, HSTS, X-Content-Type-Options)\n- Pin dependencies and lock versions; no default credentials\n\n## A06: Vulnerable & Outdated Components\n- Track SBOM/dependencies; run npm audit or a scanner regularly and patch\n- Prefer maintained libraries; remove unused deps\n\n## A07: Identification & Authentication Failures\n- Use vetted auth (OIDC/OAuth2); enforce MFA where applicable\n- Secure session handling (HttpOnly, Secure, SameSite cookies)\n\n## A08: Software & Data Integrity Failures\n- Verify integrity of third-party artifacts; signed releases when possible\n- Protect CI/CD: signed commits/tags, restricted tokens, principle of least privilege\n\n## A09: Security Logging & Monitoring Failures\n- Log authz/authn events and errors without sensitive data\n- Add alerts for suspicious activity; retain logs per policy\n\n## A10: Server-Side Request Forgery (SSRF)\n- Validate/deny-list outbound destinations; no direct fetch to arbitrary URLs\n- Use network egress controls; fetch via vetted proxies when needed\n\n## General Practices\n- Validate inputs (schema, length, type) and outputs (encoding)\n- Handle errors without leaking stack traces or secrets\n- Use content security best practices for templates/HTML\n- Add security tests where feasible (authz, input validation)\n`);
-    }
-    const principlesPath = path.join(steeringDir, 'principles.md');
-    if (!fs.existsSync(principlesPath)) {
-      fs.writeFileSync(principlesPath, `# Core Coding Principles and Patterns\n\nFollow SOLID, DRY, KISS, YAGNI, Separation of Concerns, and Modularity in all code.\n\n## SOLID Principles\n- **S**ingle Responsibility: One class, one reason to change\n- **O**pen/Closed: Open for extension, closed for modification\n- **L**iskov Substitution: Subtypes must be substitutable for base types\n- **I**nterface Segregation: Small, focused interfaces\n- **D**ependency Inversion: Depend on abstractions, not concretions\n\n## DRY (Don't Repeat Yourself)\nExtract common logic. Every knowledge piece has one authoritative representation.\n\n## KISS (Keep It Simple, Stupid)\nSimplicity over complexity. Avoid over-engineering.\n\n## YAGNI (You Aren't Gonna Need It)\nImplement only what's needed now. No speculative features.\n\n## Separation of Concerns\nSeparate presentation, business logic, and data access layers.\n\n## Modularity\nHigh cohesion, low coupling. Encapsulate implementation details.\n\n## Review Checklist\n- [ ] Single Responsibility (SRP)\n- [ ] Can extend without modifying (OCP)\n- [ ] Dependencies use abstractions (DIP)\n- [ ] No duplicated logic (DRY)\n- [ ] Simple solution (KISS)\n- [ ] Only needed features (YAGNI)\n- [ ] Concerns separated (SoC)\n- [ ] Modules cohesive & loosely coupled\n\nRefer to full principles.md for detailed examples and language-specific guidance.\n`);
+    await ensureStaticSteeringDocuments(projectPath, stubSteeringService as any);
+
+    // Ensure AGENTS.md exists (based on CLAUDE.md if available)
+    const agentsPath = path.join(projectPath, 'AGENTS.md');
+    if (!fs.existsSync(agentsPath)) {
+      const claudePath = path.join(projectPath, 'CLAUDE.md');
+      let agentsContent = '';
+
+      if (fs.existsSync(claudePath)) {
+        const claudeContent = fs.readFileSync(claudePath, 'utf8');
+        agentsContent = claudeContent
+          .replace(/# Claude Code Spec-Driven Development/g, '# AI Agent Spec-Driven Development')
+          .replace(/Claude Code/g, 'AI Agent')
+          .replace(/claude code/g, 'ai agent')
+          .replace(/\.claude\//g, '.ai agent/')
+          .replace(/\/claude/g, '/agent');
+      } else {
+        agentsContent = `# AI Agent Spec-Driven Development
+
+Kiro-style Spec Driven Development implementation using ai agent slash commands, hooks and agents.
+
+## Project Context
+
+### Paths
+- Steering: \`.kiro/steering/\`
+- Specs: \`.kiro/specs/\`
+- Commands: \`.ai agent/commands/\`
+
+### Steering vs Specification
+
+**Steering** (\`.kiro/steering/\`) - Guide AI with project-wide rules and context
+**Specs** (\`.kiro/specs/\`) - Formalize development process for individual features
+
+### Active Specifications
+- Check \`.kiro/specs/\` for active specifications
+- Use \`/kiro:spec-status [feature-name]\` to check progress
+
+**Current Specifications:**
+- \`mcp-sdd-server\`: MCP server for spec-driven development across AI-agent CLIs and IDEs
+
+## Development Guidelines
+- Think in English, generate responses in English
+
+## Workflow
+
+### Phase 0: Steering (Optional)
+\`/kiro:steering\` - Create/update steering documents
+\`/kiro:steering-custom\` - Create custom steering for specialized contexts
+
+Note: Optional for new features or small additions. You can proceed directly to spec-init.
+
+### Phase 1: Specification Creation
+1. \`/kiro:spec-init [detailed description]\` - Initialize spec with detailed project description
+2. \`/kiro:spec-requirements [feature]\` - Generate requirements document
+3. \`/kiro:spec-design [feature]\` - Interactive: "Have you reviewed requirements.md? [y/N]"
+4. \`/kiro:spec-tasks [feature]\` - Interactive: Confirms both requirements and design review
+
+### Phase 2: Progress Tracking
+\`/kiro:spec-status [feature]\` - Check current progress and phases
+
+## Development Rules
+1. **Consider steering**: Run \`/kiro:steering\` before major development (optional for new features)
+2. **Follow 3-phase approval workflow**: Requirements → Design → Tasks → Implementation
+3. **Approval required**: Each phase requires human review (interactive prompt or manual)
+4. **No skipping phases**: Design requires approved requirements; Tasks require approved design
+5. **Update task status**: Mark tasks as completed when working on them
+6. **Keep steering current**: Run \`/kiro:steering\` after significant changes
+7. **Check spec compliance**: Use \`/kiro:spec-status\` to verify alignment
+
+## Steering Configuration
+
+### Current Steering Files
+Managed by \`/kiro:steering\` command. Updates here reflect command changes.
+
+### Active Steering Files
+- \`product.md\`: Always included - Product context and business objectives
+- \`tech.md\`: Always included - Technology stack and architectural decisions
+- \`structure.md\`: Always included - File organization and code patterns
+- \`linus-review.md\`: Always included - Ensuring code quality of the projects
+- \`commit.md\`: Always included - Ensuring the commit / merge request / pull request title and message context.
+
+### Custom Steering Files
+<!-- Added by /kiro:steering-custom command -->
+<!-- Format:
+- \`filename.md\`: Mode - Pattern(s) - Description
+  Mode: Always|Conditional|Manual
+  Pattern: File patterns for Conditional mode
+-->
+
+### Inclusion Modes
+- **Always**: Loaded in every interaction (default)
+- **Conditional**: Loaded for specific file patterns (e.g., "*.test.js")
+- **Manual**: Reference with \`@filename.md\` syntax
+
+Generated on: ${new Date().toISOString()}
+`;
+      }
+
+      fs.writeFileSync(agentsPath, agentsContent);
     }
 
     return {
