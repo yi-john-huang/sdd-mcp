@@ -1,25 +1,41 @@
-import { injectable, inject } from 'inversify';
-import { v4 as uuidv4 } from 'uuid';
-import { TYPES } from '../../infrastructure/di/types.js';
-import { FileSystemPort, LoggerPort } from '../../domain/ports.js';
+import { injectable, inject } from "inversify";
+import { TYPES } from "../../infrastructure/di/types.js";
+import { FileSystemPort, LoggerPort } from "../../domain/ports.js";
 import {
   ClarificationQuestion,
   ClarificationAnalysis,
   EnrichedProjectDescription,
   ClarificationResult,
   QuestionCategory,
-  AmbiguousTerm
-} from '../../domain/types.js';
+  AmbiguousTerm,
+} from "../../domain/types.js";
+import {
+  QUALITY_SCORE_WEIGHTS,
+  ANSWER_VALIDATION,
+  PATTERN_DETECTION,
+  AMBIGUOUS_TERMS,
+} from "./clarification-constants.js";
 
 export interface ClarificationAnswers {
   [questionId: string]: string;
+}
+
+export interface AnswerValidationResult {
+  valid: boolean;
+  missingRequired: string[];
+  tooShort: Array<{
+    question: string;
+    minLength: number;
+    currentLength: number;
+  }>;
+  containsInvalidContent: string[];
 }
 
 @injectable()
 export class RequirementsClarificationService {
   constructor(
     @inject(TYPES.FileSystemPort) private readonly fileSystem: FileSystemPort,
-    @inject(TYPES.LoggerPort) private readonly logger: LoggerPort
+    @inject(TYPES.LoggerPort) private readonly logger: LoggerPort,
   ) {}
 
   /**
@@ -27,13 +43,13 @@ export class RequirementsClarificationService {
    */
   async analyzeDescription(
     description: string,
-    projectPath?: string
+    projectPath?: string,
   ): Promise<ClarificationResult> {
     const correlationId = uuidv4();
 
-    this.logger.info('Analyzing project description for clarification needs', {
+    this.logger.info("Analyzing project description for clarification needs", {
       correlationId,
-      descriptionLength: description.length
+      descriptionLength: description.length,
     });
 
     // Load existing steering docs for context
@@ -42,16 +58,16 @@ export class RequirementsClarificationService {
     // Perform analysis
     const analysis = this.performAnalysis(description, steeringContext);
 
-    this.logger.debug('Description analysis completed', {
+    this.logger.debug("Description analysis completed", {
       correlationId,
       qualityScore: analysis.qualityScore,
-      needsClarification: analysis.needsClarification
+      needsClarification: analysis.needsClarification,
     });
 
     if (!analysis.needsClarification) {
       return {
         needsClarification: false,
-        analysis
+        analysis,
       };
     }
 
@@ -61,7 +77,7 @@ export class RequirementsClarificationService {
     return {
       needsClarification: true,
       questions,
-      analysis
+      analysis,
     };
   }
 
@@ -70,7 +86,7 @@ export class RequirementsClarificationService {
    */
   validateAnswers(
     questions: ClarificationQuestion[],
-    answers: ClarificationAnswers
+    answers: ClarificationAnswers,
   ): { valid: boolean; missingRequired: string[] } {
     const missingRequired: string[] = [];
 
@@ -82,7 +98,7 @@ export class RequirementsClarificationService {
 
     return {
       valid: missingRequired.length === 0,
-      missingRequired
+      missingRequired,
     };
   }
 
@@ -92,21 +108,41 @@ export class RequirementsClarificationService {
   synthesizeDescription(
     originalDescription: string,
     questions: ClarificationQuestion[],
-    answers: ClarificationAnswers
+    answers: ClarificationAnswers,
   ): EnrichedProjectDescription {
     const correlationId = uuidv4();
 
-    this.logger.info('Synthesizing enriched project description', {
+    this.logger.info("Synthesizing enriched project description", {
       correlationId,
-      questionCount: questions.length
+      questionCount: questions.length,
     });
 
     // Extract answers by category
-    const why = this.extractAnswersByCategory(questions, answers, QuestionCategory.WHY);
-    const who = this.extractAnswersByCategory(questions, answers, QuestionCategory.WHO);
-    const what = this.extractAnswersByCategory(questions, answers, QuestionCategory.WHAT);
-    const how = this.extractAnswersByCategory(questions, answers, QuestionCategory.HOW);
-    const successCriteria = this.extractAnswersByCategory(questions, answers, QuestionCategory.SUCCESS);
+    const why = this.extractAnswersByCategory(
+      questions,
+      answers,
+      QuestionCategory.WHY,
+    );
+    const who = this.extractAnswersByCategory(
+      questions,
+      answers,
+      QuestionCategory.WHO,
+    );
+    const what = this.extractAnswersByCategory(
+      questions,
+      answers,
+      QuestionCategory.WHAT,
+    );
+    const how = this.extractAnswersByCategory(
+      questions,
+      answers,
+      QuestionCategory.HOW,
+    );
+    const successCriteria = this.extractAnswersByCategory(
+      questions,
+      answers,
+      QuestionCategory.SUCCESS,
+    );
 
     // Build enriched description
     const enriched = this.buildEnrichedDescription({
@@ -115,7 +151,7 @@ export class RequirementsClarificationService {
       who,
       what,
       how,
-      successCriteria
+      successCriteria,
     });
 
     return {
@@ -125,7 +161,7 @@ export class RequirementsClarificationService {
       what,
       how: how || undefined,
       successCriteria,
-      enriched
+      enriched,
     };
   }
 
@@ -134,7 +170,7 @@ export class RequirementsClarificationService {
    */
   private performAnalysis(
     description: string,
-    steeringContext: SteeringContext
+    steeringContext: SteeringContext,
   ): ClarificationAnalysis {
     const missingElements: string[] = [];
     const ambiguousTerms: AmbiguousTerm[] = [];
@@ -142,25 +178,25 @@ export class RequirementsClarificationService {
     // Check for WHY (business justification, problem statement)
     const hasWhy = this.detectWhy(description);
     if (!hasWhy && !steeringContext.hasProductContext) {
-      missingElements.push('Business justification or problem statement (WHY)');
+      missingElements.push("Business justification or problem statement (WHY)");
     }
 
     // Check for WHO (target users)
     const hasWho = this.detectWho(description);
     if (!hasWho && !steeringContext.hasTargetUsers) {
-      missingElements.push('Target users or personas (WHO)');
+      missingElements.push("Target users or personas (WHO)");
     }
 
     // Check for WHAT (core features, scope)
     const hasWhat = this.detectWhat(description);
     if (!hasWhat) {
-      missingElements.push('Core features or scope definition (WHAT)');
+      missingElements.push("Core features or scope definition (WHAT)");
     }
 
     // Check for success criteria
     const hasSuccessCriteria = this.detectSuccessCriteria(description);
     if (!hasSuccessCriteria) {
-      missingElements.push('Success criteria or metrics');
+      missingElements.push("Success criteria or metrics");
     }
 
     // Detect ambiguous terms
@@ -173,7 +209,7 @@ export class RequirementsClarificationService {
       hasWhat,
       hasSuccessCriteria,
       ambiguousTermCount: ambiguousTerms.length,
-      descriptionLength: description.length
+      descriptionLength: description.length,
     });
 
     // Need clarification if score < 70 or missing critical elements
@@ -187,7 +223,7 @@ export class RequirementsClarificationService {
       hasWhy,
       hasWho,
       hasWhat,
-      hasSuccessCriteria
+      hasSuccessCriteria,
     };
   }
 
@@ -196,7 +232,7 @@ export class RequirementsClarificationService {
    */
   private generateQuestions(
     analysis: ClarificationAnalysis,
-    steeringContext: SteeringContext
+    steeringContext: SteeringContext,
   ): ClarificationQuestion[] {
     const questions: ClarificationQuestion[] = [];
 
@@ -205,27 +241,29 @@ export class RequirementsClarificationService {
       questions.push({
         id: uuidv4(),
         category: QuestionCategory.WHY,
-        question: 'What business problem does this project solve? Why is it needed?',
-        why: 'Understanding the business justification ensures we build the right solution',
+        question:
+          "What business problem does this project solve? Why is it needed?",
+        why: "Understanding the business justification ensures we build the right solution",
         examples: [
-          'Our customer support team spends 5 hours/day on repetitive inquiries',
-          'Users are abandoning checkout because the process takes too long',
-          'Developers waste time searching for undocumented APIs'
+          "Our customer support team spends 5 hours/day on repetitive inquiries",
+          "Users are abandoning checkout because the process takes too long",
+          "Developers waste time searching for undocumented APIs",
         ],
-        required: true
+        required: true,
       });
 
       questions.push({
         id: uuidv4(),
         category: QuestionCategory.WHY,
-        question: 'What value does this project provide to users or the business?',
-        why: 'Clarifying value proposition helps prioritize features and measure success',
+        question:
+          "What value does this project provide to users or the business?",
+        why: "Clarifying value proposition helps prioritize features and measure success",
         examples: [
-          'Reduce support ticket volume by 40%',
-          'Increase conversion rate by improving checkout speed',
-          'Save developers 2 hours/week with better documentation'
+          "Reduce support ticket volume by 40%",
+          "Increase conversion rate by improving checkout speed",
+          "Save developers 2 hours/week with better documentation",
         ],
-        required: true
+        required: true,
       });
     }
 
@@ -234,14 +272,14 @@ export class RequirementsClarificationService {
       questions.push({
         id: uuidv4(),
         category: QuestionCategory.WHO,
-        question: 'Who are the primary users of this project?',
-        why: 'Knowing the target users shapes UX, features, and technical decisions',
+        question: "Who are the primary users of this project?",
+        why: "Knowing the target users shapes UX, features, and technical decisions",
         examples: [
-          'Customer support agents using ticketing systems',
-          'E-commerce shoppers on mobile devices',
-          'Backend developers integrating APIs'
+          "Customer support agents using ticketing systems",
+          "E-commerce shoppers on mobile devices",
+          "Backend developers integrating APIs",
         ],
-        required: true
+        required: true,
       });
     }
 
@@ -250,27 +288,27 @@ export class RequirementsClarificationService {
       questions.push({
         id: uuidv4(),
         category: QuestionCategory.WHAT,
-        question: 'What are the 3-5 core features for the MVP?',
-        why: 'Defining MVP scope prevents scope creep and ensures focused delivery',
+        question: "What are the 3-5 core features for the MVP?",
+        why: "Defining MVP scope prevents scope creep and ensures focused delivery",
         examples: [
-          'Auto-response system, ticket categorization, analytics dashboard',
-          'Product search, cart management, payment integration',
-          'API explorer, code examples, interactive documentation'
+          "Auto-response system, ticket categorization, analytics dashboard",
+          "Product search, cart management, payment integration",
+          "API explorer, code examples, interactive documentation",
         ],
-        required: true
+        required: true,
       });
 
       questions.push({
         id: uuidv4(),
         category: QuestionCategory.WHAT,
-        question: 'What is explicitly OUT OF SCOPE for this project?',
-        why: 'Boundary definition prevents feature creep and manages expectations',
+        question: "What is explicitly OUT OF SCOPE for this project?",
+        why: "Boundary definition prevents feature creep and manages expectations",
         examples: [
-          'Admin panel (future phase)',
-          'Mobile app (web only for MVP)',
-          'Multi-language support (English only initially)'
+          "Admin panel (future phase)",
+          "Mobile app (web only for MVP)",
+          "Multi-language support (English only initially)",
         ],
-        required: false
+        required: false,
       });
     }
 
@@ -279,14 +317,14 @@ export class RequirementsClarificationService {
       questions.push({
         id: uuidv4(),
         category: QuestionCategory.SUCCESS,
-        question: 'How will you measure if this project is successful?',
-        why: 'Quantifiable metrics enable objective evaluation and iteration',
+        question: "How will you measure if this project is successful?",
+        why: "Quantifiable metrics enable objective evaluation and iteration",
         examples: [
-          'Support ticket volume reduced by 30% within 3 months',
-          'Page load time under 2 seconds, conversion rate > 3%',
-          'API documentation rated 4.5/5 stars by developers'
+          "Support ticket volume reduced by 30% within 3 months",
+          "Page load time under 2 seconds, conversion rate > 3%",
+          "API documentation rated 4.5/5 stars by developers",
         ],
-        required: true
+        required: true,
       });
     }
 
@@ -295,14 +333,15 @@ export class RequirementsClarificationService {
       questions.push({
         id: uuidv4(),
         category: QuestionCategory.HOW,
-        question: 'Are there any technical constraints or preferences? (language, platform, existing systems)',
-        why: 'Technical constraints shape architecture and technology choices',
+        question:
+          "Are there any technical constraints or preferences? (language, platform, existing systems)",
+        why: "Technical constraints shape architecture and technology choices",
         examples: [
-          'Must integrate with existing Salesforce CRM',
-          'TypeScript + React preferred, hosted on AWS',
-          'Python-based, needs to run on-premise'
+          "Must integrate with existing Salesforce CRM",
+          "TypeScript + React preferred, hosted on AWS",
+          "Python-based, needs to run on-premise",
         ],
-        required: false
+        required: false,
       });
     }
 
@@ -312,9 +351,9 @@ export class RequirementsClarificationService {
         id: uuidv4(),
         category: QuestionCategory.WHAT,
         question: `You mentioned "${ambiguous.term}". ${ambiguous.suggestion}`,
-        why: 'Removing ambiguity ensures shared understanding',
+        why: "Removing ambiguity ensures shared understanding",
         examples: ambiguous.context ? [ambiguous.context] : undefined,
-        required: false
+        required: false,
       });
     }
 
@@ -324,19 +363,21 @@ export class RequirementsClarificationService {
   /**
    * Load steering documents for context
    */
-  private async loadSteeringContext(projectPath?: string): Promise<SteeringContext> {
+  private async loadSteeringContext(
+    projectPath?: string,
+  ): Promise<SteeringContext> {
     if (!projectPath) {
       return {
         hasProductContext: false,
         hasTargetUsers: false,
-        hasTechContext: false
+        hasTechContext: false,
       };
     }
 
     const context: SteeringContext = {
       hasProductContext: false,
       hasTargetUsers: false,
-      hasTechContext: false
+      hasTechContext: false,
     };
 
     try {
@@ -345,7 +386,9 @@ export class RequirementsClarificationService {
       if (await this.fileSystem.exists(productPath)) {
         const productContent = await this.fileSystem.readFile(productPath);
         context.hasProductContext = productContent.length > 200; // Has substantial content
-        context.hasTargetUsers = /target\s+users|user\s+persona/i.test(productContent);
+        context.hasTargetUsers = /target\s+users|user\s+persona/i.test(
+          productContent,
+        );
       }
 
       // Check tech.md
@@ -355,8 +398,8 @@ export class RequirementsClarificationService {
         context.hasTechContext = techContent.length > 200;
       }
     } catch (error) {
-      this.logger.warn('Failed to load steering context', {
-        error: (error as Error).message
+      this.logger.warn("Failed to load steering context", {
+        error: (error as Error).message,
       });
     }
 
@@ -381,10 +424,10 @@ export class RequirementsClarificationService {
       /\bjustification/i,
       /\bgoal\b/i,
       /\bobjective\b/i,
-      /\bpurpose\b/i
+      /\bpurpose\b/i,
     ];
 
-    return whyPatterns.some(pattern => pattern.test(description));
+    return whyPatterns.some((pattern) => pattern.test(description));
   }
 
   /**
@@ -398,10 +441,10 @@ export class RequirementsClarificationService {
       /\bpersona[s]?\b/i,
       /\bstakeholder[s]?\b/i,
       /\b(developer|designer|admin|manager)[s]?\b/i,
-      /\bfor\s+(teams?|companies|individuals)/i
+      /\bfor\s+(teams?|companies|individuals)/i,
     ];
 
-    return whoPatterns.some(pattern => pattern.test(description));
+    return whoPatterns.some((pattern) => pattern.test(description));
   }
 
   /**
@@ -418,10 +461,10 @@ export class RequirementsClarificationService {
       /\ballow[s]?\b/i,
       /\benable[s]?\b/i,
       /\bMVP\b/i,
-      /\bscope\b/i
+      /\bscope\b/i,
     ];
 
-    return whatPatterns.some(pattern => pattern.test(description));
+    return whatPatterns.some((pattern) => pattern.test(description));
   }
 
   /**
@@ -435,10 +478,10 @@ export class RequirementsClarificationService {
       /\bsuccess\s+(criteria|metric)/i,
       /\b\d+%/,
       /\bperformance\s+target/i,
-      /\bgoal[s]?\b.*\d+/i
+      /\bgoal[s]?\b.*\d+/i,
     ];
 
-    return successPatterns.some(pattern => pattern.test(description));
+    return successPatterns.some((pattern) => pattern.test(description));
   }
 
   /**
@@ -450,36 +493,44 @@ export class RequirementsClarificationService {
     const ambiguityMap = [
       {
         pattern: /\bfast\b/gi,
-        suggestion: 'Can you specify a target response time? (e.g., "< 200ms API response", "page loads in 2s")'
+        suggestion:
+          'Can you specify a target response time? (e.g., "< 200ms API response", "page loads in 2s")',
       },
       {
         pattern: /\bscalable\b/gi,
-        suggestion: 'What scale do you need to support? (e.g., "1000 concurrent users", "100k requests/hour")'
+        suggestion:
+          'What scale do you need to support? (e.g., "1000 concurrent users", "100k requests/hour")',
       },
       {
         pattern: /\buser[- ]friendly\b/gi,
-        suggestion: 'What makes it user-friendly? (e.g., "3-click checkout", "mobile-responsive", "keyboard shortcuts")'
+        suggestion:
+          'What makes it user-friendly? (e.g., "3-click checkout", "mobile-responsive", "keyboard shortcuts")',
       },
       {
         pattern: /\beasy\s+to\s+use\b/gi,
-        suggestion: 'What does easy mean for your users? (e.g., "no training required", "5-minute onboarding", "intuitive navigation")'
+        suggestion:
+          'What does easy mean for your users? (e.g., "no training required", "5-minute onboarding", "intuitive navigation")',
       },
       {
         pattern: /\bhigh\s+quality\b/gi,
-        suggestion: 'How do you define quality? (e.g., "zero critical bugs in production", "90% test coverage", "< 5% error rate")'
+        suggestion:
+          'How do you define quality? (e.g., "zero critical bugs in production", "90% test coverage", "< 5% error rate")',
       },
       {
         pattern: /\breliable\b/gi,
-        suggestion: 'What reliability level do you need? (e.g., "99.9% uptime", "zero data loss", "automatic failover")'
+        suggestion:
+          'What reliability level do you need? (e.g., "99.9% uptime", "zero data loss", "automatic failover")',
       },
       {
         pattern: /\bsecure\b/gi,
-        suggestion: 'What security requirements apply? (e.g., "SOC 2 compliant", "end-to-end encryption", "OAuth 2.0")'
+        suggestion:
+          'What security requirements apply? (e.g., "SOC 2 compliant", "end-to-end encryption", "OAuth 2.0")',
       },
       {
         pattern: /\bmodern\b/gi,
-        suggestion: 'What technologies or approaches are you considering? (e.g., "React + TypeScript", "microservices", "serverless")'
-      }
+        suggestion:
+          'What technologies or approaches are you considering? (e.g., "React + TypeScript", "microservices", "serverless")',
+      },
     ];
 
     for (const { pattern, suggestion } of ambiguityMap) {
@@ -490,7 +541,7 @@ export class RequirementsClarificationService {
           ambiguousTerms.push({
             term: match,
             context,
-            suggestion
+            suggestion,
           });
         }
       }
@@ -504,12 +555,12 @@ export class RequirementsClarificationService {
    */
   private extractContext(text: string, term: string): string {
     const index = text.toLowerCase().indexOf(term.toLowerCase());
-    if (index === -1) return '';
+    if (index === -1) return "";
 
     const start = Math.max(0, index - 30);
     const end = Math.min(text.length, index + term.length + 30);
 
-    return '...' + text.slice(start, end).trim() + '...';
+    return "..." + text.slice(start, end).trim() + "...";
   }
 
   /**
@@ -555,14 +606,14 @@ export class RequirementsClarificationService {
   private extractAnswersByCategory(
     questions: ClarificationQuestion[],
     answers: ClarificationAnswers,
-    category: QuestionCategory
+    category: QuestionCategory,
   ): string {
-    const categoryQuestions = questions.filter(q => q.category === category);
+    const categoryQuestions = questions.filter((q) => q.category === category);
     const categoryAnswers = categoryQuestions
-      .map(q => answers[q.id])
-      .filter(a => a && a.trim().length > 0);
+      .map((q) => answers[q.id])
+      .filter((a) => a && a.trim().length > 0);
 
-    return categoryAnswers.join(' ');
+    return categoryAnswers.join(" ");
   }
 
   /**
@@ -608,7 +659,7 @@ export class RequirementsClarificationService {
       parts.push(`## Success Criteria\n${components.successCriteria}`);
     }
 
-    return parts.join('\n\n');
+    return parts.join("\n\n");
   }
 }
 
