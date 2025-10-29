@@ -5,6 +5,37 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.5.1] - 2025-10-30
+
+### Fixed
+- **Enhanced Input Validation**: `validateAnswers` now checks for empty/too-short answers (< 10 chars) and potentially malicious content (XSS patterns)
+  - Returns detailed `AnswerValidationResult` with `tooShort` and `containsInvalidContent` arrays
+  - Prevents security issues from user-provided clarification answers
+- **Improved Error Handling**: `loadSteeringContext` now properly handles failures and always returns valid defaults
+  - Individual try-catch blocks for product.md and tech.md loading
+  - Better error logging with debug-level messages for individual file failures
+  - Guaranteed non-null return value
+- **Code Quality Improvements**: Extracted magic numbers and duplicated patterns to constants
+  - Created `clarification-constants.ts` with `QUALITY_SCORE_WEIGHTS`, `ANSWER_VALIDATION`, `PATTERN_DETECTION`, `AMBIGUOUS_TERMS`
+  - Replaced inline regex patterns with pre-compiled constants for better performance
+  - All scoring thresholds now configurable in one place
+- **Stable Question IDs**: Replaced UUID-based IDs with semantic identifiers
+  - Question IDs: `why_problem`, `why_value`, `who_users`, `what_mvp_features`, `what_out_of_scope`, `success_metrics`, `how_tech_constraints`, `ambiguity_1-3`
+  - Predictable IDs improve testability and debugging
+- **Jest Module Resolution**: Fixed `moduleNameMapper` pattern to properly resolve `.js` imports to TypeScript source files
+  - Pattern now correctly handles all relative imports without catching node_modules
+
+### Changed
+- **Type Safety**: Moved `ClarificationAnswers` and `AnswerValidationResult` to domain types for better reusability
+- **Test Coverage**: Updated tests to verify new validation fields (`tooShort`, `containsInvalidContent`)
+- **Build Configuration**: All 16 tests passing with TypeScript compilation successful
+
+### Technical
+- **Maintainability**: Reduced code duplication across service, adapter, and MCP server
+- **Security**: Added XSS pattern detection for user-provided answers
+- **Performance**: Pre-compiled regex patterns reduce repeated compilation overhead
+- **Configuration**: Centralized constants allow easy tuning of quality thresholds
+
 ## [1.5.0] - 2025-10-30
 
 ### Added

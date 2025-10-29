@@ -9,12 +9,9 @@ import { TemplateService } from "../../application/services/TemplateService.js";
 import { QualityService } from "../../application/services/QualityService.js";
 import { SteeringDocumentService } from "../../application/services/SteeringDocumentService.js";
 import { CodebaseAnalysisService } from "../../application/services/CodebaseAnalysisService.js";
-import {
-  RequirementsClarificationService,
-  ClarificationAnswers,
-} from "../../application/services/RequirementsClarificationService.js";
+import { RequirementsClarificationService } from "../../application/services/RequirementsClarificationService.js";
 import { LoggerPort } from "../../domain/ports.js";
-import { WorkflowPhase } from "../../domain/types.js";
+import { WorkflowPhase, ClarificationAnswers } from "../../domain/types.js";
 import { ensureStaticSteeringDocuments } from "../../application/services/staticSteering.js";
 
 export interface SDDToolHandler {

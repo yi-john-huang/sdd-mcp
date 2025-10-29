@@ -1,8 +1,8 @@
-import { RequirementsClarificationService } from '../../application/services/RequirementsClarificationService';
-import { FileSystemPort, LoggerPort } from '../../domain/ports';
-import { QuestionCategory } from '../../domain/types';
+import { RequirementsClarificationService } from "../../application/services/RequirementsClarificationService";
+import { FileSystemPort, LoggerPort } from "../../domain/ports";
+import { QuestionCategory } from "../../domain/types";
 
-describe('RequirementsClarificationService', () => {
+describe("RequirementsClarificationService", () => {
   let service: RequirementsClarificationService;
   let mockFileSystem: jest.Mocked<FileSystemPort>;
   let mockLogger: jest.Mocked<LoggerPort>;
@@ -27,8 +27,8 @@ describe('RequirementsClarificationService', () => {
     service = new RequirementsClarificationService(mockFileSystem, mockLogger);
   });
 
-  describe('analyzeDescription', () => {
-    it('should identify a complete description and not require clarification', async () => {
+  describe("analyzeDescription", () => {
+    it("should identify a complete description and not require clarification", async () => {
       const description = `
         We need to build a customer support ticketing system because our support team
         spends 5 hours/day on repetitive inquiries. This will reduce ticket volume by 40%.
@@ -47,8 +47,8 @@ describe('RequirementsClarificationService', () => {
       expect(result.analysis?.qualityScore).toBeGreaterThanOrEqual(70);
     });
 
-    it('should identify a vague description and require clarification', async () => {
-      const description = 'Build a fast and scalable web app';
+    it("should identify a vague description and require clarification", async () => {
+      const description = "Build a fast and scalable web app";
 
       const result = await service.analyzeDescription(description);
 
@@ -58,44 +58,56 @@ describe('RequirementsClarificationService', () => {
       expect(result.analysis?.qualityScore).toBeLessThan(70);
     });
 
-    it('should detect missing WHY and generate appropriate questions', async () => {
-      const description = 'A mobile app for users with features like chat and notifications';
+    it("should detect missing WHY and generate appropriate questions", async () => {
+      const description =
+        "A mobile app for users with features like chat and notifications";
 
       const result = await service.analyzeDescription(description);
 
       expect(result.needsClarification).toBe(true);
       expect(result.analysis?.hasWhy).toBe(false);
 
-      const whyQuestions = result.questions?.filter(q => q.category === QuestionCategory.WHY);
+      const whyQuestions = result.questions?.filter(
+        (q) => q.category === QuestionCategory.WHY,
+      );
       expect(whyQuestions).toBeDefined();
       expect(whyQuestions!.length).toBeGreaterThan(0);
     });
 
-    it('should detect missing WHO and generate appropriate questions', async () => {
-      const description = 'Build a system to solve inventory tracking problems';
+    it("should detect missing WHO and generate appropriate questions", async () => {
+      const description = "Build a system to solve inventory tracking problems";
 
       const result = await service.analyzeDescription(description);
 
       expect(result.analysis?.hasWho).toBe(false);
 
-      const whoQuestions = result.questions?.filter(q => q.category === QuestionCategory.WHO);
+      const whoQuestions = result.questions?.filter(
+        (q) => q.category === QuestionCategory.WHO,
+      );
       expect(whoQuestions).toBeDefined();
       expect(whoQuestions!.length).toBeGreaterThan(0);
     });
 
-    it('should detect ambiguous terms', async () => {
-      const description = 'Build a fast, scalable, user-friendly platform';
+    it("should detect ambiguous terms", async () => {
+      const description = "Build a fast, scalable, user-friendly platform";
 
       const result = await service.analyzeDescription(description);
 
       expect(result.analysis?.ambiguousTerms).toBeDefined();
       expect(result.analysis!.ambiguousTerms.length).toBeGreaterThan(0);
 
-      const terms = result.analysis!.ambiguousTerms.map(t => t.term.toLowerCase());
-      expect(terms.some(t => t.includes('fast') || t.includes('scalable') || t.includes('user'))).toBe(true);
+      const terms = result.analysis!.ambiguousTerms.map((t) =>
+        t.term.toLowerCase(),
+      );
+      expect(
+        terms.some(
+          (t) =>
+            t.includes("fast") || t.includes("scalable") || t.includes("user"),
+        ),
+      ).toBe(true);
     });
 
-    it('should use steering context to avoid redundant questions', async () => {
+    it("should use steering context to avoid redundant questions", async () => {
       mockFileSystem.exists.mockResolvedValue(true);
       mockFileSystem.readFile.mockResolvedValue(`
         # Product Overview
@@ -103,73 +115,80 @@ describe('RequirementsClarificationService', () => {
         Business Goal: Increase sales productivity by 50%
       `);
 
-      const description = 'Build a CRM system';
-      const result = await service.analyzeDescription(description, '/test/path');
+      const description = "Build a CRM system";
+      const result = await service.analyzeDescription(
+        description,
+        "/test/path",
+      );
 
       // Should have fewer questions since steering provides context
-      const whoQuestions = result.questions?.filter(q => q.category === QuestionCategory.WHO);
+      const whoQuestions = result.questions?.filter(
+        (q) => q.category === QuestionCategory.WHO,
+      );
       // Might still have questions, but steering context is loaded
       expect(mockFileSystem.exists).toHaveBeenCalled();
     });
   });
 
-  describe('validateAnswers', () => {
-    it('should validate that all required questions are answered', () => {
+  describe("validateAnswers", () => {
+    it("should validate that all required questions are answered", () => {
       const questions = [
         {
-          id: 'q1',
+          id: "q1",
           category: QuestionCategory.WHY,
-          question: 'Why is this needed?',
-          why: 'Important',
-          required: true
+          question: "Why is this needed?",
+          why: "Important",
+          required: true,
         },
         {
-          id: 'q2',
+          id: "q2",
           category: QuestionCategory.WHO,
-          question: 'Who are the users?',
-          why: 'Important',
-          required: true
+          question: "Who are the users?",
+          why: "Important",
+          required: true,
         },
         {
-          id: 'q3',
+          id: "q3",
           category: QuestionCategory.WHAT,
-          question: 'Optional feature?',
-          why: 'Nice to have',
-          required: false
-        }
+          question: "Optional feature?",
+          why: "Nice to have",
+          required: false,
+        },
       ];
 
       const answers = {
-        q1: 'To solve problem X',
-        q2: 'Enterprise users'
+        q1: "To solve problem X",
+        q2: "Enterprise users",
       };
 
       const result = service.validateAnswers(questions, answers);
 
       expect(result.valid).toBe(true);
       expect(result.missingRequired).toHaveLength(0);
+      expect(result.tooShort).toHaveLength(0);
+      expect(result.containsInvalidContent).toHaveLength(0);
     });
 
-    it('should identify missing required answers', () => {
+    it("should identify missing required answers", () => {
       const questions = [
         {
-          id: 'q1',
+          id: "q1",
           category: QuestionCategory.WHY,
-          question: 'Why is this needed?',
-          why: 'Important',
-          required: true
+          question: "Why is this needed?",
+          why: "Important",
+          required: true,
         },
         {
-          id: 'q2',
+          id: "q2",
           category: QuestionCategory.WHO,
-          question: 'Who are the users?',
-          why: 'Important',
-          required: true
-        }
+          question: "Who are the users?",
+          why: "Important",
+          required: true,
+        },
       ];
 
       const answers = {
-        q1: 'To solve problem X'
+        q1: "To solve problem X",
         // q2 is missing
       };
 
@@ -177,79 +196,91 @@ describe('RequirementsClarificationService', () => {
 
       expect(result.valid).toBe(false);
       expect(result.missingRequired).toHaveLength(1);
-      expect(result.missingRequired[0]).toBe('Who are the users?');
+      expect(result.missingRequired[0]).toBe("Who are the users?");
+      expect(result.tooShort).toHaveLength(0);
+      expect(result.containsInvalidContent).toHaveLength(0);
     });
   });
 
-  describe('synthesizeDescription', () => {
-    it('should create an enriched description from original + answers', () => {
-      const originalDescription = 'Build a task management tool';
+  describe("synthesizeDescription", () => {
+    it("should create an enriched description from original + answers", () => {
+      const originalDescription = "Build a task management tool";
 
       const questions = [
         {
-          id: 'why1',
+          id: "why1",
           category: QuestionCategory.WHY,
-          question: 'Why is this needed?',
-          why: 'Business justification',
-          required: true
+          question: "Why is this needed?",
+          why: "Business justification",
+          required: true,
         },
         {
-          id: 'who1',
+          id: "who1",
           category: QuestionCategory.WHO,
-          question: 'Who are the users?',
-          why: 'Target audience',
-          required: true
+          question: "Who are the users?",
+          why: "Target audience",
+          required: true,
         },
         {
-          id: 'what1',
+          id: "what1",
           category: QuestionCategory.WHAT,
-          question: 'What are core features?',
-          why: 'Scope definition',
-          required: true
+          question: "What are core features?",
+          why: "Scope definition",
+          required: true,
         },
         {
-          id: 'success1',
+          id: "success1",
           category: QuestionCategory.SUCCESS,
-          question: 'How to measure success?',
-          why: 'Metrics',
-          required: true
-        }
+          question: "How to measure success?",
+          why: "Metrics",
+          required: true,
+        },
       ];
 
       const answers = {
-        why1: 'Our team wastes 2 hours/day on task tracking inefficiencies',
-        who1: 'Project managers and developers in agile teams',
-        what1: 'Task creation, assignment, status tracking, and sprint planning',
-        success1: 'Reduce time spent on task management by 50%, measured monthly'
+        why1: "Our team wastes 2 hours/day on task tracking inefficiencies",
+        who1: "Project managers and developers in agile teams",
+        what1:
+          "Task creation, assignment, status tracking, and sprint planning",
+        success1:
+          "Reduce time spent on task management by 50%, measured monthly",
       };
 
-      const result = service.synthesizeDescription(originalDescription, questions, answers);
+      const result = service.synthesizeDescription(
+        originalDescription,
+        questions,
+        answers,
+      );
 
       expect(result.original).toBe(originalDescription);
-      expect(result.why).toContain('2 hours/day');
-      expect(result.who).toContain('Project managers');
-      expect(result.what).toContain('Task creation');
-      expect(result.successCriteria).toContain('50%');
-      expect(result.enriched).toContain('Business Justification');
-      expect(result.enriched).toContain('Target Users');
-      expect(result.enriched).toContain('Core Features');
-      expect(result.enriched).toContain('Success Criteria');
+      expect(result.why).toContain("2 hours/day");
+      expect(result.who).toContain("Project managers");
+      expect(result.what).toContain("Task creation");
+      expect(result.successCriteria).toContain("50%");
+      expect(result.enriched).toContain("Business Justification");
+      expect(result.enriched).toContain("Target Users");
+      expect(result.enriched).toContain("Core Features");
+      expect(result.enriched).toContain("Success Criteria");
     });
 
-    it('should handle empty answers gracefully', () => {
-      const originalDescription = 'Build something';
+    it("should handle empty answers gracefully", () => {
+      const originalDescription = "Build something";
       const questions: any[] = [];
       const answers = {};
 
-      const result = service.synthesizeDescription(originalDescription, questions, answers);
+      const result = service.synthesizeDescription(
+        originalDescription,
+        questions,
+        answers,
+      );
 
       expect(result.original).toBe(originalDescription);
       expect(result.enriched).toContain(originalDescription);
     });
   });
 
-  describe('quality score calculation', () => {
-    it('should score complete descriptions highly', async () => {
+  describe("quality score calculation", () => {
+    it("should score complete descriptions highly", async () => {
       const description = `
         Problem: Customer support is overwhelmed with 500+ tickets/day (WHY)
         Users: Support agents and customers (WHO)
@@ -262,7 +293,7 @@ describe('RequirementsClarificationService', () => {
       expect(result.analysis?.qualityScore).toBeGreaterThanOrEqual(70);
     });
 
-    it('should penalize ambiguous language', async () => {
+    it("should penalize ambiguous language", async () => {
       const description = `
         We need a fast, scalable, user-friendly, modern platform
         that is easy to use and highly reliable
@@ -274,14 +305,19 @@ describe('RequirementsClarificationService', () => {
       expect(result.analysis?.qualityScore).toBeLessThan(50);
     });
 
-    it('should give WHY the highest weight in scoring', async () => {
-      const descriptionWithWhy = 'Solve customer churn problem for enterprise users';
-      const descriptionWithoutWhy = 'A platform for enterprise users';
+    it("should give WHY the highest weight in scoring", async () => {
+      const descriptionWithWhy =
+        "Solve customer churn problem for enterprise users";
+      const descriptionWithoutWhy = "A platform for enterprise users";
 
       const resultWith = await service.analyzeDescription(descriptionWithWhy);
-      const resultWithout = await service.analyzeDescription(descriptionWithoutWhy);
+      const resultWithout = await service.analyzeDescription(
+        descriptionWithoutWhy,
+      );
 
-      expect(resultWith.analysis!.qualityScore).toBeGreaterThan(resultWithout.analysis!.qualityScore);
+      expect(resultWith.analysis!.qualityScore).toBeGreaterThan(
+        resultWithout.analysis!.qualityScore,
+      );
     });
   });
 });

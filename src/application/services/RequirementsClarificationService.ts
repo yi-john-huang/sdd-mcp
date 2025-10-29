@@ -1,4 +1,5 @@
 import { injectable, inject } from "inversify";
+import { v4 as uuidv4 } from "uuid";
 import { TYPES } from "../../infrastructure/di/types.js";
 import { FileSystemPort, LoggerPort } from "../../domain/ports.js";
 import {
@@ -8,6 +9,8 @@ import {
   ClarificationResult,
   QuestionCategory,
   AmbiguousTerm,
+  ClarificationAnswers,
+  AnswerValidationResult,
 } from "../../domain/types.js";
 import {
   QUALITY_SCORE_WEIGHTS,
@@ -15,21 +18,6 @@ import {
   PATTERN_DETECTION,
   AMBIGUOUS_TERMS,
 } from "./clarification-constants.js";
-
-export interface ClarificationAnswers {
-  [questionId: string]: string;
-}
-
-export interface AnswerValidationResult {
-  valid: boolean;
-  missingRequired: string[];
-  tooShort: Array<{
-    question: string;
-    minLength: number;
-    currentLength: number;
-  }>;
-  containsInvalidContent: string[];
-}
 
 @injectable()
 export class RequirementsClarificationService {
@@ -87,18 +75,49 @@ export class RequirementsClarificationService {
   validateAnswers(
     questions: ClarificationQuestion[],
     answers: ClarificationAnswers,
-  ): { valid: boolean; missingRequired: string[] } {
+  ): AnswerValidationResult {
     const missingRequired: string[] = [];
+    const tooShort: Array<{
+      question: string;
+      minLength: number;
+      currentLength: number;
+    }> = [];
+    const containsInvalidContent: string[] = [];
 
     for (const question of questions) {
-      if (question.required && !answers[question.id]) {
+      const answer = answers[question.id]?.trim() || "";
+
+      // Check for missing required answers
+      if (question.required && !answer) {
         missingRequired.push(question.question);
+        continue;
+      }
+
+      // Check for too-short answers
+      if (answer && answer.length < ANSWER_VALIDATION.MIN_ANSWER_LENGTH) {
+        tooShort.push({
+          question: question.question,
+          minLength: ANSWER_VALIDATION.MIN_ANSWER_LENGTH,
+          currentLength: answer.length,
+        });
+      }
+
+      // Check for potentially malicious content
+      if (answer && ANSWER_VALIDATION.INVALID_CONTENT_PATTERN.test(answer)) {
+        containsInvalidContent.push(question.question);
       }
     }
 
+    const valid =
+      missingRequired.length === 0 &&
+      tooShort.length === 0 &&
+      containsInvalidContent.length === 0;
+
     return {
-      valid: missingRequired.length === 0,
+      valid,
       missingRequired,
+      tooShort,
+      containsInvalidContent,
     };
   }
 
@@ -212,8 +231,10 @@ export class RequirementsClarificationService {
       descriptionLength: description.length,
     });
 
-    // Need clarification if score < 70 or missing critical elements
-    const needsClarification = qualityScore < 70 || missingElements.length > 0;
+    // Need clarification if score below threshold or missing critical elements
+    const needsClarification =
+      qualityScore < QUALITY_SCORE_WEIGHTS.MIN_ACCEPTABLE_SCORE ||
+      missingElements.length > 0;
 
     return {
       qualityScore,
@@ -239,7 +260,7 @@ export class RequirementsClarificationService {
     // WHY questions - always high priority
     if (!analysis.hasWhy && !steeringContext.hasProductContext) {
       questions.push({
-        id: uuidv4(),
+        id: "why_problem",
         category: QuestionCategory.WHY,
         question:
           "What business problem does this project solve? Why is it needed?",
@@ -253,7 +274,7 @@ export class RequirementsClarificationService {
       });
 
       questions.push({
-        id: uuidv4(),
+        id: "why_value",
         category: QuestionCategory.WHY,
         question:
           "What value does this project provide to users or the business?",
@@ -270,7 +291,7 @@ export class RequirementsClarificationService {
     // WHO questions
     if (!analysis.hasWho && !steeringContext.hasTargetUsers) {
       questions.push({
-        id: uuidv4(),
+        id: "who_users",
         category: QuestionCategory.WHO,
         question: "Who are the primary users of this project?",
         why: "Knowing the target users shapes UX, features, and technical decisions",
@@ -286,7 +307,7 @@ export class RequirementsClarificationService {
     // WHAT questions
     if (!analysis.hasWhat) {
       questions.push({
-        id: uuidv4(),
+        id: "what_mvp_features",
         category: QuestionCategory.WHAT,
         question: "What are the 3-5 core features for the MVP?",
         why: "Defining MVP scope prevents scope creep and ensures focused delivery",
@@ -299,7 +320,7 @@ export class RequirementsClarificationService {
       });
 
       questions.push({
-        id: uuidv4(),
+        id: "what_out_of_scope",
         category: QuestionCategory.WHAT,
         question: "What is explicitly OUT OF SCOPE for this project?",
         why: "Boundary definition prevents feature creep and manages expectations",
@@ -315,7 +336,7 @@ export class RequirementsClarificationService {
     // SUCCESS questions
     if (!analysis.hasSuccessCriteria) {
       questions.push({
-        id: uuidv4(),
+        id: "success_metrics",
         category: QuestionCategory.SUCCESS,
         question: "How will you measure if this project is successful?",
         why: "Quantifiable metrics enable objective evaluation and iteration",
@@ -331,7 +352,7 @@ export class RequirementsClarificationService {
     // HOW questions (technical approach) - only if no tech steering
     if (!steeringContext.hasTechContext) {
       questions.push({
-        id: uuidv4(),
+        id: "how_tech_constraints",
         category: QuestionCategory.HOW,
         question:
           "Are there any technical constraints or preferences? (language, platform, existing systems)",
@@ -346,9 +367,10 @@ export class RequirementsClarificationService {
     }
 
     // Ambiguity clarification
-    for (const ambiguous of analysis.ambiguousTerms.slice(0, 3)) {
+    for (let i = 0; i < Math.min(analysis.ambiguousTerms.length, 3); i++) {
+      const ambiguous = analysis.ambiguousTerms[i];
       questions.push({
-        id: uuidv4(),
+        id: `ambiguity_${i + 1}`,
         category: QuestionCategory.WHAT,
         question: `You mentioned "${ambiguous.term}". ${ambiguous.suggestion}`,
         why: "Removing ambiguity ensures shared understanding",
@@ -366,122 +388,95 @@ export class RequirementsClarificationService {
   private async loadSteeringContext(
     projectPath?: string,
   ): Promise<SteeringContext> {
-    if (!projectPath) {
-      return {
-        hasProductContext: false,
-        hasTargetUsers: false,
-        hasTechContext: false,
-      };
-    }
-
-    const context: SteeringContext = {
+    const defaultContext: SteeringContext = {
       hasProductContext: false,
       hasTargetUsers: false,
       hasTechContext: false,
     };
 
+    if (!projectPath) {
+      return defaultContext;
+    }
+
     try {
+      const context: SteeringContext = { ...defaultContext };
+
       // Check product.md
-      const productPath = `${projectPath}/.kiro/steering/product.md`;
-      if (await this.fileSystem.exists(productPath)) {
-        const productContent = await this.fileSystem.readFile(productPath);
-        context.hasProductContext = productContent.length > 200; // Has substantial content
-        context.hasTargetUsers = /target\s+users|user\s+persona/i.test(
-          productContent,
-        );
+      try {
+        const productPath = `${projectPath}/.kiro/steering/product.md`;
+        if (await this.fileSystem.exists(productPath)) {
+          const productContent = await this.fileSystem.readFile(productPath);
+          context.hasProductContext =
+            productContent.length >
+            QUALITY_SCORE_WEIGHTS.MIN_STEERING_CONTENT_LENGTH;
+          context.hasTargetUsers =
+            PATTERN_DETECTION.TARGET_USERS_PATTERN.test(productContent);
+        }
+      } catch (error) {
+        this.logger.debug("Failed to load product.md", {
+          error: (error as Error).message,
+        });
       }
 
       // Check tech.md
-      const techPath = `${projectPath}/.kiro/steering/tech.md`;
-      if (await this.fileSystem.exists(techPath)) {
-        const techContent = await this.fileSystem.readFile(techPath);
-        context.hasTechContext = techContent.length > 200;
+      try {
+        const techPath = `${projectPath}/.kiro/steering/tech.md`;
+        if (await this.fileSystem.exists(techPath)) {
+          const techContent = await this.fileSystem.readFile(techPath);
+          context.hasTechContext =
+            techContent.length >
+            QUALITY_SCORE_WEIGHTS.MIN_STEERING_CONTENT_LENGTH;
+        }
+      } catch (error) {
+        this.logger.debug("Failed to load tech.md", {
+          error: (error as Error).message,
+        });
       }
-    } catch (error) {
-      this.logger.warn("Failed to load steering context", {
-        error: (error as Error).message,
-      });
-    }
 
-    return context;
+      return context;
+    } catch (error) {
+      this.logger.warn("Failed to load steering context, using defaults", {
+        error: (error as Error).message,
+        projectPath,
+      });
+      return defaultContext;
+    }
   }
 
   /**
    * Detects if description contains WHY (business justification)
    */
   private detectWhy(description: string): boolean {
-    const whyPatterns = [
-      /\bproblem\b/i,
-      /\bsolve[sd]?\b/i,
-      /\bchallenge\b/i,
-      /\bpain\s+point/i,
-      /\bissue\b/i,
-      /\bwhy\b/i,
-      /\bbecause\b/i,
-      /\benables?\b/i,
-      /\bvalue\s+proposition/i,
-      /\bbenefit/i,
-      /\bjustification/i,
-      /\bgoal\b/i,
-      /\bobjective\b/i,
-      /\bpurpose\b/i,
-    ];
-
-    return whyPatterns.some((pattern) => pattern.test(description));
+    return PATTERN_DETECTION.WHY_PATTERNS.some((pattern) =>
+      pattern.test(description),
+    );
   }
 
   /**
    * Detects if description contains WHO (target users)
    */
   private detectWho(description: string): boolean {
-    const whoPatterns = [
-      /\buser[s]?\b/i,
-      /\bcustomer[s]?\b/i,
-      /\btarget\s+(audience|users?|customers?)/i,
-      /\bpersona[s]?\b/i,
-      /\bstakeholder[s]?\b/i,
-      /\b(developer|designer|admin|manager)[s]?\b/i,
-      /\bfor\s+(teams?|companies|individuals)/i,
-    ];
-
-    return whoPatterns.some((pattern) => pattern.test(description));
+    return PATTERN_DETECTION.WHO_PATTERNS.some((pattern) =>
+      pattern.test(description),
+    );
   }
 
   /**
    * Detects if description contains WHAT (features, scope)
    */
   private detectWhat(description: string): boolean {
-    const whatPatterns = [
-      /\bfeature[s]?\b/i,
-      /\bfunctionality\b/i,
-      /\bcapabilit(y|ies)/i,
-      /\bprovides?\b/i,
-      /\binclude[s]?\b/i,
-      /\bsupport[s]?\b/i,
-      /\ballow[s]?\b/i,
-      /\benable[s]?\b/i,
-      /\bMVP\b/i,
-      /\bscope\b/i,
-    ];
-
-    return whatPatterns.some((pattern) => pattern.test(description));
+    return PATTERN_DETECTION.WHAT_PATTERNS.some((pattern) =>
+      pattern.test(description),
+    );
   }
 
   /**
    * Detects if description contains success criteria
    */
   private detectSuccessCriteria(description: string): boolean {
-    const successPatterns = [
-      /\bmetric[s]?\b/i,
-      /\bKPI[s]?\b/i,
-      /\bmeasure[sd]?\b/i,
-      /\bsuccess\s+(criteria|metric)/i,
-      /\b\d+%/,
-      /\bperformance\s+target/i,
-      /\bgoal[s]?\b.*\d+/i,
-    ];
-
-    return successPatterns.some((pattern) => pattern.test(description));
+    return PATTERN_DETECTION.SUCCESS_PATTERNS.some((pattern) =>
+      pattern.test(description),
+    );
   }
 
   /**
@@ -490,50 +485,7 @@ export class RequirementsClarificationService {
   private detectAmbiguousTerms(description: string): AmbiguousTerm[] {
     const ambiguousTerms: AmbiguousTerm[] = [];
 
-    const ambiguityMap = [
-      {
-        pattern: /\bfast\b/gi,
-        suggestion:
-          'Can you specify a target response time? (e.g., "< 200ms API response", "page loads in 2s")',
-      },
-      {
-        pattern: /\bscalable\b/gi,
-        suggestion:
-          'What scale do you need to support? (e.g., "1000 concurrent users", "100k requests/hour")',
-      },
-      {
-        pattern: /\buser[- ]friendly\b/gi,
-        suggestion:
-          'What makes it user-friendly? (e.g., "3-click checkout", "mobile-responsive", "keyboard shortcuts")',
-      },
-      {
-        pattern: /\beasy\s+to\s+use\b/gi,
-        suggestion:
-          'What does easy mean for your users? (e.g., "no training required", "5-minute onboarding", "intuitive navigation")',
-      },
-      {
-        pattern: /\bhigh\s+quality\b/gi,
-        suggestion:
-          'How do you define quality? (e.g., "zero critical bugs in production", "90% test coverage", "< 5% error rate")',
-      },
-      {
-        pattern: /\breliable\b/gi,
-        suggestion:
-          'What reliability level do you need? (e.g., "99.9% uptime", "zero data loss", "automatic failover")',
-      },
-      {
-        pattern: /\bsecure\b/gi,
-        suggestion:
-          'What security requirements apply? (e.g., "SOC 2 compliant", "end-to-end encryption", "OAuth 2.0")',
-      },
-      {
-        pattern: /\bmodern\b/gi,
-        suggestion:
-          'What technologies or approaches are you considering? (e.g., "React + TypeScript", "microservices", "serverless")',
-      },
-    ];
-
-    for (const { pattern, suggestion } of ambiguityMap) {
+    for (const { pattern, suggestion } of AMBIGUOUS_TERMS) {
       const matches = description.match(pattern);
       if (matches) {
         for (const match of matches) {
@@ -576,26 +528,38 @@ export class RequirementsClarificationService {
   }): number {
     let score = 0;
 
-    // WHY is most important (30 points)
-    if (metrics.hasWhy) score += 30;
+    // WHY is most important
+    if (metrics.hasWhy) score += QUALITY_SCORE_WEIGHTS.HAS_WHY;
 
-    // WHO is critical (20 points)
-    if (metrics.hasWho) score += 20;
+    // WHO is critical
+    if (metrics.hasWho) score += QUALITY_SCORE_WEIGHTS.HAS_WHO;
 
-    // WHAT is essential (20 points)
-    if (metrics.hasWhat) score += 20;
+    // WHAT is essential
+    if (metrics.hasWhat) score += QUALITY_SCORE_WEIGHTS.HAS_WHAT;
 
-    // Success criteria (15 points)
-    if (metrics.hasSuccessCriteria) score += 15;
+    // Success criteria
+    if (metrics.hasSuccessCriteria) score += QUALITY_SCORE_WEIGHTS.HAS_SUCCESS;
 
-    // Penalize ambiguous terms (up to -15 points)
-    const ambiguityPenalty = Math.min(15, metrics.ambiguousTermCount * 5);
+    // Penalize ambiguous terms
+    const ambiguityPenalty = Math.min(
+      QUALITY_SCORE_WEIGHTS.MAX_AMBIGUITY_PENALTY,
+      metrics.ambiguousTermCount * QUALITY_SCORE_WEIGHTS.AMBIGUITY_PENALTY,
+    );
     score -= ambiguityPenalty;
 
-    // Length bonus (up to 15 points) - adequate detail
-    if (metrics.descriptionLength > 100) score += 5;
-    if (metrics.descriptionLength > 300) score += 5;
-    if (metrics.descriptionLength > 500) score += 5;
+    // Length bonus - adequate detail
+    if (
+      metrics.descriptionLength > QUALITY_SCORE_WEIGHTS.LENGTH_BONUS_THRESHOLD_1
+    )
+      score += QUALITY_SCORE_WEIGHTS.LENGTH_BONUS_POINTS;
+    if (
+      metrics.descriptionLength > QUALITY_SCORE_WEIGHTS.LENGTH_BONUS_THRESHOLD_2
+    )
+      score += QUALITY_SCORE_WEIGHTS.LENGTH_BONUS_POINTS;
+    if (
+      metrics.descriptionLength > QUALITY_SCORE_WEIGHTS.LENGTH_BONUS_THRESHOLD_3
+    )
+      score += QUALITY_SCORE_WEIGHTS.LENGTH_BONUS_POINTS;
 
     return Math.max(0, Math.min(100, score));
   }

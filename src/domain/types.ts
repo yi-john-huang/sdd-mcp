@@ -190,3 +190,16 @@ export interface ClarificationResult {
   readonly analysis?: ClarificationAnalysis;
   readonly enrichedDescription?: EnrichedProjectDescription;
 }
+
+export type ClarificationAnswers = Record<string, string>;
+
+export interface AnswerValidationResult {
+  readonly valid: boolean;
+  readonly missingRequired: string[];
+  readonly tooShort: Array<{
+    question: string;
+    minLength: number;
+    currentLength: number;
+  }>;
+  readonly containsInvalidContent: string[];
+}
