@@ -5,6 +5,47 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.5.0] - 2025-10-30
+
+### Added
+- **Interactive Requirements Clarification**: New `RequirementsClarificationService` that analyzes project descriptions and blocks vague requirements
+  - Quality scoring (0-100) with blocking threshold at 70%
+  - 5W1H analysis: WHY (30 pts), WHO (20 pts), WHAT (20 pts), Success Criteria (15 pts), plus length and clarity bonuses
+  - Ambiguity detection for terms like "fast", "scalable", "user-friendly", "easy", "reliable", "secure", "modern"
+  - Context-aware question generation using existing `.kiro/steering/` documents to avoid redundancy
+  - Two-pass workflow: analyze → return questions → validate answers → synthesize enriched description
+- **Enhanced sdd-init Tool**: Interactive clarification flow with blocking mechanism
+  - First pass: Analyzes description quality, returns clarification questions if score < 70%
+  - Second pass: Validates answers, synthesizes enriched description with structured 5W1H format
+  - Enriched descriptions include: Original, Business Justification (Why), Target Users (Who), Core Features (What), Technical Approach (How), Success Criteria
+  - New `clarificationAnswers` parameter for second-pass submission
+- **Comprehensive Type System**: New domain types for clarification workflow
+  - `ClarificationQuestion`, `QuestionCategory`, `ClarificationAnalysis`, `AmbiguousTerm`, `EnrichedProjectDescription`, `ClarificationResult`
+  - Full TypeScript type safety with readonly interfaces
+- **13 Unit Tests**: Complete test coverage for RequirementsClarificationService
+  - Tests for quality scoring, ambiguity detection, question generation, answer validation, and description synthesis
+  - All tests passing with 100% success rate
+
+### Changed
+- **sdd-init Behavior**: Now blocks progression on vague requirements (quality score < 70%)
+  - Previously accepted any description; now enforces quality standards
+  - Focuses on "WHY" (business justification) as highest-weighted criterion
+  - Educational feedback with actionable examples and specific question categories
+- **DI Container**: Registered `RequirementsClarificationService` in dependency injection system
+  - Added `TYPES.RequirementsClarificationService` symbol
+  - Integrated into SDDToolAdapter with proper injection
+
+### Fixed
+- **Vague Requirements Problem**: Prevents "garbage in, garbage out" by ensuring clear requirements from project start
+- **Missing Business Context**: Forces articulation of WHY before proceeding with implementation
+- **Ambiguous Language**: Detects and clarifies non-specific terms before they cause scope issues
+
+### Technical
+- **Architecture**: Follows Domain-Driven Design with service in application layer
+- **Integration**: Works in both simplified (mcp-server.js) and TypeScript (SDDToolAdapter) implementations
+- **Context Awareness**: Reads steering documents (product.md, tech.md) to avoid redundant questions
+- **Blocking Workflow**: Synchronous MCP tool with multi-pass pattern for interactive clarification
+
 ## [1.4.5] - 2025-10-19
 
 ### Changed

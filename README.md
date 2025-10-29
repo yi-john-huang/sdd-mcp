@@ -6,7 +6,9 @@
 
 A Model Context Protocol (MCP) server implementing Spec-Driven Development (SDD) workflows for AI-agent CLIs and IDEs like Claude Code, Cursor, and others.
 
-> ✅ **v1.4.5 Update**: Internal improvements! Reorganized test structure for better maintainability, centralized static steering document creation following DRY principle, improved code organization with better separation of concerns.
+> 🎯 **v1.5.0 - Interactive Requirements Clarification**: `sdd-init` now **blocks vague requirements**! The agent analyzes your project description (quality score 0-100) and interactively asks targeted clarification questions if score < 70%. Focuses on **WHY** (business justification), WHO (target users), WHAT (core features), and success criteria. Context-aware using existing steering docs. Prevents "garbage in, garbage out" with enriched 5W1H structured descriptions. **New service**: `RequirementsClarificationService` with 13 passing unit tests ✅
+
+> ✅ **v1.4.5**: Internal improvements! Reorganized test structure for better maintainability, centralized static steering document creation following DRY principle, improved code organization with better separation of concerns.
 
 > ✅ **v1.4.4**: Comprehensive codebase analysis + TDD workflow! Documents are generated with real multi-language detection (TypeScript, Java, Python, Go, Ruby, PHP, Rust, C#, Scala), framework detection (Spring Boot, Django, FastAPI, Rails, Laravel, Express, React, etc.), and architecture pattern recognition. New `principles.md` steering document enforces SOLID, DRY, KISS, YAGNI, Separation of Concerns, and Modularity. Task generation now follows Test-Driven Development (RED-GREEN-REFACTOR) workflow.
 
@@ -148,7 +150,7 @@ Once connected to your AI client, you can use these MCP tools:
 
 | Tool | Description | Usage |
 |------|-------------|--------|
-| `sdd-init` | Initialize new SDD project | Creates .kiro directory structure + AGENTS.md for cross-platform AI support |
+| `sdd-init` | Initialize new SDD project with interactive clarification | **🎯 NEW v1.5.0**: Analyzes description quality (0-100 score), blocks if < 70%, asks targeted WHY/WHO/WHAT questions, synthesizes enriched 5W1H descriptions |
 | `sdd-requirements` | Generate context-aware requirements | Analyzes package.json and structure to create EARS-formatted requirements with comprehensive multi-language analysis |
 | `sdd-design` | Create project-specific design | Generates architecture docs based on actual tech stack, dependencies, and framework detection |
 | `sdd-tasks` | Generate TDD-focused task breakdown | Creates test-first implementation tasks following RED-GREEN-REFACTOR workflow |

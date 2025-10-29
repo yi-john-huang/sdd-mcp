@@ -27,18 +27,18 @@ export interface ApprovalStatus {
 }
 
 export enum WorkflowPhase {
-  INIT = 'init',
-  REQUIREMENTS = 'requirements-generated',
-  DESIGN = 'design-generated', 
-  TASKS = 'tasks-generated',
-  IMPLEMENTATION = 'implementation-ready'
+  INIT = "init",
+  REQUIREMENTS = "requirements-generated",
+  DESIGN = "design-generated",
+  TASKS = "tasks-generated",
+  IMPLEMENTATION = "implementation-ready",
 }
 
 export enum WorkflowState {
-  PENDING = 'pending',
-  IN_PROGRESS = 'in-progress',
-  COMPLETED = 'completed',
-  ERROR = 'error'
+  PENDING = "pending",
+  IN_PROGRESS = "in-progress",
+  COMPLETED = "completed",
+  ERROR = "error",
 }
 
 export interface Requirement {
@@ -104,9 +104,9 @@ export interface QualityReport {
 }
 
 export enum TasteScore {
-  GOOD = 'good',
-  PASSABLE = 'passable',
-  GARBAGE = 'garbage'
+  GOOD = "good",
+  PASSABLE = "passable",
+  GARBAGE = "garbage",
 }
 
 export interface QualityIssue {
@@ -117,21 +117,76 @@ export interface QualityIssue {
 }
 
 export enum IssueType {
-  COMPLEXITY = 'complexity',
-  SPECIAL_CASE = 'special-case',
-  DATA_STRUCTURE = 'data-structure',
-  BREAKING_CHANGE = 'breaking-change',
-  PRACTICALITY = 'practicality'
+  COMPLEXITY = "complexity",
+  SPECIAL_CASE = "special-case",
+  DATA_STRUCTURE = "data-structure",
+  BREAKING_CHANGE = "breaking-change",
+  PRACTICALITY = "practicality",
 }
 
 export enum IssueSeverity {
-  ERROR = 'error',
-  WARNING = 'warning',
-  INFO = 'info'
+  ERROR = "error",
+  WARNING = "warning",
+  INFO = "info",
 }
 
 export interface CodeLocation {
   readonly file: string;
   readonly line: number;
   readonly column: number;
+}
+
+// Requirements Clarification Types
+
+export interface ClarificationQuestion {
+  readonly id: string;
+  readonly category: QuestionCategory;
+  readonly question: string;
+  readonly why: string; // Why this question is important
+  readonly examples?: string[]; // Example answers
+  readonly required: boolean;
+}
+
+export enum QuestionCategory {
+  WHY = "why", // Business justification, problem being solved
+  WHO = "who", // Target users, personas, stakeholders
+  WHAT = "what", // Core features, scope, MVP
+  HOW = "how", // Technical approach, architecture
+  SUCCESS = "success", // Success criteria, metrics
+}
+
+export interface ClarificationAnalysis {
+  readonly qualityScore: number; // 0-100
+  readonly missingElements: string[];
+  readonly ambiguousTerms: AmbiguousTerm[];
+  readonly needsClarification: boolean;
+  readonly hasWhy: boolean;
+  readonly hasWho: boolean;
+  readonly hasWhat: boolean;
+  readonly hasSuccessCriteria: boolean;
+}
+
+export interface AmbiguousTerm {
+  readonly term: string;
+  readonly context: string;
+  readonly suggestion: string;
+}
+
+export interface EnrichedProjectDescription {
+  readonly original: string;
+  readonly why: string; // Business justification
+  readonly who: string; // Target users
+  readonly what: string; // Core features
+  readonly how?: string; // Technical approach
+  readonly successCriteria: string;
+  readonly constraints?: string;
+  readonly assumptions?: string;
+  readonly enriched: string; // Synthesized full description
+}
+
+export interface ClarificationResult {
+  readonly needsClarification: boolean;
+  readonly questions?: ClarificationQuestion[];
+  readonly analysis?: ClarificationAnalysis;
+  readonly enrichedDescription?: EnrichedProjectDescription;
 }

@@ -2,22 +2,22 @@
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import { z } from "zod";
-import fs from 'fs/promises';
-import path from 'path';
-import { 
-  analyzeProject, 
-  generateProductDocument, 
-  generateTechDocument, 
-  generateStructureDocument 
-} from './documentGenerator.js';
+import fs from "fs/promises";
+import path from "path";
+import {
+  analyzeProject,
+  generateProductDocument,
+  generateTechDocument,
+  generateStructureDocument,
+} from "./documentGenerator.js";
 
 // Best-effort dynamic loader for spec generators (requirements/design/tasks)
 async function loadSpecGenerator() {
   const tried = [];
   const attempts = [
-    './specGenerator.js',                 // root-level JS (dev/runtime)
-    './dist/utils/specGenerator.js',      // compiled TS output
-    './utils/specGenerator.js'            // TS runtime (when transpiled on-the-fly)
+    "./specGenerator.js", // root-level JS (dev/runtime)
+    "./dist/utils/specGenerator.js", // compiled TS output
+    "./utils/specGenerator.js", // TS runtime (when transpiled on-the-fly)
   ];
   for (const p of attempts) {
     try {
@@ -28,46 +28,52 @@ async function loadSpecGenerator() {
       tried.push(`${p}: ${(e && e.message) || e}`);
     }
   }
-  throw new Error(`Unable to load specGenerator from known paths. Tried: \n- ${tried.join('\n- ')}`);
+  throw new Error(
+    `Unable to load specGenerator from known paths. Tried: \n- ${tried.join("\n- ")}`,
+  );
 }
 
 // Resolve version dynamically from package.json when possible
 async function resolveVersion() {
   try {
-    const pkgUrl = new URL('./package.json', import.meta.url);
-    const pkgText = await fs.readFile(pkgUrl, 'utf8');
+    const pkgUrl = new URL("./package.json", import.meta.url);
+    const pkgText = await fs.readFile(pkgUrl, "utf8");
     const pkg = JSON.parse(pkgText);
-    return pkg.version || '0.0.0';
+    return pkg.version || "0.0.0";
   } catch {
-    return '0.0.0';
+    return "0.0.0";
   }
 }
 
-const server = new McpServer({
-  name: 'sdd-mcp-server',
-  version: await resolveVersion()
-}, {
-  instructions: 'Use this server for spec-driven development workflows'
-});
+const server = new McpServer(
+  {
+    name: "sdd-mcp-server",
+    version: await resolveVersion(),
+  },
+  {
+    instructions: "Use this server for spec-driven development workflows",
+  },
+);
 
 // Helper functions for file operations
 async function createKiroDirectory(projectPath) {
-  const kiroPath = path.join(projectPath, '.kiro');
-  const specsPath = path.join(kiroPath, 'specs');
-  const steeringPath = path.join(kiroPath, 'steering');
-  
+  const kiroPath = path.join(projectPath, ".kiro");
+  const specsPath = path.join(kiroPath, "specs");
+  const steeringPath = path.join(kiroPath, "steering");
+
   await fs.mkdir(kiroPath, { recursive: true });
   await fs.mkdir(specsPath, { recursive: true });
   await fs.mkdir(steeringPath, { recursive: true });
-  
+
   return { kiroPath, specsPath, steeringPath };
 }
 
 async function generateFeatureName(description) {
   // Simple feature name generation from description
-  return description.toLowerCase()
-    .replace(/[^a-z0-9\s]/g, '')
-    .replace(/\s+/g, '-')
+  return description
+    .toLowerCase()
+    .replace(/[^a-z0-9\s]/g, "")
+    .replace(/\s+/g, "-")
     .substring(0, 50);
 }
 
@@ -75,277 +81,637 @@ async function getCurrentTimestamp() {
   return new Date().toISOString();
 }
 
+// Requirements Clarification helpers
+function analyzeDescriptionQuality(description) {
+  const analysis = {
+    hasWhy:
+      /\b(problem|solve[sd]?|challenge|pain\s+point|issue|why|because|enables?|value\s+proposition|benefit|justification|goal|objective|purpose)\b/i.test(
+        description,
+      ),
+    hasWho:
+      /\b(user[s]?|customer[s]?|target\s+(audience|users?|customers?)|persona[s]?|stakeholder[s]?|(developer|designer|admin|manager)[s]?|for\s+(teams?|companies|individuals))\b/i.test(
+        description,
+      ),
+    hasWhat:
+      /\b(feature[s]?|functionality|capabilit(y|ies)|provides?|include[s]?|support[s]?|allow[s]?|enable[s]?|MVP|scope)\b/i.test(
+        description,
+      ),
+    hasSuccessCriteria:
+      /\b(metric[s]?|KPI[s]?|measure[sd]?|success\s+(criteria|metric)|\d+%|performance\s+target|goal[s]?\s+.*\d+)\b/i.test(
+        description,
+      ),
+    ambiguousTerms: [],
+  };
+
+  // Detect ambiguous terms
+  const ambiguityChecks = [
+    {
+      pattern: /\bfast\b/gi,
+      suggestion: "Can you specify a target response time?",
+    },
+    {
+      pattern: /\bscalable\b/gi,
+      suggestion: "What scale do you need to support?",
+    },
+    {
+      pattern: /\buser[- ]friendly\b/gi,
+      suggestion: "What makes it user-friendly?",
+    },
+    {
+      pattern: /\beasy\s+to\s+use\b/gi,
+      suggestion: "What does easy mean for your users?",
+    },
+    {
+      pattern: /\bhigh\s+quality\b/gi,
+      suggestion: "How do you define quality?",
+    },
+    {
+      pattern: /\breliable\b/gi,
+      suggestion: "What reliability level do you need?",
+    },
+    {
+      pattern: /\bsecure\b/gi,
+      suggestion: "What security requirements apply?",
+    },
+    {
+      pattern: /\bmodern\b/gi,
+      suggestion: "What technologies are you considering?",
+    },
+  ];
+
+  for (const { pattern, suggestion } of ambiguityChecks) {
+    const matches = description.match(pattern);
+    if (matches) {
+      analysis.ambiguousTerms.push({ term: matches[0], suggestion });
+    }
+  }
+
+  // Calculate quality score
+  let score = 0;
+  if (analysis.hasWhy) score += 30;
+  if (analysis.hasWho) score += 20;
+  if (analysis.hasWhat) score += 20;
+  if (analysis.hasSuccessCriteria) score += 15;
+  if (description.length > 100) score += 5;
+  if (description.length > 300) score += 5;
+  if (description.length > 500) score += 5;
+  score -= Math.min(15, analysis.ambiguousTerms.length * 5);
+
+  analysis.qualityScore = Math.max(0, Math.min(100, score));
+  analysis.needsClarification = score < 70;
+
+  return analysis;
+}
+
+function generateClarificationQuestions(analysis) {
+  const questions = [];
+
+  if (!analysis.hasWhy) {
+    questions.push({
+      id: "why_problem",
+      category: "why",
+      question:
+        "What business problem does this project solve? Why is it needed?",
+      examples: [
+        "Our customer support team spends 5 hours/day on repetitive inquiries",
+        "Users are abandoning checkout because the process takes too long",
+      ],
+      required: true,
+    });
+    questions.push({
+      id: "why_value",
+      category: "why",
+      question:
+        "What value does this project provide to users or the business?",
+      examples: [
+        "Reduce support ticket volume by 40%",
+        "Increase conversion rate by improving checkout speed",
+      ],
+      required: true,
+    });
+  }
+
+  if (!analysis.hasWho) {
+    questions.push({
+      id: "who_users",
+      category: "who",
+      question: "Who are the primary users of this project?",
+      examples: [
+        "Customer support agents using ticketing systems",
+        "E-commerce shoppers on mobile devices",
+        "Backend developers integrating APIs",
+      ],
+      required: true,
+    });
+  }
+
+  if (!analysis.hasWhat) {
+    questions.push({
+      id: "what_features",
+      category: "what",
+      question: "What are the 3-5 core features for the MVP?",
+      examples: [
+        "Auto-response system, ticket categorization, analytics dashboard",
+        "Product search, cart management, payment integration",
+      ],
+      required: true,
+    });
+    questions.push({
+      id: "what_scope",
+      category: "what",
+      question: "What is explicitly OUT OF SCOPE for this project?",
+      examples: ["Admin panel (future phase)", "Mobile app (web only for MVP)"],
+      required: false,
+    });
+  }
+
+  if (!analysis.hasSuccessCriteria) {
+    questions.push({
+      id: "success_metrics",
+      category: "success",
+      question: "How will you measure if this project is successful?",
+      examples: [
+        "Support ticket volume reduced by 30% within 3 months",
+        "Page load time under 2 seconds, conversion rate > 3%",
+      ],
+      required: true,
+    });
+  }
+
+  // Add questions for ambiguous terms (max 2)
+  for (const ambiguous of analysis.ambiguousTerms.slice(0, 2)) {
+    questions.push({
+      id: `ambiguous_${ambiguous.term.toLowerCase().replace(/\s+/g, "_")}`,
+      category: "what",
+      question: `You mentioned "${ambiguous.term}". ${ambiguous.suggestion}`,
+      required: false,
+    });
+  }
+
+  return questions;
+}
+
+function formatQuestionsForUser(questions) {
+  let output = "## Requirements Clarification Needed\n\n";
+  output +=
+    "Your project description needs more detail to ensure we build the right solution.\n\n";
+  output += `**Quality Score**: ${Math.round(questions.analysis?.qualityScore || 0)}/100 (need 70+ to proceed)\n\n`;
+  output += "### Please answer these questions:\n\n";
+
+  let questionNum = 1;
+  for (const q of questions) {
+    output += `**${questionNum}. ${q.question}**${q.required ? " *(required)*" : ""}\n`;
+    if (q.examples && q.examples.length > 0) {
+      output += `   Examples:\n`;
+      for (const ex of q.examples) {
+        output += `   - ${ex}\n`;
+      }
+    }
+    output += `   Answer ID: \`${q.id}\`\n\n`;
+    questionNum++;
+  }
+
+  output += "\n### How to Provide Answers\n\n";
+  output +=
+    "Call sdd-init again with the `clarificationAnswers` parameter:\n\n";
+  output += "```json\n{\n";
+  output += '  "projectName": "your-project-name",\n';
+  output += '  "description": "your original description",\n';
+  output += '  "clarificationAnswers": {\n';
+  for (let i = 0; i < questions.length; i++) {
+    const q = questions[i];
+    output += `    "${q.id}": "your answer here"${i < questions.length - 1 ? "," : ""}\n`;
+  }
+  output += "  }\n}\n```\n";
+
+  return output;
+}
+
 // Register all SDD tools matching README and kiro command templates
 
-// 1. sdd-init - Initialize new SDD project
-server.registerTool("sdd-init", {
-  title: "Initialize SDD Project",
-  description: "Initialize a new SDD project",
-  inputSchema: {
-    projectName: z.string().describe('The name of the project to initialize'),
-    description: z.string().optional().describe('Optional project description')
+// 1. sdd-init - Initialize new SDD project with interactive clarification
+server.registerTool(
+  "sdd-init",
+  {
+    title: "Initialize SDD Project",
+    description:
+      "Initialize a new SDD project with interactive requirements clarification",
+    inputSchema: {
+      projectName: z.string().describe("The name of the project to initialize"),
+      description: z.string().optional().describe("Project description"),
+      clarificationAnswers: z
+        .record(z.string())
+        .optional()
+        .describe("Answers to clarification questions (second pass)"),
+    },
   },
-}, async ({ projectName, description = '' }) => {
-  try {
-    const currentPath = process.cwd();
-    
-    // Create .kiro directory structure in current directory (not in a subdirectory)
-    const { specsPath, steeringPath } = await createKiroDirectory(currentPath);
-    
-    // Generate feature name from description
-    const featureName = await generateFeatureName(description || projectName);
-    const featurePath = path.join(specsPath, featureName);
-    await fs.mkdir(featurePath, { recursive: true });
-    
-    // Create spec.json
-    const specJson = {
-      "feature_name": featureName,
-      "created_at": await getCurrentTimestamp(),
-      "updated_at": await getCurrentTimestamp(),
-      "language": "en",
-      "phase": "initialized",
-      "approvals": {
-        "requirements": {
-          "generated": false,
-          "approved": false
-        },
-        "design": {
-          "generated": false,
-          "approved": false
-        },
-        "tasks": {
-          "generated": false,
-          "approved": false
+  async ({ projectName, description = "", clarificationAnswers }) => {
+    try {
+      const currentPath = process.cwd();
+
+      // FIRST PASS: Analyze description quality and generate clarification questions if needed
+      if (!clarificationAnswers) {
+        const analysis = analyzeDescriptionQuality(description);
+
+        // If description is vague or incomplete, BLOCK and ask for clarification
+        if (analysis.needsClarification) {
+          const questions = generateClarificationQuestions(analysis);
+          questions.analysis = analysis; // Attach analysis for formatting
+
+          return {
+            content: [
+              {
+                type: "text",
+                text: formatQuestionsForUser(questions),
+              },
+            ],
+          };
         }
-      },
-      "ready_for_implementation": false
-    };
-    
-    await fs.writeFile(path.join(featurePath, 'spec.json'), JSON.stringify(specJson, null, 2));
-    
-    // Create requirements.md template
-    const requirementsTemplate = `# Requirements Document\n\n## Project Description (Input)\n${description}\n\n## Requirements\n<!-- Will be generated in /kiro:spec-requirements phase -->`;
-    await fs.writeFile(path.join(featurePath, 'requirements.md'), requirementsTemplate);
-    
-    // Ensure AGENTS.md exists in steering directory based on CLAUDE.md (static exception)
-    const agentsPath = path.join(steeringPath, 'AGENTS.md');
-    const claudePath = path.join(currentPath, 'CLAUDE.md');
-    const agentsExists = await fs.access(agentsPath).then(() => true).catch(() => false);
-    if (!agentsExists) {
-      let agentsContent = '';
-      const claudeExists = await fs.access(claudePath).then(() => true).catch(() => false);
-      if (claudeExists) {
-        const claude = await fs.readFile(claudePath, 'utf8');
-        agentsContent = claude
-          .replace(/# Claude Code Spec-Driven Development/g, '# AI Agent Spec-Driven Development')
-          .replace(/Claude Code/g, 'AI Agent')
-          .replace(/claude code/g, 'ai agent')
-          .replace(/Claude/g, 'AI Agent')
-          .replace(/claude/g, 'ai agent');
-      } else {
-        agentsContent = '# AI Agent Spec-Driven Development\n\nKiro-style Spec Driven Development implementation for AI agents across different CLIs and IDEs.';
       }
-      await fs.writeFile(agentsPath, agentsContent);
+
+      // SECOND PASS: Validate answers if provided
+      if (clarificationAnswers) {
+        const analysis = analyzeDescriptionQuality(description);
+        const questions = generateClarificationQuestions(analysis);
+
+        // Validate required questions are answered
+        const missingRequired = questions
+          .filter((q) => q.required && !clarificationAnswers[q.id])
+          .map((q) => q.question);
+
+        if (missingRequired.length > 0) {
+          return {
+            content: [
+              {
+                type: "text",
+                text: `## Missing Required Answers\n\nThe following required questions were not answered:\n\n${missingRequired.map((q, i) => `${i + 1}. ${q}`).join("\n")}\n\nPlease provide answers for all required questions.`,
+              },
+            ],
+          };
+        }
+
+        // Build enriched description from answers
+        const whyAnswers = questions
+          .filter((q) => q.category === "why")
+          .map((q) => clarificationAnswers[q.id])
+          .filter((a) => a)
+          .join(" ");
+
+        const whoAnswers = questions
+          .filter((q) => q.category === "who")
+          .map((q) => clarificationAnswers[q.id])
+          .filter((a) => a)
+          .join(" ");
+
+        const whatAnswers = questions
+          .filter((q) => q.category === "what")
+          .map((q) => clarificationAnswers[q.id])
+          .filter((a) => a)
+          .join(" ");
+
+        const successAnswers = questions
+          .filter((q) => q.category === "success")
+          .map((q) => clarificationAnswers[q.id])
+          .filter((a) => a)
+          .join(" ");
+
+        // Synthesize enriched description
+        const enrichedParts = [];
+        if (description)
+          enrichedParts.push(`## Original Description\n${description}`);
+        if (whyAnswers)
+          enrichedParts.push(`## Business Justification (Why)\n${whyAnswers}`);
+        if (whoAnswers)
+          enrichedParts.push(`## Target Users (Who)\n${whoAnswers}`);
+        if (whatAnswers)
+          enrichedParts.push(`## Core Features (What)\n${whatAnswers}`);
+        if (successAnswers)
+          enrichedParts.push(`## Success Criteria\n${successAnswers}`);
+
+        description = enrichedParts.join("\n\n");
+      }
+
+      // Proceed with spec creation (either quality is good or answers were provided)
+      // Create .kiro directory structure in current directory (not in a subdirectory)
+      const { specsPath, steeringPath } =
+        await createKiroDirectory(currentPath);
+
+      // Generate feature name from description
+      const featureName = await generateFeatureName(description || projectName);
+      const featurePath = path.join(specsPath, featureName);
+      await fs.mkdir(featurePath, { recursive: true });
+
+      // Create spec.json
+      const specJson = {
+        feature_name: featureName,
+        created_at: await getCurrentTimestamp(),
+        updated_at: await getCurrentTimestamp(),
+        language: "en",
+        phase: "initialized",
+        approvals: {
+          requirements: {
+            generated: false,
+            approved: false,
+          },
+          design: {
+            generated: false,
+            approved: false,
+          },
+          tasks: {
+            generated: false,
+            approved: false,
+          },
+        },
+        ready_for_implementation: false,
+      };
+
+      await fs.writeFile(
+        path.join(featurePath, "spec.json"),
+        JSON.stringify(specJson, null, 2),
+      );
+
+      // Create requirements.md template
+      const requirementsTemplate = `# Requirements Document\n\n## Project Description (Input)\n${description}\n\n## Requirements\n<!-- Will be generated in /kiro:spec-requirements phase -->`;
+      await fs.writeFile(
+        path.join(featurePath, "requirements.md"),
+        requirementsTemplate,
+      );
+
+      // Ensure AGENTS.md exists in steering directory based on CLAUDE.md (static exception)
+      const agentsPath = path.join(steeringPath, "AGENTS.md");
+      const claudePath = path.join(currentPath, "CLAUDE.md");
+      const agentsExists = await fs
+        .access(agentsPath)
+        .then(() => true)
+        .catch(() => false);
+      if (!agentsExists) {
+        let agentsContent = "";
+        const claudeExists = await fs
+          .access(claudePath)
+          .then(() => true)
+          .catch(() => false);
+        if (claudeExists) {
+          const claude = await fs.readFile(claudePath, "utf8");
+          agentsContent = claude
+            .replace(
+              /# Claude Code Spec-Driven Development/g,
+              "# AI Agent Spec-Driven Development",
+            )
+            .replace(/Claude Code/g, "AI Agent")
+            .replace(/claude code/g, "ai agent")
+            .replace(/Claude/g, "AI Agent")
+            .replace(/claude/g, "ai agent");
+        } else {
+          agentsContent =
+            "# AI Agent Spec-Driven Development\n\nKiro-style Spec Driven Development implementation for AI agents across different CLIs and IDEs.";
+        }
+        await fs.writeFile(agentsPath, agentsContent);
+      }
+
+      const clarificationNote = clarificationAnswers
+        ? "\n\n✅ **Requirements Clarification**: Your answers have been incorporated into an enriched project description."
+        : "";
+
+      return {
+        content: [
+          {
+            type: "text",
+            text: `## Spec Initialization Complete\n\n**Generated Feature Name**: ${featureName}\n**Project Name**: ${projectName}\n**Project Description**: ${description}${clarificationNote}\n\n**Created Files**:\n- \`.kiro/specs/${featureName}/spec.json\` - Metadata and approval tracking\n- \`.kiro/specs/${featureName}/requirements.md\` - Requirements template with enriched description\n\n**Next Step**: Use \`sdd-requirements ${featureName}\` to generate comprehensive requirements\n\nThe spec has been initialized following stage-by-stage development principles.`,
+          },
+        ],
+      };
+    } catch (error) {
+      return {
+        content: [
+          {
+            type: "text",
+            text: `Error initializing SDD project: ${error.message}`,
+          },
+        ],
+      };
     }
-    
-    return {
-      content: [{
-        type: 'text',
-        text: `## Spec Initialization Complete\n\n**Generated Feature Name**: ${featureName}\n**Project Name**: ${projectName}\n**Project Description**: ${description}\n\n**Created Files**:\n- \`.kiro/specs/${featureName}/spec.json\` - Metadata and approval tracking\n- \`.kiro/specs/${featureName}/requirements.md\` - Requirements template\n\n**Next Step**: Use \`sdd-requirements ${featureName}\` to generate comprehensive requirements\n\nThe spec has been initialized following stage-by-stage development principles.`
-      }]
-    };
-  } catch (error) {
-    return {
-      content: [{
-        type: 'text',
-        text: `Error initializing SDD project: ${error.message}`
-      }]
-    };
-  }
-});
+  },
+);
 
 // 2. sdd-requirements - Generate requirements doc
-server.registerTool("sdd-requirements", {
-  title: "Generate Requirements Document",
-  description: "Generate requirements doc",
-  inputSchema: {
-    featureName: z.string().describe('Feature name from spec initialization')
+server.registerTool(
+  "sdd-requirements",
+  {
+    title: "Generate Requirements Document",
+    description: "Generate requirements doc",
+    inputSchema: {
+      featureName: z.string().describe("Feature name from spec initialization"),
+    },
   },
-}, async ({ featureName }) => {
-  try {
-    const currentPath = process.cwd();
-    const featurePath = path.join(currentPath, '.kiro', 'specs', featureName);
-    
-    // Check if spec exists
-    const specPath = path.join(featurePath, 'spec.json');
-    const specExists = await fs.access(specPath).then(() => true).catch(() => false);
-    if (!specExists) {
+  async ({ featureName }) => {
+    try {
+      const currentPath = process.cwd();
+      const featurePath = path.join(currentPath, ".kiro", "specs", featureName);
+
+      // Check if spec exists
+      const specPath = path.join(featurePath, "spec.json");
+      const specExists = await fs
+        .access(specPath)
+        .then(() => true)
+        .catch(() => false);
+      if (!specExists) {
+        return {
+          content: [
+            {
+              type: "text",
+              text: `Error: Spec not found for feature "${featureName}". Use sdd-init first.`,
+            },
+          ],
+        };
+      }
+
+      // Read existing spec
+      const specContent = await fs.readFile(specPath, "utf8");
+      const spec = JSON.parse(specContent);
+
+      // Generate requirements using specGenerator with fallback
+      let requirementsContent;
+      try {
+        const { mod } = await loadSpecGenerator();
+        requirementsContent = await mod.generateRequirementsDocument(
+          currentPath,
+          featureName,
+        );
+      } catch (e) {
+        requirementsContent = `# Requirements Document\n\n<!-- Warning: Analysis-backed generation failed. Using fallback template. -->\n<!-- Error: ${e && e.message ? e.message : String(e)} -->\n\n## Project Context\n**Feature**: ${spec.feature_name}\n**Description**: ${spec.description || "Feature to be implemented"}\n`;
+      }
+
+      await fs.writeFile(
+        path.join(featurePath, "requirements.md"),
+        requirementsContent,
+      );
+
+      // Update spec.json
+      spec.phase = "requirements-generated";
+      spec.approvals.requirements.generated = true;
+      spec.updated_at = await getCurrentTimestamp();
+
+      await fs.writeFile(specPath, JSON.stringify(spec, null, 2));
+
       return {
-        content: [{
-          type: 'text',
-          text: `Error: Spec not found for feature "${featureName}". Use sdd-init first.`
-        }]
+        content: [
+          {
+            type: "text",
+            text: `## Requirements Generated\n\nRequirements document generated for feature: **${featureName}**\n\n**Generated**: .kiro/specs/${featureName}/requirements.md\n**Status**: Requirements phase completed\n\n**Next Step**: Review the requirements, then use \`sdd-design\` to proceed to design phase`,
+          },
+        ],
+      };
+    } catch (error) {
+      return {
+        content: [
+          {
+            type: "text",
+            text: `Error generating requirements: ${error.message}`,
+          },
+        ],
       };
     }
-    
-    // Read existing spec
-    const specContent = await fs.readFile(specPath, 'utf8');
-    const spec = JSON.parse(specContent);
-    
-    // Generate requirements using specGenerator with fallback
-    let requirementsContent;
-    try {
-      const { mod } = await loadSpecGenerator();
-      requirementsContent = await mod.generateRequirementsDocument(currentPath, featureName);
-    } catch (e) {
-      requirementsContent = `# Requirements Document\n\n<!-- Warning: Analysis-backed generation failed. Using fallback template. -->\n<!-- Error: ${e && e.message ? e.message : String(e)} -->\n\n## Project Context\n**Feature**: ${spec.feature_name}\n**Description**: ${spec.description || 'Feature to be implemented'}\n`;
-    }
-    
-    await fs.writeFile(path.join(featurePath, 'requirements.md'), requirementsContent);
-    
-    // Update spec.json
-    spec.phase = "requirements-generated";
-    spec.approvals.requirements.generated = true;
-    spec.updated_at = await getCurrentTimestamp();
-    
-    await fs.writeFile(specPath, JSON.stringify(spec, null, 2));
-    
-    return {
-      content: [{
-        type: 'text',
-        text: `## Requirements Generated\n\nRequirements document generated for feature: **${featureName}**\n\n**Generated**: .kiro/specs/${featureName}/requirements.md\n**Status**: Requirements phase completed\n\n**Next Step**: Review the requirements, then use \`sdd-design\` to proceed to design phase`
-      }]
-    };
-  } catch (error) {
-    return {
-      content: [{
-        type: 'text',
-        text: `Error generating requirements: ${error.message}`
-      }]
-    };
-  }
-});
+  },
+);
 
 // 3. sdd-design - Create design specifications
-server.registerTool("sdd-design", {
-  title: "Create Design Specifications",
-  description: "Create design specifications",
-  inputSchema: {
-    featureName: z.string().describe('Feature name from spec initialization')
+server.registerTool(
+  "sdd-design",
+  {
+    title: "Create Design Specifications",
+    description: "Create design specifications",
+    inputSchema: {
+      featureName: z.string().describe("Feature name from spec initialization"),
+    },
   },
-}, async ({ featureName }) => {
-  try {
-    const currentPath = process.cwd();
-    const featurePath = path.join(currentPath, '.kiro', 'specs', featureName);
-    const specPath = path.join(featurePath, 'spec.json');
-    
-    // Read and validate spec
-    const specContent = await fs.readFile(specPath, 'utf8');
-    const spec = JSON.parse(specContent);
-    
-    if (!spec.approvals.requirements.generated) {
+  async ({ featureName }) => {
+    try {
+      const currentPath = process.cwd();
+      const featurePath = path.join(currentPath, ".kiro", "specs", featureName);
+      const specPath = path.join(featurePath, "spec.json");
+
+      // Read and validate spec
+      const specContent = await fs.readFile(specPath, "utf8");
+      const spec = JSON.parse(specContent);
+
+      if (!spec.approvals.requirements.generated) {
+        return {
+          content: [
+            {
+              type: "text",
+              text: `Error: Requirements must be generated before design. Run \`sdd-requirements ${featureName}\` first.`,
+            },
+          ],
+        };
+      }
+
+      // Read requirements for context
+      const requirementsPath = path.join(featurePath, "requirements.md");
+      let requirementsContext = "";
+      try {
+        requirementsContext = await fs.readFile(requirementsPath, "utf8");
+      } catch (error) {
+        requirementsContext = "Requirements document not available";
+      }
+
+      // Generate design using specGenerator with fallback
+      let designContent;
+      try {
+        const { mod } = await loadSpecGenerator();
+        designContent = await mod.generateDesignDocument(
+          currentPath,
+          featureName,
+        );
+      } catch (e) {
+        designContent = `# Technical Design Document\n\n<!-- Warning: Analysis-backed generation failed. Using fallback template. -->\n<!-- Error: ${e && e.message ? e.message : String(e)} -->\n\n## Project Context\n**Feature**: ${spec.feature_name}\n**Phase**: ${spec.phase}`;
+      }
+
+      await fs.writeFile(path.join(featurePath, "design.md"), designContent);
+
+      // Update spec.json
+      spec.phase = "design-generated";
+      spec.approvals.design.generated = true;
+      spec.updated_at = await getCurrentTimestamp();
+
+      await fs.writeFile(specPath, JSON.stringify(spec, null, 2));
+
       return {
-        content: [{
-          type: 'text',
-          text: `Error: Requirements must be generated before design. Run \`sdd-requirements ${featureName}\` first.`
-        }]
+        content: [
+          {
+            type: "text",
+            text: `## Design Generated\n\nTechnical design document generated for feature: **${featureName}**\n\n**Generated**: .kiro/specs/${featureName}/design.md\n**Status**: Design phase completed\n\n**Next Step**: Review the design document, then use \`sdd-tasks\` to proceed to task planning phase`,
+          },
+        ],
+      };
+    } catch (error) {
+      return {
+        content: [
+          {
+            type: "text",
+            text: `Error generating design: ${error.message}`,
+          },
+        ],
       };
     }
-    
-    // Read requirements for context
-    const requirementsPath = path.join(featurePath, 'requirements.md');
-    let requirementsContext = '';
-    try {
-      requirementsContext = await fs.readFile(requirementsPath, 'utf8');
-    } catch (error) {
-      requirementsContext = 'Requirements document not available';
-    }
-
-    // Generate design using specGenerator with fallback
-    let designContent;
-    try {
-      const { mod } = await loadSpecGenerator();
-      designContent = await mod.generateDesignDocument(currentPath, featureName);
-    } catch (e) {
-      designContent = `# Technical Design Document\n\n<!-- Warning: Analysis-backed generation failed. Using fallback template. -->\n<!-- Error: ${e && e.message ? e.message : String(e)} -->\n\n## Project Context\n**Feature**: ${spec.feature_name}\n**Phase**: ${spec.phase}`;
-    }
-    
-    await fs.writeFile(path.join(featurePath, 'design.md'), designContent);
-    
-    // Update spec.json
-    spec.phase = "design-generated";
-    spec.approvals.design.generated = true;
-    spec.updated_at = await getCurrentTimestamp();
-    
-    await fs.writeFile(specPath, JSON.stringify(spec, null, 2));
-    
-    return {
-      content: [{
-        type: 'text',
-        text: `## Design Generated\n\nTechnical design document generated for feature: **${featureName}**\n\n**Generated**: .kiro/specs/${featureName}/design.md\n**Status**: Design phase completed\n\n**Next Step**: Review the design document, then use \`sdd-tasks\` to proceed to task planning phase`
-      }]
-    };
-  } catch (error) {
-    return {
-      content: [{
-        type: 'text',
-        text: `Error generating design: ${error.message}`
-      }]
-    };
-  }
-});
+  },
+);
 
 // 4. sdd-tasks - Generate task breakdown
-server.registerTool("sdd-tasks", {
-  title: "Generate Task Breakdown",
-  description: "Generate task breakdown",
-  inputSchema: {
-    featureName: z.string().describe('Feature name from spec initialization')
+server.registerTool(
+  "sdd-tasks",
+  {
+    title: "Generate Task Breakdown",
+    description: "Generate task breakdown",
+    inputSchema: {
+      featureName: z.string().describe("Feature name from spec initialization"),
+    },
   },
-}, async ({ featureName }) => {
-  try {
-    const currentPath = process.cwd();
-    const featurePath = path.join(currentPath, '.kiro', 'specs', featureName);
-    const specPath = path.join(featurePath, 'spec.json');
-    
-    // Read and validate spec
-    const specContent = await fs.readFile(specPath, 'utf8');
-    const spec = JSON.parse(specContent);
-    
-    if (!spec.approvals.design.generated) {
-      return {
-        content: [{
-          type: 'text',
-          text: `Error: Design must be generated before tasks. Run \`sdd-design ${featureName}\` first.`
-        }]
-      };
-    }
-    
-    // Read design and requirements for context
-    const designPath = path.join(featurePath, 'design.md');
-    const requirementsPath = path.join(featurePath, 'requirements.md');
-    let designContext = '';
-    let requirementsContext = '';
-
+  async ({ featureName }) => {
     try {
-      designContext = await fs.readFile(designPath, 'utf8');
-    } catch (error) {
-      designContext = 'Design document not available';
-    }
+      const currentPath = process.cwd();
+      const featurePath = path.join(currentPath, ".kiro", "specs", featureName);
+      const specPath = path.join(featurePath, "spec.json");
 
-    try {
-      requirementsContext = await fs.readFile(requirementsPath, 'utf8');
-    } catch (error) {
-      requirementsContext = 'Requirements document not available';
-    }
+      // Read and validate spec
+      const specContent = await fs.readFile(specPath, "utf8");
+      const spec = JSON.parse(specContent);
 
-    // Generate tasks document based on requirements and design
-    const tasksContent = `# Implementation Plan
+      if (!spec.approvals.design.generated) {
+        return {
+          content: [
+            {
+              type: "text",
+              text: `Error: Design must be generated before tasks. Run \`sdd-design ${featureName}\` first.`,
+            },
+          ],
+        };
+      }
+
+      // Read design and requirements for context
+      const designPath = path.join(featurePath, "design.md");
+      const requirementsPath = path.join(featurePath, "requirements.md");
+      let designContext = "";
+      let requirementsContext = "";
+
+      try {
+        designContext = await fs.readFile(designPath, "utf8");
+      } catch (error) {
+        designContext = "Design document not available";
+      }
+
+      try {
+        requirementsContext = await fs.readFile(requirementsPath, "utf8");
+      } catch (error) {
+        requirementsContext = "Requirements document not available";
+      }
+
+      // Generate tasks document based on requirements and design
+      const tasksContent = `# Implementation Plan
 
 ## Project Context
 **Feature**: ${spec.feature_name}
-**Description**: ${spec.description || 'Feature to be implemented'}
-**Design Phase**: ${spec.approvals.design.generated ? 'Completed' : 'Pending'}
+**Description**: ${spec.description || "Feature to be implemented"}
+**Design Phase**: ${spec.approvals.design.generated ? "Completed" : "Pending"}
 
 ## Instructions for AI Agent
 
@@ -370,12 +736,12 @@ Create tasks that:
 
 ## Requirements Context
 \`\`\`
-${requirementsContext.substring(0, 1000)}${requirementsContext.length > 1000 ? '...\n[Requirements truncated - see requirements.md for full content]' : ''}
+${requirementsContext.substring(0, 1000)}${requirementsContext.length > 1000 ? "...\n[Requirements truncated - see requirements.md for full content]" : ""}
 \`\`\`
 
 ## Design Context
 \`\`\`
-${designContext.substring(0, 1000)}${designContext.length > 1000 ? '...\n[Design truncated - see design.md for full content]' : ''}
+${designContext.substring(0, 1000)}${designContext.length > 1000 ? "...\n[Design truncated - see design.md for full content]" : ""}
 \`\`\`
 
 ## Current Project Information
@@ -386,504 +752,635 @@ ${designContext.substring(0, 1000)}${designContext.length > 1000 ? '...\n[Design
 
 **Note**: This template will be replaced by AI-generated implementation tasks specific to your project requirements and design.`;
 
-    // Try to replace template with analysis-backed tasks
-    try {
-      const { mod } = await loadSpecGenerator();
-      tasksContent = await mod.generateTasksDocument(currentPath, featureName);
-    } catch (e) {
-      // Keep template; include debug info in file header already
+      // Try to replace template with analysis-backed tasks
+      try {
+        const { mod } = await loadSpecGenerator();
+        tasksContent = await mod.generateTasksDocument(
+          currentPath,
+          featureName,
+        );
+      } catch (e) {
+        // Keep template; include debug info in file header already
+      }
+
+      await fs.writeFile(path.join(featurePath, "tasks.md"), tasksContent);
+
+      // Update spec.json
+      spec.phase = "tasks-generated";
+      spec.approvals.tasks.generated = true;
+      spec.ready_for_implementation = true;
+      spec.updated_at = await getCurrentTimestamp();
+
+      await fs.writeFile(specPath, JSON.stringify(spec, null, 2));
+
+      return {
+        content: [
+          {
+            type: "text",
+            text: `## Implementation Tasks Generated\n\nImplementation tasks document generated for feature: **${featureName}**\n\n**Generated**: .kiro/specs/${featureName}/tasks.md\n**Status**: Tasks phase completed\n**Ready for Implementation**: Yes\n\n**Next Step**: Review tasks, then use \`sdd-implement\` to begin implementation or \`sdd-status\` to check progress`,
+          },
+        ],
+      };
+    } catch (error) {
+      return {
+        content: [
+          {
+            type: "text",
+            text: `Error generating tasks: ${error.message}`,
+          },
+        ],
+      };
     }
-    
-    await fs.writeFile(path.join(featurePath, 'tasks.md'), tasksContent);
-    
-    // Update spec.json
-    spec.phase = "tasks-generated";
-    spec.approvals.tasks.generated = true;
-    spec.ready_for_implementation = true;
-    spec.updated_at = await getCurrentTimestamp();
-    
-    await fs.writeFile(specPath, JSON.stringify(spec, null, 2));
-    
-    return {
-      content: [{
-        type: 'text',
-        text: `## Implementation Tasks Generated\n\nImplementation tasks document generated for feature: **${featureName}**\n\n**Generated**: .kiro/specs/${featureName}/tasks.md\n**Status**: Tasks phase completed\n**Ready for Implementation**: Yes\n\n**Next Step**: Review tasks, then use \`sdd-implement\` to begin implementation or \`sdd-status\` to check progress`
-      }]
-    };
-  } catch (error) {
-    return {
-      content: [{
-        type: 'text',
-        text: `Error generating tasks: ${error.message}`
-      }]
-    };
-  }
-});
+  },
+);
 
 // 5. sdd-implement - Implementation guidelines
-server.registerTool("sdd-implement", {
-  title: "Implementation Guidelines",
-  description: "Implementation guidelines",
-  inputSchema: {
-    featureName: z.string().describe('Feature name from spec initialization')
+server.registerTool(
+  "sdd-implement",
+  {
+    title: "Implementation Guidelines",
+    description: "Implementation guidelines",
+    inputSchema: {
+      featureName: z.string().describe("Feature name from spec initialization"),
+    },
   },
-}, async ({ featureName }) => {
-  try {
-    const currentPath = process.cwd();
-    const featurePath = path.join(currentPath, '.kiro', 'specs', featureName);
-    const specPath = path.join(featurePath, 'spec.json');
-    
-    // Read spec
-    const specContent = await fs.readFile(specPath, 'utf8');
-    const spec = JSON.parse(specContent);
-    
-    if (!spec.ready_for_implementation) {
+  async ({ featureName }) => {
+    try {
+      const currentPath = process.cwd();
+      const featurePath = path.join(currentPath, ".kiro", "specs", featureName);
+      const specPath = path.join(featurePath, "spec.json");
+
+      // Read spec
+      const specContent = await fs.readFile(specPath, "utf8");
+      const spec = JSON.parse(specContent);
+
+      if (!spec.ready_for_implementation) {
+        return {
+          content: [
+            {
+              type: "text",
+              text: `Error: Project not ready for implementation. Complete requirements, design, and tasks phases first.`,
+            },
+          ],
+        };
+      }
+
       return {
-        content: [{
-          type: 'text',
-          text: `Error: Project not ready for implementation. Complete requirements, design, and tasks phases first.`
-        }]
+        content: [
+          {
+            type: "text",
+            text: `## Implementation Guidelines for ${featureName}\n\n**Project Status**: Ready for implementation\n**Current Phase**: ${spec.phase}\n\n**Implementation Instructions**:\n1. Work through tasks sequentially as defined in tasks.md\n2. Follow the technical design specifications in design.md\n3. Ensure all requirements from requirements.md are satisfied\n4. Use \`sdd-quality-check\` to validate code quality\n5. Mark tasks as completed in tasks.md as you progress\n\n**Key Principles**:\n- Follow established coding patterns and conventions\n- Implement comprehensive error handling\n- Add appropriate logging and monitoring\n- Write tests for each component\n- Validate against requirements at each step\n\n**Next Steps**:\n- Begin with Task 1: Set up MCP server foundation\n- Use the design document as your implementation guide\n- Run quality checks regularly during development`,
+          },
+        ],
+      };
+    } catch (error) {
+      return {
+        content: [
+          {
+            type: "text",
+            text: `Error getting implementation guidelines: ${error.message}`,
+          },
+        ],
       };
     }
-    
-    return {
-      content: [{
-        type: 'text',
-        text: `## Implementation Guidelines for ${featureName}\n\n**Project Status**: Ready for implementation\n**Current Phase**: ${spec.phase}\n\n**Implementation Instructions**:\n1. Work through tasks sequentially as defined in tasks.md\n2. Follow the technical design specifications in design.md\n3. Ensure all requirements from requirements.md are satisfied\n4. Use \`sdd-quality-check\` to validate code quality\n5. Mark tasks as completed in tasks.md as you progress\n\n**Key Principles**:\n- Follow established coding patterns and conventions\n- Implement comprehensive error handling\n- Add appropriate logging and monitoring\n- Write tests for each component\n- Validate against requirements at each step\n\n**Next Steps**:\n- Begin with Task 1: Set up MCP server foundation\n- Use the design document as your implementation guide\n- Run quality checks regularly during development`
-      }]
-    };
-  } catch (error) {
-    return {
-      content: [{
-        type: 'text',
-        text: `Error getting implementation guidelines: ${error.message}`
-      }]
-    };
-  }
-});
+  },
+);
 
 // 6. sdd-status - Check workflow progress
-server.registerTool("sdd-status", {
-  title: "Check Workflow Progress",
-  description: "Check workflow progress",
-  inputSchema: {
-    featureName: z.string().optional().describe('Feature name (optional - shows all if not provided)')
+server.registerTool(
+  "sdd-status",
+  {
+    title: "Check Workflow Progress",
+    description: "Check workflow progress",
+    inputSchema: {
+      featureName: z
+        .string()
+        .optional()
+        .describe("Feature name (optional - shows all if not provided)"),
+    },
   },
-}, async ({ featureName }) => {
-  try {
-    const currentPath = process.cwd();
-    const kiroPath = path.join(currentPath, '.kiro');
-    
-    // Check if .kiro directory exists
-    const kiroExists = await fs.access(kiroPath).then(() => true).catch(() => false);
-    if (!kiroExists) {
-      return {
-        content: [{
-          type: 'text',
-          text: 'SDD project status: No active project found. Use sdd-init to create a new project.'
-        }]
-      };
-    }
-    
-    const specsPath = path.join(kiroPath, 'specs');
-    
-    if (featureName) {
-      // Show status for specific feature
-      const featurePath = path.join(specsPath, featureName);
-      const specPath = path.join(featurePath, 'spec.json');
-      
-      const specExists = await fs.access(specPath).then(() => true).catch(() => false);
-      if (!specExists) {
+  async ({ featureName }) => {
+    try {
+      const currentPath = process.cwd();
+      const kiroPath = path.join(currentPath, ".kiro");
+
+      // Check if .kiro directory exists
+      const kiroExists = await fs
+        .access(kiroPath)
+        .then(() => true)
+        .catch(() => false);
+      if (!kiroExists) {
         return {
-          content: [{
-            type: 'text',
-            text: `Feature "${featureName}" not found. Use sdd-init to create it.`
-          }]
+          content: [
+            {
+              type: "text",
+              text: "SDD project status: No active project found. Use sdd-init to create a new project.",
+            },
+          ],
         };
       }
-      
-      const specContent = await fs.readFile(specPath, 'utf8');
-      const spec = JSON.parse(specContent);
-      
-      let status = `## SDD Project Status: ${spec.feature_name}\n\n`;
-      status += `**Current Phase**: ${spec.phase}\n`;
-      status += `**Language**: ${spec.language}\n`;
-      status += `**Created**: ${spec.created_at}\n`;
-      status += `**Updated**: ${spec.updated_at}\n\n`;
-      
-      status += `**Phase Progress**:\n`;
-      status += `- Requirements: ${spec.approvals.requirements.generated ? '✅ Generated' : '❌ Not Generated'}${spec.approvals.requirements.approved ? ', ✅ Approved' : ', ❌ Not Approved'}\n`;
-      status += `- Design: ${spec.approvals.design.generated ? '✅ Generated' : '❌ Not Generated'}${spec.approvals.design.approved ? ', ✅ Approved' : ', ❌ Not Approved'}\n`;
-      status += `- Tasks: ${spec.approvals.tasks.generated ? '✅ Generated' : '❌ Not Generated'}${spec.approvals.tasks.approved ? ', ✅ Approved' : ', ❌ Not Approved'}\n\n`;
-      
-      status += `**Ready for Implementation**: ${spec.ready_for_implementation ? '✅ Yes' : '❌ No'}\n\n`;
-      
-      // Suggest next steps
-      if (!spec.approvals.requirements.generated) {
-        status += `**Next Step**: Run \`sdd-requirements ${featureName}\``;
-      } else if (!spec.approvals.design.generated) {
-        status += `**Next Step**: Run \`sdd-design ${featureName}\``;
-      } else if (!spec.approvals.tasks.generated) {
-        status += `**Next Step**: Run \`sdd-tasks ${featureName}\``;
-      } else {
-        status += `**Next Step**: Run \`sdd-implement ${featureName}\` to begin implementation`;
-      }
-      
-      return {
-        content: [{
-          type: 'text',
-          text: status
-        }]
-      };
-    } else {
-      // Show all features
-      const features = await fs.readdir(specsPath).catch(() => []);
-      
-      if (features.length === 0) {
-        return {
-          content: [{
-            type: 'text',
-            text: 'No SDD features found. Use sdd-init to create a new project.'
-          }]
-        };
-      }
-      
-      let status = `## SDD Project Status - All Features\n\n`;
-      
-      for (const feature of features) {
-        const specPath = path.join(specsPath, feature, 'spec.json');
-        const specExists = await fs.access(specPath).then(() => true).catch(() => false);
-        
-        if (specExists) {
-          const specContent = await fs.readFile(specPath, 'utf8');
-          const spec = JSON.parse(specContent);
-          
-          status += `**${spec.feature_name}**:\n`;
-          status += `- Phase: ${spec.phase}\n`;
-          status += `- Requirements: ${spec.approvals.requirements.generated ? '✅' : '❌'}\n`;
-          status += `- Design: ${spec.approvals.design.generated ? '✅' : '❌'}\n`;
-          status += `- Tasks: ${spec.approvals.tasks.generated ? '✅' : '❌'}\n`;
-          status += `- Ready: ${spec.ready_for_implementation ? '✅' : '❌'}\n\n`;
+
+      const specsPath = path.join(kiroPath, "specs");
+
+      if (featureName) {
+        // Show status for specific feature
+        const featurePath = path.join(specsPath, featureName);
+        const specPath = path.join(featurePath, "spec.json");
+
+        const specExists = await fs
+          .access(specPath)
+          .then(() => true)
+          .catch(() => false);
+        if (!specExists) {
+          return {
+            content: [
+              {
+                type: "text",
+                text: `Feature "${featureName}" not found. Use sdd-init to create it.`,
+              },
+            ],
+          };
         }
+
+        const specContent = await fs.readFile(specPath, "utf8");
+        const spec = JSON.parse(specContent);
+
+        let status = `## SDD Project Status: ${spec.feature_name}\n\n`;
+        status += `**Current Phase**: ${spec.phase}\n`;
+        status += `**Language**: ${spec.language}\n`;
+        status += `**Created**: ${spec.created_at}\n`;
+        status += `**Updated**: ${spec.updated_at}\n\n`;
+
+        status += `**Phase Progress**:\n`;
+        status += `- Requirements: ${spec.approvals.requirements.generated ? "✅ Generated" : "❌ Not Generated"}${spec.approvals.requirements.approved ? ", ✅ Approved" : ", ❌ Not Approved"}\n`;
+        status += `- Design: ${spec.approvals.design.generated ? "✅ Generated" : "❌ Not Generated"}${spec.approvals.design.approved ? ", ✅ Approved" : ", ❌ Not Approved"}\n`;
+        status += `- Tasks: ${spec.approvals.tasks.generated ? "✅ Generated" : "❌ Not Generated"}${spec.approvals.tasks.approved ? ", ✅ Approved" : ", ❌ Not Approved"}\n\n`;
+
+        status += `**Ready for Implementation**: ${spec.ready_for_implementation ? "✅ Yes" : "❌ No"}\n\n`;
+
+        // Suggest next steps
+        if (!spec.approvals.requirements.generated) {
+          status += `**Next Step**: Run \`sdd-requirements ${featureName}\``;
+        } else if (!spec.approvals.design.generated) {
+          status += `**Next Step**: Run \`sdd-design ${featureName}\``;
+        } else if (!spec.approvals.tasks.generated) {
+          status += `**Next Step**: Run \`sdd-tasks ${featureName}\``;
+        } else {
+          status += `**Next Step**: Run \`sdd-implement ${featureName}\` to begin implementation`;
+        }
+
+        return {
+          content: [
+            {
+              type: "text",
+              text: status,
+            },
+          ],
+        };
+      } else {
+        // Show all features
+        const features = await fs.readdir(specsPath).catch(() => []);
+
+        if (features.length === 0) {
+          return {
+            content: [
+              {
+                type: "text",
+                text: "No SDD features found. Use sdd-init to create a new project.",
+              },
+            ],
+          };
+        }
+
+        let status = `## SDD Project Status - All Features\n\n`;
+
+        for (const feature of features) {
+          const specPath = path.join(specsPath, feature, "spec.json");
+          const specExists = await fs
+            .access(specPath)
+            .then(() => true)
+            .catch(() => false);
+
+          if (specExists) {
+            const specContent = await fs.readFile(specPath, "utf8");
+            const spec = JSON.parse(specContent);
+
+            status += `**${spec.feature_name}**:\n`;
+            status += `- Phase: ${spec.phase}\n`;
+            status += `- Requirements: ${spec.approvals.requirements.generated ? "✅" : "❌"}\n`;
+            status += `- Design: ${spec.approvals.design.generated ? "✅" : "❌"}\n`;
+            status += `- Tasks: ${spec.approvals.tasks.generated ? "✅" : "❌"}\n`;
+            status += `- Ready: ${spec.ready_for_implementation ? "✅" : "❌"}\n\n`;
+          }
+        }
+
+        return {
+          content: [
+            {
+              type: "text",
+              text: status,
+            },
+          ],
+        };
       }
-      
+    } catch (error) {
       return {
-        content: [{
-          type: 'text',
-          text: status
-        }]
+        content: [
+          {
+            type: "text",
+            text: `Error checking status: ${error.message}`,
+          },
+        ],
       };
     }
-  } catch (error) {
-    return {
-      content: [{
-        type: 'text',
-        text: `Error checking status: ${error.message}`
-      }]
-    };
-  }
-});
+  },
+);
 
 // 7. sdd-approve - Approve workflow phases
-server.registerTool("sdd-approve", {
-  title: "Approve Workflow Phases",
-  description: "Approve workflow phases",
-  inputSchema: {
-    featureName: z.string().describe('Feature name from spec initialization'),
-    phase: z.enum(['requirements', 'design', 'tasks']).describe('Phase to approve')
+server.registerTool(
+  "sdd-approve",
+  {
+    title: "Approve Workflow Phases",
+    description: "Approve workflow phases",
+    inputSchema: {
+      featureName: z.string().describe("Feature name from spec initialization"),
+      phase: z
+        .enum(["requirements", "design", "tasks"])
+        .describe("Phase to approve"),
+    },
   },
-}, async ({ featureName, phase }) => {
-  try {
-    const currentPath = process.cwd();
-    const featurePath = path.join(currentPath, '.kiro', 'specs', featureName);
-    const specPath = path.join(featurePath, 'spec.json');
-    
-    // Read spec
-    const specContent = await fs.readFile(specPath, 'utf8');
-    const spec = JSON.parse(specContent);
-    
-    if (!spec.approvals[phase].generated) {
+  async ({ featureName, phase }) => {
+    try {
+      const currentPath = process.cwd();
+      const featurePath = path.join(currentPath, ".kiro", "specs", featureName);
+      const specPath = path.join(featurePath, "spec.json");
+
+      // Read spec
+      const specContent = await fs.readFile(specPath, "utf8");
+      const spec = JSON.parse(specContent);
+
+      if (!spec.approvals[phase].generated) {
+        return {
+          content: [
+            {
+              type: "text",
+              text: `Error: ${phase} must be generated before approval. Run sdd-${phase} ${featureName} first.`,
+            },
+          ],
+        };
+      }
+
+      // Approve the phase
+      spec.approvals[phase].approved = true;
+      spec.updated_at = await getCurrentTimestamp();
+
+      await fs.writeFile(specPath, JSON.stringify(spec, null, 2));
+
       return {
-        content: [{
-          type: 'text',
-          text: `Error: ${phase} must be generated before approval. Run sdd-${phase} ${featureName} first.`
-        }]
+        content: [
+          {
+            type: "text",
+            text: `## Phase Approved\n\n**Feature**: ${featureName}\n**Phase**: ${phase}\n**Status**: ✅ Approved\n\nPhase has been marked as approved and workflow can proceed to the next phase.`,
+          },
+        ],
+      };
+    } catch (error) {
+      return {
+        content: [
+          {
+            type: "text",
+            text: `Error approving phase: ${error.message}`,
+          },
+        ],
       };
     }
-    
-    // Approve the phase
-    spec.approvals[phase].approved = true;
-    spec.updated_at = await getCurrentTimestamp();
-    
-    await fs.writeFile(specPath, JSON.stringify(spec, null, 2));
-    
-    return {
-      content: [{
-        type: 'text',
-        text: `## Phase Approved\n\n**Feature**: ${featureName}\n**Phase**: ${phase}\n**Status**: ✅ Approved\n\nPhase has been marked as approved and workflow can proceed to the next phase.`
-      }]
-    };
-  } catch (error) {
-    return {
-      content: [{
-        type: 'text',
-        text: `Error approving phase: ${error.message}`
-      }]
-    };
-  }
-});
+  },
+);
 
 // 8. sdd-quality-check - Code quality analysis
-server.registerTool("sdd-quality-check", {
-  title: "Code Quality Analysis",
-  description: "Code quality analysis",
-  inputSchema: {
-    code: z.string().describe('Code to analyze'),
-    language: z.string().optional().describe('Programming language (default: javascript)')
+server.registerTool(
+  "sdd-quality-check",
+  {
+    title: "Code Quality Analysis",
+    description: "Code quality analysis",
+    inputSchema: {
+      code: z.string().describe("Code to analyze"),
+      language: z
+        .string()
+        .optional()
+        .describe("Programming language (default: javascript)"),
+    },
   },
-}, async ({ code, language = 'javascript' }) => {
-  try {
-    // Simple quality analysis (Linus-style 5-layer approach)
-    const lines = code.split('\n');
-    const issues = [];
-    
-    // Layer 1: Syntax and Basic Structure
-    if (code.includes('console.log')) {
-      issues.push('L1: Remove debug console.log statements');
-    }
-    if (code.includes('var ')) {
-      issues.push('L1: Use let/const instead of var');
-    }
-    
-    // Layer 2: Code Style and Conventions
-    if (!/^[a-z]/.test(code.split('function ')[1]?.split('(')[0] || '')) {
-      if (code.includes('function ')) {
-        issues.push('L2: Function names should start with lowercase');
+  async ({ code, language = "javascript" }) => {
+    try {
+      // Simple quality analysis (Linus-style 5-layer approach)
+      const lines = code.split("\n");
+      const issues = [];
+
+      // Layer 1: Syntax and Basic Structure
+      if (code.includes("console.log")) {
+        issues.push("L1: Remove debug console.log statements");
       }
-    }
-    
-    // Layer 3: Logic and Algorithm
-    if (code.includes('for') && !code.includes('const')) {
-      issues.push('L3: Consider using const in for loops for immutable iteration variables');
-    }
-    
-    // Layer 4: Architecture and Design
-    if (lines.length > 50) {
-      issues.push('L4: Function/module is too long, consider breaking into smaller parts');
-    }
-    
-    // Layer 5: Business Logic and Requirements
-    if (!code.includes('error') && code.includes('try')) {
-      issues.push('L5: Missing proper error handling in try block');
-    }
-    
-    const qualityScore = Math.max(0, 100 - (issues.length * 15));
-    
-    let report = `## Linus-Style Code Quality Analysis\n\n`;
-    report += `**Language**: ${language}\n`;
-    report += `**Lines of Code**: ${lines.length}\n`;
-    report += `**Quality Score**: ${qualityScore}/100\n\n`;
-    
-    if (issues.length === 0) {
-      report += `**Status**: ✅ Code quality is excellent\n\n`;
-      report += `**Analysis**: No significant issues found. Code follows good practices.`;
-    } else {
-      report += `**Issues Found**: ${issues.length}\n\n`;
-      report += `**Quality Issues**:\n`;
-      for (const issue of issues) {
-        report += `- ${issue}\n`;
+      if (code.includes("var ")) {
+        issues.push("L1: Use let/const instead of var");
       }
-      report += `\n**Recommendation**: Address the identified issues to improve code quality.`;
+
+      // Layer 2: Code Style and Conventions
+      if (!/^[a-z]/.test(code.split("function ")[1]?.split("(")[0] || "")) {
+        if (code.includes("function ")) {
+          issues.push("L2: Function names should start with lowercase");
+        }
+      }
+
+      // Layer 3: Logic and Algorithm
+      if (code.includes("for") && !code.includes("const")) {
+        issues.push(
+          "L3: Consider using const in for loops for immutable iteration variables",
+        );
+      }
+
+      // Layer 4: Architecture and Design
+      if (lines.length > 50) {
+        issues.push(
+          "L4: Function/module is too long, consider breaking into smaller parts",
+        );
+      }
+
+      // Layer 5: Business Logic and Requirements
+      if (!code.includes("error") && code.includes("try")) {
+        issues.push("L5: Missing proper error handling in try block");
+      }
+
+      const qualityScore = Math.max(0, 100 - issues.length * 15);
+
+      let report = `## Linus-Style Code Quality Analysis\n\n`;
+      report += `**Language**: ${language}\n`;
+      report += `**Lines of Code**: ${lines.length}\n`;
+      report += `**Quality Score**: ${qualityScore}/100\n\n`;
+
+      if (issues.length === 0) {
+        report += `**Status**: ✅ Code quality is excellent\n\n`;
+        report += `**Analysis**: No significant issues found. Code follows good practices.`;
+      } else {
+        report += `**Issues Found**: ${issues.length}\n\n`;
+        report += `**Quality Issues**:\n`;
+        for (const issue of issues) {
+          report += `- ${issue}\n`;
+        }
+        report += `\n**Recommendation**: Address the identified issues to improve code quality.`;
+      }
+
+      return {
+        content: [
+          {
+            type: "text",
+            text: report,
+          },
+        ],
+      };
+    } catch (error) {
+      return {
+        content: [
+          {
+            type: "text",
+            text: `Error analyzing code quality: ${error.message}`,
+          },
+        ],
+      };
     }
-    
-    return {
-      content: [{
-        type: 'text',
-        text: report
-      }]
-    };
-  } catch (error) {
-    return {
-      content: [{
-        type: 'text',
-        text: `Error analyzing code quality: ${error.message}`
-      }]
-    };
-  }
-});
+  },
+);
 
 // 9. sdd-context-load - Load project context
-server.registerTool("sdd-context-load", {
-  title: "Load Project Context",
-  description: "Load project context",
-  inputSchema: {
-    featureName: z.string().describe('Feature name to load context for')
+server.registerTool(
+  "sdd-context-load",
+  {
+    title: "Load Project Context",
+    description: "Load project context",
+    inputSchema: {
+      featureName: z.string().describe("Feature name to load context for"),
+    },
   },
-}, async ({ featureName }) => {
-  try {
-    const currentPath = process.cwd();
-    const featurePath = path.join(currentPath, '.kiro', 'specs', featureName);
-    
-    // Load all context files
-    const files = ['spec.json', 'requirements.md', 'design.md', 'tasks.md'];
-    const context = {};
-    
-    for (const file of files) {
-      const filePath = path.join(featurePath, file);
-      const fileExists = await fs.access(filePath).then(() => true).catch(() => false);
-      
-      if (fileExists) {
-        const content = await fs.readFile(filePath, 'utf8');
-        context[file] = file.endsWith('.json') ? JSON.parse(content) : content;
+  async ({ featureName }) => {
+    try {
+      const currentPath = process.cwd();
+      const featurePath = path.join(currentPath, ".kiro", "specs", featureName);
+
+      // Load all context files
+      const files = ["spec.json", "requirements.md", "design.md", "tasks.md"];
+      const context = {};
+
+      for (const file of files) {
+        const filePath = path.join(featurePath, file);
+        const fileExists = await fs
+          .access(filePath)
+          .then(() => true)
+          .catch(() => false);
+
+        if (fileExists) {
+          const content = await fs.readFile(filePath, "utf8");
+          context[file] = file.endsWith(".json")
+            ? JSON.parse(content)
+            : content;
+        }
       }
-    }
-    
-    let contextReport = `## Project Context Loaded: ${featureName}\n\n`;
-    
-    if (context['spec.json']) {
-      const spec = context['spec.json'];
-      contextReport += `**Project Metadata**:\n`;
-      contextReport += `- Feature: ${spec.feature_name}\n`;
-      contextReport += `- Phase: ${spec.phase}\n`;
-      contextReport += `- Language: ${spec.language}\n`;
-      contextReport += `- Ready for Implementation: ${spec.ready_for_implementation ? 'Yes' : 'No'}\n\n`;
-    }
-    
-    contextReport += `**Available Documents**:\n`;
-    for (const [file, content] of Object.entries(context)) {
-      if (file !== 'spec.json') {
-        const preview = typeof content === 'string' ? content.substring(0, 100) + '...' : 'JSON data';
-        contextReport += `- **${file}**: ${preview}\n`;
+
+      let contextReport = `## Project Context Loaded: ${featureName}\n\n`;
+
+      if (context["spec.json"]) {
+        const spec = context["spec.json"];
+        contextReport += `**Project Metadata**:\n`;
+        contextReport += `- Feature: ${spec.feature_name}\n`;
+        contextReport += `- Phase: ${spec.phase}\n`;
+        contextReport += `- Language: ${spec.language}\n`;
+        contextReport += `- Ready for Implementation: ${spec.ready_for_implementation ? "Yes" : "No"}\n\n`;
       }
+
+      contextReport += `**Available Documents**:\n`;
+      for (const [file, content] of Object.entries(context)) {
+        if (file !== "spec.json") {
+          const preview =
+            typeof content === "string"
+              ? content.substring(0, 100) + "..."
+              : "JSON data";
+          contextReport += `- **${file}**: ${preview}\n`;
+        }
+      }
+
+      contextReport += `\n**Context Status**: Project memory restored successfully\n`;
+      contextReport += `**Total Files Loaded**: ${Object.keys(context).length}`;
+
+      return {
+        content: [
+          {
+            type: "text",
+            text: contextReport,
+          },
+        ],
+      };
+    } catch (error) {
+      return {
+        content: [
+          {
+            type: "text",
+            text: `Error loading project context: ${error.message}`,
+          },
+        ],
+      };
     }
-    
-    contextReport += `\n**Context Status**: Project memory restored successfully\n`;
-    contextReport += `**Total Files Loaded**: ${Object.keys(context).length}`;
-    
-    return {
-      content: [{
-        type: 'text',
-        text: contextReport
-      }]
-    };
-  } catch (error) {
-    return {
-      content: [{
-        type: 'text',
-        text: `Error loading project context: ${error.message}`
-      }]
-    };
-  }
-});
+  },
+);
 
 // 10. sdd-template-render - Render templates
-server.registerTool("sdd-template-render", {
-  title: "Render Templates",
-  description: "Render templates",
-  inputSchema: {
-    templateType: z.enum(['requirements', 'design', 'tasks', 'custom']).describe('Type of template to render'),
-    featureName: z.string().describe('Feature name for template context'),
-    customTemplate: z.string().optional().describe('Custom template content (if templateType is custom)')
+server.registerTool(
+  "sdd-template-render",
+  {
+    title: "Render Templates",
+    description: "Render templates",
+    inputSchema: {
+      templateType: z
+        .enum(["requirements", "design", "tasks", "custom"])
+        .describe("Type of template to render"),
+      featureName: z.string().describe("Feature name for template context"),
+      customTemplate: z
+        .string()
+        .optional()
+        .describe("Custom template content (if templateType is custom)"),
+    },
   },
-}, async ({ templateType, featureName, customTemplate }) => {
-  try {
-    const currentPath = process.cwd();
-    const featurePath = path.join(currentPath, '.kiro', 'specs', featureName);
-    const specPath = path.join(featurePath, 'spec.json');
-    
-    // Load spec for context
-    const specExists = await fs.access(specPath).then(() => true).catch(() => false);
-    let spec = {};
-    if (specExists) {
-      const specContent = await fs.readFile(specPath, 'utf8');
-      spec = JSON.parse(specContent);
+  async ({ templateType, featureName, customTemplate }) => {
+    try {
+      const currentPath = process.cwd();
+      const featurePath = path.join(currentPath, ".kiro", "specs", featureName);
+      const specPath = path.join(featurePath, "spec.json");
+
+      // Load spec for context
+      const specExists = await fs
+        .access(specPath)
+        .then(() => true)
+        .catch(() => false);
+      let spec = {};
+      if (specExists) {
+        const specContent = await fs.readFile(specPath, "utf8");
+        spec = JSON.parse(specContent);
+      }
+
+      let renderedContent = "";
+
+      switch (templateType) {
+        case "requirements":
+          renderedContent = `# Requirements Template for ${featureName}\n\n## Project Context\n- Feature: ${spec.feature_name || featureName}\n- Language: ${spec.language || "en"}\n\n## Requirements Sections\n1. Functional Requirements\n2. Non-Functional Requirements\n3. Business Rules\n4. Acceptance Criteria (EARS format)`;
+          break;
+
+        case "design":
+          renderedContent = `# Design Template for ${featureName}\n\n## Architecture Overview\n- System Architecture\n- Component Design\n- Data Models\n- Interface Specifications\n\n## Technology Decisions\n- Stack Selection\n- Framework Choices\n- Integration Patterns`;
+          break;
+
+        case "tasks":
+          renderedContent = `# Tasks Template for ${featureName}\n\n## Implementation Tasks\n\n- [ ] 1. Foundation Setup\n  - Project initialization\n  - Dependencies setup\n  - Basic structure\n\n- [ ] 2. Core Implementation\n  - Main functionality\n  - Business logic\n  - Data handling\n\n- [ ] 3. Integration & Testing\n  - System integration\n  - Testing implementation\n  - Quality validation`;
+          break;
+
+        case "custom":
+          if (!customTemplate) {
+            throw new Error(
+              "Custom template content is required for custom template type",
+            );
+          }
+          // Simple template variable replacement
+          renderedContent = customTemplate
+            .replace(/\{\{featureName\}\}/g, featureName)
+            .replace(/\{\{language\}\}/g, spec.language || "en")
+            .replace(/\{\{phase\}\}/g, spec.phase || "initialized")
+            .replace(/\{\{timestamp\}\}/g, new Date().toISOString());
+          break;
+      }
+
+      return {
+        content: [
+          {
+            type: "text",
+            text: `## Template Rendered: ${templateType}\n\n**Feature**: ${featureName}\n**Template Type**: ${templateType}\n\n**Rendered Content**:\n\`\`\`markdown\n${renderedContent}\n\`\`\`\n\n**Usage**: Copy the rendered content to create your ${templateType} document`,
+          },
+        ],
+      };
+    } catch (error) {
+      return {
+        content: [
+          {
+            type: "text",
+            text: `Error rendering template: ${error.message}`,
+          },
+        ],
+      };
     }
-    
-    let renderedContent = '';
-    
-    switch (templateType) {
-      case 'requirements':
-        renderedContent = `# Requirements Template for ${featureName}\n\n## Project Context\n- Feature: ${spec.feature_name || featureName}\n- Language: ${spec.language || 'en'}\n\n## Requirements Sections\n1. Functional Requirements\n2. Non-Functional Requirements\n3. Business Rules\n4. Acceptance Criteria (EARS format)`;
-        break;
-        
-      case 'design':
-        renderedContent = `# Design Template for ${featureName}\n\n## Architecture Overview\n- System Architecture\n- Component Design\n- Data Models\n- Interface Specifications\n\n## Technology Decisions\n- Stack Selection\n- Framework Choices\n- Integration Patterns`;
-        break;
-        
-      case 'tasks':
-        renderedContent = `# Tasks Template for ${featureName}\n\n## Implementation Tasks\n\n- [ ] 1. Foundation Setup\n  - Project initialization\n  - Dependencies setup\n  - Basic structure\n\n- [ ] 2. Core Implementation\n  - Main functionality\n  - Business logic\n  - Data handling\n\n- [ ] 3. Integration & Testing\n  - System integration\n  - Testing implementation\n  - Quality validation`;
-        break;
-        
-      case 'custom':
-        if (!customTemplate) {
-          throw new Error('Custom template content is required for custom template type');
-        }
-        // Simple template variable replacement
-        renderedContent = customTemplate
-          .replace(/\{\{featureName\}\}/g, featureName)
-          .replace(/\{\{language\}\}/g, spec.language || 'en')
-          .replace(/\{\{phase\}\}/g, spec.phase || 'initialized')
-          .replace(/\{\{timestamp\}\}/g, new Date().toISOString());
-        break;
-    }
-    
-    return {
-      content: [{
-        type: 'text',
-        text: `## Template Rendered: ${templateType}\n\n**Feature**: ${featureName}\n**Template Type**: ${templateType}\n\n**Rendered Content**:\n\`\`\`markdown\n${renderedContent}\n\`\`\`\n\n**Usage**: Copy the rendered content to create your ${templateType} document`
-      }]
-    };
-  } catch (error) {
-    return {
-      content: [{
-        type: 'text',
-        text: `Error rendering template: ${error.message}`
-      }]
-    };
-  }
-});
+  },
+);
 
 // 11. sdd-steering - Create/update steering documents
-server.registerTool("sdd-steering", {
-  title: "Create/Update Steering Documents",
-  description: "Create or update steering documents",
-  inputSchema: {
-    updateMode: z.enum(['create', 'update']).optional().describe('Whether to create new or update existing documents (auto-detected if not specified)')
+server.registerTool(
+  "sdd-steering",
+  {
+    title: "Create/Update Steering Documents",
+    description: "Create or update steering documents",
+    inputSchema: {
+      updateMode: z
+        .enum(["create", "update"])
+        .optional()
+        .describe(
+          "Whether to create new or update existing documents (auto-detected if not specified)",
+        ),
+    },
   },
-}, async ({ updateMode }) => {
-  try {
-    const currentPath = process.cwd();
-    const steeringPath = path.join(currentPath, '.kiro', 'steering');
-    
-    // Create steering directory if it doesn't exist
-    await fs.mkdir(steeringPath, { recursive: true });
-    
-    // Analyze existing files
-    const productExists = await fs.access(path.join(steeringPath, 'product.md')).then(() => true).catch(() => false);
-    const techExists = await fs.access(path.join(steeringPath, 'tech.md')).then(() => true).catch(() => false);
-    const structureExists = await fs.access(path.join(steeringPath, 'structure.md')).then(() => true).catch(() => false);
-    
-    // Auto-detect mode if not specified
-    if (!updateMode) {
-      updateMode = (productExists || techExists || structureExists) ? 'update' : 'create';
-    }
-    
-    // Generate actual analyzed content using documentGenerator functions
-    const analysis = await analyzeProject(currentPath);
-    const productContent = generateProductDocument(analysis);
-    const techContent = generateTechDocument(analysis);
-    const structureContent = generateStructureDocument(analysis);
+  async ({ updateMode }) => {
+    try {
+      const currentPath = process.cwd();
+      const steeringPath = path.join(currentPath, ".kiro", "steering");
 
-    // Write the analyzed steering documents
-    await fs.writeFile(path.join(steeringPath, 'product.md'), productContent);
-    await fs.writeFile(path.join(steeringPath, 'tech.md'), techContent);
-    await fs.writeFile(path.join(steeringPath, 'structure.md'), structureContent);
-    
-    // Ensure static steering docs exist (full content)
-    const linusPath = path.join(steeringPath, 'linus-review.md');
-    const linusExists = await fs.access(linusPath).then(() => true).catch(() => false);
-    if (!linusExists) {
-      const fullLinusContent = `# Linus Torvalds Code Review Steering Document
+      // Create steering directory if it doesn't exist
+      await fs.mkdir(steeringPath, { recursive: true });
+
+      // Analyze existing files
+      const productExists = await fs
+        .access(path.join(steeringPath, "product.md"))
+        .then(() => true)
+        .catch(() => false);
+      const techExists = await fs
+        .access(path.join(steeringPath, "tech.md"))
+        .then(() => true)
+        .catch(() => false);
+      const structureExists = await fs
+        .access(path.join(steeringPath, "structure.md"))
+        .then(() => true)
+        .catch(() => false);
+
+      // Auto-detect mode if not specified
+      if (!updateMode) {
+        updateMode =
+          productExists || techExists || structureExists ? "update" : "create";
+      }
+
+      // Generate actual analyzed content using documentGenerator functions
+      const analysis = await analyzeProject(currentPath);
+      const productContent = generateProductDocument(analysis);
+      const techContent = generateTechDocument(analysis);
+      const structureContent = generateStructureDocument(analysis);
+
+      // Write the analyzed steering documents
+      await fs.writeFile(path.join(steeringPath, "product.md"), productContent);
+      await fs.writeFile(path.join(steeringPath, "tech.md"), techContent);
+      await fs.writeFile(
+        path.join(steeringPath, "structure.md"),
+        structureContent,
+      );
+
+      // Ensure static steering docs exist (full content)
+      const linusPath = path.join(steeringPath, "linus-review.md");
+      const linusExists = await fs
+        .access(linusPath)
+        .then(() => true)
+        .catch(() => false);
+      if (!linusExists) {
+        const fullLinusContent = `# Linus Torvalds Code Review Steering Document
 
 ## Role Definition
 
@@ -1036,12 +1533,15 @@ This steering document is applied when:
 - Code review: Apply taste scoring and improvement recommendations
 
 Remember: "Good taste" comes from experience. Question everything. Simplify ruthlessly. Never break userspace.`;
-      await fs.writeFile(linusPath, fullLinusContent);
-    }
-    const commitPath = path.join(steeringPath, 'commit.md');
-    const commitExists = await fs.access(commitPath).then(() => true).catch(() => false);
-    if (!commitExists) {
-      const fullCommitContent = `# Commit Message Guidelines
+        await fs.writeFile(linusPath, fullLinusContent);
+      }
+      const commitPath = path.join(steeringPath, "commit.md");
+      const commitExists = await fs
+        .access(commitPath)
+        .then(() => true)
+        .catch(() => false);
+      if (!commitExists) {
+        const fullCommitContent = `# Commit Message Guidelines
 
 Commit messages should follow a consistent format to improve readability and provide clear context about changes. Each commit message should start with a type prefix that indicates the nature of the change.
 
@@ -1100,26 +1600,35 @@ refactor(module): simplify EKS node group module
 6. Reference issues and pull requests in the footer
 
 These guidelines help maintain a clean and useful git history that makes it easier to track changes and understand the project's evolution.`;
-      await fs.writeFile(commitPath, fullCommitContent);
-    }
+        await fs.writeFile(commitPath, fullCommitContent);
+      }
 
-    // Ensure AGENTS.md exists in steering directory (create from CLAUDE.md if available)
-    const agentsPath = path.join(steeringPath, 'AGENTS.md');
-    const claudePath = path.join(currentPath, 'CLAUDE.md');
-    const agentsExists = await fs.access(agentsPath).then(() => true).catch(() => false);
-    if (!agentsExists) {
-      let agentsContent = '';
-      const claudeExists = await fs.access(claudePath).then(() => true).catch(() => false);
-      if (claudeExists) {
-        const claude = await fs.readFile(claudePath, 'utf8');
-        agentsContent = claude
-          .replace(/# Claude Code Spec-Driven Development/g, '# AI Agent Spec-Driven Development')
-          .replace(/Claude Code/g, 'AI Agent')
-          .replace(/claude code/g, 'ai agent')
-          .replace(/\.claude\//g, '.ai agent/')
-          .replace(/\/claude/g, '/agent');
-      } else {
-        agentsContent = `# AI Agent Spec-Driven Development
+      // Ensure AGENTS.md exists in steering directory (create from CLAUDE.md if available)
+      const agentsPath = path.join(steeringPath, "AGENTS.md");
+      const claudePath = path.join(currentPath, "CLAUDE.md");
+      const agentsExists = await fs
+        .access(agentsPath)
+        .then(() => true)
+        .catch(() => false);
+      if (!agentsExists) {
+        let agentsContent = "";
+        const claudeExists = await fs
+          .access(claudePath)
+          .then(() => true)
+          .catch(() => false);
+        if (claudeExists) {
+          const claude = await fs.readFile(claudePath, "utf8");
+          agentsContent = claude
+            .replace(
+              /# Claude Code Spec-Driven Development/g,
+              "# AI Agent Spec-Driven Development",
+            )
+            .replace(/Claude Code/g, "AI Agent")
+            .replace(/claude code/g, "ai agent")
+            .replace(/\.claude\//g, ".ai agent/")
+            .replace(/\/claude/g, "/agent");
+        } else {
+          agentsContent = `# AI Agent Spec-Driven Development
 
 Kiro-style Spec Driven Development implementation using ai agent slash commands, hooks and agents.
 
@@ -1195,15 +1704,18 @@ Managed by \`/kiro:steering\` command. Updates here reflect command changes.
 - **Always**: Loaded in every interaction (default)
 - **Conditional**: Loaded for specific file patterns (e.g., "*.test.js")
 - **Manual**: Reference with \`@filename.md\` syntax`;
+        }
+        await fs.writeFile(agentsPath, agentsContent);
       }
-      await fs.writeFile(agentsPath, agentsContent);
-    }
 
-    // Ensure security-check.md exists (static)
-    const securityPath = path.join(steeringPath, 'security-check.md');
-    const securityExists = await fs.access(securityPath).then(() => true).catch(() => false);
-    if (!securityExists) {
-      const securityContent = `# Security Check (OWASP Top 10 Aligned)
+      // Ensure security-check.md exists (static)
+      const securityPath = path.join(steeringPath, "security-check.md");
+      const securityExists = await fs
+        .access(securityPath)
+        .then(() => true)
+        .catch(() => false);
+      if (!securityExists) {
+        const securityContent = `# Security Check (OWASP Top 10 Aligned)
 
 Use this checklist during code generation and review. Avoid OWASP Top 10 issues by design.
 
@@ -1253,13 +1765,16 @@ Use this checklist during code generation and review. Avoid OWASP Top 10 issues 
 - Use content security best practices for templates/HTML
 - Add security tests where feasible (authz, input validation)
 `;
-      await fs.writeFile(securityPath, securityContent);
-    }
+        await fs.writeFile(securityPath, securityContent);
+      }
 
-    const tddPath = path.join(steeringPath, 'tdd-guideline.md');
-    const tddExists = await fs.access(tddPath).then(() => true).catch(() => false);
-    if (!tddExists) {
-      const tddContent = `# Test-Driven Development (TDD) Guideline
+      const tddPath = path.join(steeringPath, "tdd-guideline.md");
+      const tddExists = await fs
+        .access(tddPath)
+        .then(() => true)
+        .catch(() => false);
+      if (!tddExists) {
+        const tddContent = `# Test-Driven Development (TDD) Guideline
 
 ## Purpose
 This steering document defines TDD practices and workflow to ensure test-first development throughout the project lifecycle.
@@ -1503,13 +2018,16 @@ npm test path/to/test.test.ts
 ## Enforcement
 This document is **always** active and applies to all development phases. Every code change should follow TDD principles as defined here.
 `;
-      await fs.writeFile(tddPath, tddContent);
-    }
+        await fs.writeFile(tddPath, tddContent);
+      }
 
-    const principlesPath = path.join(steeringPath, 'principles.md');
-    const principlesExists = await fs.access(principlesPath).then(() => true).catch(() => false);
-    if (!principlesExists) {
-      const principlesContent = `# Core Coding Principles and Patterns
+      const principlesPath = path.join(steeringPath, "principles.md");
+      const principlesExists = await fs
+        .access(principlesPath)
+        .then(() => true)
+        .catch(() => false);
+      if (!principlesExists) {
+        const principlesContent = `# Core Coding Principles and Patterns
 
 Follow SOLID, DRY, KISS, YAGNI, Separation of Concerns, and Modularity in all code.
 
@@ -1547,15 +2065,16 @@ High cohesion, low coupling. Encapsulate implementation details.
 
 Refer to full principles.md for detailed examples and language-specific guidance.
 `;
-      await fs.writeFile(principlesPath, principlesContent);
-    }
-    
-    const mode = updateMode === 'update' ? 'Updated' : 'Created';
-    
-    return {
-      content: [{
-        type: 'text',
-        text: `## Steering Documents ${mode}
+        await fs.writeFile(principlesPath, principlesContent);
+      }
+
+      const mode = updateMode === "update" ? "Updated" : "Created";
+
+      return {
+        content: [
+          {
+            type: "text",
+            text: `## Steering Documents ${mode}
 
 **Project Path**: ${currentPath}
 **Mode**: ${updateMode}
@@ -1584,66 +2103,88 @@ The steering documents now contain analysis instructions for AI agents rather th
 3. Content will be tailored to your specific technology stack and architecture
 4. Documents will provide accurate, up-to-date guidance for development
 
-These steering documents provide instructions for AI agents to analyze your project and generate appropriate guidance, eliminating the language-dependency issues of template-based approaches.`
-      }]
-    };
-  } catch (error) {
-    return {
-      content: [{
-        type: 'text',
-        text: `Error creating/updating steering documents: ${error.message}`
-      }]
-    };
-  }
-});
+These steering documents provide instructions for AI agents to analyze your project and generate appropriate guidance, eliminating the language-dependency issues of template-based approaches.`,
+          },
+        ],
+      };
+    } catch (error) {
+      return {
+        content: [
+          {
+            type: "text",
+            text: `Error creating/updating steering documents: ${error.message}`,
+          },
+        ],
+      };
+    }
+  },
+);
 
 // 12. sdd-steering-custom - Create custom steering documents
-server.registerTool("sdd-steering-custom", {
-  title: "Create Custom Steering Document",
-  description: "Create custom steering documents",
-  inputSchema: {
-    fileName: z.string().describe('Filename for the custom steering document (e.g., "api-standards.md")'),
-    topic: z.string().describe('Topic/purpose of the custom steering document'),
-    inclusionMode: z.enum(['always', 'conditional', 'manual']).describe('How this steering document should be included'),
-    filePattern: z.string().optional().describe('File pattern for conditional inclusion (e.g., "*.test.js", "src/api/**/*")')
+server.registerTool(
+  "sdd-steering-custom",
+  {
+    title: "Create Custom Steering Document",
+    description: "Create custom steering documents",
+    inputSchema: {
+      fileName: z
+        .string()
+        .describe(
+          'Filename for the custom steering document (e.g., "api-standards.md")',
+        ),
+      topic: z
+        .string()
+        .describe("Topic/purpose of the custom steering document"),
+      inclusionMode: z
+        .enum(["always", "conditional", "manual"])
+        .describe("How this steering document should be included"),
+      filePattern: z
+        .string()
+        .optional()
+        .describe(
+          'File pattern for conditional inclusion (e.g., "*.test.js", "src/api/**/*")',
+        ),
+    },
   },
-}, async ({ fileName, topic, inclusionMode, filePattern }) => {
-  try {
-    const currentPath = process.cwd();
-    const steeringPath = path.join(currentPath, '.kiro', 'steering');
-    
-    // Create steering directory if it doesn't exist
-    await fs.mkdir(steeringPath, { recursive: true });
-    
-    // Ensure filename ends with .md
-    if (!fileName.endsWith('.md')) {
-      fileName += '.md';
-    }
-    
-    // Generate inclusion mode comment
-    let inclusionComment = '<!-- Inclusion Mode: ';
-    if (inclusionMode === 'always') {
-      inclusionComment += 'Always -->';
-    } else if (inclusionMode === 'conditional') {
-      inclusionComment += `Conditional: "${filePattern || '**/*'}" -->`;
-    } else {
-      inclusionComment += 'Manual -->';
-    }
-    
-    // Generate content based on topic
-    let content = `${inclusionComment}
-    
+  async ({ fileName, topic, inclusionMode, filePattern }) => {
+    try {
+      const currentPath = process.cwd();
+      const steeringPath = path.join(currentPath, ".kiro", "steering");
+
+      // Create steering directory if it doesn't exist
+      await fs.mkdir(steeringPath, { recursive: true });
+
+      // Ensure filename ends with .md
+      if (!fileName.endsWith(".md")) {
+        fileName += ".md";
+      }
+
+      // Generate inclusion mode comment
+      let inclusionComment = "<!-- Inclusion Mode: ";
+      if (inclusionMode === "always") {
+        inclusionComment += "Always -->";
+      } else if (inclusionMode === "conditional") {
+        inclusionComment += `Conditional: "${filePattern || "**/*"}" -->`;
+      } else {
+        inclusionComment += "Manual -->";
+      }
+
+      // Generate content based on topic
+      let content = `${inclusionComment}
+
 # ${topic}
 
 ## Purpose
 This document provides specialized guidance for ${topic.toLowerCase()} within the project context.
 
 ## When This Document Applies
-${inclusionMode === 'conditional' ? 
-  `This guidance applies when working with files matching: \`${filePattern || '**/*'}\`` :
-  inclusionMode === 'always' ? 
-  'This guidance applies to all development work in this project.' :
-  'Reference this document manually using @${fileName} when needed.'}
+${
+  inclusionMode === "conditional"
+    ? `This guidance applies when working with files matching: \`${filePattern || "**/*"}\``
+    : inclusionMode === "always"
+      ? "This guidance applies to all development work in this project."
+      : "Reference this document manually using @${fileName} when needed."
+}
 
 ## Guidelines
 
@@ -1679,545 +2220,666 @@ ${inclusionMode === 'conditional' ?
 - [Testing requirements]
 - [Review checklist items]`;
 
-    const filePath = path.join(steeringPath, fileName);
-    await fs.writeFile(filePath, content);
-    
-    return {
-      content: [{
-        type: 'text',
-        text: `## Custom Steering Document Created
+      const filePath = path.join(steeringPath, fileName);
+      await fs.writeFile(filePath, content);
+
+      return {
+        content: [
+          {
+            type: "text",
+            text: `## Custom Steering Document Created
 
 **File**: .kiro/steering/${fileName}
 **Topic**: ${topic}
-**Inclusion Mode**: ${inclusionMode}${inclusionMode === 'conditional' ? ` (Pattern: "${filePattern}")` : ''}
+**Inclusion Mode**: ${inclusionMode}${inclusionMode === "conditional" ? ` (Pattern: "${filePattern}")` : ""}
 
 **Created**: Custom steering document with template structure
 **Usage**: ${
-  inclusionMode === 'always' ? 'Will be loaded in all AI interactions' :
-  inclusionMode === 'conditional' ? `Will be loaded when working with files matching "${filePattern}"` :
-  `Reference manually with @${fileName} when needed`
-}
+              inclusionMode === "always"
+                ? "Will be loaded in all AI interactions"
+                : inclusionMode === "conditional"
+                  ? `Will be loaded when working with files matching "${filePattern}"`
+                  : `Reference manually with @${fileName} when needed`
+            }
 
-The document has been created with a standard template structure. Edit the file to add your specific guidelines, examples, and best practices for ${topic.toLowerCase()}.`
-      }]
-    };
-  } catch (error) {
-    return {
-      content: [{
-        type: 'text',
-        text: `Error creating custom steering document: ${error.message}`
-      }]
-    };
-  }
-});
+The document has been created with a standard template structure. Edit the file to add your specific guidelines, examples, and best practices for ${topic.toLowerCase()}.`,
+          },
+        ],
+      };
+    } catch (error) {
+      return {
+        content: [
+          {
+            type: "text",
+            text: `Error creating custom steering document: ${error.message}`,
+          },
+        ],
+      };
+    }
+  },
+);
 
 // 13. sdd-validate-design - Interactive design quality review
-server.registerTool("sdd-validate-design", {
-  title: "Validate Design Quality",
-  description: "Interactive design quality review and validation",
-  inputSchema: {
-    featureName: z.string().describe('Feature name to validate design for')
+server.registerTool(
+  "sdd-validate-design",
+  {
+    title: "Validate Design Quality",
+    description: "Interactive design quality review and validation",
+    inputSchema: {
+      featureName: z.string().describe("Feature name to validate design for"),
+    },
   },
-}, async ({ featureName }) => {
-  try {
-    const currentPath = process.cwd();
-    const featurePath = path.join(currentPath, '.kiro', 'specs', featureName);
-    const designPath = path.join(featurePath, 'design.md');
-    const specPath = path.join(featurePath, 'spec.json');
-    
-    // Check if design document exists
-    const designExists = await fs.access(designPath).then(() => true).catch(() => false);
-    if (!designExists) {
-      return {
-        content: [{
-          type: 'text',
-          text: `Error: Design document not found. Run \`sdd-design ${featureName}\` first to generate design document.`
-        }]
-      };
-    }
-    
-    // Load design and spec
-    const designContent = await fs.readFile(designPath, 'utf8');
-    const specContent = await fs.readFile(specPath, 'utf8');
-    const spec = JSON.parse(specContent);
-    
-    // Analyze design for critical issues
-    const issues = [];
-    
-    // Check for type safety (if TypeScript patterns detected)
-    if (designContent.includes('any') || designContent.includes(': any')) {
-      issues.push({
-        title: "Type Safety Concern",
-        concern: "Design mentions 'any' types which compromises type safety",
-        impact: "Reduces code reliability and IDE support",
-        suggestion: "Define explicit interfaces and types for all data structures"
-      });
-    }
-    
-    // Check for architectural patterns
-    if (!designContent.includes('Component') && !designContent.includes('Service') && !designContent.includes('Module')) {
-      issues.push({
-        title: "Architecture Clarity",
-        concern: "Design lacks clear component or service boundaries",
-        impact: "May lead to monolithic or poorly organized code",
-        suggestion: "Define clear components, services, or modules with specific responsibilities"
-      });
-    }
-    
-    // Check for error handling
-    if (!designContent.includes('error') && !designContent.includes('Error')) {
-      issues.push({
-        title: "Error Handling Strategy",
-        concern: "Design doesn't address error handling patterns",
-        impact: "Runtime errors may not be properly managed",
-        suggestion: "Add comprehensive error handling strategy and exception management"
-      });
-    }
-    
-    // Limit to 3 most critical issues
-    const criticalIssues = issues.slice(0, 3);
-    
-    // Identify design strengths
-    const strengths = [];
-    if (designContent.includes('mermaid') || designContent.includes('```')) {
-      strengths.push("Visual documentation with diagrams and code examples");
-    }
-    if (designContent.includes('interface') || designContent.includes('Interface')) {
-      strengths.push("Clear interface definitions and contracts");
-    }
-    
-    // Make GO/NO-GO decision
-    const hasBlockingIssues = criticalIssues.length > 2 || 
-      criticalIssues.some(issue => issue.title.includes('Architecture') || issue.title.includes('Type Safety'));
-    
-    const decision = hasBlockingIssues ? 'NO-GO' : 'GO';
-    const nextStep = decision === 'GO' ? 
-      `Run \`sdd-tasks ${featureName}\` to generate implementation tasks` :
-      `Address critical issues in design document before proceeding`;
-    
-    let report = `## Design Validation Review: ${featureName}\n\n`;
-    report += `**Overall Assessment**: ${decision === 'GO' ? '✅ Design ready for implementation' : '❌ Design needs revision'}\n\n`;
-    
-    if (criticalIssues.length > 0) {
-      report += `### Critical Issues (${criticalIssues.length})\n\n`;
-      criticalIssues.forEach((issue, index) => {
-        report += `🔴 **Critical Issue ${index + 1}**: ${issue.title}\n`;
-        report += `**Concern**: ${issue.concern}\n`;
-        report += `**Impact**: ${issue.impact}\n`;
-        report += `**Suggestion**: ${issue.suggestion}\n\n`;
-      });
-    }
-    
-    if (strengths.length > 0) {
-      report += `### Design Strengths\n\n`;
-      strengths.forEach(strength => {
-        report += `✅ ${strength}\n`;
-      });
-      report += `\n`;
-    }
-    
-    report += `### Final Assessment\n`;
-    report += `**Decision**: ${decision}\n`;
-    report += `**Rationale**: ${
-      decision === 'GO' ? 
-      'Design addresses core requirements with acceptable architectural approach and manageable risks.' :
-      'Critical architectural or technical issues need resolution before implementation can proceed safely.'
-    }\n`;
-    report += `**Next Steps**: ${nextStep}\n\n`;
-    
-    report += `### Interactive Discussion\n`;
-    report += `Questions for design review:\n`;
-    report += `1. Do you agree with the identified issues and their severity?\n`;
-    report += `2. Are there alternative approaches to address the concerns?\n`;
-    report += `3. What are your thoughts on the overall design complexity?\n`;
-    report += `4. Are there any design decisions that need clarification?\n`;
-    
-    return {
-      content: [{
-        type: 'text',
-        text: report
-      }]
-    };
-  } catch (error) {
-    return {
-      content: [{
-        type: 'text',
-        text: `Error validating design: ${error.message}`
-      }]
-    };
-  }
-});
+  async ({ featureName }) => {
+    try {
+      const currentPath = process.cwd();
+      const featurePath = path.join(currentPath, ".kiro", "specs", featureName);
+      const designPath = path.join(featurePath, "design.md");
+      const specPath = path.join(featurePath, "spec.json");
 
-// 14. sdd-validate-gap - Analyze implementation gap
-server.registerTool("sdd-validate-gap", {
-  title: "Validate Implementation Gap",
-  description: "Analyze implementation gap between requirements and codebase",
-  inputSchema: {
-    featureName: z.string().describe('Feature name to analyze implementation gap for')
-  },
-}, async ({ featureName }) => {
-  try {
-    const currentPath = process.cwd();
-    const featurePath = path.join(currentPath, '.kiro', 'specs', featureName);
-    const requirementsPath = path.join(featurePath, 'requirements.md');
-    const specPath = path.join(featurePath, 'spec.json');
-    
-    // Check if requirements exist
-    const requirementsExist = await fs.access(requirementsPath).then(() => true).catch(() => false);
-    if (!requirementsExist) {
-      return {
-        content: [{
-          type: 'text',
-          text: `Error: Requirements document not found. Run \`sdd-requirements ${featureName}\` first to generate requirements.`
-        }]
-      };
-    }
-    
-    // Load requirements and spec
-    const requirementsContent = await fs.readFile(requirementsPath, 'utf8');
-    const specContent = await fs.readFile(specPath, 'utf8');
-    const spec = JSON.parse(specContent);
-    
-    // Analyze current codebase
-    const codebaseAnalysis = {
-      hasPackageJson: await fs.access('package.json').then(() => true).catch(() => false),
-      hasSourceCode: false,
-      techStack: [],
-      architecture: 'Unknown'
-    };
-    
-    if (codebaseAnalysis.hasPackageJson) {
-      const packageContent = await fs.readFile('package.json', 'utf8');
-      const packageJson = JSON.parse(packageContent);
-      codebaseAnalysis.techStack = Object.keys(packageJson.dependencies || {});
-      codebaseAnalysis.architecture = 'Node.js Application';
-    }
-    
-    // Check for source directories
-    const srcExists = await fs.access('src').then(() => true).catch(() => false);
-    const libExists = await fs.access('lib').then(() => true).catch(() => false);
-    codebaseAnalysis.hasSourceCode = srcExists || libExists;
-    
-    // Extract requirements complexity
-    const requirements = requirementsContent.match(/WHEN|IF|WHILE|WHERE/g) || [];
-    const complexity = requirements.length > 10 ? 'XL' : 
-                      requirements.length > 6 ? 'L' :
-                      requirements.length > 3 ? 'M' : 'S';
-    
-    // Identify gaps and implementation approaches
-    const gaps = [];
-    if (!codebaseAnalysis.hasSourceCode) {
-      gaps.push("No existing source code structure - requires full implementation from scratch");
-    }
-    if (!codebaseAnalysis.techStack.includes('@modelcontextprotocol/sdk')) {
-      gaps.push("MCP SDK integration required for AI tool compatibility");
-    }
-    if (requirementsContent.includes('database') || requirementsContent.includes('storage')) {
-      gaps.push("Data storage layer needs to be designed and implemented");
-    }
-    
-    // Implementation strategy options
-    const strategies = [
-      {
-        approach: "Extension",
-        rationale: codebaseAnalysis.hasSourceCode ? 
-          "Extend existing codebase with new functionality" : 
-          "Not applicable - no existing codebase to extend",
-        applicable: codebaseAnalysis.hasSourceCode,
-        complexity: codebaseAnalysis.hasSourceCode ? 'M' : 'N/A',
-        tradeoffs: codebaseAnalysis.hasSourceCode ? 
-          "Pros: Maintains consistency, faster development. Cons: May introduce technical debt" :
-          "N/A"
-      },
-      {
-        approach: "New Implementation",
-        rationale: "Create new components following established patterns",
-        applicable: true,
-        complexity: complexity,
-        tradeoffs: "Pros: Clean architecture, full control. Cons: More development time, integration complexity"
-      },
-      {
-        approach: "Hybrid",
-        rationale: "Combine extension of existing components with new development where needed",
-        applicable: codebaseAnalysis.hasSourceCode,
-        complexity: codebaseAnalysis.hasSourceCode ? 'L' : 'M',
-        tradeoffs: "Pros: Balanced approach, optimal resource usage. Cons: Requires careful integration planning"
-      }
-    ];
-    
-    const applicableStrategies = strategies.filter(s => s.applicable);
-    const recommendedStrategy = applicableStrategies.find(s => s.approach === 'Hybrid') || 
-                              applicableStrategies.find(s => s.approach === 'New Implementation');
-    
-    let report = `## Implementation Gap Analysis: ${featureName}\n\n`;
-    
-    report += `### Analysis Summary\n`;
-    report += `- **Feature Complexity**: ${complexity} (based on ${requirements.length} requirements)\n`;
-    report += `- **Existing Codebase**: ${codebaseAnalysis.hasSourceCode ? 'Source code detected' : 'No source code structure'}\n`;
-    report += `- **Technology Stack**: ${codebaseAnalysis.techStack.length} dependencies\n`;
-    report += `- **Architecture Type**: ${codebaseAnalysis.architecture}\n\n`;
-    
-    report += `### Existing Codebase Insights\n`;
-    report += `- **Package Management**: ${codebaseAnalysis.hasPackageJson ? 'npm/package.json configured' : 'No package.json found'}\n`;
-    report += `- **Source Structure**: ${codebaseAnalysis.hasSourceCode ? 'Established source directories' : 'No conventional source structure'}\n`;
-    report += `- **Key Dependencies**: ${codebaseAnalysis.techStack.slice(0, 5).join(', ') || 'None detected'}\n\n`;
-    
-    if (gaps.length > 0) {
-      report += `### Implementation Gaps Identified\n`;
-      gaps.forEach(gap => report += `- ${gap}\n`);
-      report += `\n`;
-    }
-    
-    report += `### Implementation Strategy Options\n\n`;
-    applicableStrategies.forEach(strategy => {
-      report += `**${strategy.approach} Approach**:\n`;
-      report += `- **Rationale**: ${strategy.rationale}\n`;
-      report += `- **Complexity**: ${strategy.complexity}\n`;
-      report += `- **Trade-offs**: ${strategy.tradeoffs}\n\n`;
-    });
-    
-    report += `### Technical Research Needs\n`;
-    const researchNeeds = [];
-    if (!codebaseAnalysis.techStack.includes('@modelcontextprotocol/sdk')) {
-      researchNeeds.push("MCP SDK integration patterns and best practices");
-    }
-    if (requirementsContent.includes('template') || requirementsContent.includes('generation')) {
-      researchNeeds.push("Template engine selection and implementation");
-    }
-    if (requirementsContent.includes('workflow') || requirementsContent.includes('state')) {
-      researchNeeds.push("State machine or workflow engine patterns");
-    }
-    
-    if (researchNeeds.length > 0) {
-      researchNeeds.forEach(need => report += `- ${need}\n`);
-    } else {
-      report += `- No significant research dependencies identified\n`;
-    }
-    report += `\n`;
-    
-    report += `### Recommendations for Design Phase\n`;
-    report += `- **Preferred Approach**: ${recommendedStrategy.approach} (${recommendedStrategy.complexity} complexity)\n`;
-    report += `- **Key Decisions**: Architecture patterns, technology integration, component boundaries\n`;
-    report += `- **Risk Mitigation**: ${complexity === 'XL' || complexity === 'L' ? 'Consider phased implementation approach' : 'Standard development approach acceptable'}\n`;
-    report += `- **Next Step**: Use this analysis to inform technical design decisions\n`;
-    
-    return {
-      content: [{
-        type: 'text',
-        text: report
-      }]
-    };
-  } catch (error) {
-    return {
-      content: [{
-        type: 'text',
-        text: `Error analyzing implementation gap: ${error.message}`
-      }]
-    };
-  }
-});
-
-// 15. sdd-spec-impl - Execute spec tasks using TDD
-server.registerTool("sdd-spec-impl", {
-  title: "Execute Spec Tasks with TDD",
-  description: "Execute spec tasks using TDD methodology",
-  inputSchema: {
-    featureName: z.string().describe('Feature name to execute tasks for'),
-    taskNumbers: z.string().optional().describe('Specific task numbers to execute (e.g., "1.1,2.3" or leave empty for all pending)')
-  },
-}, async ({ featureName, taskNumbers }) => {
-  try {
-    const currentPath = process.cwd();
-    const featurePath = path.join(currentPath, '.kiro', 'specs', featureName);
-    const tasksPath = path.join(featurePath, 'tasks.md');
-    const requirementsPath = path.join(featurePath, 'requirements.md');
-    const designPath = path.join(featurePath, 'design.md');
-    const specPath = path.join(featurePath, 'spec.json');
-    
-    // Validate required files exist
-    const requiredFiles = [
-      { path: requirementsPath, name: 'requirements.md' },
-      { path: designPath, name: 'design.md' },
-      { path: tasksPath, name: 'tasks.md' },
-      { path: specPath, name: 'spec.json' }
-    ];
-    
-    for (const file of requiredFiles) {
-      const exists = await fs.access(file.path).then(() => true).catch(() => false);
-      if (!exists) {
+      // Check if design document exists
+      const designExists = await fs
+        .access(designPath)
+        .then(() => true)
+        .catch(() => false);
+      if (!designExists) {
         return {
-          content: [{
-            type: 'text',
-            text: `Error: Required file ${file.name} not found. Complete the full spec workflow first:\n1. sdd-requirements ${featureName}\n2. sdd-design ${featureName}\n3. sdd-tasks ${featureName}`
-          }]
+          content: [
+            {
+              type: "text",
+              text: `Error: Design document not found. Run \`sdd-design ${featureName}\` first to generate design document.`,
+            },
+          ],
         };
       }
-    }
-    
-    // Load all context documents
-    const tasksContent = await fs.readFile(tasksPath, 'utf8');
-    const specContent = await fs.readFile(specPath, 'utf8');
-    const spec = JSON.parse(specContent);
-    
-    // Parse tasks to find pending ones
-    const taskLines = tasksContent.split('\n');
-    const tasks = [];
-    let currentMajorTask = null;
-    
-    for (let i = 0; i < taskLines.length; i++) {
-      const line = taskLines[i].trim();
-      
-      // Match major tasks (- [ ] 1. Task name)
-      const majorMatch = line.match(/^- \[([ x])\] (\d+)\. (.+)$/);
-      if (majorMatch) {
-        currentMajorTask = {
-          number: majorMatch[2],
-          description: majorMatch[3],
-          completed: majorMatch[1] === 'x',
-          subtasks: []
-        };
-        tasks.push(currentMajorTask);
-        continue;
-      }
-      
-      // Match sub-tasks (- [ ] 1.1 Subtask name)
-      const subMatch = line.match(/^- \[([ x])\] (\d+\.\d+) (.+)$/);
-      if (subMatch && currentMajorTask) {
-        currentMajorTask.subtasks.push({
-          number: subMatch[2],
-          description: subMatch[3],
-          completed: subMatch[1] === 'x'
+
+      // Load design and spec
+      const designContent = await fs.readFile(designPath, "utf8");
+      const specContent = await fs.readFile(specPath, "utf8");
+      const spec = JSON.parse(specContent);
+
+      // Analyze design for critical issues
+      const issues = [];
+
+      // Check for type safety (if TypeScript patterns detected)
+      if (designContent.includes("any") || designContent.includes(": any")) {
+        issues.push({
+          title: "Type Safety Concern",
+          concern: "Design mentions 'any' types which compromises type safety",
+          impact: "Reduces code reliability and IDE support",
+          suggestion:
+            "Define explicit interfaces and types for all data structures",
         });
       }
-    }
-    
-    // Filter tasks based on taskNumbers parameter
-    let tasksToExecute = [];
-    if (taskNumbers) {
-      const requestedNumbers = taskNumbers.split(',').map(n => n.trim());
-      for (const task of tasks) {
-        if (requestedNumbers.includes(task.number) && !task.completed) {
-          tasksToExecute.push({ type: 'major', task });
-        }
-        for (const subtask of task.subtasks) {
-          if (requestedNumbers.includes(subtask.number) && !subtask.completed) {
-            tasksToExecute.push({ type: 'subtask', task: subtask, parent: task });
-          }
-        }
+
+      // Check for architectural patterns
+      if (
+        !designContent.includes("Component") &&
+        !designContent.includes("Service") &&
+        !designContent.includes("Module")
+      ) {
+        issues.push({
+          title: "Architecture Clarity",
+          concern: "Design lacks clear component or service boundaries",
+          impact: "May lead to monolithic or poorly organized code",
+          suggestion:
+            "Define clear components, services, or modules with specific responsibilities",
+        });
       }
-    } else {
-      // Get all pending tasks
-      for (const task of tasks) {
-        if (!task.completed) {
-          tasksToExecute.push({ type: 'major', task });
-        }
-        for (const subtask of task.subtasks) {
-          if (!subtask.completed) {
-            tasksToExecute.push({ type: 'subtask', task: subtask, parent: task });
-          }
-        }
+
+      // Check for error handling
+      if (
+        !designContent.includes("error") &&
+        !designContent.includes("Error")
+      ) {
+        issues.push({
+          title: "Error Handling Strategy",
+          concern: "Design doesn't address error handling patterns",
+          impact: "Runtime errors may not be properly managed",
+          suggestion:
+            "Add comprehensive error handling strategy and exception management",
+        });
       }
-    }
-    
-    if (tasksToExecute.length === 0) {
+
+      // Limit to 3 most critical issues
+      const criticalIssues = issues.slice(0, 3);
+
+      // Identify design strengths
+      const strengths = [];
+      if (designContent.includes("mermaid") || designContent.includes("```")) {
+        strengths.push("Visual documentation with diagrams and code examples");
+      }
+      if (
+        designContent.includes("interface") ||
+        designContent.includes("Interface")
+      ) {
+        strengths.push("Clear interface definitions and contracts");
+      }
+
+      // Make GO/NO-GO decision
+      const hasBlockingIssues =
+        criticalIssues.length > 2 ||
+        criticalIssues.some(
+          (issue) =>
+            issue.title.includes("Architecture") ||
+            issue.title.includes("Type Safety"),
+        );
+
+      const decision = hasBlockingIssues ? "NO-GO" : "GO";
+      const nextStep =
+        decision === "GO"
+          ? `Run \`sdd-tasks ${featureName}\` to generate implementation tasks`
+          : `Address critical issues in design document before proceeding`;
+
+      let report = `## Design Validation Review: ${featureName}\n\n`;
+      report += `**Overall Assessment**: ${decision === "GO" ? "✅ Design ready for implementation" : "❌ Design needs revision"}\n\n`;
+
+      if (criticalIssues.length > 0) {
+        report += `### Critical Issues (${criticalIssues.length})\n\n`;
+        criticalIssues.forEach((issue, index) => {
+          report += `🔴 **Critical Issue ${index + 1}**: ${issue.title}\n`;
+          report += `**Concern**: ${issue.concern}\n`;
+          report += `**Impact**: ${issue.impact}\n`;
+          report += `**Suggestion**: ${issue.suggestion}\n\n`;
+        });
+      }
+
+      if (strengths.length > 0) {
+        report += `### Design Strengths\n\n`;
+        strengths.forEach((strength) => {
+          report += `✅ ${strength}\n`;
+        });
+        report += `\n`;
+      }
+
+      report += `### Final Assessment\n`;
+      report += `**Decision**: ${decision}\n`;
+      report += `**Rationale**: ${
+        decision === "GO"
+          ? "Design addresses core requirements with acceptable architectural approach and manageable risks."
+          : "Critical architectural or technical issues need resolution before implementation can proceed safely."
+      }\n`;
+      report += `**Next Steps**: ${nextStep}\n\n`;
+
+      report += `### Interactive Discussion\n`;
+      report += `Questions for design review:\n`;
+      report += `1. Do you agree with the identified issues and their severity?\n`;
+      report += `2. Are there alternative approaches to address the concerns?\n`;
+      report += `3. What are your thoughts on the overall design complexity?\n`;
+      report += `4. Are there any design decisions that need clarification?\n`;
+
       return {
-        content: [{
-          type: 'text',
-          text: `## No Pending Tasks Found\n\n**Feature**: ${featureName}\n**Status**: ${taskNumbers ? 'Specified tasks already completed or not found' : 'All tasks already completed'}\n\n${taskNumbers ? `**Requested**: ${taskNumbers}` : '**All tasks**: ✅ Completed'}\n\nUse \`sdd-status ${featureName}\` to check current progress.`
-        }]
+        content: [
+          {
+            type: "text",
+            text: report,
+          },
+        ],
+      };
+    } catch (error) {
+      return {
+        content: [
+          {
+            type: "text",
+            text: `Error validating design: ${error.message}`,
+          },
+        ],
       };
     }
-    
-    // Generate TDD implementation guidance for the tasks
-    let report = `## TDD Implementation Execution: ${featureName}\n\n`;
-    report += `**Tasks to Execute**: ${tasksToExecute.length} pending tasks\n`;
-    report += `**TDD Methodology**: Kent Beck's Red → Green → Refactor cycle\n\n`;
-    
-    report += `### Context Loaded\n`;
-    report += `- ✅ Requirements: .kiro/specs/${featureName}/requirements.md\n`;
-    report += `- ✅ Design: .kiro/specs/${featureName}/design.md\n`;
-    report += `- ✅ Tasks: .kiro/specs/${featureName}/tasks.md\n`;
-    report += `- ✅ Metadata: .kiro/specs/${featureName}/spec.json\n\n`;
-    
-    report += `### TDD Implementation Plan\n\n`;
-    
-    tasksToExecute.slice(0, 5).forEach((item, index) => {
-      const task = item.task;
-      const taskNumber = item.type === 'subtask' ? task.number : task.number;
-      const taskDesc = task.description;
-      
-      report += `**Task ${taskNumber}**: ${taskDesc}\n\n`;
-      report += `**TDD Cycle for this task**:\n`;
-      report += `1. 🔴 **RED**: Write failing tests for "${taskDesc}"\n`;
-      report += `   - Define test cases that specify expected behavior\n`;
-      report += `   - Ensure tests fail initially (no implementation yet)\n`;
-      report += `   - Verify test framework and setup is working\n\n`;
-      
-      report += `2. 🟢 **GREEN**: Write minimal code to pass tests\n`;
-      report += `   - Implement only what's needed to make tests pass\n`;
-      report += `   - Focus on making it work, not making it perfect\n`;
-      report += `   - Avoid over-engineering at this stage\n\n`;
-      
-      report += `3. 🔵 **REFACTOR**: Clean up and improve code structure\n`;
-      report += `   - Improve code quality while keeping tests green\n`;
-      report += `   - Remove duplication and improve naming\n`;
-      report += `   - Ensure code follows project conventions\n\n`;
-      
-      report += `4. ✅ **VERIFY**: Complete task verification\n`;
-      report += `   - All tests pass (new and existing)\n`;
-      report += `   - Code quality meets standards\n`;
-      report += `   - No regressions in existing functionality\n`;
-      report += `   - Mark task as completed: \`- [x] ${taskNumber} ${taskDesc}\`\n\n`;
-    });
-    
-    if (tasksToExecute.length > 5) {
-      report += `... and ${tasksToExecute.length - 5} more tasks\n\n`;
+  },
+);
+
+// 14. sdd-validate-gap - Analyze implementation gap
+server.registerTool(
+  "sdd-validate-gap",
+  {
+    title: "Validate Implementation Gap",
+    description: "Analyze implementation gap between requirements and codebase",
+    inputSchema: {
+      featureName: z
+        .string()
+        .describe("Feature name to analyze implementation gap for"),
+    },
+  },
+  async ({ featureName }) => {
+    try {
+      const currentPath = process.cwd();
+      const featurePath = path.join(currentPath, ".kiro", "specs", featureName);
+      const requirementsPath = path.join(featurePath, "requirements.md");
+      const specPath = path.join(featurePath, "spec.json");
+
+      // Check if requirements exist
+      const requirementsExist = await fs
+        .access(requirementsPath)
+        .then(() => true)
+        .catch(() => false);
+      if (!requirementsExist) {
+        return {
+          content: [
+            {
+              type: "text",
+              text: `Error: Requirements document not found. Run \`sdd-requirements ${featureName}\` first to generate requirements.`,
+            },
+          ],
+        };
+      }
+
+      // Load requirements and spec
+      const requirementsContent = await fs.readFile(requirementsPath, "utf8");
+      const specContent = await fs.readFile(specPath, "utf8");
+      const spec = JSON.parse(specContent);
+
+      // Analyze current codebase
+      const codebaseAnalysis = {
+        hasPackageJson: await fs
+          .access("package.json")
+          .then(() => true)
+          .catch(() => false),
+        hasSourceCode: false,
+        techStack: [],
+        architecture: "Unknown",
+      };
+
+      if (codebaseAnalysis.hasPackageJson) {
+        const packageContent = await fs.readFile("package.json", "utf8");
+        const packageJson = JSON.parse(packageContent);
+        codebaseAnalysis.techStack = Object.keys(
+          packageJson.dependencies || {},
+        );
+        codebaseAnalysis.architecture = "Node.js Application";
+      }
+
+      // Check for source directories
+      const srcExists = await fs
+        .access("src")
+        .then(() => true)
+        .catch(() => false);
+      const libExists = await fs
+        .access("lib")
+        .then(() => true)
+        .catch(() => false);
+      codebaseAnalysis.hasSourceCode = srcExists || libExists;
+
+      // Extract requirements complexity
+      const requirements =
+        requirementsContent.match(/WHEN|IF|WHILE|WHERE/g) || [];
+      const complexity =
+        requirements.length > 10
+          ? "XL"
+          : requirements.length > 6
+            ? "L"
+            : requirements.length > 3
+              ? "M"
+              : "S";
+
+      // Identify gaps and implementation approaches
+      const gaps = [];
+      if (!codebaseAnalysis.hasSourceCode) {
+        gaps.push(
+          "No existing source code structure - requires full implementation from scratch",
+        );
+      }
+      if (!codebaseAnalysis.techStack.includes("@modelcontextprotocol/sdk")) {
+        gaps.push("MCP SDK integration required for AI tool compatibility");
+      }
+      if (
+        requirementsContent.includes("database") ||
+        requirementsContent.includes("storage")
+      ) {
+        gaps.push("Data storage layer needs to be designed and implemented");
+      }
+
+      // Implementation strategy options
+      const strategies = [
+        {
+          approach: "Extension",
+          rationale: codebaseAnalysis.hasSourceCode
+            ? "Extend existing codebase with new functionality"
+            : "Not applicable - no existing codebase to extend",
+          applicable: codebaseAnalysis.hasSourceCode,
+          complexity: codebaseAnalysis.hasSourceCode ? "M" : "N/A",
+          tradeoffs: codebaseAnalysis.hasSourceCode
+            ? "Pros: Maintains consistency, faster development. Cons: May introduce technical debt"
+            : "N/A",
+        },
+        {
+          approach: "New Implementation",
+          rationale: "Create new components following established patterns",
+          applicable: true,
+          complexity: complexity,
+          tradeoffs:
+            "Pros: Clean architecture, full control. Cons: More development time, integration complexity",
+        },
+        {
+          approach: "Hybrid",
+          rationale:
+            "Combine extension of existing components with new development where needed",
+          applicable: codebaseAnalysis.hasSourceCode,
+          complexity: codebaseAnalysis.hasSourceCode ? "L" : "M",
+          tradeoffs:
+            "Pros: Balanced approach, optimal resource usage. Cons: Requires careful integration planning",
+        },
+      ];
+
+      const applicableStrategies = strategies.filter((s) => s.applicable);
+      const recommendedStrategy =
+        applicableStrategies.find((s) => s.approach === "Hybrid") ||
+        applicableStrategies.find((s) => s.approach === "New Implementation");
+
+      let report = `## Implementation Gap Analysis: ${featureName}\n\n`;
+
+      report += `### Analysis Summary\n`;
+      report += `- **Feature Complexity**: ${complexity} (based on ${requirements.length} requirements)\n`;
+      report += `- **Existing Codebase**: ${codebaseAnalysis.hasSourceCode ? "Source code detected" : "No source code structure"}\n`;
+      report += `- **Technology Stack**: ${codebaseAnalysis.techStack.length} dependencies\n`;
+      report += `- **Architecture Type**: ${codebaseAnalysis.architecture}\n\n`;
+
+      report += `### Existing Codebase Insights\n`;
+      report += `- **Package Management**: ${codebaseAnalysis.hasPackageJson ? "npm/package.json configured" : "No package.json found"}\n`;
+      report += `- **Source Structure**: ${codebaseAnalysis.hasSourceCode ? "Established source directories" : "No conventional source structure"}\n`;
+      report += `- **Key Dependencies**: ${codebaseAnalysis.techStack.slice(0, 5).join(", ") || "None detected"}\n\n`;
+
+      if (gaps.length > 0) {
+        report += `### Implementation Gaps Identified\n`;
+        gaps.forEach((gap) => (report += `- ${gap}\n`));
+        report += `\n`;
+      }
+
+      report += `### Implementation Strategy Options\n\n`;
+      applicableStrategies.forEach((strategy) => {
+        report += `**${strategy.approach} Approach**:\n`;
+        report += `- **Rationale**: ${strategy.rationale}\n`;
+        report += `- **Complexity**: ${strategy.complexity}\n`;
+        report += `- **Trade-offs**: ${strategy.tradeoffs}\n\n`;
+      });
+
+      report += `### Technical Research Needs\n`;
+      const researchNeeds = [];
+      if (!codebaseAnalysis.techStack.includes("@modelcontextprotocol/sdk")) {
+        researchNeeds.push("MCP SDK integration patterns and best practices");
+      }
+      if (
+        requirementsContent.includes("template") ||
+        requirementsContent.includes("generation")
+      ) {
+        researchNeeds.push("Template engine selection and implementation");
+      }
+      if (
+        requirementsContent.includes("workflow") ||
+        requirementsContent.includes("state")
+      ) {
+        researchNeeds.push("State machine or workflow engine patterns");
+      }
+
+      if (researchNeeds.length > 0) {
+        researchNeeds.forEach((need) => (report += `- ${need}\n`));
+      } else {
+        report += `- No significant research dependencies identified\n`;
+      }
+      report += `\n`;
+
+      report += `### Recommendations for Design Phase\n`;
+      report += `- **Preferred Approach**: ${recommendedStrategy.approach} (${recommendedStrategy.complexity} complexity)\n`;
+      report += `- **Key Decisions**: Architecture patterns, technology integration, component boundaries\n`;
+      report += `- **Risk Mitigation**: ${complexity === "XL" || complexity === "L" ? "Consider phased implementation approach" : "Standard development approach acceptable"}\n`;
+      report += `- **Next Step**: Use this analysis to inform technical design decisions\n`;
+
+      return {
+        content: [
+          {
+            type: "text",
+            text: report,
+          },
+        ],
+      };
+    } catch (error) {
+      return {
+        content: [
+          {
+            type: "text",
+            text: `Error analyzing implementation gap: ${error.message}`,
+          },
+        ],
+      };
     }
-    
-    report += `### Implementation Guidelines\n`;
-    report += `- **Follow design specifications**: Implement exactly what's specified in design.md\n`;
-    report += `- **Test-first approach**: Always write tests before implementation code\n`;
-    report += `- **Incremental progress**: Complete one task fully before moving to next\n`;
-    report += `- **Update task status**: Mark checkboxes as completed in tasks.md\n`;
-    report += `- **Quality focus**: Maintain code quality and test coverage\n\n`;
-    
-    report += `### Next Steps\n`;
-    report += `1. Start with the first pending task: "${tasksToExecute[0].task.description}"\n`;
-    report += `2. Follow the TDD cycle: Red → Green → Refactor → Verify\n`;
-    report += `3. Update tasks.md to mark completed tasks with [x]\n`;
-    report += `4. Run \`sdd-quality-check\` to validate code quality\n`;
-    report += `5. Continue with remaining tasks sequentially\n\n`;
-    
-    report += `**Remember**: TDD is about building confidence through tests. Write tests that clearly specify the expected behavior, then implement the simplest solution that makes those tests pass.`;
-    
-    return {
-      content: [{
-        type: 'text',
-        text: report
-      }]
-    };
-  } catch (error) {
-    return {
-      content: [{
-        type: 'text',
-        text: `Error executing spec implementation: ${error.message}`
-      }]
-    };
-  }
-});
+  },
+);
+
+// 15. sdd-spec-impl - Execute spec tasks using TDD
+server.registerTool(
+  "sdd-spec-impl",
+  {
+    title: "Execute Spec Tasks with TDD",
+    description: "Execute spec tasks using TDD methodology",
+    inputSchema: {
+      featureName: z.string().describe("Feature name to execute tasks for"),
+      taskNumbers: z
+        .string()
+        .optional()
+        .describe(
+          'Specific task numbers to execute (e.g., "1.1,2.3" or leave empty for all pending)',
+        ),
+    },
+  },
+  async ({ featureName, taskNumbers }) => {
+    try {
+      const currentPath = process.cwd();
+      const featurePath = path.join(currentPath, ".kiro", "specs", featureName);
+      const tasksPath = path.join(featurePath, "tasks.md");
+      const requirementsPath = path.join(featurePath, "requirements.md");
+      const designPath = path.join(featurePath, "design.md");
+      const specPath = path.join(featurePath, "spec.json");
+
+      // Validate required files exist
+      const requiredFiles = [
+        { path: requirementsPath, name: "requirements.md" },
+        { path: designPath, name: "design.md" },
+        { path: tasksPath, name: "tasks.md" },
+        { path: specPath, name: "spec.json" },
+      ];
+
+      for (const file of requiredFiles) {
+        const exists = await fs
+          .access(file.path)
+          .then(() => true)
+          .catch(() => false);
+        if (!exists) {
+          return {
+            content: [
+              {
+                type: "text",
+                text: `Error: Required file ${file.name} not found. Complete the full spec workflow first:\n1. sdd-requirements ${featureName}\n2. sdd-design ${featureName}\n3. sdd-tasks ${featureName}`,
+              },
+            ],
+          };
+        }
+      }
+
+      // Load all context documents
+      const tasksContent = await fs.readFile(tasksPath, "utf8");
+      const specContent = await fs.readFile(specPath, "utf8");
+      const spec = JSON.parse(specContent);
+
+      // Parse tasks to find pending ones
+      const taskLines = tasksContent.split("\n");
+      const tasks = [];
+      let currentMajorTask = null;
+
+      for (let i = 0; i < taskLines.length; i++) {
+        const line = taskLines[i].trim();
+
+        // Match major tasks (- [ ] 1. Task name)
+        const majorMatch = line.match(/^- \[([ x])\] (\d+)\. (.+)$/);
+        if (majorMatch) {
+          currentMajorTask = {
+            number: majorMatch[2],
+            description: majorMatch[3],
+            completed: majorMatch[1] === "x",
+            subtasks: [],
+          };
+          tasks.push(currentMajorTask);
+          continue;
+        }
+
+        // Match sub-tasks (- [ ] 1.1 Subtask name)
+        const subMatch = line.match(/^- \[([ x])\] (\d+\.\d+) (.+)$/);
+        if (subMatch && currentMajorTask) {
+          currentMajorTask.subtasks.push({
+            number: subMatch[2],
+            description: subMatch[3],
+            completed: subMatch[1] === "x",
+          });
+        }
+      }
+
+      // Filter tasks based on taskNumbers parameter
+      let tasksToExecute = [];
+      if (taskNumbers) {
+        const requestedNumbers = taskNumbers.split(",").map((n) => n.trim());
+        for (const task of tasks) {
+          if (requestedNumbers.includes(task.number) && !task.completed) {
+            tasksToExecute.push({ type: "major", task });
+          }
+          for (const subtask of task.subtasks) {
+            if (
+              requestedNumbers.includes(subtask.number) &&
+              !subtask.completed
+            ) {
+              tasksToExecute.push({
+                type: "subtask",
+                task: subtask,
+                parent: task,
+              });
+            }
+          }
+        }
+      } else {
+        // Get all pending tasks
+        for (const task of tasks) {
+          if (!task.completed) {
+            tasksToExecute.push({ type: "major", task });
+          }
+          for (const subtask of task.subtasks) {
+            if (!subtask.completed) {
+              tasksToExecute.push({
+                type: "subtask",
+                task: subtask,
+                parent: task,
+              });
+            }
+          }
+        }
+      }
+
+      if (tasksToExecute.length === 0) {
+        return {
+          content: [
+            {
+              type: "text",
+              text: `## No Pending Tasks Found\n\n**Feature**: ${featureName}\n**Status**: ${taskNumbers ? "Specified tasks already completed or not found" : "All tasks already completed"}\n\n${taskNumbers ? `**Requested**: ${taskNumbers}` : "**All tasks**: ✅ Completed"}\n\nUse \`sdd-status ${featureName}\` to check current progress.`,
+            },
+          ],
+        };
+      }
+
+      // Generate TDD implementation guidance for the tasks
+      let report = `## TDD Implementation Execution: ${featureName}\n\n`;
+      report += `**Tasks to Execute**: ${tasksToExecute.length} pending tasks\n`;
+      report += `**TDD Methodology**: Kent Beck's Red → Green → Refactor cycle\n\n`;
+
+      report += `### Context Loaded\n`;
+      report += `- ✅ Requirements: .kiro/specs/${featureName}/requirements.md\n`;
+      report += `- ✅ Design: .kiro/specs/${featureName}/design.md\n`;
+      report += `- ✅ Tasks: .kiro/specs/${featureName}/tasks.md\n`;
+      report += `- ✅ Metadata: .kiro/specs/${featureName}/spec.json\n\n`;
+
+      report += `### TDD Implementation Plan\n\n`;
+
+      tasksToExecute.slice(0, 5).forEach((item, index) => {
+        const task = item.task;
+        const taskNumber = item.type === "subtask" ? task.number : task.number;
+        const taskDesc = task.description;
+
+        report += `**Task ${taskNumber}**: ${taskDesc}\n\n`;
+        report += `**TDD Cycle for this task**:\n`;
+        report += `1. 🔴 **RED**: Write failing tests for "${taskDesc}"\n`;
+        report += `   - Define test cases that specify expected behavior\n`;
+        report += `   - Ensure tests fail initially (no implementation yet)\n`;
+        report += `   - Verify test framework and setup is working\n\n`;
+
+        report += `2. 🟢 **GREEN**: Write minimal code to pass tests\n`;
+        report += `   - Implement only what's needed to make tests pass\n`;
+        report += `   - Focus on making it work, not making it perfect\n`;
+        report += `   - Avoid over-engineering at this stage\n\n`;
+
+        report += `3. 🔵 **REFACTOR**: Clean up and improve code structure\n`;
+        report += `   - Improve code quality while keeping tests green\n`;
+        report += `   - Remove duplication and improve naming\n`;
+        report += `   - Ensure code follows project conventions\n\n`;
+
+        report += `4. ✅ **VERIFY**: Complete task verification\n`;
+        report += `   - All tests pass (new and existing)\n`;
+        report += `   - Code quality meets standards\n`;
+        report += `   - No regressions in existing functionality\n`;
+        report += `   - Mark task as completed: \`- [x] ${taskNumber} ${taskDesc}\`\n\n`;
+      });
+
+      if (tasksToExecute.length > 5) {
+        report += `... and ${tasksToExecute.length - 5} more tasks\n\n`;
+      }
+
+      report += `### Implementation Guidelines\n`;
+      report += `- **Follow design specifications**: Implement exactly what's specified in design.md\n`;
+      report += `- **Test-first approach**: Always write tests before implementation code\n`;
+      report += `- **Incremental progress**: Complete one task fully before moving to next\n`;
+      report += `- **Update task status**: Mark checkboxes as completed in tasks.md\n`;
+      report += `- **Quality focus**: Maintain code quality and test coverage\n\n`;
+
+      report += `### Next Steps\n`;
+      report += `1. Start with the first pending task: "${tasksToExecute[0].task.description}"\n`;
+      report += `2. Follow the TDD cycle: Red → Green → Refactor → Verify\n`;
+      report += `3. Update tasks.md to mark completed tasks with [x]\n`;
+      report += `4. Run \`sdd-quality-check\` to validate code quality\n`;
+      report += `5. Continue with remaining tasks sequentially\n\n`;
+
+      report += `**Remember**: TDD is about building confidence through tests. Write tests that clearly specify the expected behavior, then implement the simplest solution that makes those tests pass.`;
+
+      return {
+        content: [
+          {
+            type: "text",
+            text: report,
+          },
+        ],
+      };
+    } catch (error) {
+      return {
+        content: [
+          {
+            type: "text",
+            text: `Error executing spec implementation: ${error.message}`,
+          },
+        ],
+      };
+    }
+  },
+);
 
 const transport = new StdioServerTransport();
 // Helper functions for validation
 function isAnalysisInsufficient(analysis) {
-  return analysis.name === 'Unknown Project' && 
-         analysis.description === 'No description available' &&
-         analysis.dependencies.length === 0;
+  return (
+    analysis.name === "Unknown Project" &&
+    analysis.description === "No description available" &&
+    analysis.dependencies.length === 0
+  );
 }
 
 function contentContainsGenericPlaceholders(content) {
-  return content.includes('Unknown Project') || 
-         content.includes('No description available') ||
-         content.includes('unknown');
+  return (
+    content.includes("Unknown Project") ||
+    content.includes("No description available") ||
+    content.includes("unknown")
+  );
 }
 
 await server.connect(transport);
