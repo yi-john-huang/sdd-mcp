@@ -5,6 +5,57 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.6.0] - 2025-10-30
+
+### Changed
+- **Architecture Refactoring**: Decomposed `RequirementsClarificationService` from "God Class" into focused, single-responsibility services following Domain-Driven Design principles
+  - **SteeringContextLoader**: Pure I/O service for loading steering documents from filesystem
+  - **DescriptionAnalyzer**: Pure analysis service using scored semantic detection (0-100 per category)
+  - **QuestionGenerator**: Pure transformation service generating questions from analysis + configuration
+  - **AnswerValidator**: Pure validation service with security checks
+  - **DescriptionEnricher**: Pure synthesis service for 5W1H-structured descriptions
+  - **RequirementsClarificationService**: Now acts as thin orchestrator delegating to specialized services
+- **Improved Analysis**: Replaced brittle boolean regex matching with scored semantic detection
+  - Each 5W1H category now scored 0-100 based on keyword density and coverage
+  - Boolean presence derived from scores (threshold: 30%)
+  - New score fields in `ClarificationAnalysis`: `whyScore`, `whoScore`, `whatScore`, `successScore`
+  - Reduces false positives/negatives from simple pattern matching
+- **Externalized Configuration**: Moved all question templates to `clarification-questions.ts`
+  - Stable semantic IDs: `why_problem`, `why_value`, `who_users`, `what_mvp_features`, etc.
+  - Each template includes: question, rationale, examples, required flag, condition function
+  - Enables adding new questions without code changes
+  - Better separation of business rules from service logic
+
+### Added
+- **New Domain Types**: 
+  - `SteeringContext`: Moved to domain types for reusability across services
+  - `DescriptionComponents`: Structured 5W1H components for enriched descriptions
+- **Comprehensive Test Coverage**: 
+  - 15 tests for DescriptionAnalyzer (scored semantic detection)
+  - 8 tests for QuestionGenerator (template-based generation)
+  - 11 tests for AnswerValidator (validation + security)
+  - 10 tests for DescriptionEnricher (5W1H synthesis)
+  - 13 tests for SteeringContextLoader (I/O with error handling)
+  - 5 tests for RequirementsClarificationService (orchestration)
+  - Total: 62 new unit tests, all passing
+
+### Technical Improvements
+- **Single Responsibility Principle**: Each service has one clear purpose with focused interface
+- **Dependency Injection**: All new services registered in DI container with proper type bindings
+- **Error Handling**: SteeringContextLoader differentiates file-level errors (debug) from system errors (warn)
+- **Testability**: Pure functions enable fast, isolated unit tests without mocks
+- **Maintainability**: Services average ~100 LOC vs previous ~500 LOC monolith
+- **Type Safety**: All services fully typed with readonly interfaces for immutability
+
+### Migration Notes
+- **Breaking Change**: `RequirementsClarificationService` constructor signature changed
+  - Old: `constructor(fileSystem: FileSystemPort, logger: LoggerPort)`
+  - New: `constructor(logger, steeringLoader, analyzer, questionGenerator, answerValidator, enricher)`
+  - **Impact**: Direct instantiation requires all 6 dependencies
+  - **Mitigation**: Use DI container (`container.get(TYPES.RequirementsClarificationService)`) - no code changes needed
+- **API Compatibility**: Public methods unchanged - `analyzeDescription()`, `validateAnswers()`, `synthesizeDescription()` work identically
+- **Test Updates**: Tests now mock specialized services instead of filesystem - see updated test file for examples
+
 ## [1.5.1] - 2025-10-30
 
 ### Fixed

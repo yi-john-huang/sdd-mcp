@@ -84,6 +84,11 @@ import { CodebaseAnalysisService } from "../../application/services/CodebaseAnal
 import { SteeringDocumentService } from "../../application/services/SteeringDocumentService.js";
 import { ProjectContextService } from "../../application/services/ProjectContextService.js";
 import { RequirementsClarificationService } from "../../application/services/RequirementsClarificationService.js";
+import { SteeringContextLoader } from "../../application/services/SteeringContextLoader.js";
+import { DescriptionAnalyzer } from "../../application/services/DescriptionAnalyzer.js";
+import { QuestionGenerator } from "../../application/services/QuestionGenerator.js";
+import { AnswerValidator } from "../../application/services/AnswerValidator.js";
+import { DescriptionEnricher } from "../../application/services/DescriptionEnricher.js";
 import { SDDToolAdapter } from "../../adapters/cli/SDDToolAdapter.js";
 
 export function createContainer(): Container {
@@ -182,6 +187,19 @@ export function createContainer(): Container {
       TYPES.RequirementsClarificationService,
     )
     .to(RequirementsClarificationService);
+  container
+    .bind<SteeringContextLoader>(TYPES.SteeringContextLoader)
+    .to(SteeringContextLoader);
+  container
+    .bind<DescriptionAnalyzer>(TYPES.DescriptionAnalyzer)
+    .to(DescriptionAnalyzer);
+  container
+    .bind<QuestionGenerator>(TYPES.QuestionGenerator)
+    .to(QuestionGenerator);
+  container.bind<AnswerValidator>(TYPES.AnswerValidator).to(AnswerValidator);
+  container
+    .bind<DescriptionEnricher>(TYPES.DescriptionEnricher)
+    .to(DescriptionEnricher);
 
   // Bind adapters
   container.bind<SDDToolAdapter>(TYPES.SDDToolAdapter).to(SDDToolAdapter);

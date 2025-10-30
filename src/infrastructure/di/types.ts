@@ -33,6 +33,11 @@ export const TYPES = {
   RequirementsClarificationService: Symbol.for(
     "RequirementsClarificationService",
   ),
+  SteeringContextLoader: Symbol.for("SteeringContextLoader"),
+  DescriptionAnalyzer: Symbol.for("DescriptionAnalyzer"),
+  QuestionGenerator: Symbol.for("QuestionGenerator"),
+  AnswerValidator: Symbol.for("AnswerValidator"),
+  DescriptionEnricher: Symbol.for("DescriptionEnricher"),
 
   // MCP components
   MCPServer: Symbol.for("MCPServer"),

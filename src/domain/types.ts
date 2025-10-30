@@ -157,6 +157,10 @@ export enum QuestionCategory {
 
 export interface ClarificationAnalysis {
   readonly qualityScore: number; // 0-100
+  readonly whyScore: number; // 0-100 - NEW in v1.6.0
+  readonly whoScore: number; // 0-100 - NEW in v1.6.0
+  readonly whatScore: number; // 0-100 - NEW in v1.6.0
+  readonly successScore: number; // 0-100 - NEW in v1.6.0
   readonly missingElements: string[];
   readonly ambiguousTerms: AmbiguousTerm[];
   readonly needsClarification: boolean;
@@ -202,4 +206,19 @@ export interface AnswerValidationResult {
     currentLength: number;
   }>;
   readonly containsInvalidContent: string[];
+}
+
+export interface SteeringContext {
+  readonly hasProductContext: boolean;
+  readonly hasTargetUsers: boolean;
+  readonly hasTechContext: boolean;
+}
+
+export interface DescriptionComponents {
+  readonly original: string;
+  readonly why: string;
+  readonly who: string;
+  readonly what: string;
+  readonly how: string;
+  readonly successCriteria: string;
 }
