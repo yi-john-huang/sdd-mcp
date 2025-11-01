@@ -5,6 +5,14 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.6.1] - 2025-10-30
+
+### Changed
+- **Documentation**: Updated README.md with v1.6.0 architecture refactoring information
+  - Added v1.6.0 announcement highlighting 5 focused services
+  - Updated version references from 1.4.5 to 1.6.0 in Quick Start examples
+  - Emphasized scored semantic detection and improved maintainability
+
 ## [1.6.0] - 2025-10-30
 
 ### Changed
