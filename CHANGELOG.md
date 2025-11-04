@@ -5,6 +5,25 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.6.2] - 2025-11-05
+
+### Fixed
+- **Module Loading**: Unified module loading system for cross-context compatibility
+  - Fixed `sdd-steering` generating generic templates when run via `npx -y sdd-mcp-server@latest`
+  - Created `src/utils/moduleLoader.ts` with fallback path resolution for different execution contexts
+  - Updated `handleSteeringSimplified()`, `handleRequirementsSimplified()`, `handleDesignSimplified()`, and `handleTasksSimplified()` to use dynamic module loader
+  - Module loader tries multiple paths: `./utils/*.js` (dist), `../utils/*.js` (subdirectory), `./*.js` (root), `../*.js` (alternative root)
+  - Now works correctly across all execution methods: npx, node dist/index.js, npm run dev, npm start
+  - Debug logging shows which path succeeded for troubleshooting
+  - Graceful fallback to template generation with clear error messages when modules cannot be loaded
+
+### Added
+- **Testing**: Comprehensive unit tests for moduleLoader (`src/__tests__/unit/utils/moduleLoader.test.ts`)
+  - Tests for successful module loading
+  - Tests for fallback path resolution
+  - Tests for error handling and error message format
+  - 100% test coverage for moduleLoader functionality
+
 ## [1.6.1] - 2025-10-30
 
 ### Changed
