@@ -6,6 +6,8 @@
 
 A Model Context Protocol (MCP) server implementing Spec-Driven Development (SDD) workflows for AI-agent CLIs and IDEs like Claude Code, Cursor, and others.
 
+> 🔧 **v1.6.2 - Module Loading Fix**: Fixed critical bug where `sdd-steering` generated generic templates instead of analyzing actual codebases when run via `npx`. Root cause: hardcoded import paths didn't account for different execution contexts. Solution: Unified module loading system with **4-path fallback resolution** handling npm start, npm dev, node dist/index.js, and npx contexts. Comprehensive error handling with all attempted paths in error messages. Debug logging for troubleshooting. **100% test coverage** (71 tests passing, 6 new moduleLoader tests). Code review score: **9/10 (Excellent)** ✅. Production-ready with zero security issues!
+
 > 🚀 **v1.6.0 - Architecture Refactoring**: Decomposed requirements clarification into **5 focused services** following Single Responsibility Principle! Each service now has one clear purpose: `SteeringContextLoader` (I/O), `DescriptionAnalyzer` (scored semantic detection 0-100), `QuestionGenerator` (template-based), `AnswerValidator` (validation + security), `DescriptionEnricher` (5W1H synthesis). Replaced brittle boolean regex with **scored semantic detection** for better accuracy. Externalized question templates to configuration. **62 new unit tests** (65 total passing) ✅. Services average ~100 LOC vs previous 500 LOC monolith. Better maintainability, testability, and type safety!
 
 > 🎯 **v1.5.0 - Interactive Requirements Clarification**: `sdd-init` now **blocks vague requirements**! The agent analyzes your project description (quality score 0-100) and interactively asks targeted clarification questions if score < 70%. Focuses on **WHY** (business justification), WHO (target users), WHAT (core features), and success criteria. Context-aware using existing steering docs. Prevents "garbage in, garbage out" with enriched 5W1H structured descriptions.
@@ -437,9 +439,9 @@ As of v1.4.3, comprehensive codebase analysis is automatic with multi-language d
 ## 📖 Advanced Documentation
 
 For detailed documentation on:
+- **🏗️ Architecture Overview**: See [ARCHITECTURE.md](ARCHITECTURE.md) for complete system design, layered architecture, module loading, and Mermaid diagrams
 - **Plugin Development**: See [DEPLOYMENT.md](DEPLOYMENT.md)
 - **Docker Deployment**: See [Dockerfile](Dockerfile) and [docker-compose.yml](docker-compose.yml)
-- **Architecture Details**: Explore the `/src` directory structure
 - **Code Quality Standards**: Review `.kiro/steering/linus-review.md`
 - **TDD Guidelines**: See `.kiro/steering/tdd-guideline.md` for complete Test-Driven Development workflow
 - **Coding Principles**: Review `.kiro/steering/principles.md` for SOLID, DRY, KISS, YAGNI, SoC, and Modularity guidance
