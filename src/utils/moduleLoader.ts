@@ -8,6 +8,9 @@
  * - Development mode (src/utils/)
  * - Alternative paths (parent directory)
  *
+ * The loader supports both TypeScript (.ts) and JavaScript (.js, .mjs, .cjs) extensions
+ * for cross-context compatibility.
+ *
  * @module moduleLoader
  */
 
@@ -25,9 +28,18 @@ export interface DocumentGeneratorModule {
  * Interface for the specGenerator module
  */
 export interface SpecGeneratorModule {
-  generateRequirementsDocument(projectPath: string, featureName: string): Promise<string>;
-  generateDesignDocument(projectPath: string, featureName: string): Promise<string>;
-  generateTasksDocument(projectPath: string, featureName: string): Promise<string>;
+  generateRequirementsDocument(
+    projectPath: string,
+    featureName: string,
+  ): Promise<string>;
+  generateDesignDocument(
+    projectPath: string,
+    featureName: string,
+  ): Promise<string>;
+  generateTasksDocument(
+    projectPath: string,
+    featureName: string,
+  ): Promise<string>;
 }
 
 /**
@@ -55,79 +67,79 @@ export interface ProjectAnalysis {
 }
 
 /**
- * Load the documentGenerator module using fallback path resolution
+ * File extensions to try when loading modules
+ * Order matters: .js first for production builds, .ts for development
+ */
+const EXTENSIONS = [".js", ".ts", ".mjs", ".cjs"] as const;
+
+/**
+ * Compute base paths for module resolution
+ * Returns relative paths that work in both dev (tsx) and prod (node) contexts
+ */
+function computeBasePaths(target: string): string[] {
+  return [
+    `./utils/${target}`, // Same directory utils/ subfolder
+    `./${target}`, // Same directory
+    `../${target}`, // Parent directory (for root-level modules)
+    `../utils/${target}`, // Parent utils/ (typical case from dist/X to dist/utils/)
+  ];
+}
+
+/**
+ * Generic module loader with cross-context support
+ * Tries multiple paths with multiple extensions
+ */
+async function loadModule<T>(
+  target: "documentGenerator" | "specGenerator",
+): Promise<T> {
+  const basePaths = computeBasePaths(target);
+  const errors: string[] = [];
+
+  for (const basePath of basePaths) {
+    for (const ext of EXTENSIONS) {
+      const fullPath = `${basePath}${ext}`;
+
+      try {
+        console.error(`[SDD-DEBUG] ModuleLoader attempting: ${fullPath}`);
+        const module = await import(fullPath);
+        console.error(`[SDD-DEBUG] ✅ Loaded ${target} from: ${fullPath}`);
+        return module as T;
+      } catch (error) {
+        const errorMessage =
+          error instanceof Error ? error.message : String(error);
+        errors.push(`${fullPath}: ${errorMessage}`);
+      }
+    }
+  }
+
+  // All paths failed
+  throw new Error(
+    `Failed to load ${target}. Attempted paths:\n${errors.map((e) => `  - ${e}`).join("\n")}`,
+  );
+}
+
+/**
+ * Load the documentGenerator module using cross-context path resolution
  *
- * Attempts to load the module from multiple paths in priority order:
- * 1. ./utils/documentGenerator.js - Compiled TypeScript in dist/utils/
- * 2. ../utils/documentGenerator.js - From subdirectory (e.g., dist/tools/)
- * 3. ./documentGenerator.js - Root-level published package
- * 4. ../documentGenerator.js - Alternative root-level
+ * Attempts to load the module from multiple paths with multiple extensions.
+ * Supports both TypeScript (.ts) and JavaScript (.js, .mjs, .cjs) files.
  *
  * @returns The documentGenerator module with all export functions
  * @throws Error if all import paths fail, with details of all attempts
  */
 export async function loadDocumentGenerator(): Promise<DocumentGeneratorModule> {
-  const paths = [
-    './utils/documentGenerator.js',    // Priority 1: Compiled TS in dist/utils/
-    '../utils/documentGenerator.js',   // Priority 2: From subdirectory
-    './documentGenerator.js',          // Priority 3: Root-level package
-    '../documentGenerator.js'          // Priority 4: Alternative root
-  ];
-
-  const errors: string[] = [];
-
-  for (const path of paths) {
-    try {
-      const module = await import(path);
-      console.error(`[SDD-DEBUG] ✅ Loaded documentGenerator from: ${path}`);
-      return module as DocumentGeneratorModule;
-    } catch (error) {
-      const errorMessage = error instanceof Error ? error.message : String(error);
-      errors.push(`${path}: ${errorMessage}`);
-    }
-  }
-
-  // All paths failed
-  throw new Error(
-    `Failed to load documentGenerator. Attempted paths:\n${errors.map(e => `  - ${e}`).join('\n')}`
-  );
+  return loadModule<DocumentGeneratorModule>("documentGenerator");
 }
 
 /**
- * Load the specGenerator module using fallback path resolution
+ * Load the specGenerator module using cross-context path resolution
  *
- * Attempts to load the module from multiple paths in priority order:
- * 1. ./utils/specGenerator.js - Compiled TypeScript in dist/utils/
- * 2. ../utils/specGenerator.js - From subdirectory
- * 3. ./specGenerator.js - Root-level published package
- * 4. ../specGenerator.js - Alternative root-level
+ * Attempts to load the module from multiple paths with multiple extensions.
+ * Supports both TypeScript (.ts) and JavaScript (.js, .mjs, .cjs) files.
  *
  * @returns The specGenerator module with all export functions
  * @throws Error if all import paths fail, with details of all attempts
  */
 export async function loadSpecGenerator(): Promise<SpecGeneratorModule> {
-  const paths = [
-    './utils/specGenerator.js',        // Priority 1: Compiled TS in dist/utils/
-    '../utils/specGenerator.js',       // Priority 2: From subdirectory
-    './specGenerator.js',              // Priority 3: Root-level package
-    '../specGenerator.js'              // Priority 4: Alternative root
-  ];
-
-  const errors: string[] = [];
-
-  for (const path of paths) {
-    try {
-      const module = await import(path);
-      console.error(`[SDD-DEBUG] ✅ Loaded specGenerator from: ${path}`);
-      return module as SpecGeneratorModule;
-    } catch (error) {
-      const errorMessage = error instanceof Error ? error.message : String(error);
-      errors.push(`${path}: ${errorMessage}`);
-    }
-  }
-
-  // All paths failed
-  throw new Error(
-    `Failed to load specGenerator. Attempted paths:\n${errors.map(e => `  - ${e}`).join('\n')}`
-  );
+  return loadModule<SpecGeneratorModule>("specGenerator");
 }

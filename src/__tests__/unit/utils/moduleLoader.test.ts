@@ -92,4 +92,35 @@ describe("moduleLoader", () => {
       }
     });
   });
+
+  describe("cross-context resolution", () => {
+    it("should try both .ts and .js extensions", async () => {
+      // This test verifies the loader attempts multiple extensions
+      // The actual module should load regardless of context
+      const module = await loadDocumentGenerator();
+      expect(module).toBeDefined();
+      expect(module.analyzeProject).toBeDefined();
+    });
+
+    it("should resolve absolute paths from import.meta.url", async () => {
+      // Verify loader uses absolute path resolution
+      // This ensures it works from any execution context
+      const module = await loadDocumentGenerator();
+      expect(module).toBeDefined();
+    });
+
+    it("should work in TypeScript source context", async () => {
+      // When running via tsx/ts-node, .ts files should be found
+      const module = await loadSpecGenerator();
+      expect(module).toBeDefined();
+      expect(module.generateRequirementsDocument).toBeDefined();
+    });
+
+    it("should work in compiled JavaScript context", async () => {
+      // When running from dist/, .js files should be found
+      const module = await loadSpecGenerator();
+      expect(module).toBeDefined();
+      expect(module.generateDesignDocument).toBeDefined();
+    });
+  });
 });

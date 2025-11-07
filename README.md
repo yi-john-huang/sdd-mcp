@@ -271,12 +271,38 @@ npm install -g sdd-mcp-server@latest
 export LOG_LEVEL=info          # debug, info, warn, error
 export DEFAULT_LANG=en         # en, es, fr, de, it, pt, ru, ja, zh, ko
 
+# Document generation behavior
+export SDD_ALLOW_TEMPLATE_FALLBACK=false  # true to allow fallback templates when module loading fails
+                                          # false (default) to fail fast with actionable errors
+
 # Advanced configuration (optional)
 export PLUGIN_DIR=/path/to/plugins
 export TEMPLATE_DIR=/path/to/templates
 export MAX_PLUGINS=50
 export HOOK_TIMEOUT=10000
 ```
+
+#### Module Loading and Fallback Behavior
+
+By default, the SDD server requires actual codebase analysis to generate steering documents and specifications. If module loading fails (e.g., running from source without building), commands will error with helpful messages:
+
+```bash
+# Default behavior - fail fast with clear error
+sdd-steering
+# Error: Failed to load documentGenerator: ...
+# To use template fallbacks, set SDD_ALLOW_TEMPLATE_FALLBACK=true or run 'npm run build'
+```
+
+To allow fallback templates when modules cannot be loaded:
+
+```bash
+# Allow fallback templates (useful for development/debugging)
+export SDD_ALLOW_TEMPLATE_FALLBACK=true
+sdd-steering
+# ⚠️ Warning: Using fallback templates - documents will contain generic content
+```
+
+**Recommendation**: Keep fallback disabled in production to ensure all generated documents reflect your actual codebase.
 
 ### Claude Code Integration Example
 ```bash

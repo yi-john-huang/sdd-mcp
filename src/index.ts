@@ -383,6 +383,34 @@ async function createSimpleMCPServer() {
   await server.connect(transport);
 }
 
+/**
+ * Helper function to handle module loader failures consistently
+ *
+ * @param context - Description of what was being loaded (e.g., "documentGenerator", "specGenerator")
+ * @param error - The error that occurred during loading
+ * @param allowFallback - Whether to allow fallback templates (from env var or args)
+ * @returns Object with fallback content if allowed, or throws error
+ * @throws Error if fallback is not allowed
+ */
+function handleLoaderFailure(
+  context: string,
+  error: Error,
+  allowFallback: boolean = false,
+): { useFallback: boolean; error: Error } {
+  const errorMessage = `Failed to load ${context}: ${error.message}\n\nTo use template fallbacks, set SDD_ALLOW_TEMPLATE_FALLBACK=true environment variable or run 'npm run build' to generate required files.`;
+
+  console.error(`[SDD-DEBUG] Loader failure for ${context}:`, error.message);
+  console.error(`[SDD-DEBUG] Fallback allowed:`, allowFallback);
+
+  if (!allowFallback) {
+    // Propagate error - do not use fallback
+    throw new Error(errorMessage);
+  }
+
+  console.error(`[SDD-DEBUG] Using fallback templates for ${context}`);
+  return { useFallback: true, error };
+}
+
 // Simplified steering implementation for MCP mode
 async function handleSteeringSimplified(args: any) {
   const fs = await import("fs");
@@ -430,6 +458,11 @@ async function handleSteeringSimplified(args: any) {
     let structureContent: string;
     let projectAnalysis: any;
 
+    // Check if fallback is allowed via environment variable or args
+    const allowFallback =
+      process.env.SDD_ALLOW_TEMPLATE_FALLBACK === "true" ||
+      args?.allowFallback === true;
+
     try {
       // Attempt to import and use the dynamic document generator (using unified module loader)
       console.error(
@@ -462,15 +495,11 @@ async function handleSteeringSimplified(args: any) {
         "[SDD-DEBUG] Dynamic document generation completed successfully",
       );
     } catch (importError) {
-      console.error(
-        "[SDD-DEBUG] Failed to import or use documentGenerator:",
-        (importError as Error).message,
-      );
-      console.error(
-        "[SDD-DEBUG] Attempted import path: ./utils/documentGenerator.js",
-      );
-      console.error(
-        "[SDD-DEBUG] Falling back to basic templates with warning...",
+      // Use shared error handler
+      const { useFallback, error } = handleLoaderFailure(
+        "documentGenerator",
+        importError as Error,
+        allowFallback,
       );
 
       // Fallback to basic templates
@@ -495,7 +524,7 @@ async function handleSteeringSimplified(args: any) {
       productContent = `# Product Overview
 
 ⚠️ **Warning**: This document was generated using fallback templates due to documentGenerator import failure.
-Error: ${(importError as Error).message}
+Error: ${error.message}
 
 ## Product Description
 ${projectName}
@@ -521,7 +550,7 @@ Generated on: ${new Date().toISOString()}
       techContent = `# Technology Stack
 
 ⚠️ **Warning**: This document was generated using fallback templates due to documentGenerator import failure.
-Error: ${(importError as Error).message}
+Error: ${error.message}
 
 ## Architecture
 **Type**: MCP Server Application
@@ -546,7 +575,7 @@ Generated on: ${new Date().toISOString()}
       structureContent = `# Project Structure
 
 ⚠️ **Warning**: This document was generated using fallback templates due to documentGenerator import failure.
-Error: ${(importError as Error).message}
+Error: ${error.message}
 
 ## Directory Organization
 \`\`\`
@@ -1182,6 +1211,11 @@ async function handleRequirementsSimplified(args: any) {
     let requirementsContent: string;
     let analysisUsed = false;
 
+    // Check if fallback is allowed
+    const allowFallback =
+      process.env.SDD_ALLOW_TEMPLATE_FALLBACK === "true" ||
+      args?.allowFallback === true;
+
     try {
       console.error(
         "[SDD-DEBUG] Attempting to load specGenerator for comprehensive analysis...",
@@ -1200,15 +1234,16 @@ async function handleRequirementsSimplified(args: any) {
         "[SDD-DEBUG] ✅ Requirements generated using comprehensive codebase analysis",
       );
     } catch (genErr) {
-      console.error(
-        "[SDD-DEBUG] ⚠️ Comprehensive analysis failed, using fallback template",
+      // Use shared error handler
+      const { useFallback, error } = handleLoaderFailure(
+        "specGenerator",
+        genErr as Error,
+        allowFallback,
       );
-      console.error("[SDD-DEBUG] Error details:", (genErr as Error).message);
-      console.error("[SDD-DEBUG] Stack:", (genErr as Error).stack);
 
       requirementsContent = `# Requirements Document
 
-<!-- Note: Using basic template due to analysis error: ${(genErr as Error).message} -->
+<!-- Note: Using basic template due to analysis error: ${error.message} -->
 
 ## Introduction
 ${generateIntroductionFromDescription(projectDescription)}
@@ -1343,6 +1378,11 @@ async function handleDesignSimplified(args: any) {
     let designContent: string;
     let analysisUsed = false;
 
+    // Check if fallback is allowed
+    const allowFallback =
+      process.env.SDD_ALLOW_TEMPLATE_FALLBACK === "true" ||
+      args?.allowFallback === true;
+
     try {
       console.error(
         "[SDD-DEBUG] Attempting to load specGenerator for comprehensive design analysis...",
@@ -1358,14 +1398,16 @@ async function handleDesignSimplified(args: any) {
         "[SDD-DEBUG] ✅ Design generated using comprehensive codebase analysis",
       );
     } catch (genErr) {
-      console.error(
-        "[SDD-DEBUG] ⚠️ Comprehensive analysis failed, using fallback template",
+      // Use shared error handler
+      const { useFallback, error } = handleLoaderFailure(
+        "specGenerator",
+        genErr as Error,
+        allowFallback,
       );
-      console.error("[SDD-DEBUG] Error details:", (genErr as Error).message);
 
       designContent = `# Technical Design Document
 
-<!-- Note: Using basic template due to analysis error: ${(genErr as Error).message} -->
+<!-- Note: Using basic template due to analysis error: ${error.message} -->
 
 ## Overview
 This design document specifies the technical implementation approach for ${spec.feature_name}.
@@ -1469,6 +1511,11 @@ async function handleTasksSimplified(args: any) {
     let tasksContent: string;
     let analysisUsed = false;
 
+    // Check if fallback is allowed
+    const allowFallback =
+      process.env.SDD_ALLOW_TEMPLATE_FALLBACK === "true" ||
+      args?.allowFallback === true;
+
     try {
       console.error(
         "[SDD-DEBUG] Attempting to load specGenerator for comprehensive task analysis...",
@@ -1484,14 +1531,16 @@ async function handleTasksSimplified(args: any) {
         "[SDD-DEBUG] ✅ Tasks generated using comprehensive codebase analysis",
       );
     } catch (genErr) {
-      console.error(
-        "[SDD-DEBUG] ⚠️ Comprehensive analysis failed, using fallback template",
+      // Use shared error handler
+      const { useFallback, error } = handleLoaderFailure(
+        "specGenerator",
+        genErr as Error,
+        allowFallback,
       );
-      console.error("[SDD-DEBUG] Error details:", (genErr as Error).message);
 
       tasksContent = `# Implementation Plan
 
-<!-- Note: Using basic template due to analysis error: ${(genErr as Error).message} -->
+<!-- Note: Using basic template due to analysis error: ${error.message} -->
 
 - [ ] 1. Set up project foundation and infrastructure
 - [ ] 2. Implement core functionality
