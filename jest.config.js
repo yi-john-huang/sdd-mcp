@@ -2,6 +2,11 @@ export default {
   preset: "ts-jest/presets/default-esm",
   extensionsToTreatAsEsm: [".ts"],
   testEnvironment: "node",
+  globals: {
+    "ts-jest": {
+      useESM: true,
+    },
+  },
   roots: ["<rootDir>/src/__tests__/unit"],
   testMatch: ["**/?(*.)+(test).ts"],
   transform: {
@@ -9,7 +14,14 @@ export default {
       "ts-jest",
       {
         useESM: true,
-        tsconfig: "<rootDir>/tsconfig.jest.json",
+        tsconfig: {
+          module: "ES2022",
+          moduleResolution: "NodeNext",
+          target: "ES2022",
+          types: ["jest", "node"],
+          allowImportingTsExtensions: true,
+          esModuleInterop: true,
+        },
       },
     ],
   },

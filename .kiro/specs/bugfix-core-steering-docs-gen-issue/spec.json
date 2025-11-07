@@ -1,0 +1,22 @@
+{
+  "feature_name": "bugfix-core-steering-docs-gen-issue",
+  "created_at": "2025-11-07T13:49:30.801Z",
+  "updated_at": "2025-11-07T14:26:02Z",
+  "language": "en",
+  "phase": "tasks-generated",
+  "approvals": {
+    "requirements": {
+      "generated": true,
+      "approved": false
+    },
+    "design": {
+      "generated": true,
+      "approved": false
+    },
+    "tasks": {
+      "generated": true,
+      "approved": false
+    }
+  },
+  "ready_for_implementation": true
+}

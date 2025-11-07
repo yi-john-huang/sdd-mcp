@@ -5,6 +5,31 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Fixed
+- **Module Loading Cross-Context Support**: Enhanced module loader to support both TypeScript and JavaScript execution contexts
+  - Module loader now tries both `.ts` and `.js` extensions (also `.mjs`, `.cjs`) for maximum compatibility
+  - Works correctly in dev mode (`npm run dev`, `tsx src/index.ts`) and production (`npm start`, `npx`)
+  - Fixes issue where TypeScript sources couldn't be loaded when `dist/` didn't exist
+
+### Added
+- **Fallback Control**: New `SDD_ALLOW_TEMPLATE_FALLBACK` environment variable for controlling document generation behavior
+  - Default: `false` - Commands fail fast with actionable error messages when modules cannot be loaded
+  - Set to `true` - Allow fallback to generic templates (useful for development/debugging)
+  - Provides clear guidance: "run `npm run build`" or "set SDD_ALLOW_TEMPLATE_FALLBACK=true"
+  - Prevents silent generation of generic documents that don't reflect actual codebase
+- **Shared Error Handler**: Centralized `handleLoaderFailure()` function for consistent error handling across all document generation commands
+  - Used by `handleSteeringSimplified`, `handleRequirementsSimplified`, `handleDesignSimplified`, `handleTasksSimplified`
+  - Provides detailed error messages with troubleshooting steps
+  - Logs fallback decisions for debugging
+
+### Changed
+- **Error Handling Philosophy**: Changed from "silent fallback" to "fail fast with guidance"
+  - Previously: Module load failures silently fell back to generic templates
+  - Now: Module load failures throw descriptive errors by default (unless SDD_ALLOW_TEMPLATE_FALLBACK=true)
+  - Ensures operators are aware when documents don't reflect actual codebase analysis
+
 ## [1.6.2] - 2025-11-05
 
 ### Fixed
