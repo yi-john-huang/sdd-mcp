@@ -1,0 +1,22 @@
+{
+  "feature_name": "refactor-requirementsclarificationservice-v160-to-",
+  "created_at": "2025-10-29T17:09:35.286Z",
+  "updated_at": "2025-10-29T22:06:08.208Z",
+  "language": "en",
+  "phase": "design-generated",
+  "approvals": {
+    "requirements": {
+      "generated": true,
+      "approved": true
+    },
+    "design": {
+      "generated": true,
+      "approved": true
+    },
+    "tasks": {
+      "generated": false,
+      "approved": false
+    }
+  },
+  "ready_for_implementation": false
+}

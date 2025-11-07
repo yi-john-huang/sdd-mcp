@@ -6,9 +6,13 @@
 
 A Model Context Protocol (MCP) server implementing Spec-Driven Development (SDD) workflows for AI-agent CLIs and IDEs like Claude Code, Cursor, and others.
 
-> ✅ **v1.4.5 Update**: Internal improvements! Reorganized test structure for better maintainability, centralized static steering document creation following DRY principle, improved code organization with better separation of concerns.
+> 🔧 **v1.6.2 - Module Loading Fix**: Fixed critical bug where `sdd-steering` generated generic templates instead of analyzing actual codebases when run via `npx`. Root cause: hardcoded import paths didn't account for different execution contexts. Solution: Unified module loading system with **4-path fallback resolution** handling npm start, npm dev, node dist/index.js, and npx contexts. Comprehensive error handling with all attempted paths in error messages. Debug logging for troubleshooting. **100% test coverage** (71 tests passing, 6 new moduleLoader tests). Code review score: **9/10 (Excellent)** ✅. Production-ready with zero security issues!
 
-> ✅ **v1.4.4**: Comprehensive codebase analysis + TDD workflow! Documents are generated with real multi-language detection (TypeScript, Java, Python, Go, Ruby, PHP, Rust, C#, Scala), framework detection (Spring Boot, Django, FastAPI, Rails, Laravel, Express, React, etc.), and architecture pattern recognition. New `principles.md` steering document enforces SOLID, DRY, KISS, YAGNI, Separation of Concerns, and Modularity. Task generation now follows Test-Driven Development (RED-GREEN-REFACTOR) workflow.
+> 🚀 **v1.6.0 - Architecture Refactoring**: Decomposed requirements clarification into **5 focused services** following Single Responsibility Principle! Each service now has one clear purpose: `SteeringContextLoader` (I/O), `DescriptionAnalyzer` (scored semantic detection 0-100), `QuestionGenerator` (template-based), `AnswerValidator` (validation + security), `DescriptionEnricher` (5W1H synthesis). Replaced brittle boolean regex with **scored semantic detection** for better accuracy. Externalized question templates to configuration. **62 new unit tests** (65 total passing) ✅. Services average ~100 LOC vs previous 500 LOC monolith. Better maintainability, testability, and type safety!
+
+> 🎯 **v1.5.0 - Interactive Requirements Clarification**: `sdd-init` now **blocks vague requirements**! The agent analyzes your project description (quality score 0-100) and interactively asks targeted clarification questions if score < 70%. Focuses on **WHY** (business justification), WHO (target users), WHAT (core features), and success criteria. Context-aware using existing steering docs. Prevents "garbage in, garbage out" with enriched 5W1H structured descriptions.
+
+> ✅ **v1.4.5**: Internal improvements! Reorganized test structure for better maintainability, centralized static steering document creation following DRY principle, improved code organization with better separation of concerns.
 
 ## 🚀 Quick Start
 
@@ -18,7 +22,7 @@ A Model Context Protocol (MCP) server implementing Spec-Driven Development (SDD)
 npx -y sdd-mcp-server@latest
 
 # Pin exact version (optional)
-npx -y sdd-mcp-server@1.4.5
+npx -y sdd-mcp-server@1.6.0
 
 # For Claude Code MCP integration, add to your configuration:
 # "sdd-mcp-server": {
@@ -33,7 +37,7 @@ npx -y sdd-mcp-server@1.4.5
 npm install -g sdd-mcp-server@latest
 
 # Pin exact version (optional)
-npm install -g sdd-mcp-server@1.4.5
+npm install -g sdd-mcp-server@1.6.0
 
 # Start the server
 sdd-mcp-server
@@ -148,7 +152,7 @@ Once connected to your AI client, you can use these MCP tools:
 
 | Tool | Description | Usage |
 |------|-------------|--------|
-| `sdd-init` | Initialize new SDD project | Creates .kiro directory structure + AGENTS.md for cross-platform AI support |
+| `sdd-init` | Initialize new SDD project with interactive clarification | **🎯 NEW v1.5.0**: Analyzes description quality (0-100 score), blocks if < 70%, asks targeted WHY/WHO/WHAT questions, synthesizes enriched 5W1H descriptions |
 | `sdd-requirements` | Generate context-aware requirements | Analyzes package.json and structure to create EARS-formatted requirements with comprehensive multi-language analysis |
 | `sdd-design` | Create project-specific design | Generates architecture docs based on actual tech stack, dependencies, and framework detection |
 | `sdd-tasks` | Generate TDD-focused task breakdown | Creates test-first implementation tasks following RED-GREEN-REFACTOR workflow |
@@ -267,12 +271,38 @@ npm install -g sdd-mcp-server@latest
 export LOG_LEVEL=info          # debug, info, warn, error
 export DEFAULT_LANG=en         # en, es, fr, de, it, pt, ru, ja, zh, ko
 
+# Document generation behavior
+export SDD_ALLOW_TEMPLATE_FALLBACK=false  # true to allow fallback templates when module loading fails
+                                          # false (default) to fail fast with actionable errors
+
 # Advanced configuration (optional)
 export PLUGIN_DIR=/path/to/plugins
 export TEMPLATE_DIR=/path/to/templates
 export MAX_PLUGINS=50
 export HOOK_TIMEOUT=10000
 ```
+
+#### Module Loading and Fallback Behavior
+
+By default, the SDD server requires actual codebase analysis to generate steering documents and specifications. If module loading fails (e.g., running from source without building), commands will error with helpful messages:
+
+```bash
+# Default behavior - fail fast with clear error
+sdd-steering
+# Error: Failed to load documentGenerator: ...
+# To use template fallbacks, set SDD_ALLOW_TEMPLATE_FALLBACK=true or run 'npm run build'
+```
+
+To allow fallback templates when modules cannot be loaded:
+
+```bash
+# Allow fallback templates (useful for development/debugging)
+export SDD_ALLOW_TEMPLATE_FALLBACK=true
+sdd-steering
+# ⚠️ Warning: Using fallback templates - documents will contain generic content
+```
+
+**Recommendation**: Keep fallback disabled in production to ensure all generated documents reflect your actual codebase.
 
 ### Claude Code Integration Example
 ```bash
@@ -435,9 +465,9 @@ As of v1.4.3, comprehensive codebase analysis is automatic with multi-language d
 ## 📖 Advanced Documentation
 
 For detailed documentation on:
+- **🏗️ Architecture Overview**: See [ARCHITECTURE.md](ARCHITECTURE.md) for complete system design, layered architecture, module loading, and Mermaid diagrams
 - **Plugin Development**: See [DEPLOYMENT.md](DEPLOYMENT.md)
 - **Docker Deployment**: See [Dockerfile](Dockerfile) and [docker-compose.yml](docker-compose.yml)
-- **Architecture Details**: Explore the `/src` directory structure
 - **Code Quality Standards**: Review `.kiro/steering/linus-review.md`
 - **TDD Guidelines**: See `.kiro/steering/tdd-guideline.md` for complete Test-Driven Development workflow
 - **Coding Principles**: Review `.kiro/steering/principles.md` for SOLID, DRY, KISS, YAGNI, SoC, and Modularity guidance

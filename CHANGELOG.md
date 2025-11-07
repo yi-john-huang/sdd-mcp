@@ -5,6 +5,181 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Fixed
+- **Module Loading Cross-Context Support**: Enhanced module loader to support both TypeScript and JavaScript execution contexts
+  - Module loader now tries both `.ts` and `.js` extensions (also `.mjs`, `.cjs`) for maximum compatibility
+  - Works correctly in dev mode (`npm run dev`, `tsx src/index.ts`) and production (`npm start`, `npx`)
+  - Fixes issue where TypeScript sources couldn't be loaded when `dist/` didn't exist
+
+### Added
+- **Fallback Control**: New `SDD_ALLOW_TEMPLATE_FALLBACK` environment variable for controlling document generation behavior
+  - Default: `false` - Commands fail fast with actionable error messages when modules cannot be loaded
+  - Set to `true` - Allow fallback to generic templates (useful for development/debugging)
+  - Provides clear guidance: "run `npm run build`" or "set SDD_ALLOW_TEMPLATE_FALLBACK=true"
+  - Prevents silent generation of generic documents that don't reflect actual codebase
+- **Shared Error Handler**: Centralized `handleLoaderFailure()` function for consistent error handling across all document generation commands
+  - Used by `handleSteeringSimplified`, `handleRequirementsSimplified`, `handleDesignSimplified`, `handleTasksSimplified`
+  - Provides detailed error messages with troubleshooting steps
+  - Logs fallback decisions for debugging
+
+### Changed
+- **Error Handling Philosophy**: Changed from "silent fallback" to "fail fast with guidance"
+  - Previously: Module load failures silently fell back to generic templates
+  - Now: Module load failures throw descriptive errors by default (unless SDD_ALLOW_TEMPLATE_FALLBACK=true)
+  - Ensures operators are aware when documents don't reflect actual codebase analysis
+
+## [1.6.2] - 2025-11-05
+
+### Fixed
+- **Module Loading**: Unified module loading system for cross-context compatibility
+  - Fixed `sdd-steering` generating generic templates when run via `npx -y sdd-mcp-server@latest`
+  - Created `src/utils/moduleLoader.ts` with fallback path resolution for different execution contexts
+  - Updated `handleSteeringSimplified()`, `handleRequirementsSimplified()`, `handleDesignSimplified()`, and `handleTasksSimplified()` to use dynamic module loader
+  - Module loader tries multiple paths: `./utils/*.js` (dist), `../utils/*.js` (subdirectory), `./*.js` (root), `../*.js` (alternative root)
+  - Now works correctly across all execution methods: npx, node dist/index.js, npm run dev, npm start
+  - Debug logging shows which path succeeded for troubleshooting
+  - Graceful fallback to template generation with clear error messages when modules cannot be loaded
+
+### Added
+- **Testing**: Comprehensive unit tests for moduleLoader (`src/__tests__/unit/utils/moduleLoader.test.ts`)
+  - Tests for successful module loading
+  - Tests for fallback path resolution
+  - Tests for error handling and error message format
+  - 100% test coverage for moduleLoader functionality
+
+## [1.6.1] - 2025-10-30
+
+### Changed
+- **Documentation**: Updated README.md with v1.6.0 architecture refactoring information
+  - Added v1.6.0 announcement highlighting 5 focused services
+  - Updated version references from 1.4.5 to 1.6.0 in Quick Start examples
+  - Emphasized scored semantic detection and improved maintainability
+
+## [1.6.0] - 2025-10-30
+
+### Changed
+- **Architecture Refactoring**: Decomposed `RequirementsClarificationService` from "God Class" into focused, single-responsibility services following Domain-Driven Design principles
+  - **SteeringContextLoader**: Pure I/O service for loading steering documents from filesystem
+  - **DescriptionAnalyzer**: Pure analysis service using scored semantic detection (0-100 per category)
+  - **QuestionGenerator**: Pure transformation service generating questions from analysis + configuration
+  - **AnswerValidator**: Pure validation service with security checks
+  - **DescriptionEnricher**: Pure synthesis service for 5W1H-structured descriptions
+  - **RequirementsClarificationService**: Now acts as thin orchestrator delegating to specialized services
+- **Improved Analysis**: Replaced brittle boolean regex matching with scored semantic detection
+  - Each 5W1H category now scored 0-100 based on keyword density and coverage
+  - Boolean presence derived from scores (threshold: 30%)
+  - New score fields in `ClarificationAnalysis`: `whyScore`, `whoScore`, `whatScore`, `successScore`
+  - Reduces false positives/negatives from simple pattern matching
+- **Externalized Configuration**: Moved all question templates to `clarification-questions.ts`
+  - Stable semantic IDs: `why_problem`, `why_value`, `who_users`, `what_mvp_features`, etc.
+  - Each template includes: question, rationale, examples, required flag, condition function
+  - Enables adding new questions without code changes
+  - Better separation of business rules from service logic
+
+### Added
+- **New Domain Types**: 
+  - `SteeringContext`: Moved to domain types for reusability across services
+  - `DescriptionComponents`: Structured 5W1H components for enriched descriptions
+- **Comprehensive Test Coverage**: 
+  - 15 tests for DescriptionAnalyzer (scored semantic detection)
+  - 8 tests for QuestionGenerator (template-based generation)
+  - 11 tests for AnswerValidator (validation + security)
+  - 10 tests for DescriptionEnricher (5W1H synthesis)
+  - 13 tests for SteeringContextLoader (I/O with error handling)
+  - 5 tests for RequirementsClarificationService (orchestration)
+  - Total: 62 new unit tests, all passing
+
+### Technical Improvements
+- **Single Responsibility Principle**: Each service has one clear purpose with focused interface
+- **Dependency Injection**: All new services registered in DI container with proper type bindings
+- **Error Handling**: SteeringContextLoader differentiates file-level errors (debug) from system errors (warn)
+- **Testability**: Pure functions enable fast, isolated unit tests without mocks
+- **Maintainability**: Services average ~100 LOC vs previous ~500 LOC monolith
+- **Type Safety**: All services fully typed with readonly interfaces for immutability
+
+### Migration Notes
+- **Breaking Change**: `RequirementsClarificationService` constructor signature changed
+  - Old: `constructor(fileSystem: FileSystemPort, logger: LoggerPort)`
+  - New: `constructor(logger, steeringLoader, analyzer, questionGenerator, answerValidator, enricher)`
+  - **Impact**: Direct instantiation requires all 6 dependencies
+  - **Mitigation**: Use DI container (`container.get(TYPES.RequirementsClarificationService)`) - no code changes needed
+- **API Compatibility**: Public methods unchanged - `analyzeDescription()`, `validateAnswers()`, `synthesizeDescription()` work identically
+- **Test Updates**: Tests now mock specialized services instead of filesystem - see updated test file for examples
+
+## [1.5.1] - 2025-10-30
+
+### Fixed
+- **Enhanced Input Validation**: `validateAnswers` now checks for empty/too-short answers (< 10 chars) and potentially malicious content (XSS patterns)
+  - Returns detailed `AnswerValidationResult` with `tooShort` and `containsInvalidContent` arrays
+  - Prevents security issues from user-provided clarification answers
+- **Improved Error Handling**: `loadSteeringContext` now properly handles failures and always returns valid defaults
+  - Individual try-catch blocks for product.md and tech.md loading
+  - Better error logging with debug-level messages for individual file failures
+  - Guaranteed non-null return value
+- **Code Quality Improvements**: Extracted magic numbers and duplicated patterns to constants
+  - Created `clarification-constants.ts` with `QUALITY_SCORE_WEIGHTS`, `ANSWER_VALIDATION`, `PATTERN_DETECTION`, `AMBIGUOUS_TERMS`
+  - Replaced inline regex patterns with pre-compiled constants for better performance
+  - All scoring thresholds now configurable in one place
+- **Stable Question IDs**: Replaced UUID-based IDs with semantic identifiers
+  - Question IDs: `why_problem`, `why_value`, `who_users`, `what_mvp_features`, `what_out_of_scope`, `success_metrics`, `how_tech_constraints`, `ambiguity_1-3`
+  - Predictable IDs improve testability and debugging
+- **Jest Module Resolution**: Fixed `moduleNameMapper` pattern to properly resolve `.js` imports to TypeScript source files
+  - Pattern now correctly handles all relative imports without catching node_modules
+
+### Changed
+- **Type Safety**: Moved `ClarificationAnswers` and `AnswerValidationResult` to domain types for better reusability
+- **Test Coverage**: Updated tests to verify new validation fields (`tooShort`, `containsInvalidContent`)
+- **Build Configuration**: All 16 tests passing with TypeScript compilation successful
+
+### Technical
+- **Maintainability**: Reduced code duplication across service, adapter, and MCP server
+- **Security**: Added XSS pattern detection for user-provided answers
+- **Performance**: Pre-compiled regex patterns reduce repeated compilation overhead
+- **Configuration**: Centralized constants allow easy tuning of quality thresholds
+
+## [1.5.0] - 2025-10-30
+
+### Added
+- **Interactive Requirements Clarification**: New `RequirementsClarificationService` that analyzes project descriptions and blocks vague requirements
+  - Quality scoring (0-100) with blocking threshold at 70%
+  - 5W1H analysis: WHY (30 pts), WHO (20 pts), WHAT (20 pts), Success Criteria (15 pts), plus length and clarity bonuses
+  - Ambiguity detection for terms like "fast", "scalable", "user-friendly", "easy", "reliable", "secure", "modern"
+  - Context-aware question generation using existing `.kiro/steering/` documents to avoid redundancy
+  - Two-pass workflow: analyze → return questions → validate answers → synthesize enriched description
+- **Enhanced sdd-init Tool**: Interactive clarification flow with blocking mechanism
+  - First pass: Analyzes description quality, returns clarification questions if score < 70%
+  - Second pass: Validates answers, synthesizes enriched description with structured 5W1H format
+  - Enriched descriptions include: Original, Business Justification (Why), Target Users (Who), Core Features (What), Technical Approach (How), Success Criteria
+  - New `clarificationAnswers` parameter for second-pass submission
+- **Comprehensive Type System**: New domain types for clarification workflow
+  - `ClarificationQuestion`, `QuestionCategory`, `ClarificationAnalysis`, `AmbiguousTerm`, `EnrichedProjectDescription`, `ClarificationResult`
+  - Full TypeScript type safety with readonly interfaces
+- **13 Unit Tests**: Complete test coverage for RequirementsClarificationService
+  - Tests for quality scoring, ambiguity detection, question generation, answer validation, and description synthesis
+  - All tests passing with 100% success rate
+
+### Changed
+- **sdd-init Behavior**: Now blocks progression on vague requirements (quality score < 70%)
+  - Previously accepted any description; now enforces quality standards
+  - Focuses on "WHY" (business justification) as highest-weighted criterion
+  - Educational feedback with actionable examples and specific question categories
+- **DI Container**: Registered `RequirementsClarificationService` in dependency injection system
+  - Added `TYPES.RequirementsClarificationService` symbol
+  - Integrated into SDDToolAdapter with proper injection
+
+### Fixed
+- **Vague Requirements Problem**: Prevents "garbage in, garbage out" by ensuring clear requirements from project start
+- **Missing Business Context**: Forces articulation of WHY before proceeding with implementation
+- **Ambiguous Language**: Detects and clarifies non-specific terms before they cause scope issues
+
+### Technical
+- **Architecture**: Follows Domain-Driven Design with service in application layer
+- **Integration**: Works in both simplified (mcp-server.js) and TypeScript (SDDToolAdapter) implementations
+- **Context Awareness**: Reads steering documents (product.md, tech.md) to avoid redundant questions
+- **Blocking Workflow**: Synchronous MCP tool with multi-pass pattern for interactive clarification
+
 ## [1.4.5] - 2025-10-19
 
 ### Changed
