@@ -5,6 +5,17 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.8.0] - 2025-11-22
+
+### Changed
+- **MCP Tool Standardization**: Standardized all documentation and generated files to use MCP tool calls (e.g., `sdd-init`) instead of legacy slash commands (e.g., `/kiro:spec-init`)
+  - Updated `AGENTS.md` generation logic in `staticSteering.ts`, `SDDToolAdapter.ts`, and `index.ts`
+  - Updated `README.md` documentation and examples
+  - Ensures consistent tool usage across all AI agents (Claude Code, Cursor, etc.)
+- **AGENTS.md Generation**: Fixed `sdd-steering` to correctly generate `AGENTS.md` with the new MCP tool call format
+  - Now includes correct paths and command references
+  - Removes outdated references to `/kiro:` commands
+
 ## [1.7.0] - 2025-11-07
 
 ### Fixed
