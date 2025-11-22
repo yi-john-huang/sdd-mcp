@@ -698,7 +698,7 @@ Note: Optional for new features or small additions. You can proceed directly to 
 4. **No skipping phases**: Design requires approved requirements; Tasks require approved design
 5. **Update task status**: Mark tasks as completed when working on them
 6. **Keep steering current**: Run \`/kiro:steering\` after significant changes
-7. **Check spec compliance**: Use \`/kiro:spec-status\` to verify alignment
+7. **Check spec compliance**: Use \`/kiro:spec-status [feature-name]\` to verify alignment
 
 ## Steering Configuration
 
@@ -708,7 +708,7 @@ Managed by \`/kiro:steering\` command. Updates here reflect command changes.
 ### Active Steering Files
 - \`product.md\`: Always included - Product context and business objectives
 - \`tech.md\`: Always included - Technology stack and architectural decisions
-- \`structure.md\`: Always included - File organization and code patterns
+- \`structure.md\`: Always included - Project organization and architectural decisions
 - \`linus-review.md\`: Always included - Ensuring code quality of the projects
 - \`commit.md\`: Always included - Ensuring the commit / merge request / pull request title and message context.
 
@@ -2326,12 +2326,12 @@ Managed by \`/kiro:steering\` command. Updates here reflect command changes.
 ### Active Steering Files
 - \`product.md\`: Always included - Product context and business objectives
 - \`tech.md\`: Always included - Technology stack and architectural decisions
-- \`structure.md\`: Always included - File organization and code patterns
+- \`structure.md\`: Always included - Project organization and code patterns
 - \`linus-review.md\`: Always included - Ensuring code quality of the projects
 - \`commit.md\`: Always included - Ensuring the commit / merge request / pull request title and message context.
 
 ### Custom Steering Files
-<!-- Added by /kiro:steering-custom command -->
+<!-- Added by \`/kiro:steering-custom\` command -->
 <!-- Format:
 - \`filename.md\`: Mode - Pattern(s) - Description
   Mode: Always|Conditional|Manual
@@ -2345,6 +2345,7 @@ Managed by \`/kiro:steering\` command. Updates here reflect command changes.
       }
       fs.writeFileSync(agentsPath, agentsContent);
     }
+
 
     return {
       content: [
