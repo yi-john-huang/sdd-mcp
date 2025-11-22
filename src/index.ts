@@ -15,10 +15,10 @@ const isMCPMode =
 
 if (isMCPMode) {
   // Completely silence all console output for MCP mode
-  console.log = () => {};
-  console.info = () => {};
-  console.warn = () => {};
-  console.debug = () => {};
+  console.log = () => { };
+  console.info = () => { };
+  console.warn = () => { };
+  console.debug = () => { };
   // Keep error for debugging but send to stderr
   const originalError = console.error;
   console.error = (...args) => originalError("[SDD-DEBUG]", ...args);
@@ -650,7 +650,7 @@ Generated on: ${new Date().toISOString()}
       } else {
         agentsContent = `# AI Agent Spec-Driven Development
 
-Kiro-style Spec Driven Development implementation using ai agent slash commands, hooks and agents.
+Kiro-style Spec Driven Development implementation using MCP tools.
 
 ## Project Context
 
@@ -661,15 +661,15 @@ Kiro-style Spec Driven Development implementation using ai agent slash commands,
 
 ### Steering vs Specification
 
-**Steering** (\`.kiro/steering/\`) - Guide AI with project-wide rules and context
+**Steering** (\`.kiro/steering/\`) - Guide AI with project-wide rules and context  
 **Specs** (\`.kiro/specs/\`) - Formalize development process for individual features
 
 ### Active Specifications
 - Check \`.kiro/specs/\` for active specifications
-- Use \`/kiro:spec-status [feature-name]\` to check progress
+- Use \`sdd-status\` to check progress
 
 **Current Specifications:**
-- \`mcp-sdd-server\`: MCP server for spec-driven development across AI-agent CLIs and IDEs
+- (None active)
 
 ## Development Guidelines
 - Think in English, generate responses in English
@@ -677,44 +677,47 @@ Kiro-style Spec Driven Development implementation using ai agent slash commands,
 ## Workflow
 
 ### Phase 0: Steering (Optional)
-\`/kiro:steering\` - Create/update steering documents
-\`/kiro:steering-custom\` - Create custom steering for specialized contexts
+\`sdd-steering\` - Create/update steering documents  
+\`sdd-steering-custom\` - Create custom steering for specialized contexts
 
-Note: Optional for new features or small additions. You can proceed directly to spec-init.
+Note: Optional for new features or small additions. You can proceed directly to sdd-init.
 
 ### Phase 1: Specification Creation
-1. \`/kiro:spec-init [detailed description]\` - Initialize spec with detailed project description
-2. \`/kiro:spec-requirements [feature]\` - Generate requirements document
-3. \`/kiro:spec-design [feature]\` - Interactive: "Have you reviewed requirements.md? [y/N]"
-4. \`/kiro:spec-tasks [feature]\` - Interactive: Confirms both requirements and design review
+1. \`sdd-init\` - Initialize spec with detailed project description
+2. \`sdd-requirements\` - Generate requirements document
+3. \`sdd-design\` - Interactive: "Have you reviewed requirements.md? [y/N]"
+4. \`sdd-tasks\` - Interactive: Confirms both requirements and design review
 
 ### Phase 2: Progress Tracking
-\`/kiro:spec-status [feature]\` - Check current progress and phases
+\`sdd-status\` - Check current progress and phases
 
 ## Development Rules
-1. **Consider steering**: Run \`/kiro:steering\` before major development (optional for new features)
+1. **Consider steering**: Run \`sdd-steering\` before major development (optional for new features)
 2. **Follow 3-phase approval workflow**: Requirements → Design → Tasks → Implementation
 3. **Approval required**: Each phase requires human review (interactive prompt or manual)
 4. **No skipping phases**: Design requires approved requirements; Tasks require approved design
 5. **Update task status**: Mark tasks as completed when working on them
-6. **Keep steering current**: Run \`/kiro:steering\` after significant changes
-7. **Check spec compliance**: Use \`/kiro:spec-status\` to verify alignment
+6. **Keep steering current**: Run \`sdd-steering\` after significant changes
+7. **Check spec compliance**: Use \`sdd-status\` to verify alignment
 
 ## Steering Configuration
 
 ### Current Steering Files
-Managed by \`/kiro:steering\` command. Updates here reflect command changes.
+Managed by \`sdd-steering\` tool. Updates here reflect tool changes.
 
 ### Active Steering Files
 - \`product.md\`: Always included - Product context and business objectives
 - \`tech.md\`: Always included - Technology stack and architectural decisions
 - \`structure.md\`: Always included - File organization and code patterns
 - \`linus-review.md\`: Always included - Ensuring code quality of the projects
-- \`commit.md\`: Always included - Ensuring the commit / merge request / pull request title and message context.
+- \`commit.md\`: Always included - Ensuring the commit / merge request / pull request title and message context
+- \`security-check.md\`: Always included - OWASP Top 10 security checklist (REQUIRED for code generation and review)
+- \`tdd-guideline.md\`: Always included - Test-Driven Development workflow (REQUIRED for all new features)
+- \`principles.md\`: Always included - Core coding principles (SOLID, DRY, KISS, YAGNI, Separation of Concerns, Modularity)
 
 ### Custom Steering Files
-<!-- Added by /kiro:steering-custom command -->
-<!-- Format:
+<!-- Added by sdd-steering-custom tool -->
+<!-- Format: 
 - \`filename.md\`: Mode - Pattern(s) - Description
   Mode: Always|Conditional|Manual
   Pattern: File patterns for Conditional mode
@@ -724,11 +727,8 @@ Managed by \`/kiro:steering\` command. Updates here reflect command changes.
 - **Always**: Loaded in every interaction (default)
 - **Conditional**: Loaded for specific file patterns (e.g., "*.test.js")
 - **Manual**: Reference with \`@filename.md\` syntax
-
-Generated on: ${new Date().toISOString()}
 `;
       }
-
       fs.writeFileSync(agentsPath, agentsContent);
     }
 
@@ -810,12 +810,11 @@ Define the purpose and scope of this steering document.
 Describe when and how this steering document should be applied.
 
 ## Inclusion Mode
-Mode: ${inclusionMode}${
-      filePattern
+Mode: ${inclusionMode}${filePattern
         ? `
 Pattern: ${filePattern}`
         : ""
-    }
+      }
 
 Generated on: ${new Date().toISOString()}
 `;
@@ -1255,8 +1254,8 @@ ${generateIntroductionFromDescription(projectDescription)}
 
 #### Acceptance Criteria
 ${generateEARSRequirements(projectDescription)
-  .map((req, index) => `${index + 1}. ${req}`)
-  .join("\n")}
+          .map((req, index) => `${index + 1}. ${req}`)
+          .join("\n")}
 
 ### Requirement 2: System Quality
 **Objective:** As a user, I want the system to be reliable and performant, so that I can depend on it for my work
@@ -1788,11 +1787,11 @@ function generateComponentDescriptionsSimplified(
   return components.length > 0
     ? components
     : [
-        {
-          name: "Application Core",
-          description: "Main application functionality",
-        },
-      ];
+      {
+        name: "Application Core",
+        description: "Main application functionality",
+      },
+    ];
 }
 
 function generateDataModelsSimplified(
@@ -2268,7 +2267,7 @@ ${description}
       } else {
         agentsContent = `# AI Agent Spec-Driven Development
 
-Kiro-style Spec Driven Development implementation using ai agent slash commands, hooks and agents.
+Kiro-style Spec Driven Development implementation using MCP tools.
 
 ## Project Context
 
@@ -2279,15 +2278,15 @@ Kiro-style Spec Driven Development implementation using ai agent slash commands,
 
 ### Steering vs Specification
 
-**Steering** (\`.kiro/steering/\`) - Guide AI with project-wide rules and context
+**Steering** (\`.kiro/steering/\`) - Guide AI with project-wide rules and context  
 **Specs** (\`.kiro/specs/\`) - Formalize development process for individual features
 
 ### Active Specifications
 - Check \`.kiro/specs/\` for active specifications
-- Use \`/kiro:spec-status [feature-name]\` to check progress
+- Use \`sdd-status\` to check progress
 
 **Current Specifications:**
-- \`mcp-sdd-server\`: MCP server for spec-driven development across AI-agent CLIs and IDEs
+- (None active)
 
 ## Development Guidelines
 - Think in English, generate responses in English
@@ -2295,44 +2294,47 @@ Kiro-style Spec Driven Development implementation using ai agent slash commands,
 ## Workflow
 
 ### Phase 0: Steering (Optional)
-\`/kiro:steering\` - Create/update steering documents
-\`/kiro:steering-custom\` - Create custom steering for specialized contexts
+\`sdd-steering\` - Create/update steering documents  
+\`sdd-steering-custom\` - Create custom steering for specialized contexts
 
-Note: Optional for new features or small additions. You can proceed directly to spec-init.
+Note: Optional for new features or small additions. You can proceed directly to sdd-init.
 
 ### Phase 1: Specification Creation
-1. \`/kiro:spec-init [detailed description]\` - Initialize spec with detailed project description
-2. \`/kiro:spec-requirements [feature]\` - Generate requirements document
-3. \`/kiro:spec-design [feature]\` - Interactive: "Have you reviewed requirements.md? [y/N]"
-4. \`/kiro:spec-tasks [feature]\` - Interactive: Confirms both requirements and design review
+1. \`sdd-init\` - Initialize spec with detailed project description
+2. \`sdd-requirements\` - Generate requirements document
+3. \`sdd-design\` - Interactive: "Have you reviewed requirements.md? [y/N]"
+4. \`sdd-tasks\` - Interactive: Confirms both requirements and design review
 
 ### Phase 2: Progress Tracking
-\`/kiro:spec-status [feature]\` - Check current progress and phases
+\`sdd-status\` - Check current progress and phases
 
 ## Development Rules
-1. **Consider steering**: Run \`/kiro:steering\` before major development (optional for new features)
+1. **Consider steering**: Run \`sdd-steering\` before major development (optional for new features)
 2. **Follow 3-phase approval workflow**: Requirements → Design → Tasks → Implementation
 3. **Approval required**: Each phase requires human review (interactive prompt or manual)
 4. **No skipping phases**: Design requires approved requirements; Tasks require approved design
 5. **Update task status**: Mark tasks as completed when working on them
-6. **Keep steering current**: Run \`/kiro:steering\` after significant changes
-7. **Check spec compliance**: Use \`/kiro:spec-status\` to verify alignment
+6. **Keep steering current**: Run \`sdd-steering\` after significant changes
+7. **Check spec compliance**: Use \`sdd-status\` to verify alignment
 
 ## Steering Configuration
 
 ### Current Steering Files
-Managed by \`/kiro:steering\` command. Updates here reflect command changes.
+Managed by \`sdd-steering\` tool. Updates here reflect tool changes.
 
 ### Active Steering Files
 - \`product.md\`: Always included - Product context and business objectives
 - \`tech.md\`: Always included - Technology stack and architectural decisions
 - \`structure.md\`: Always included - File organization and code patterns
 - \`linus-review.md\`: Always included - Ensuring code quality of the projects
-- \`commit.md\`: Always included - Ensuring the commit / merge request / pull request title and message context.
+- \`commit.md\`: Always included - Ensuring the commit / merge request / pull request title and message context
+- \`security-check.md\`: Always included - OWASP Top 10 security checklist (REQUIRED for code generation and review)
+- \`tdd-guideline.md\`: Always included - Test-Driven Development workflow (REQUIRED for all new features)
+- \`principles.md\`: Always included - Core coding principles (SOLID, DRY, KISS, YAGNI, Separation of Concerns, Modularity)
 
 ### Custom Steering Files
-<!-- Added by /kiro:steering-custom command -->
-<!-- Format:
+<!-- Added by sdd-steering-custom tool -->
+<!-- Format: 
 - \`filename.md\`: Mode - Pattern(s) - Description
   Mode: Always|Conditional|Manual
   Pattern: File patterns for Conditional mode
@@ -2341,10 +2343,12 @@ Managed by \`/kiro:steering\` command. Updates here reflect command changes.
 ### Inclusion Modes
 - **Always**: Loaded in every interaction (default)
 - **Conditional**: Loaded for specific file patterns (e.g., "*.test.js")
-- **Manual**: Reference with \`@filename.md\` syntax`;
+- **Manual**: Reference with \`@filename.md\` syntax
+`;
       }
       fs.writeFileSync(agentsPath, agentsContent);
     }
+
 
     return {
       content: [
