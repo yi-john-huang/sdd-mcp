@@ -6,6 +6,8 @@
 
 A Model Context Protocol (MCP) server implementing Spec-Driven Development (SDD) workflows for AI-agent CLIs and IDEs like Claude Code, Cursor, and others.
 
+> 🤖 **v1.7.0 - MCP Tool Standardization**: Updated `AGENTS.md` generation to use standard MCP tool calls (e.g., `sdd-init`) instead of legacy slash commands. Fixed `sdd-steering` to correctly generate `AGENTS.md` with the new format. Ensures consistent tool usage across all AI agents.
+
 > 🔧 **v1.6.2 - Module Loading Fix**: Fixed critical bug where `sdd-steering` generated generic templates instead of analyzing actual codebases when run via `npx`. Root cause: hardcoded import paths didn't account for different execution contexts. Solution: Unified module loading system with **4-path fallback resolution** handling npm start, npm dev, node dist/index.js, and npx contexts. Comprehensive error handling with all attempted paths in error messages. Debug logging for troubleshooting. **100% test coverage** (71 tests passing, 6 new moduleLoader tests). Code review score: **9/10 (Excellent)** ✅. Production-ready with zero security issues!
 
 > 🚀 **v1.6.0 - Architecture Refactoring**: Decomposed requirements clarification into **5 focused services** following Single Responsibility Principle! Each service now has one clear purpose: `SteeringContextLoader` (I/O), `DescriptionAnalyzer` (scored semantic detection 0-100), `QuestionGenerator` (template-based), `AnswerValidator` (validation + security), `DescriptionEnricher` (5W1H synthesis). Replaced brittle boolean regex with **scored semantic detection** for better accuracy. Externalized question templates to configuration. **62 new unit tests** (65 total passing) ✅. Services average ~100 LOC vs previous 500 LOC monolith. Better maintainability, testability, and type safety!
@@ -216,52 +218,36 @@ Once connected to your AI client, you can use these MCP tools:
    Use sdd-context-load to restore project memory
    ```
 
-## Upgrading to 1.4.4
+## Latest Updates (v1.7.0)
 
-**What's New in v1.4.4**:
-- ✅ **Comprehensive Codebase Analysis**: Documents now generated with full multi-language detection (TypeScript, Java, Python, Go, Ruby, PHP, Rust, C#, Scala)
-- ✅ **Framework Detection**: Automatic recognition of Spring Boot, Django, FastAPI, Rails, Laravel, Express, React, Vue, Angular, Next.js, and 20+ frameworks
-- ✅ **Build Tool & Test Framework Detection**: Identifies Maven, Gradle, npm, pip, cargo, Jest, pytest, JUnit, Mocha, and more
-- ✅ **Architecture Pattern Recognition**: Detects DDD, MVC, Microservices, and Clean Architecture patterns
-- ✅ **New Steering Document**: `principles.md` added with comprehensive SOLID, DRY, KISS, YAGNI, Separation of Concerns, and Modularity guidance
-- ✅ **TDD Task Generation**: All implementation tasks now follow Test-Driven Development (RED-GREEN-REFACTOR) workflow
-- ✅ **Improved Error Handling**: Better logging and debug messages for analysis failures
-- ✅ **User Feedback**: Clear indication whether comprehensive analysis or fallback template was used
+**What's New**:
+- ✅ **MCP Tool Standardization**: All documentation and generated files now use standard MCP tool calls (e.g., `sdd-init`) instead of legacy slash commands.
+- ✅ **Updated AGENTS.md**: The `AGENTS.md` file is now automatically generated with the correct tool usage instructions.
+- ✅ **Module Loading Fix (v1.6.2)**: Robust module loading for `sdd-steering` across all execution contexts (npx, npm start, etc.).
+- ✅ **Architecture Refactoring (v1.6.0)**: Improved internal architecture for better maintainability and testing.
 
 **Upgrade Commands**:
 ```bash
 # Prefer npx (no installation required)
 npx -y sdd-mcp-server@latest
 
-# Or pin to specific version
-npx -y sdd-mcp-server@1.4.4
-
 # Global installation
 npm install -g sdd-mcp-server@latest
-# Or pin: npm install -g sdd-mcp-server@1.4.4
 ```
-
-**Migration Notes**:
-- If you pinned a version in your MCP config, update it to `@latest` or `@1.4.4`
-- All steering documents now include `principles.md` and `tdd-guideline.md` automatically
-- TDD task generation is now default - tasks will follow RED-GREEN-REFACTOR order
-- No code changes needed - all improvements are backward compatible
 
 ## Previous Versions
 
-### v1.4.3
-- Comprehensive codebase analysis fix for document generation
-- Enhanced multi-language and framework detection
-- Better error reporting and user feedback
+### v1.6.x
+- Module loading fixes and architecture refactoring
+- Improved requirements clarification service
 
-### v1.4.2
-- Added `tdd-guideline.md` steering document for TDD enforcement
-- Security-check.md (OWASP Top 10) included in static steering docs
+### v1.5.0
+- Interactive requirements clarification with 5W1H analysis
 
-### v1.4.0
-- Analysis-based document generation on first run (no more template-first step)
-- Dynamic steering with static exceptions (`linus-review.md`, `commit.md`)
-- Node.js >= 18 required
+### v1.4.x
+- Comprehensive codebase analysis
+- TDD task generation default
+- Security and principles steering documents
 
 ## ⚙️ Configuration
 
@@ -383,7 +369,7 @@ Here's how to use the MCP SDD Server in your AI client:
 # Result: 5-layer analysis + SOLID/DRY/KISS validation + security checks
 
 # 9. Check workflow status
-"Use sdd-status to see current progress and approvals"
+"Use sdd-status to check workflow progress and phase approvals"
 # Result: Phase completion status and approval tracking
 ```
 
@@ -465,6 +451,7 @@ As of v1.4.3, comprehensive codebase analysis is automatic with multi-language d
 ## 📖 Advanced Documentation
 
 For detailed documentation on:
+- **🤖 AI Agent Guide**: See [AGENTS.md](AGENTS.md) for detailed instructions on using this server with AI agents
 - **🏗️ Architecture Overview**: See [ARCHITECTURE.md](ARCHITECTURE.md) for complete system design, layered architecture, module loading, and Mermaid diagrams
 - **Plugin Development**: See [DEPLOYMENT.md](DEPLOYMENT.md)
 - **Docker Deployment**: See [Dockerfile](Dockerfile) and [docker-compose.yml](docker-compose.yml)
