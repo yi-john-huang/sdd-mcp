@@ -82,6 +82,8 @@ function computeBasePaths(target: string): string[] {
     `./${target}`, // Same directory
     `../${target}`, // Parent directory (for root-level modules)
     `../utils/${target}`, // Parent utils/ (typical case from dist/X to dist/utils/)
+    `../../${target}`, // Two levels up (for root-level modules from dist/utils/)
+    `../../utils/${target}`, // Two levels up utils/
   ];
 }
 
