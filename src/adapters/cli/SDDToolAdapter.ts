@@ -277,9 +277,6 @@ export class SDDToolAdapter {
       specContent,
     );
 
-    // Create AGENTS.md if it doesn't exist
-    await this.createAgentsFile(currentPath);
-
     const clarificationNote = clarificationAnswers
       ? "\n\n✅ Requirements Clarification: Your answers have been incorporated into an enriched project description."
       : "";
@@ -532,11 +529,8 @@ export class SDDToolAdapter {
         content: structureContent,
       });
 
-      // Create static steering documents if they don't exist
+      // Create static steering documents (including AGENTS.md) if they don't exist
       await this.createStaticSteeringDocuments(projectPath);
-
-      // Create AGENTS.md if it doesn't exist
-      await this.createAgentsFile(projectPath);
 
       // Get project info from package.json
       let packageJson: any = {};
@@ -919,116 +913,5 @@ ${this.generateWorkflow(analysis)}`;
     projectPath: string,
   ): Promise<void> {
     await ensureStaticSteeringDocuments(projectPath, this.steeringService);
-  }
-
-  private async createAgentsFile(projectPath: string): Promise<void> {
-    const fs = await import("fs");
-    const path = await import("path");
-
-    // Check if AGENTS.md exists, if not create it based on CLAUDE.md
-    const agentsPath = path.join(projectPath, "AGENTS.md");
-    if (!fs.existsSync(agentsPath)) {
-      // Try to read CLAUDE.md to use as template
-      const claudePath = path.join(projectPath, "CLAUDE.md");
-      let agentsContent = "";
-
-      if (fs.existsSync(claudePath)) {
-        // Read CLAUDE.md and adapt it for general agents
-        const claudeContent = fs.readFileSync(claudePath, "utf8");
-        agentsContent = claudeContent
-          .replace(
-            /# Claude Code Spec-Driven Development/g,
-            "# AI Agent Spec-Driven Development",
-          )
-          .replace(/Claude Code/g, "AI Agent")
-          .replace(/claude code/g, "ai agent")
-          .replace(/Claude/g, "AI Agent")
-          .replace(/claude/g, "ai agent");
-      } else {
-        // Fallback to basic template if CLAUDE.md doesn't exist
-        agentsContent = `# AI Agent Spec-Driven Development
-
-Kiro-style Spec Driven Development implementation using MCP tools.
-
-## Project Context
-
-### Paths
-- Steering: \`.kiro/steering/\`
-- Specs: \`.kiro/specs/\`
-- Commands: \`.ai agent/commands/\`
-
-### Steering vs Specification
-
-**Steering** (\`.kiro/steering/\`) - Guide AI with project-wide rules and context  
-**Specs** (\`.kiro/specs/\`) - Formalize development process for individual features
-
-### Active Specifications
-- Check \`.kiro/specs/\` for active specifications
-- Use \`sdd-status\` to check progress
-
-**Current Specifications:**
-- (None active)
-
-## Development Guidelines
-- Think in English, generate responses in English
-
-## Workflow
-
-### Phase 0: Steering (Optional)
-\`sdd-steering\` - Create/update steering documents  
-\`sdd-steering-custom\` - Create custom steering for specialized contexts
-
-Note: Optional for new features or small additions. You can proceed directly to sdd-init.
-
-### Phase 1: Specification Creation
-1. \`sdd-init\` - Initialize spec with detailed project description
-2. \`sdd-requirements\` - Generate requirements document
-3. \`sdd-design\` - Interactive: "Have you reviewed requirements.md? [y/N]"
-4. \`sdd-tasks\` - Interactive: Confirms both requirements and design review
-
-### Phase 2: Progress Tracking
-\`sdd-status\` - Check current progress and phases
-
-## Development Rules
-1. **Consider steering**: Run \`sdd-steering\` before major development (optional for new features)
-2. **Follow 3-phase approval workflow**: Requirements → Design → Tasks → Implementation
-3. **Approval required**: Each phase requires human review (interactive prompt or manual)
-4. **No skipping phases**: Design requires approved requirements; Tasks require approved design
-5. **Update task status**: Mark tasks as completed when working on them
-6. **Keep steering current**: Run \`sdd-steering\` after significant changes
-7. **Check spec compliance**: Use \`sdd-status\` to verify alignment
-
-## Steering Configuration
-
-### Current Steering Files
-Managed by \`sdd-steering\` tool. Updates here reflect tool changes.
-
-### Active Steering Files
-- \`product.md\`: Always included - Product context and business objectives
-- \`tech.md\`: Always included - Technology stack and architectural decisions
-- \`structure.md\`: Always included - File organization and code patterns
-- \`linus-review.md\`: Always included - Ensuring code quality of the projects
-- \`commit.md\`: Always included - Ensuring the commit / merge request / pull request title and message context
-- \`security-check.md\`: Always included - OWASP Top 10 security checklist (REQUIRED for code generation and review)
-- \`tdd-guideline.md\`: Always included - Test-Driven Development workflow (REQUIRED for all new features)
-- \`principles.md\`: Always included - Core coding principles (SOLID, DRY, KISS, YAGNI, Separation of Concerns, Modularity)
-
-### Custom Steering Files
-<!-- Added by sdd-steering-custom tool -->
-<!-- Format: 
-- \`filename.md\`: Mode - Pattern(s) - Description
-  Mode: Always|Conditional|Manual
-  Pattern: File patterns for Conditional mode
--->
-
-### Inclusion Modes
-- **Always**: Loaded in every interaction (default)
-- **Conditional**: Loaded for specific file patterns (e.g., "*.test.js")
-- **Manual**: Reference with \`@filename.md\` syntax
-`;
-      }
-
-      fs.writeFileSync(agentsPath, agentsContent);
-    }
   }
 }
