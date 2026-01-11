@@ -6,6 +6,8 @@
 
 A Model Context Protocol (MCP) server implementing Spec-Driven Development (SDD) workflows for AI-agent CLIs and IDEs like Claude Code, Cursor, and others.
 
+> 🎯 **v1.9.0 - Hybrid MCP + Agent Skills Architecture**: Restructured for token efficiency! Template/guidance tools (requirements, design, tasks, steering, implement) are now **Claude Code Agent Skills** loaded on-demand. Action-oriented tools remain as MCP tools. ~55% token savings in typical operations. Install skills with `npx sdd-mcp install-skills`.
+
 > 🤖 **v1.8.0 - MCP Tool Standardization**: Updated `AGENTS.md` generation to use standard MCP tool calls (e.g., `sdd-init`) instead of legacy slash commands. Fixed `sdd-steering` to correctly generate `AGENTS.md` with the new format. Ensures consistent tool usage across all AI agents.
 
 > 🔧 **v1.6.2 - Module Loading Fix**: Fixed critical bug where `sdd-steering` generated generic templates instead of analyzing actual codebases when run via `npx`. Root cause: hardcoded import paths didn't account for different execution contexts. Solution: Unified module loading system with **4-path fallback resolution** handling npm start, npm dev, node dist/index.js, and npx contexts. Comprehensive error handling with all attempted paths in error messages. Debug logging for troubleshooting. **100% test coverage** (71 tests passing, 6 new moduleLoader tests). Code review score: **9/10 (Excellent)** ✅. Production-ready with zero security issues!
@@ -148,83 +150,130 @@ npm install -g sdd-mcp-server@latest
 sdd-mcp-server
 ```
 
-## 📋 Available SDD Commands
+## 🎯 Agent Skills (NEW in v1.9.0)
+
+SDD now uses a **hybrid architecture** for better token efficiency:
+
+- **MCP Tools**: Action-oriented operations (init, status, approve, quality-check, validate, spec-impl)
+- **Agent Skills**: Template/guidance-heavy operations (requirements, design, tasks, steering, implement, commit)
+
+### Installing Agent Skills
+
+```bash
+# Install skills to your project's .claude/skills/ directory
+npx sdd-mcp install-skills
+
+# Or specify a custom path
+npx sdd-mcp install-skills --path ./my-skills
+
+# List available skills
+npx sdd-mcp install-skills --list
+```
+
+### Available Skills
+
+After installation, use these skills in Claude Code:
+
+| Skill | Description |
+|-------|-------------|
+| `/sdd-requirements <feature>` | Generate EARS-formatted requirements with embedded quality checklist |
+| `/sdd-design <feature>` | Create architecture design with Linus-style principles |
+| `/sdd-tasks <feature>` | Generate TDD task breakdown with test pyramid guidance |
+| `/sdd-implement <feature>` | Implementation guidelines with SOLID, security, TDD |
+| `/sdd-steering` | Create/update project-specific steering documents |
+| `/sdd-steering-custom` | Create custom steering with inclusion modes |
+| `/sdd-commit` | Commit/PR guidelines with conventional commits |
+
+### Token Efficiency
+
+**Old Design** (static steering): ~3,800 tokens loaded for every operation
+**New Design** (skills): ~1,700 tokens loaded only when skill invoked
+
+**Savings**: ~55% fewer tokens in typical operations!
+
+## 📋 Available MCP Tools
 
 Once connected to your AI client, you can use these MCP tools:
 
 | Tool | Description | Usage |
 |------|-------------|--------|
-| `sdd-init` | Initialize new SDD project with interactive clarification | **🎯 NEW v1.5.0**: Analyzes description quality (0-100 score), blocks if < 70%, asks targeted WHY/WHO/WHAT questions, synthesizes enriched 5W1H descriptions |
-| `sdd-requirements` | Generate context-aware requirements | Analyzes package.json and structure to create EARS-formatted requirements with comprehensive multi-language analysis |
-| `sdd-design` | Create project-specific design | Generates architecture docs based on actual tech stack, dependencies, and framework detection |
-| `sdd-tasks` | Generate TDD-focused task breakdown | Creates test-first implementation tasks following RED-GREEN-REFACTOR workflow |
-| `sdd-implement` | Implementation guidelines | Provides implementation steering |
-| `sdd-status` | Check workflow progress | Shows current phase and approvals |
-| `sdd-approve` | Approve workflow phases | Mark phases as approved for progression |
+| `sdd-init` | Initialize new SDD project with interactive clarification | Analyzes description quality (0-100 score), blocks if < 70%, asks targeted WHY/WHO/WHAT questions |
+| `sdd-status` | Check workflow progress | Shows current phase and approvals for features |
+| `sdd-approve` | Approve workflow phases | Mark phases (requirements, design, tasks) as approved |
 | `sdd-quality-check` | Code quality analysis | Linus-style 5-layer code review |
 | `sdd-context-load` | Load project context | Restore project memory and state |
-| `sdd-template-render` | Render templates | Generate files from templates |
-| `sdd-steering` | Create/update steering docs | Analyzes project to generate product.md, tech.md, structure.md + static docs: linus-review.md, commit.md, security-check.md, tdd-guideline.md, principles.md (SOLID/DRY/KISS/YAGNI/SoC/Modularity) |
-| `sdd-steering-custom` | Create custom steering docs | Add specialized guidance documents |
 | `sdd-validate-design` | Design quality validation | Interactive GO/NO-GO design review |
 | `sdd-validate-gap` | Implementation gap analysis | Analyze requirements vs codebase |
 | `sdd-spec-impl` | Execute tasks with TDD | Kent Beck's Red-Green-Refactor methodology |
+| `sdd-list-skills` | List available Agent Skills | Shows skills that can be installed for Claude Code |
+
+> **Note**: Template/guidance tools (`sdd-requirements`, `sdd-design`, `sdd-tasks`, `sdd-steering`, `sdd-implement`) are now **Agent Skills**. Install them with `npx sdd-mcp install-skills` and use as `/sdd-requirements`, `/sdd-design`, etc.
 
 ## 💡 Basic Workflow
 
-1. **Initialize Project & Steering**
-   ```
+1. **Setup: Install Skills & Initialize Project**
+   ```bash
+   # Install SDD Agent Skills to your project
+   npx sdd-mcp install-skills
+
+   # Initialize project with MCP tool
    Use sdd-init to create a new SDD project
-   Use sdd-steering to generate 8 steering documents:
-     - product.md, tech.md, structure.md (dynamic, analyzed from codebase)
-     - linus-review.md, commit.md, security-check.md (static quality standards)
-     - tdd-guideline.md (Test-Driven Development workflow)
-     - principles.md (SOLID, DRY, KISS, YAGNI, SoC, Modularity)
+
+   # Generate steering documents with Agent Skill
+   Use /sdd-steering to generate product.md, tech.md, structure.md
    ```
 
-2. **Generate Requirements**
+2. **Generate Requirements (Agent Skill)**
    ```
-   Use sdd-requirements to analyze your project with comprehensive multi-language detection
-   Automatically detects: language, framework, build tools, test frameworks, architecture patterns
-   Creates EARS-formatted requirements based on actual project context
-   Use sdd-validate-gap to analyze implementation feasibility
-   ```
-
-3. **Create Design**
-   ```
-   Use sdd-design to generate architecture based on detected tech stack
-   Includes: component structure, data models, API design, tech stack details
-   Use sdd-validate-design for GO/NO-GO design review
+   Use /sdd-requirements <feature-name> to analyze your project
+   Automatically detects: language, framework, build tools, test frameworks
+   Creates EARS-formatted requirements with embedded quality checklist
+   Use sdd-validate-gap (MCP tool) to analyze implementation feasibility
    ```
 
-4. **Plan Tasks with TDD**
+3. **Create Design (Agent Skill)**
    ```
-   Use sdd-tasks to create TDD-focused implementation breakdown
+   Use /sdd-design <feature-name> to generate architecture
+   Includes: component structure, data models, API design, Linus principles
+   Use sdd-validate-design (MCP tool) for GO/NO-GO design review
+   Use sdd-approve (MCP tool) to approve the design phase
+   ```
+
+4. **Plan Tasks with TDD (Agent Skill)**
+   ```
+   Use /sdd-tasks <feature-name> to create TDD-focused task breakdown
+   Includes test pyramid guidance (70/20/10 ratio)
    Tasks follow RED-GREEN-REFACTOR workflow automatically
-   Phases: Test Setup → Implementation → Refactoring → Integration
+   Use sdd-approve (MCP tool) to approve the tasks phase
    ```
 
-5. **Implement with TDD**
+5. **Implement with TDD (Agent Skill + MCP Tool)**
    ```
-   Use sdd-spec-impl to execute tasks with Test-Driven Development
-   Follow the generated TDD workflow from tdd-guideline.md
-   Use sdd-quality-check for Linus-style code review and SOLID principles validation
+   Use /sdd-implement <feature-name> for implementation guidelines
+   Use sdd-spec-impl (MCP tool) to execute tasks with TDD methodology
+   Use sdd-quality-check (MCP tool) for Linus-style code review
    ```
 
-6. **Monitor & Manage**
+6. **Commit Changes (Agent Skill)**
+   ```
+   Use /sdd-commit for commit message and PR guidelines
+   Follow conventional commits format
+   ```
+
+7. **Monitor & Manage (MCP Tools)**
    ```
    Use sdd-status to check workflow progress and phase approvals
-   Use sdd-approve to mark phases as approved
    Use sdd-context-load to restore project memory
    ```
 
-## Latest Updates (v1.8.0)
+## Latest Updates (v1.9.0)
 
 **What's New**:
-- ✅ **MCP Tool Standardization**: All documentation and generated files now use standard MCP tool calls (e.g., `sdd-init`) instead of legacy slash commands.
-- ✅ **Updated AGENTS.md**: The `AGENTS.md` file is now automatically generated with the correct tool usage instructions.
-- ✅ **Module Loading Fix (v1.6.2)**: Robust module loading for `sdd-steering` across all execution contexts (npx, npm start, etc.).
-- ✅ **Architecture Refactoring (v1.6.0)**: Improved internal architecture for better maintainability and testing.
+- 🎯 **Hybrid MCP + Agent Skills Architecture**: Template/guidance tools moved to Claude Code Agent Skills for ~55% token savings
+- ✅ **7 Agent Skills**: sdd-requirements, sdd-design, sdd-tasks, sdd-implement, sdd-steering, sdd-steering-custom, sdd-commit
+- ✅ **Skill Installation CLI**: `npx sdd-mcp install-skills` to install skills to `.claude/skills/`
+- ✅ **New MCP Tool**: `sdd-list-skills` to list available skills
+- ✅ **Token Efficiency**: Guidance loaded on-demand instead of always-on steering
 
 **Upgrade Commands**:
 ```bash
@@ -233,9 +282,16 @@ npx -y sdd-mcp-server@latest
 
 # Global installation
 npm install -g sdd-mcp-server@latest
+
+# Install Agent Skills to your project
+npx sdd-mcp install-skills
 ```
 
 ## Previous Versions
+
+### v1.8.x
+- MCP tool standardization (standard tool calls vs slash commands)
+- Updated AGENTS.md generation
 
 ### v1.6.x
 - Module loading fixes and architecture refactoring

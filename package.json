@@ -1,15 +1,17 @@
 {
   "name": "sdd-mcp-server",
-  "version": "1.8.0",
+  "version": "2.0.0",
   "description": "MCP server for spec-driven development workflows across AI-agent CLIs and IDEs",
   "main": "dist/index.js",
   "bin": {
     "sdd-mcp-server": "mcp-server.js",
-    "sdd-mcp": "dist/index.js"
+    "sdd-mcp": "dist/index.js",
+    "sdd-install-skills": "dist/cli/install-skills.js"
   },
   "type": "module",
   "files": [
     "dist/**/*",
+    "skills/**/*",
     "mcp-server.js",
     "documentGenerator.js",
     "specGenerator.js",
@@ -66,7 +68,8 @@
     "inversify": "^6.0.2",
     "os-locale": "^6.0.2",
     "reflect-metadata": "^0.2.2",
-    "uuid": "^10.0.0"
+    "uuid": "^10.0.0",
+    "zod": "^3.23.8"
   },
   "devDependencies": {
     "@types/esprima": "^4.0.6",

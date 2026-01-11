@@ -1,80 +1,178 @@
 # AI Agent Spec-Driven Development
 
-Kiro-style Spec Driven Development implementation using MCP tools.
+Hybrid MCP + Agent Skills implementation for spec-driven development.
+
+## Two Development Paths
+
+Choose the appropriate path based on task complexity:
+
+### Path A: Simple Task (`/simple-task`)
+For small features, bug fixes, quick enhancements.
+
+```
+User: "Add a logout button"
+→ /simple-task
+→ References: tdd-guideline.md, principles.md, linus-review.md, owasp-top10-check.md
+→ Implements with best practices
+```
+
+### Path B: Full SDD Workflow
+For complex features requiring formal specification.
+
+```
+User: "Build user authentication system"
+→ sdd-init → /sdd-requirements → /sdd-design → /sdd-tasks → /sdd-implement
+→ Full approval workflow at each phase
+```
+
+---
+
+## Reference Documents (Steering)
+
+These documents provide guidance and can be referenced by skills:
+
+| Document | Purpose |
+|----------|---------|
+| `tdd-guideline.md` | TDD Red-Green-Refactor methodology |
+| `principles.md` | SOLID, DRY, KISS, YAGNI, Separation of Concerns |
+| `linus-review.md` | Code quality and "good taste" criteria |
+| `owasp-top10-check.md` | OWASP Top 10 security checklist |
+
+Located in `.spec/steering/` (or `.kiro/steering/` for legacy projects).
+
+---
+
+## Architecture (v1.9.0)
+
+This project uses a **hybrid architecture** for token efficiency:
+
+- **MCP Tools**: Action-oriented operations (init, status, approve, quality-check, validate, spec-impl)
+- **Agent Skills**: Template/guidance-heavy operations (requirements, design, tasks, steering, implement, commit)
+
+### Install Agent Skills
+
+```bash
+npx sdd-mcp install-skills
+```
 
 ## Project Context
 
 ### Paths
-- Steering: `.kiro/steering/`
-- Specs: `.kiro/specs/`
-- Commands: `.ai agent/commands/`
+- Steering: `.spec/steering/`
+- Specs: `.spec/specs/`
+- Skills: `.claude/skills/`
 
-### Steering vs Specification
+### Steering Documents
 
-**Steering** (`.kiro/steering/`) - Guide AI with project-wide rules and context  
-**Specs** (`.kiro/specs/`) - Formalize development process for individual features
+**Reference Documents** (guidance for skills):
+- `tdd-guideline.md`: TDD methodology and test pyramid
+- `principles.md`: SOLID, DRY, KISS, YAGNI, Modularity
+- `linus-review.md`: Code quality and "good taste" criteria
+- `owasp-top10-check.md`: OWASP Top 10 security checklist
 
-### Active Specifications
-- Check `.kiro/specs/` for active specifications
-- Use `sdd-status` to check progress
-
-**Current Specifications:**
-- `mcp-sdd-server`: MCP server for spec-driven development across AI-agent CLIs and IDEs
-- `mcp-steering-fix`: Fix MCP server steering document generation functionality
-
-## Development Guidelines
-- Think in English, generate responses in English
+**Project-Specific** (describe YOUR project):
+- `product.md`: Product context and business objectives
+- `tech.md`: Technology stack and decisions
+- `structure.md`: File organization and patterns
 
 ## Workflow
 
-### Phase 0: Steering (Optional)
-`sdd-steering` - Create/update steering documents  
-`sdd-steering-custom` - Create custom steering for specialized contexts
+### Phase 0: Setup (One-time)
+```bash
+# Install Agent Skills to your project
+npx sdd-mcp install-skills
+```
 
-Note: Optional for new features or small additions. You can proceed directly to sdd-init.
+### Phase 1: Steering (Optional)
+`/sdd-steering` (Skill) - Create/update project-specific steering documents
+`/sdd-steering-custom` (Skill) - Create custom steering for specialized contexts
 
-### Phase 1: Specification Creation
-1. `sdd-init` - Initialize spec with detailed project description
-2. `sdd-requirements` - Generate requirements document
-3. `sdd-design` - Interactive: "Have you reviewed requirements.md? [y/N]"
-4. `sdd-tasks` - Interactive: Confirms both requirements and design review
+### Phase 2: Specification Creation
+1. `sdd-init` (MCP Tool) - Initialize spec with project description
+2. `/sdd-requirements <feature>` (Skill) - Generate EARS-formatted requirements
+3. `sdd-approve --phase requirements` (MCP Tool) - Approve requirements
+4. `/sdd-design <feature>` (Skill) - Create architecture design
+5. `sdd-validate-design` (MCP Tool) - GO/NO-GO design review
+6. `sdd-approve --phase design` (MCP Tool) - Approve design
+7. `/sdd-tasks <feature>` (Skill) - Generate TDD task breakdown
+8. `sdd-approve --phase tasks` (MCP Tool) - Approve tasks
 
-### Phase 2: Progress Tracking
-`sdd-status` - Check current progress and phases
+### Phase 3: Implementation
+- `/sdd-implement <feature>` (Skill) - Implementation guidelines with SOLID, security, TDD
+- `sdd-spec-impl` (MCP Tool) - Execute tasks with TDD methodology
+- `sdd-quality-check` (MCP Tool) - Linus-style code review
+
+### Phase 4: Commit
+- `/sdd-commit` (Skill) - Commit message and PR guidelines
+
+### Progress Tracking
+- `sdd-status` (MCP Tool) - Check current progress and phases
+- `sdd-context-load` (MCP Tool) - Restore project context
+
+## MCP Tools
+
+| Tool | Description |
+|------|-------------|
+| `sdd-init` | Initialize new SDD project |
+| `sdd-status` | Check workflow progress |
+| `sdd-approve` | Approve workflow phases |
+| `sdd-quality-check` | Code quality analysis |
+| `sdd-context-load` | Load project context |
+| `sdd-validate-design` | Design quality validation |
+| `sdd-validate-gap` | Implementation gap analysis |
+| `sdd-spec-impl` | Execute tasks with TDD |
+| `sdd-list-skills` | List available Agent Skills |
+
+## Agent Skills
+
+| Skill | Description |
+|-------|-------------|
+| `/simple-task` | Quick implementation with best practices (references steering docs) |
+| `/sdd-requirements` | EARS-formatted requirements with quality checklist |
+| `/sdd-design` | Architecture design with Linus principles |
+| `/sdd-tasks` | TDD task breakdown with test pyramid guidance |
+| `/sdd-implement` | Implementation guidelines (SOLID, security, TDD) |
+| `/sdd-steering` | Project-specific steering documents |
+| `/sdd-steering-custom` | Custom steering with inclusion modes |
+| `/sdd-commit` | Commit/PR guidelines with conventional commits |
+
+## Token Efficiency
+
+Skills are loaded **on-demand** instead of always-on steering:
+
+- Old: ~3,800 tokens loaded for every operation
+- New: ~1,700 tokens loaded only when skill invoked
+- **Savings**: ~55% fewer tokens!
 
 ## Development Rules
-1. **Consider steering**: Run `sdd-steering` before major development (optional for new features)
-2. **Follow 3-phase approval workflow**: Requirements → Design → Tasks → Implementation
-3. **Approval required**: Each phase requires human review (interactive prompt or manual)
-4. **No skipping phases**: Design requires approved requirements; Tasks require approved design
-5. **Update task status**: Mark tasks as completed when working on them
-6. **Keep steering current**: Run `sdd-steering` after significant changes
-7. **Check spec compliance**: Use `sdd-status` to verify alignment
+
+1. **Install skills first**: Run `npx sdd-mcp install-skills`
+2. **Use skills for guidance**: `/sdd-requirements`, `/sdd-design`, `/sdd-tasks`, `/sdd-implement`
+3. **Use MCP tools for actions**: `sdd-init`, `sdd-approve`, `sdd-status`, `sdd-spec-impl`
+4. **Follow 3-phase approval workflow**: Requirements → Design → Tasks → Implementation
+5. **Approval required**: Each phase requires human review
+6. **No skipping phases**: Design requires approved requirements; Tasks require approved design
 
 ## Steering Configuration
 
-### Current Steering Files
-Managed by `sdd-steering` tool. Updates here reflect tool changes.
+### Reference Documents (guidance for skills)
+Located in `.spec/steering/`:
+- `tdd-guideline.md`: TDD Red-Green-Refactor methodology
+- `principles.md`: SOLID, DRY, KISS, YAGNI, Separation of Concerns
+- `linus-review.md`: Code quality "good taste" criteria
+- `owasp-top10-check.md`: OWASP Top 10 security checklist
 
-### Active Steering Files
-- `product.md`: Always included - Product context and business objectives
-- `tech.md`: Always included - Technology stack and architectural decisions
-- `structure.md`: Always included - File organization and code patterns
-- `linus-review.md`: Always included - Ensuring code quality of the projects
-- `commit.md`: Always included - Ensuring the commit / merge request / pull request title and message context
-- `security-check.md`: Always included - OWASP Top 10 security checklist (REQUIRED for code generation and review)
-- `tdd-guideline.md`: Always included - Test-Driven Development workflow (REQUIRED for all new features)
-- `principles.md`: Always included - Core coding principles (SOLID, DRY, KISS, YAGNI, Separation of Concerns, Modularity)
+### Project-Specific Files (per-project context)
+Located in `.spec/steering/`:
+- `product.md`: Product context and business objectives
+- `tech.md`: Technology stack and decisions
+- `structure.md`: File organization and patterns
 
-### Custom Steering Files
-<!-- Added by sdd-steering-custom tool -->
-<!-- Format: 
-- `filename.md`: Mode - Pattern(s) - Description
-  Mode: Always|Conditional|Manual
-  Pattern: File patterns for Conditional mode
--->
-
-### Inclusion Modes
-- **Always**: Loaded in every interaction (default)
-- **Conditional**: Loaded for specific file patterns (e.g., "*.test.js")
-- **Manual**: Reference with `@filename.md` syntax
+### Skills (on-demand)
+Located in `.claude/skills/`:
+- `/simple-task`: Quick implementation with steering doc references
+- `/sdd-requirements`: EARS format templates
+- `/sdd-design`: Architecture pattern templates
+- `/sdd-tasks`: Task breakdown templates
+- `/sdd-implement`: Extended implementation checklists
+- `/sdd-commit`: Commit/PR templates

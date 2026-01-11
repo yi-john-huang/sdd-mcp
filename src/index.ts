@@ -109,55 +109,32 @@ async function createSimpleMCPServer() {
     },
   );
 
-  // Add ALL SDD tools (not just basic ones)
+  // MCP Tools - Action-oriented tools only
+  // Template/guidance tools have been moved to Agent Skills (use /sdd-requirements, /sdd-design, etc.)
   server.setRequestHandler(ListToolsRequestSchema, async () => {
     return {
       tools: [
         {
           name: "sdd-init",
-          description: "Initialize a new SDD project from description",
+          description: "Initialize a new SDD project with interactive requirements clarification",
           inputSchema: {
             type: "object",
             properties: {
+              projectName: {
+                type: "string",
+                description: "The name of the project to initialize",
+              },
               description: {
                 type: "string",
-                description: "Detailed project description",
+                description: "Project description",
+              },
+              clarificationAnswers: {
+                type: "object",
+                description: "Answers to clarification questions (second pass)",
+                additionalProperties: { type: "string" },
               },
             },
-            required: ["description"],
-          },
-        },
-        {
-          name: "sdd-requirements",
-          description: "Generate requirements doc",
-          inputSchema: {
-            type: "object",
-            properties: {
-              featureName: { type: "string" },
-            },
-            required: ["featureName"],
-          },
-        },
-        {
-          name: "sdd-design",
-          description: "Create design specifications",
-          inputSchema: {
-            type: "object",
-            properties: {
-              featureName: { type: "string" },
-            },
-            required: ["featureName"],
-          },
-        },
-        {
-          name: "sdd-tasks",
-          description: "Generate task breakdown",
-          inputSchema: {
-            type: "object",
-            properties: {
-              featureName: { type: "string" },
-            },
-            required: ["featureName"],
+            required: ["projectName"],
           },
         },
         {
@@ -166,47 +143,11 @@ async function createSimpleMCPServer() {
           inputSchema: {
             type: "object",
             properties: {
-              featureName: { type: "string" },
-            },
-          },
-        },
-        {
-          name: "sdd-steering",
-          description: "Create/update steering documents",
-          inputSchema: {
-            type: "object",
-            properties: {
-              updateMode: { type: "string", enum: ["create", "update"] },
-            },
-          },
-        },
-        {
-          name: "sdd-steering-custom",
-          description: "Create custom steering documents",
-          inputSchema: {
-            type: "object",
-            properties: {
-              fileName: { type: "string" },
-              topic: { type: "string" },
-              inclusionMode: {
+              featureName: {
                 type: "string",
-                enum: ["always", "conditional", "manual"],
+                description: "Feature name (optional - shows all if not provided)",
               },
-              filePattern: { type: "string" },
             },
-            required: ["fileName", "topic", "inclusionMode"],
-          },
-        },
-        {
-          name: "sdd-quality-check",
-          description: "Code quality analysis",
-          inputSchema: {
-            type: "object",
-            properties: {
-              code: { type: "string" },
-              language: { type: "string" },
-            },
-            required: ["code"],
           },
         },
         {
@@ -215,9 +156,13 @@ async function createSimpleMCPServer() {
           inputSchema: {
             type: "object",
             properties: {
-              featureName: { type: "string" },
+              featureName: {
+                type: "string",
+                description: "Feature name from spec initialization",
+              },
               phase: {
                 type: "string",
+                description: "Phase to approve",
                 enum: ["requirements", "design", "tasks"],
               },
             },
@@ -225,14 +170,21 @@ async function createSimpleMCPServer() {
           },
         },
         {
-          name: "sdd-implement",
-          description: "Implementation guidelines",
+          name: "sdd-quality-check",
+          description: "Code quality analysis",
           inputSchema: {
             type: "object",
             properties: {
-              featureName: { type: "string" },
+              code: {
+                type: "string",
+                description: "Code to analyze",
+              },
+              language: {
+                type: "string",
+                description: "Programming language (default: javascript)",
+              },
             },
-            required: ["featureName"],
+            required: ["code"],
           },
         },
         {
@@ -241,59 +193,66 @@ async function createSimpleMCPServer() {
           inputSchema: {
             type: "object",
             properties: {
-              featureName: { type: "string" },
+              featureName: {
+                type: "string",
+                description: "Feature name to load context for",
+              },
             },
             required: ["featureName"],
           },
         },
         {
-          name: "sdd-template-render",
-          description: "Render templates",
-          inputSchema: {
-            type: "object",
-            properties: {
-              templateType: {
-                type: "string",
-                enum: ["requirements", "design", "tasks", "custom"],
-              },
-              featureName: { type: "string" },
-              customTemplate: { type: "string" },
-            },
-            required: ["templateType", "featureName"],
-          },
-        },
-        {
           name: "sdd-validate-design",
-          description: "Validate design quality",
+          description: "Interactive design quality review and validation",
           inputSchema: {
             type: "object",
             properties: {
-              featureName: { type: "string" },
+              featureName: {
+                type: "string",
+                description: "Feature name to validate design for",
+              },
             },
             required: ["featureName"],
           },
         },
         {
           name: "sdd-validate-gap",
-          description: "Validate implementation gap",
+          description: "Analyze implementation gap between requirements and codebase",
           inputSchema: {
             type: "object",
             properties: {
-              featureName: { type: "string" },
+              featureName: {
+                type: "string",
+                description: "Feature name to analyze implementation gap for",
+              },
             },
             required: ["featureName"],
           },
         },
         {
           name: "sdd-spec-impl",
-          description: "Execute spec tasks using TDD",
+          description: "Execute spec tasks using TDD methodology",
           inputSchema: {
             type: "object",
             properties: {
-              featureName: { type: "string" },
-              taskNumbers: { type: "string" },
+              featureName: {
+                type: "string",
+                description: "Feature name to execute tasks for",
+              },
+              taskNumbers: {
+                type: "string",
+                description: "Specific task numbers to execute (e.g., \"1.1,2.3\" or leave empty for all pending)",
+              },
             },
             required: ["featureName"],
+          },
+        },
+        {
+          name: "sdd-list-skills",
+          description: "List available SDD Agent Skills that can be installed for Claude Code",
+          inputSchema: {
+            type: "object",
+            properties: {},
           },
         },
       ],
@@ -308,37 +267,16 @@ async function createSimpleMCPServer() {
         return await handleInitSimplified(args);
       case "sdd-status":
         return await handleStatusSimplified(args);
-      case "sdd-steering":
-        return await handleSteeringSimplified(args);
-      case "sdd-steering-custom":
-        return await handleSteeringCustomSimplified(args);
-      case "sdd-requirements":
-        return await handleRequirementsSimplified(args);
-      case "sdd-design":
-        return await handleDesignSimplified(args);
-      case "sdd-tasks":
-        return await handleTasksSimplified(args);
       case "sdd-quality-check":
         return await handleQualityCheckSimplified(args);
       case "sdd-approve":
         return await handleApproveSimplified(args);
-      case "sdd-implement":
-        return await handleImplementSimplified(args);
       case "sdd-context-load":
         return {
           content: [
             {
               type: "text",
               text: `Project context loaded for ${args.featureName}. (Simplified MCP mode)`,
-            },
-          ],
-        };
-      case "sdd-template-render":
-        return {
-          content: [
-            {
-              type: "text",
-              text: `Template ${args.templateType} rendered for ${args.featureName}. (Simplified MCP mode)`,
             },
           ],
         };
@@ -369,6 +307,8 @@ async function createSimpleMCPServer() {
             },
           ],
         };
+      case "sdd-list-skills":
+        return await handleListSkillsSimplified();
       default:
         throw new Error(`Unknown tool: ${name}`);
     }
@@ -381,6 +321,90 @@ async function createSimpleMCPServer() {
 
   const transport = new StdioServerTransport();
   await server.connect(transport);
+}
+
+// List available SDD Agent Skills
+async function handleListSkillsSimplified() {
+  const path = await import("path");
+  const { SkillManager } = await import("./skills/SkillManager.js");
+
+  try {
+    // Determine skills path - check multiple locations
+    const possiblePaths = [
+      path.resolve(process.cwd(), "node_modules/sdd-mcp-server/skills"),
+      path.resolve(process.cwd(), "skills"),
+      path.resolve(__dirname, "../skills"),
+      path.resolve(__dirname, "../../skills"),
+    ];
+
+    let skillsPath = possiblePaths[0];
+    const fs = await import("fs");
+    for (const p of possiblePaths) {
+      if (fs.existsSync(p)) {
+        skillsPath = p;
+        break;
+      }
+    }
+
+    const skillManager = new SkillManager(skillsPath);
+    const skills = await skillManager.listSkills();
+
+    if (skills.length === 0) {
+      return {
+        content: [
+          {
+            type: "text",
+            text: `## SDD Agent Skills
+
+No skills found in the package. Skills may not be installed correctly.
+
+**Expected location**: \`${skillsPath}\`
+
+**Installation**: Run \`npx sdd-mcp install-skills\` to install skills to your project.`,
+          },
+        ],
+      };
+    }
+
+    const skillsList = skills
+      .map((skill) => `- **${skill.name}**: ${skill.description || "No description"}`)
+      .join("\n");
+
+    return {
+      content: [
+        {
+          type: "text",
+          text: `## SDD Agent Skills
+
+Available skills that can be installed for Claude Code:
+
+${skillsList}
+
+**Total**: ${skills.length} skills
+
+**Installation**: Run \`npx sdd-mcp install-skills\` to install all skills to \`.claude/skills/\`
+
+After installation, you can use these skills in Claude Code with:
+- \`/sdd-requirements <feature-name>\`
+- \`/sdd-design <feature-name>\`
+- \`/sdd-tasks <feature-name>\`
+- \`/sdd-implement <feature-name>\`
+- \`/sdd-steering\`
+- \`/sdd-commit\``,
+        },
+      ],
+    };
+  } catch (error) {
+    return {
+      content: [
+        {
+          type: "text",
+          text: `Error listing skills: ${(error as Error).message}`,
+        },
+      ],
+      isError: true,
+    };
+  }
 }
 
 /**
