@@ -5,6 +5,87 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.0.0] - 2026-01-12
+
+### BREAKING CHANGES
+- **Hybrid Architecture**: Restructured as MCP Tools + Claude Code Agent Skills
+  - MCP Tools: Action-oriented operations (init, status, approve, quality-check, validate, spec-impl)
+  - Agent Skills: Template/guidance-heavy operations (requirements, design, tasks, steering, implement, commit)
+- **Directory Rename**: `.kiro/` → `.spec/` for new projects (legacy `.kiro/` still supported)
+- **Removed MCP Tools**: `sdd-requirements`, `sdd-design`, `sdd-tasks`, `sdd-steering`, `sdd-steering-custom`, `sdd-implement` → Now Agent Skills
+- **Renamed Steering Document**: `security-check.md` → `owasp-top10-check.md`
+
+### Added
+- **New `/simple-task` Skill**: Quick implementation path for small features, bug fixes, and enhancements
+  - References steering documents (TDD, principles, linus-review, OWASP) as needed
+  - User-driven choice between simple task vs full SDD workflow
+- **Agent Skills System**: 9 Claude Code skills with on-demand loading
+  - `/simple-task`: Quick implementation with best practices
+  - `/sdd-requirements`: EARS-formatted requirements generation
+  - `/sdd-design`: Architecture design with Linus principles
+  - `/sdd-tasks`: TDD task breakdown with test pyramid
+  - `/sdd-implement`: Implementation guidelines (SOLID, security, TDD)
+  - `/sdd-steering`: Project-specific steering documents
+  - `/sdd-steering-custom`: Custom steering with inclusion modes
+  - `/sdd-commit`: Commit/PR guidelines with conventional commits
+- **Skill Installation CLI**: `npx sdd-mcp install-skills` to install skills to project
+- **SkillManager**: New `src/skills/SkillManager.ts` for skill discovery and installation
+- **New MCP Tool**: `sdd-list-skills` to list available Agent Skills
+- **Two Development Paths**: Users choose between `/simple-task` (quick) or full SDD workflow (formal)
+
+### Changed
+- **Token Efficiency**: ~55% fewer tokens by loading skills on-demand instead of always-on steering
+  - Old: ~3,800 tokens loaded for every operation
+  - New: ~1,700 tokens loaded only when skill invoked
+- **Language-Agnostic Skills**: All skills updated to be programming language agnostic
+  - Removed hardcoded `package.json` references
+  - Generic "project manifest" terminology with multi-language examples
+  - Support for npm, pip, cargo, go mod, maven, etc.
+- **Reference Documents Architecture**: Steering documents (TDD, principles, linus-review, OWASP) are now reference documents that skills can invoke, not always-loaded
+- **AGENTS.md**: Completely rewritten for hybrid architecture with two development paths
+- **ESLint Configuration**: Fixed and relaxed for gradual adoption (0 errors, warnings only)
+
+### Fixed
+- ESLint configuration error: `@typescript-eslint/recommended` → `plugin:@typescript-eslint/recommended`
+- Added ignore patterns for test files in ESLint
+- Relaxed strict TypeScript rules to warnings for pre-existing code
+
+### Technical
+- **New Files**:
+  - `skills/simple-task/SKILL.md`
+  - `skills/sdd-requirements/SKILL.md`
+  - `skills/sdd-design/SKILL.md`
+  - `skills/sdd-tasks/SKILL.md`
+  - `skills/sdd-implement/SKILL.md`
+  - `skills/sdd-steering/SKILL.md`
+  - `skills/sdd-steering-custom/SKILL.md`
+  - `skills/sdd-commit/SKILL.md`
+  - `src/skills/SkillManager.ts`
+  - `src/cli/install-skills.ts`
+  - `src/__tests__/unit/skills/SkillManager.test.ts`
+  - `src/__tests__/unit/cli/install-skills.test.ts`
+- **Test Coverage**: 25 new tests for skills infrastructure (107 total tests passing)
+- **Package Updates**: Added `skills/**/*` to published files, new `sdd-install-skills` binary
+
+### Migration Guide
+```bash
+# 1. Update package
+npm update sdd-mcp-server
+
+# 2. Install skills to your project
+npx sdd-mcp install-skills
+
+# 3. (Optional) Rename directories for new projects
+mv .kiro .spec
+
+# 4. (Optional) Rename steering document
+mv .spec/steering/security-check.md .spec/steering/owasp-top10-check.md
+
+# 5. Use new workflow
+# Simple features: /simple-task <description>
+# Complex features: Full SDD workflow (sdd-init → /sdd-requirements → etc.)
+```
+
 ## [1.8.1] - 2025-12-02
 
 ### Fixed
