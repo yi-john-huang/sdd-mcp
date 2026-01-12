@@ -5,7 +5,7 @@
  * when write operations are interrupted.
  */
 
-import { mkdtemp, readFile, rm, stat, readdir } from "node:fs/promises";
+import { mkdtemp, readFile, rm, readdir } from "node:fs/promises";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { atomicWriteFile, atomicWriteJSON } from "../../../utils/atomicWrite";
@@ -171,6 +171,25 @@ describe("atomicWrite", () => {
       const parsed = JSON.parse(content);
       // undefined values are omitted in JSON
       expect(parsed).toEqual({ a: null });
+    });
+
+    it("should throw on circular references", async () => {
+      const filePath = join(tempDir, "circular.json");
+      const data: Record<string, unknown> = { name: "test" };
+      data.self = data; // Create circular reference
+
+      await expect(atomicWriteJSON(filePath, data)).rejects.toThrow(TypeError);
+
+      // Verify no file was created (error occurs before atomicWriteFile is called)
+      const files = await readdir(tempDir);
+      expect(files).not.toContain("circular.json");
+    });
+
+    it("should throw on BigInt values", async () => {
+      const filePath = join(tempDir, "bigint.json");
+      const data = { value: BigInt(9007199254740991) };
+
+      await expect(atomicWriteJSON(filePath, data)).rejects.toThrow(TypeError);
     });
   });
 

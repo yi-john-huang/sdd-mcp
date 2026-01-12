@@ -45,8 +45,10 @@ export async function atomicWriteFile(
   const dir = path.dirname(filePath);
   const filename = path.basename(filePath);
 
-  // Create temp file path with process ID and timestamp for uniqueness
-  const tempPath = path.join(dir, `.${filename}.${process.pid}.${Date.now()}.tmp`);
+  // Create temp file path with process ID, timestamp, and random suffix for uniqueness
+  // Random suffix prevents collisions when multiple writes occur within the same millisecond
+  const uniqueSuffix = `${Date.now()}.${Math.random().toString(36).slice(2, 10)}`;
+  const tempPath = path.join(dir, `.${filename}.${process.pid}.${uniqueSuffix}.tmp`);
 
   try {
     // Ensure directory exists
