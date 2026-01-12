@@ -1,7 +1,13 @@
 #!/usr/bin/env node
 
+import * as fs from 'fs';
 import * as path from 'path';
+import { fileURLToPath } from 'url';
 import { SkillManager } from '../skills/SkillManager.js';
+
+// ESM equivalent of __dirname
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
 /**
  * CLI options for install-skills command
@@ -35,16 +41,27 @@ export class InstallSkillsCLI {
    * Get the default skills path based on package location
    */
   private getDefaultSkillsPath(): string {
-    // In production, skills are at package root
-    // Try to find skills directory relative to common locations
+    // Try multiple paths and return the first one that exists
     const possiblePaths = [
+      // Relative to this file (dist/cli/install-skills.js -> skills/)
+      path.resolve(__dirname, '../../skills'),
+      // Alternative: one level up
+      path.resolve(__dirname, '../skills'),
+      // From package root when installed globally or via npx
+      path.resolve(__dirname, '../../../skills'),
+      // From current working directory
       path.resolve(process.cwd(), 'node_modules/sdd-mcp-server/skills'),
       path.resolve(process.cwd(), 'skills'),
-      path.resolve(__dirname, '../../skills'),
-      path.resolve(__dirname, '../../../skills'),
     ];
 
-    // Return first path (we'll validate in SkillManager)
+    // Return the first path that exists
+    for (const p of possiblePaths) {
+      if (fs.existsSync(p)) {
+        return p;
+      }
+    }
+
+    // Fallback to first path (will error in SkillManager if not found)
     return possiblePaths[0];
   }
 
@@ -197,8 +214,12 @@ export async function main() {
   await cli.run(options);
 }
 
-// Only run main if this is the entry point (works in both ESM and CJS)
-const isMainModule = typeof require !== 'undefined' && require.main === module;
+// ESM main module detection: check if this file is the entry point
+const isMainModule = process.argv[1] && (
+  process.argv[1] === __filename ||
+  process.argv[1].endsWith('/install-skills.js') ||
+  process.argv[1].endsWith('/sdd-install-skills')
+);
 
 if (isMainModule) {
   main().catch((error) => {

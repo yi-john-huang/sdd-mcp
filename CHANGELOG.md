@@ -5,6 +5,18 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.0.2] - 2026-01-12
+
+### Fixed
+- **Skill Installation CLI**: Fixed `npx sdd-mcp install-skills --list` returning empty results
+  - Added proper ESM support using `import.meta.url` for `__dirname` resolution
+  - Fixed path resolution to check multiple paths and return the first existing one
+  - Fixed ESM main module detection (was incorrectly checking for `require` which doesn't exist in ESM)
+
+### Technical
+- Updated `src/cli/install-skills.ts` with ESM-compatible path resolution
+- Skills directory is now correctly found in all execution contexts (npx, global install, local)
+
 ## [2.0.1] - 2026-01-12
 
 ### Changed
