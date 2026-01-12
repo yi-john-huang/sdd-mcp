@@ -1,8 +1,17 @@
 /**
  * Atomic file write utility
+ * 原子性檔案寫入工具
  *
  * Prevents file corruption when write operations are interrupted (crash, kill signal).
  * Uses the temp-file + rename pattern which is atomic on POSIX systems.
+ * 防止寫入操作被中斷時（crash、kill signal）造成檔案損壞。
+ * 使用 temp-file + rename 模式，在 POSIX 系統上是原子操作。
+ *
+ * @note Windows Limitation / Windows 限制:
+ *   On Windows, fs.rename() may fail with EEXIST if target exists.
+ *   For Windows production use, consider using 'write-file-atomic' package.
+ *   在 Windows 上，若目標檔案存在，fs.rename() 可能會失敗。
+ *   若需在 Windows 生產環境使用，建議改用 'write-file-atomic' 套件。
  *
  * @module utils/atomicWrite
  */

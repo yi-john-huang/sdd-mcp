@@ -60,13 +60,12 @@ describe("atomicWrite", () => {
       expect(files).toEqual(["test.txt"]);
     });
 
-    it("should clean up temp file on write error", async () => {
-      // Try to write to a directory (should fail)
-      const dirPath = join(tempDir, "testdir");
-      await atomicWriteFile(dirPath, "content"); // First creates it as file
+    it("should work with special characters in filename", async () => {
+      // Test filenames with spaces and special chars (common in user projects)
+      const filePath = join(tempDir, "test file (1).txt");
+      await atomicWriteFile(filePath, "content");
 
-      // Reading it back should succeed
-      const content = await readFile(dirPath, "utf8");
+      const content = await readFile(filePath, "utf8");
       expect(content).toBe("content");
     });
 
