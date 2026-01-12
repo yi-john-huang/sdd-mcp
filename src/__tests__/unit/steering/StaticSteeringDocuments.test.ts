@@ -9,7 +9,7 @@ class StubSteeringDocumentService {
     projectPath: string,
     config: { name: string; type: string; mode: string; content: string }
   ): Promise<SteeringDocument> {
-    const filePath = path.join(projectPath, '.kiro', 'steering', config.name);
+    const filePath = path.join(projectPath, '.spec', 'steering', config.name);
     await mkdir(path.dirname(filePath), { recursive: true });
     await writeFile(filePath, config.content, 'utf8');
 
@@ -32,7 +32,7 @@ describe('SDDToolAdapter static steering documents', () => {
 
   beforeEach(async () => {
     projectRoot = await mkdtemp(path.join(os.tmpdir(), 'sdd-steering-'));
-    await mkdir(path.join(projectRoot, '.kiro', 'steering'), { recursive: true });
+    await mkdir(path.join(projectRoot, '.spec', 'steering'), { recursive: true });
   });
 
   afterEach(async () => {
@@ -42,7 +42,7 @@ describe('SDDToolAdapter static steering documents', () => {
   it('creates the full static steering set when missing', async () => {
     await ensureStaticSteeringDocuments(projectRoot, new StubSteeringDocumentService() as any);
 
-    const steeringDir = path.join(projectRoot, '.kiro', 'steering');
+    const steeringDir = path.join(projectRoot, '.spec', 'steering');
 
     const files = await Promise.all([
       readFile(path.join(steeringDir, 'security-check.md'), 'utf8'),

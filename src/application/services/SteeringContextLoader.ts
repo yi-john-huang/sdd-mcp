@@ -34,7 +34,7 @@ export class SteeringContextLoader {
       let hasTechContext = false;
 
       // Load product.md with individual error handling
-      const productPath = `${projectPath}/.kiro/steering/product.md`;
+      const productPath = `${projectPath}/.spec/steering/product.md`;
       if (await this.fileSystem.exists(productPath)) {
         try {
           const content = await this.fileSystem.readFile(productPath);
@@ -49,7 +49,7 @@ export class SteeringContextLoader {
       }
 
       // Load tech.md with individual error handling
-      const techPath = `${projectPath}/.kiro/steering/tech.md`;
+      const techPath = `${projectPath}/.spec/steering/tech.md`;
       if (await this.fileSystem.exists(techPath)) {
         try {
           const content = await this.fileSystem.readFile(techPath);

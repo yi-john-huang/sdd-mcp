@@ -68,7 +68,7 @@ export class SteeringDocumentService {
       preferences
     });
 
-    const steeringPath = path.join(projectPath, '.kiro', 'steering');
+    const steeringPath = path.join(projectPath, '.spec', 'steering');
     const documents: SteeringDocument[] = [];
 
     try {
@@ -439,7 +439,7 @@ export class SteeringDocumentService {
 
     // Apply plugin steering documents
     const pluginSteeringContext: PluginSteeringContext = {
-      projectPath: steeringContext.documents[0]?.path.split('/.kiro/')[0] || process.cwd(),
+      projectPath: steeringContext.documents[0]?.path.split('/.spec/')[0] || process.cwd(),
       workingDirectory: process.cwd(),
       variables: {},
       metadata: {
@@ -592,7 +592,7 @@ export class SteeringDocumentService {
     }
 
     // Check for new documents
-    const steeringPath = path.join(projectPath, '.kiro', 'steering');
+    const steeringPath = path.join(projectPath, '.spec', 'steering');
     if (await this.fileSystem.exists(steeringPath)) {
       const files = await this.fileSystem.readdir(steeringPath);
       const existingPaths = new Set(currentContext.documents.map(d => d.path));
@@ -652,7 +652,7 @@ export class SteeringDocumentService {
       type: config.type
     });
 
-    const steeringPath = path.join(projectPath, '.kiro', 'steering');
+    const steeringPath = path.join(projectPath, '.spec', 'steering');
     
     // Ensure steering directory exists
     if (!(await this.fileSystem.exists(steeringPath))) {

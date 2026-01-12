@@ -235,9 +235,9 @@ export class QualityGateService {
 
       // Also check documentation files for requirements/design phases
       const docsFiles = [
-        `${project.path}/.kiro/specs/${project.name}/requirements.md`,
-        `${project.path}/.kiro/specs/${project.name}/design.md`,
-        `${project.path}/.kiro/specs/${project.name}/tasks.md`
+        `${project.path}/.spec/specs/${project.name}/requirements.md`,
+        `${project.path}/.spec/specs/${project.name}/design.md`,
+        `${project.path}/.spec/specs/${project.name}/tasks.md`
       ];
 
       for (const filePath of docsFiles) {
@@ -485,7 +485,7 @@ export class QualityGateService {
     report: QualityReport
   ): Promise<void> {
     try {
-      const reportDir = `${project.path}/.kiro/quality`;
+      const reportDir = `${project.path}/.spec/quality`;
       await this.fileSystem.mkdir(reportDir);
       
       const reportPath = `${reportDir}/quality-report-${phase.toLowerCase()}-${Date.now()}.json`;

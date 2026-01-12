@@ -268,7 +268,7 @@ ${tasks.deployment.map((task, index) => `- [ ] ${index + 1}. ${task.title}
     content: string
   ): Promise<void> {
     const correlationId = uuidv4();
-    const filePath = `${project.path}/.kiro/specs/${project.name}/${fileName}`;
+    const filePath = `${project.path}/.spec/specs/${project.name}/${fileName}`;
     
     this.logger.info('Writing project file', {
       correlationId,
@@ -412,7 +412,7 @@ ${tasks.deployment.map((task, index) => `- [ ] ${index + 1}. ${task.title}
         }
       ],
       subdirectories: {
-        '.kiro': {
+        '.spec': {
           files: [],
           subdirectories: {
             'steering': {

@@ -59,7 +59,7 @@ describe("SteeringContextLoader", () => {
       const result = await loader.loadContext(projectPath);
 
       expect(mockFileSystem.exists).toHaveBeenCalledWith(
-        `${projectPath}/.kiro/steering/product.md`,
+        `${projectPath}/.spec/steering/product.md`,
       );
       expect(result.hasProductContext).toBe(true);
     });
@@ -78,7 +78,7 @@ describe("SteeringContextLoader", () => {
       const result = await loader.loadContext(projectPath);
 
       expect(mockFileSystem.exists).toHaveBeenCalledWith(
-        `${projectPath}/.kiro/steering/tech.md`,
+        `${projectPath}/.spec/steering/tech.md`,
       );
       expect(result.hasTechContext).toBe(true);
     });

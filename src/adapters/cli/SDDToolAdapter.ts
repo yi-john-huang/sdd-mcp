@@ -552,9 +552,9 @@ export class SDDToolAdapter {
 **Mode**: ${updateMode}
 
 **Updated Files**:
-- \`.kiro/steering/product.md\` - Product overview and business context
-- \`.kiro/steering/tech.md\` - Technology stack and development environment
-- \`.kiro/steering/structure.md\` - Project organization and architectural decisions
+- \`.spec/steering/product.md\` - Product overview and business context
+- \`.spec/steering/tech.md\` - Technology stack and development environment
+- \`.spec/steering/structure.md\` - Project organization and architectural decisions
 
 **Analysis**:
 - Technology stack: ${Object.keys({ ...packageJson.dependencies, ...packageJson.devDependencies }).length} dependencies detected

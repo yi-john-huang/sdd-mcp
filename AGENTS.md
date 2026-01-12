@@ -38,7 +38,7 @@ These documents provide guidance and can be referenced by skills:
 | `linus-review.md` | Code quality and "good taste" criteria |
 | `owasp-top10-check.md` | OWASP Top 10 security checklist |
 
-Located in `.spec/steering/` (or `.kiro/steering/` for legacy projects).
+Located in `.spec/steering/` (or `.spec/steering/` for legacy projects).
 
 ---
 

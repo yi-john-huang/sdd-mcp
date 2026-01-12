@@ -126,7 +126,7 @@ export class ResourceManager {
       throw new Error(`Project not found: ${projectId}`);
     }
 
-    const filePath = `${project.path}/.kiro/specs/${project.name}/${fileName}`;
+    const filePath = `${project.path}/.spec/specs/${project.name}/${fileName}`;
     
     try {
       if (await this.fileSystem.exists(filePath)) {
@@ -191,7 +191,7 @@ export class ResourceManager {
 
   private async readSteeringResource(uri: string): Promise<ResourceContents> {
     if (uri === 'sdd://steering/linus-review.md') {
-      const steeringPath = '.kiro/steering/linus-review.md';
+      const steeringPath = '.spec/steering/linus-review.md';
       
       if (await this.fileSystem.exists(steeringPath)) {
         const content = await this.fileSystem.readFile(steeringPath);

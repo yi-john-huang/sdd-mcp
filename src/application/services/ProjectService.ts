@@ -163,8 +163,8 @@ export class ProjectService {
 
   private async createProjectStructure(basePath: string): Promise<void> {
     const directories = [
-      `${basePath}/.kiro/specs`,
-      `${basePath}/.kiro/steering`,
+      `${basePath}/.spec/specs`,
+      `${basePath}/.spec/steering`,
       `${basePath}/.claude/commands`
     ];
 

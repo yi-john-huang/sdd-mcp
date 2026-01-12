@@ -441,10 +441,13 @@ async function handleStatusSimplified(args: any) {
   const path = await import("path");
   const { featureName } = args || {};
   const currentPath = process.cwd();
+  // Support both .spec (new) and .kiro (legacy)
+  const specPath = path.join(currentPath, ".spec");
   const kiroPath = path.join(currentPath, ".kiro");
+  const sddPath = await fs.promises.access(specPath).then(() => specPath).catch(() => kiroPath);
 
   const exists = await fs.promises
-    .access(kiroPath)
+    .access(sddPath)
     .then(() => true)
     .catch(() => false);
   if (!exists) {
@@ -457,7 +460,7 @@ async function handleStatusSimplified(args: any) {
       ],
     };
   }
-  const specsPath = path.join(kiroPath, "specs");
+  const specsPath = path.join(sddPath, "specs");
 
   if (featureName) {
     const featurePath = path.join(specsPath, featureName);
@@ -542,7 +545,9 @@ async function handleApproveSimplified(args: any) {
     };
   }
   try {
-    const featurePath = path.join(process.cwd(), ".kiro", "specs", featureName);
+    // Support both .spec (new) and .kiro (legacy)
+    const sddDir = fs.existsSync(path.join(process.cwd(), ".spec")) ? ".spec" : ".kiro";
+    const featurePath = path.join(process.cwd(), sddDir, "specs", featureName);
     const specPath = path.join(featurePath, "spec.json");
     const spec = JSON.parse(fs.readFileSync(specPath, "utf8"));
     if (!spec.approvals?.[phase]?.generated) {
@@ -633,7 +638,9 @@ async function ensureUniqueFeatureName(baseName: string): Promise<string> {
   const fs = await import("fs");
   const path = await import("path");
 
-  const specsDir = path.join(process.cwd(), ".kiro", "specs");
+  // Support both .spec (new) and .kiro (legacy)
+  const sddDir = fs.existsSync(path.join(process.cwd(), ".spec")) ? ".spec" : ".kiro";
+  const specsDir = path.join(process.cwd(), sddDir, "specs");
 
   if (!fs.existsSync(specsDir)) {
     return baseName;
@@ -654,7 +661,9 @@ async function loadSpecContext(featureName: string) {
   const fs = await import("fs");
   const path = await import("path");
 
-  const specDir = path.join(process.cwd(), ".kiro", "specs", featureName);
+  // Support both .spec (new) and .kiro (legacy)
+  const sddDir = fs.existsSync(path.join(process.cwd(), ".spec")) ? ".spec" : ".kiro";
+  const specDir = path.join(process.cwd(), sddDir, "specs", featureName);
   const specJsonPath = path.join(specDir, "spec.json");
   const requirementsPath = path.join(specDir, "requirements.md");
 
@@ -698,8 +707,8 @@ async function handleInitSimplified(args: any) {
     const baseFeatureName = generateFeatureName(description);
     const featureName = await ensureUniqueFeatureName(baseFeatureName);
 
-    // Create .kiro/specs/[feature-name] directory
-    const specDir = path.join(projectPath, ".kiro", "specs", featureName);
+    // Create .spec/specs/[feature-name] directory (use .spec for new projects)
+    const specDir = path.join(projectPath, ".spec", "specs", featureName);
     if (!fs.existsSync(specDir)) {
       fs.mkdirSync(specDir, { recursive: true });
     }
@@ -767,22 +776,22 @@ ${description}
       } else {
         agentsContent = `# AI Agent Spec-Driven Development
 
-Kiro-style Spec Driven Development implementation using MCP tools.
+Spec Driven Development implementation using MCP tools.
 
 ## Project Context
 
 ### Paths
-- Steering: \`.kiro/steering/\`
-- Specs: \`.kiro/specs/\`
-- Commands: \`.ai agent/commands/\`
+- Steering: \`.spec/steering/\`
+- Specs: \`.spec/specs/\`
+- Commands: \`.claude/commands/\`
 
 ### Steering vs Specification
 
-**Steering** (\`.kiro/steering/\`) - Guide AI with project-wide rules and context  
-**Specs** (\`.kiro/specs/\`) - Formalize development process for individual features
+**Steering** (\`.spec/steering/\`) - Guide AI with project-wide rules and context
+**Specs** (\`.spec/specs/\`) - Formalize development process for individual features
 
 ### Active Specifications
-- Check \`.kiro/specs/\` for active specifications
+- Check \`.spec/specs/\` for active specifications
 - Use \`sdd-status\` to check progress
 
 **Current Specifications:**
@@ -860,8 +869,8 @@ Managed by \`sdd-steering\` tool. Updates here reflect tool changes.
 **Description**: ${description}
 
 **Created Files**:
-- \`.kiro/specs/${featureName}/spec.json\` - Project metadata and phase tracking
-- \`.kiro/specs/${featureName}/requirements.md\` - Initial requirements template
+- \`.spec/specs/${featureName}/spec.json\` - Project metadata and phase tracking
+- \`.spec/specs/${featureName}/requirements.md\` - Initial requirements template
 
 **Next Steps**:
 1. Run \`sdd-requirements ${featureName}\` to generate detailed requirements
@@ -923,7 +932,7 @@ async function main(): Promise<void> {
           validation:
             "Cross-phase validation with approval gates and rollback support",
           initialization:
-            "Project setup with .kiro directory structure and spec.json",
+            "Project setup with .spec directory structure and spec.json",
           context:
             "Project memory with codebase analysis and context persistence",
           steering:

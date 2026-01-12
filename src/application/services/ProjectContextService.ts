@@ -371,7 +371,7 @@ export class ProjectContextService {
           recommendations.push('Dependencies may have changed - refresh dependency analysis');
         }
         
-        if (changedFiles.some(f => f.includes('.kiro/steering'))) {
+        if (changedFiles.some(f => f.includes('.spec/steering'))) {
           recommendations.push('Steering documents changed - refresh steering context');
         }
       }
@@ -405,7 +405,7 @@ export class ProjectContextService {
     });
 
     try {
-      const contextDir = `${context.basePath}/.kiro/context`;
+      const contextDir = `${context.basePath}/.spec/context`;
       if (!(await this.fileSystem.exists(contextDir))) {
         await this.fileSystem.mkdir(contextDir);
       }
@@ -456,7 +456,7 @@ export class ProjectContextService {
 
   async loadPersistedContext(projectId: string, projectPath: string): Promise<ProjectContext | null> {
     try {
-      const contextFile = `${projectPath}/.kiro/context/${projectId}.json`;
+      const contextFile = `${projectPath}/.spec/context/${projectId}.json`;
       
       if (await this.fileSystem.exists(contextFile)) {
         const content = await this.fileSystem.readFile(contextFile);
@@ -550,7 +550,7 @@ export class ProjectContextService {
 
   private async loadProjectMetadata(projectPath: string): Promise<ProjectContextMetadata> {
     // Try to load from spec.json first
-    const specJsonPath = `${projectPath}/.kiro/specs`;
+    const specJsonPath = `${projectPath}/.spec/specs`;
     let name = 'Unknown Project';
     let description: string | undefined;
     

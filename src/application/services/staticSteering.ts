@@ -12,7 +12,7 @@ export async function ensureStaticSteeringDocuments(
   const path = await import('path');
 
   // Linus review (always-on quality guardrail)
-  const linusReviewPath = path.join(projectPath, '.kiro', 'steering', 'linus-review.md');
+  const linusReviewPath = path.join(projectPath, '.spec', 'steering', 'linus-review.md');
   if (!fs.existsSync(linusReviewPath)) {
     const linusReviewContent = `# Linus Torvalds Code Review Steering Document
 
@@ -178,7 +178,7 @@ Remember: "Good taste" comes from experience. Question everything. Simplify ruth
   }
 
   // Commit guidelines
-  const commitPath = path.join(projectPath, '.kiro', 'steering', 'commit.md');
+  const commitPath = path.join(projectPath, '.spec', 'steering', 'commit.md');
   if (!fs.existsSync(commitPath)) {
     const commitContent = `# Commit Message Guidelines
 
@@ -250,7 +250,7 @@ These guidelines help maintain a clean and useful git history that makes it easi
   }
 
   // Security checklist (OWASP baseline)
-  const securityPath = path.join(projectPath, '.kiro', 'steering', 'security-check.md');
+  const securityPath = path.join(projectPath, '.spec', 'steering', 'security-check.md');
   if (!fs.existsSync(securityPath)) {
     const securityContent = `# Security Check (OWASP Top 10 Aligned)
 
@@ -312,7 +312,7 @@ Use this checklist during code generation and review. Avoid OWASP Top 10 issues 
   }
 
   // TDD guideline reinforcement
-  const tddPath = path.join(projectPath, '.kiro', 'steering', 'tdd-guideline.md');
+  const tddPath = path.join(projectPath, '.spec', 'steering', 'tdd-guideline.md');
   if (!fs.existsSync(tddPath)) {
     const tddContent = `# Test-Driven Development (TDD) Guideline
 
@@ -436,7 +436,7 @@ This document is **always** active and applies to all development phases. Every 
   }
 
   // Core coding principles (SOLID, DRY, etc.)
-  const principlesPath = path.join(projectPath, '.kiro', 'steering', 'principles.md');
+  const principlesPath = path.join(projectPath, '.spec', 'steering', 'principles.md');
   if (!fs.existsSync(principlesPath)) {
     const principlesContent = `# Core Coding Principles and Patterns
 
@@ -506,17 +506,17 @@ Kiro-style Spec Driven Development implementation using MCP tools.
 ## Project Context
 
 ### Paths
-- Steering: \`.kiro/steering/\`
-- Specs: \`.kiro/specs/\`
+- Steering: \`.spec/steering/\`
+- Specs: \`.spec/specs/\`
 - Commands: \`.ai agent/commands/\`
 
 ### Steering vs Specification
 
-**Steering** (\`.kiro/steering/\`) - Guide AI with project-wide rules and context  
-**Specs** (\`.kiro/specs/\`) - Formalize development process for individual features
+**Steering** (\`.spec/steering/\`) - Guide AI with project-wide rules and context  
+**Specs** (\`.spec/specs/\`) - Formalize development process for individual features
 
 ### Active Specifications
-- Check \`.kiro/specs/\` for active specifications
+- Check \`.spec/specs/\` for active specifications
 - Use \`sdd-status\` to check progress
 
 **Current Specifications:**

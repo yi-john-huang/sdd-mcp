@@ -145,9 +145,9 @@ export class ProjectInitializationService {
       
       // Check directory structure
       const requiredDirectories = [
-        `${projectPath}/.kiro`,
-        `${projectPath}/.kiro/specs`,
-        `${projectPath}/.kiro/steering`
+        `${projectPath}/.spec`,
+        `${projectPath}/.spec/specs`,
+        `${projectPath}/.spec/steering`
       ];
 
       const missingDirectories: string[] = [];
@@ -158,7 +158,7 @@ export class ProjectInitializationService {
 
       // Check for required files
       const requiredFiles = [
-        `${projectPath}/.kiro/specs/spec.json`
+        `${projectPath}/.spec/specs/spec.json`
       ];
 
       const missingFiles: string[] = [];
@@ -222,10 +222,10 @@ export class ProjectInitializationService {
     try {
       // Check directory structure
       const requiredDirectories = [
-        `${project.path}/.kiro`,
-        `${project.path}/.kiro/specs`,
-        `${project.path}/.kiro/specs/${project.name}`,
-        `${project.path}/.kiro/steering`
+        `${project.path}/.spec`,
+        `${project.path}/.spec/specs`,
+        `${project.path}/.spec/specs/${project.name}`,
+        `${project.path}/.spec/steering`
       ];
 
       for (const dir of requiredDirectories) {
@@ -235,7 +235,7 @@ export class ProjectInitializationService {
       }
 
       // Check required files
-      const specJsonPath = `${project.path}/.kiro/specs/${project.name}/spec.json`;
+      const specJsonPath = `${project.path}/.spec/specs/${project.name}/spec.json`;
       if (!(await this.fileSystem.exists(specJsonPath))) {
         issues.push(`Missing spec.json file: ${specJsonPath}`);
       } else {
@@ -249,9 +249,9 @@ export class ProjectInitializationService {
 
       // Check for steering files
       const steeringFiles = [
-        `${project.path}/.kiro/steering/product.md`,
-        `${project.path}/.kiro/steering/tech.md`,
-        `${project.path}/.kiro/steering/structure.md`
+        `${project.path}/.spec/steering/product.md`,
+        `${project.path}/.spec/steering/tech.md`,
+        `${project.path}/.spec/steering/structure.md`
       ];
 
       let steeringCount = 0;
@@ -430,9 +430,9 @@ export class ProjectInitializationService {
 
   private async createDirectoryStructure(projectPath: string): Promise<string[]> {
     const directories = [
-      `${projectPath}/.kiro`,
-      `${projectPath}/.kiro/specs`,
-      `${projectPath}/.kiro/steering`,
+      `${projectPath}/.spec`,
+      `${projectPath}/.spec/specs`,
+      `${projectPath}/.spec/steering`,
       `${projectPath}/.claude`,
       `${projectPath}/.claude/commands`
     ];
@@ -458,7 +458,7 @@ export class ProjectInitializationService {
     // Generate spec.json
     const specContent = await this.templateService.generateSpecJson(project);
     await this.templateService.writeProjectFile(project, 'spec.json', specContent);
-    generatedFiles.push(`${project.path}/.kiro/specs/${project.name}/spec.json`);
+    generatedFiles.push(`${project.path}/.spec/specs/${project.name}/spec.json`);
 
     // Generate README template if requested
     if (options.template && options.template !== 'basic') {
@@ -499,9 +499,9 @@ This project follows Spec-Driven Development (SDD) methodology:
 
 ## Getting Started
 
-1. Review requirements: \`.kiro/specs/${project.name}/requirements.md\`
-2. Check design: \`.kiro/specs/${project.name}/design.md\`
-3. Follow tasks: \`.kiro/specs/${project.name}/tasks.md\`
+1. Review requirements: \`.spec/specs/${project.name}/requirements.md\`
+2. Check design: \`.spec/specs/${project.name}/design.md\`
+3. Follow tasks: \`.spec/specs/${project.name}/tasks.md\`
 
 ## SDD Commands
 
@@ -541,8 +541,8 @@ ${options.description || 'Product description and objectives to be defined.'}
 Generated on: ${new Date().toISOString()}
 `;
 
-    await this.fileSystem.writeFile(`${project.path}/.kiro/steering/product.md`, productContent);
-    generatedFiles.push(`${project.path}/.kiro/steering/product.md`);
+    await this.fileSystem.writeFile(`${project.path}/.spec/steering/product.md`, productContent);
+    generatedFiles.push(`${project.path}/.spec/steering/product.md`);
 
     // Basic tech steering
     const techContent = `# Technology Steering Document
@@ -567,8 +567,8 @@ ${options.technology || 'Technology decisions to be defined.'}
 Generated on: ${new Date().toISOString()}
 `;
 
-    await this.fileSystem.writeFile(`${project.path}/.kiro/steering/tech.md`, techContent);
-    generatedFiles.push(`${project.path}/.kiro/steering/tech.md`);
+    await this.fileSystem.writeFile(`${project.path}/.spec/steering/tech.md`, techContent);
+    generatedFiles.push(`${project.path}/.spec/steering/tech.md`);
 
     return generatedFiles;
   }

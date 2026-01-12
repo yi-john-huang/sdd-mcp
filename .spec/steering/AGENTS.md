@@ -185,7 +185,7 @@ await sdd-implement(featureName);
   - **RED**: Write failing tests BEFORE any implementation
   - **GREEN**: Write minimal code to make tests pass
   - **REFACTOR**: Improve code quality while keeping tests green
-  - Refer to `.kiro/steering/tdd-guideline.md` for complete TDD workflow
+  - Refer to `.spec/steering/tdd-guideline.md` for complete TDD workflow
 
 ### 4. Communication Clarity
 - Provide clear explanations for design decisions

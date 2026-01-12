@@ -935,7 +935,7 @@ function generateDeploymentConfig(analysis: ProjectAnalysis): string {
 }
 
 function buildDirectoryTree(analysis: ProjectAnalysis): string {
-  let tree = `├── .kiro/                    # SDD workflow files
+  let tree = `├── .spec/                    # SDD workflow files
 │   ├── steering/            # Project steering documents
 │   └── specs/              # Feature specifications\n`;
   

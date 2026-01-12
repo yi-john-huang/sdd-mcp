@@ -6,6 +6,8 @@
 
 A Model Context Protocol (MCP) server implementing Spec-Driven Development (SDD) workflows for AI-agent CLIs and IDEs like Claude Code, Cursor, and others.
 
+> 🔄 **v2.1.0 - Directory Migration**: The SDD specification directory has been renamed from `.kiro` to `.spec`. Use `npx sdd-mcp migrate-kiro` to migrate existing projects. Legacy `.kiro` directories are still supported for backwards compatibility.
+
 > 🔧 **v2.0.3 - CLI Subcommand Support**: `npx sdd-mcp install-skills` now works correctly! Created proper CLI entry point with subcommand support.
 
 > 🚀 **v2.0.0 - Hybrid MCP + Agent Skills Architecture**: Restructured for token efficiency! Template/guidance tools (requirements, design, tasks, steering, implement) are now **Claude Code Agent Skills** loaded on-demand. Action-oriented tools remain as MCP tools. ~55% token savings in typical operations. Install skills with `npx sdd-mcp install-skills`.
@@ -171,6 +173,23 @@ npx sdd-mcp install-skills --path ./my-skills
 # List available skills
 npx sdd-mcp install-skills --list
 ```
+
+### Migrating from .kiro to .spec (v2.1.0+)
+
+If you have existing projects using the legacy `.kiro` directory, migrate to the new `.spec` standard:
+
+```bash
+# Preview migration (dry run)
+npx sdd-mcp migrate-kiro --dry-run
+
+# Perform migration
+npx sdd-mcp migrate-kiro
+
+# Migrate a specific project
+npx sdd-mcp migrate-kiro --path ./my-project
+```
+
+**Note**: Legacy `.kiro` directories are still supported for backwards compatibility, but new projects will use `.spec`.
 
 ### Available Skills
 
@@ -528,10 +547,10 @@ For detailed documentation on:
 - **🏗️ Architecture Overview**: See [ARCHITECTURE.md](ARCHITECTURE.md) for complete system design, layered architecture, module loading, and Mermaid diagrams
 - **Plugin Development**: See [DEPLOYMENT.md](DEPLOYMENT.md)
 - **Docker Deployment**: See [Dockerfile](Dockerfile) and [docker-compose.yml](docker-compose.yml)
-- **Code Quality Standards**: Review `.kiro/steering/linus-review.md`
-- **TDD Guidelines**: See `.kiro/steering/tdd-guideline.md` for complete Test-Driven Development workflow
-- **Coding Principles**: Review `.kiro/steering/principles.md` for SOLID, DRY, KISS, YAGNI, SoC, and Modularity guidance
-- **Security Checklist**: Check `.kiro/steering/security-check.md` for OWASP Top 10 aligned security practices
+- **Code Quality Standards**: Review `.spec/steering/linus-review.md`
+- **TDD Guidelines**: See `.spec/steering/tdd-guideline.md` for complete Test-Driven Development workflow
+- **Coding Principles**: Review `.spec/steering/principles.md` for SOLID, DRY, KISS, YAGNI, SoC, and Modularity guidance
+- **Security Checklist**: Check `.spec/steering/security-check.md` for OWASP Top 10 aligned security practices
 
 ## 🐛 Support & Issues
 

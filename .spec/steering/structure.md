@@ -2,7 +2,7 @@
 
 ## Directory Organization
 ```
-├── .kiro/                    # SDD workflow files
+├── .spec/                    # SDD workflow files
 │   ├── steering/            # Project steering documents
 │   └── specs/              # Feature specifications
 ├── data/                   # Project directory

@@ -5,9 +5,9 @@ import { analyzeProject } from "./documentGenerator.js";
  * References steering documents for TDD and coding principles
  */
 const TDD_SUBTASK =
-  "Follow `.kiro/steering/tdd-guideline.md` (Red→Green→Refactor)";
+  "Follow `.spec/steering/tdd-guideline.md` (Red→Green→Refactor)";
 const PRINCIPLES_SUBTASK =
-  "Review `.kiro/steering/principles.md`; capture any deviations";
+  "Review `.spec/steering/principles.md`; capture any deviations";
 
 /**
  * Enforce governance by adding TDD and principles subtasks to every task
@@ -208,7 +208,7 @@ ${section("Integration", tasks.integration)}
 ---
 
 **Note**: Follow TDD principles strictly. Never write production code without a failing test first.
-Refer to \`.kiro/steering/tdd-guideline.md\` for detailed TDD guidance.
+Refer to \`.spec/steering/tdd-guideline.md\` for detailed TDD guidance.
 `;
 }
 

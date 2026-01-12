@@ -44,7 +44,7 @@ describe("specGenerator", () => {
     it("should reference tdd-guideline.md in tasks", async () => {
       const result = await generateTasksDocument("/test/path", "test-feature");
 
-      expect(result).toContain(".kiro/steering/tdd-guideline.md");
+      expect(result).toContain(".spec/steering/tdd-guideline.md");
     });
 
     it("should include governance subtasks in every task group", async () => {
@@ -52,14 +52,14 @@ describe("specGenerator", () => {
 
       // Check that TDD guidance subtask appears (should appear multiple times - once per task)
       const tddMatches = result.match(
-        /Follow `\.kiro\/steering\/tdd-guideline\.md` \(Red→Green→Refactor\)/g
+        /Follow `\.spec\/steering\/tdd-guideline\.md` \(Red→Green→Refactor\)/g
       );
       expect(tddMatches).not.toBeNull();
       expect(tddMatches!.length).toBeGreaterThan(3); // Should appear in multiple tasks
 
       // Check that principles subtask appears
       const principlesMatches = result.match(
-        /Review `\.kiro\/steering\/principles\.md`; capture any deviations/g
+        /Review `\.spec\/steering\/principles\.md`; capture any deviations/g
       );
       expect(principlesMatches).not.toBeNull();
       expect(principlesMatches!.length).toBeGreaterThan(3); // Should appear in multiple tasks

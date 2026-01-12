@@ -307,7 +307,7 @@ sequenceDiagram
         AS->>DL: Enrich Description with 5W1H
     end
     
-    AS->>FS: Create .kiro/specs/{feature}/
+    AS->>FS: Create .spec/specs/{feature}/
     AS->>FS: Write spec.json
     FS->>AS: Success
     
@@ -386,7 +386,7 @@ stateDiagram-v2
 
 ### Workflow State Persistence
 
-**File**: `.kiro/specs/{feature-name}/spec.json`
+**File**: `.spec/specs/{feature-name}/spec.json`
 
 ```json
 {
@@ -535,11 +535,11 @@ graph LR
 
 ### Plugin Development
 
-**Location**: `.kiro/plugins/`
+**Location**: `.spec/plugins/`
 
 **Example Tool Plugin**:
 ```typescript
-// .kiro/plugins/custom-validator/index.ts
+// .spec/plugins/custom-validator/index.ts
 export default {
   name: 'custom-validator',
   type: 'tool',
@@ -604,9 +604,9 @@ sequenceDiagram
     Tool->>DG: generateTechDocument(analysis)
     Tool->>DG: generateStructureDocument(analysis)
     
-    Tool->>FS: Write .kiro/steering/product.md
-    Tool->>FS: Write .kiro/steering/tech.md
-    Tool->>FS: Write .kiro/steering/structure.md
+    Tool->>FS: Write .spec/steering/product.md
+    Tool->>FS: Write .spec/steering/tech.md
+    Tool->>FS: Write .spec/steering/structure.md
     
     FS->>Tool: Success
     Tool->>AI: Documents generated
@@ -660,7 +660,7 @@ graph TB
 | A01: Broken Access Control | Path traversal prevention | `src/application/services/AnswerValidator.ts` |
 | A02: Cryptographic Failures | No sensitive data storage | Stateless design, no credentials |
 | A03: Injection | Input sanitization | Regex-based XSS/SQL detection |
-| A04: Insecure Design | Security by design | `.kiro/steering/security-check.md` |
+| A04: Insecure Design | Security by design | `.spec/steering/security-check.md` |
 | A05: Security Misconfiguration | Secure defaults | Docker distroless, non-root user |
 | A06: Vulnerable Components | Dependency scanning | `npm audit` in CI/CD |
 | A07: Authentication Failures | N/A | No authentication (local tool) |

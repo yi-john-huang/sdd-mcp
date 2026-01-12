@@ -77,7 +77,7 @@ export class WorkflowValidationService {
 
     try {
       // Check if requirements document exists
-      const requirementsPath = `${project.path}/.kiro/specs/${project.name}/requirements.md`;
+      const requirementsPath = `${project.path}/.spec/specs/${project.name}/requirements.md`;
       if (!(await this.fileSystem.exists(requirementsPath))) {
         missingItems.push('requirements.md file not found');
       } else {
@@ -205,7 +205,7 @@ export class WorkflowValidationService {
 
     try {
       // Check if design document exists
-      const designPath = `${project.path}/.kiro/specs/${project.name}/design.md`;
+      const designPath = `${project.path}/.spec/specs/${project.name}/design.md`;
       if (!(await this.fileSystem.exists(designPath))) {
         missingItems.push('design.md file not found');
       } else {
@@ -340,7 +340,7 @@ export class WorkflowValidationService {
 
     try {
       // Check if tasks document exists
-      const tasksPath = `${project.path}/.kiro/specs/${project.name}/tasks.md`;
+      const tasksPath = `${project.path}/.spec/specs/${project.name}/tasks.md`;
       if (!(await this.fileSystem.exists(tasksPath))) {
         missingItems.push('tasks.md file not found');
       } else {
@@ -470,7 +470,7 @@ export class WorkflowValidationService {
     const coverageGaps: string[] = [];
 
     try {
-      const basePath = `${project.path}/.kiro/specs/${project.name}`;
+      const basePath = `${project.path}/.spec/specs/${project.name}`;
       
       // Read all phase documents
       const documents: { [key: string]: string } = {};
