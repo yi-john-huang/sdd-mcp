@@ -10,6 +10,7 @@ import {
   generateTechDocument,
   generateStructureDocument,
 } from "./documentGenerator.js";
+import { atomicWriteJSON } from "./atomicWrite.js";
 
 // Best-effort dynamic loader for spec generators (requirements/design/tasks)
 async function loadSpecGenerator() {
@@ -551,7 +552,7 @@ server.registerTool(
       spec.approvals.requirements.generated = true;
       spec.updated_at = await getCurrentTimestamp();
 
-      await fs.writeFile(specPath, JSON.stringify(spec, null, 2));
+      await atomicWriteJSON(specPath, spec);
 
       return {
         content: [
@@ -633,7 +634,7 @@ server.registerTool(
       spec.approvals.design.generated = true;
       spec.updated_at = await getCurrentTimestamp();
 
-      await fs.writeFile(specPath, JSON.stringify(spec, null, 2));
+      await atomicWriteJSON(specPath, spec);
 
       return {
         content: [
@@ -771,7 +772,7 @@ ${designContext.substring(0, 1000)}${designContext.length > 1000 ? "...\n[Design
       spec.ready_for_implementation = true;
       spec.updated_at = await getCurrentTimestamp();
 
-      await fs.writeFile(specPath, JSON.stringify(spec, null, 2));
+      await atomicWriteJSON(specPath, spec);
 
       return {
         content: [
@@ -1034,7 +1035,7 @@ server.registerTool(
       spec.approvals[phase].approved = true;
       spec.updated_at = await getCurrentTimestamp();
 
-      await fs.writeFile(specPath, JSON.stringify(spec, null, 2));
+      await atomicWriteJSON(specPath, spec);
 
       return {
         content: [
