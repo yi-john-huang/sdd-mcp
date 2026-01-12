@@ -5,6 +5,34 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.1.0] - 2026-01-12
+
+### BREAKING CHANGES
+- **Directory Rename**: SDD specification directory renamed from `.kiro/` to `.spec/`
+  - New projects will use `.spec/` automatically
+  - Legacy `.kiro/` directories still supported for backwards compatibility
+
+### Added
+- **Migration CLI Tool**: `npx sdd-mcp migrate-kiro` to migrate existing projects
+  - `--dry-run` flag to preview changes
+  - `--force` flag to overwrite existing `.spec/` directory
+  - `--path` flag to specify project directory
+- **Unit Tests**: 6 new tests for migration tool
+
+### Changed
+- All source code updated to use `.spec/` with `.kiro/` fallback
+- Documentation updated (README, ARCHITECTURE, AGENTS.md)
+- Steering documents updated to reference `.spec/steering/`
+
+### Migration Guide
+```bash
+# Preview what will be migrated
+npx sdd-mcp migrate-kiro --dry-run
+
+# Perform migration
+npx sdd-mcp migrate-kiro
+```
+
 ## [2.0.3] - 2026-01-12
 
 ### Added
