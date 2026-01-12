@@ -1,11 +1,11 @@
 {
   "name": "sdd-mcp-server",
-  "version": "2.0.2",
+  "version": "2.0.3",
   "description": "MCP server for spec-driven development workflows across AI-agent CLIs and IDEs",
   "main": "dist/index.js",
   "bin": {
     "sdd-mcp-server": "mcp-server.js",
-    "sdd-mcp": "dist/index.js",
+    "sdd-mcp": "dist/cli/sdd-mcp-cli.js",
     "sdd-install-skills": "dist/cli/install-skills.js"
   },
   "type": "module",
