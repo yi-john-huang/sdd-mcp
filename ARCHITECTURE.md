@@ -1,6 +1,6 @@
 # MCP SDD Server Architecture
 
-**Version**: 2.0.1
+**Version**: 2.0.3
 **Last Updated**: 2026-01-12
 **Status**: Production
 

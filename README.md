@@ -6,7 +6,7 @@
 
 A Model Context Protocol (MCP) server implementing Spec-Driven Development (SDD) workflows for AI-agent CLIs and IDEs like Claude Code, Cursor, and others.
 
-> 🎯 **v2.0.1 - Codebase Simplification**: Removed 7,131 lines of dead code and legacy tests for better maintainability. No breaking changes from v2.0.0.
+> 🔧 **v2.0.3 - CLI Subcommand Support**: `npx sdd-mcp install-skills` now works correctly! Created proper CLI entry point with subcommand support.
 
 > 🚀 **v2.0.0 - Hybrid MCP + Agent Skills Architecture**: Restructured for token efficiency! Template/guidance tools (requirements, design, tasks, steering, implement) are now **Claude Code Agent Skills** loaded on-demand. Action-oriented tools remain as MCP tools. ~55% token savings in typical operations. Install skills with `npx sdd-mcp install-skills`.
 
@@ -178,6 +178,7 @@ After installation, use these skills in Claude Code:
 
 | Skill | Description |
 |-------|-------------|
+| `/simple-task <description>` | Quick implementation for small features, bug fixes, enhancements |
 | `/sdd-requirements <feature>` | Generate EARS-formatted requirements with embedded quality checklist |
 | `/sdd-design <feature>` | Create architecture design with Linus-style principles |
 | `/sdd-tasks <feature>` | Generate TDD task breakdown with test pyramid guidance |
@@ -268,12 +269,12 @@ Once connected to your AI client, you can use these MCP tools:
    Use sdd-context-load to restore project memory
    ```
 
-## Latest Updates (v2.0.1)
+## Latest Updates (v2.0.3)
 
 **What's New**:
-- 🧹 **Codebase Simplification**: Removed 7,131 lines of dead code and legacy tests
-- ✅ **Improved Maintainability**: Cleaner codebase with only active, relevant code
-- ✅ **No Breaking Changes**: All existing functionality from v2.0.0 preserved
+- 🔧 **CLI Subcommand Support**: `npx sdd-mcp install-skills` now works correctly
+- ✅ **ESM Compatibility**: Fixed path resolution for all execution contexts (npx, global, local)
+- ✅ **Proper CLI Entry Point**: New `sdd-mcp-cli.ts` handles subcommands
 
 **v2.0.0 Features** (included in this release):
 - 🎯 **Hybrid MCP + Agent Skills Architecture**: Template/guidance tools moved to Claude Code Agent Skills for ~55% token savings
@@ -284,21 +285,26 @@ Once connected to your AI client, you can use these MCP tools:
 
 **Upgrade Commands**:
 ```bash
-# Prefer npx (no installation required)
-npx -y sdd-mcp-server@latest
-
-# Global installation
-npm install -g sdd-mcp-server@latest
-
 # Install Agent Skills to your project
 npx sdd-mcp install-skills
+
+# List available skills
+npx sdd-mcp install-skills --list
+
+# Show CLI help
+npx sdd-mcp --help
+
+# MCP server (for AI client integration)
+npx sdd-mcp-server
 ```
 
 ## Previous Versions
 
 ### v2.0.x
-- v2.0.0: Hybrid MCP + Agent Skills architecture, ~55% token savings
+- v2.0.3: CLI subcommand support (`npx sdd-mcp install-skills` works)
+- v2.0.2: ESM compatibility fix for install-skills CLI
 - v2.0.1: Codebase simplification, removed 7,131 lines of dead code
+- v2.0.0: Hybrid MCP + Agent Skills architecture, ~55% token savings
 
 ### v1.8.x
 - MCP tool standardization (standard tool calls vs slash commands)

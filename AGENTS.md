@@ -42,7 +42,7 @@ Located in `.spec/steering/` (or `.kiro/steering/` for legacy projects).
 
 ---
 
-## Architecture (v2.0.1)
+## Architecture (v2.0.3)
 
 This project uses a **hybrid architecture** for token efficiency:
 
