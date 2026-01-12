@@ -6,7 +6,9 @@
 
 A Model Context Protocol (MCP) server implementing Spec-Driven Development (SDD) workflows for AI-agent CLIs and IDEs like Claude Code, Cursor, and others.
 
-> 🎯 **v1.9.0 - Hybrid MCP + Agent Skills Architecture**: Restructured for token efficiency! Template/guidance tools (requirements, design, tasks, steering, implement) are now **Claude Code Agent Skills** loaded on-demand. Action-oriented tools remain as MCP tools. ~55% token savings in typical operations. Install skills with `npx sdd-mcp install-skills`.
+> 🎯 **v2.0.1 - Codebase Simplification**: Removed 7,131 lines of dead code and legacy tests for better maintainability. No breaking changes from v2.0.0.
+
+> 🚀 **v2.0.0 - Hybrid MCP + Agent Skills Architecture**: Restructured for token efficiency! Template/guidance tools (requirements, design, tasks, steering, implement) are now **Claude Code Agent Skills** loaded on-demand. Action-oriented tools remain as MCP tools. ~55% token savings in typical operations. Install skills with `npx sdd-mcp install-skills`.
 
 > 🤖 **v1.8.0 - MCP Tool Standardization**: Updated `AGENTS.md` generation to use standard MCP tool calls (e.g., `sdd-init`) instead of legacy slash commands. Fixed `sdd-steering` to correctly generate `AGENTS.md` with the new format. Ensures consistent tool usage across all AI agents.
 
@@ -266,11 +268,16 @@ Once connected to your AI client, you can use these MCP tools:
    Use sdd-context-load to restore project memory
    ```
 
-## Latest Updates (v1.9.0)
+## Latest Updates (v2.0.1)
 
 **What's New**:
+- 🧹 **Codebase Simplification**: Removed 7,131 lines of dead code and legacy tests
+- ✅ **Improved Maintainability**: Cleaner codebase with only active, relevant code
+- ✅ **No Breaking Changes**: All existing functionality from v2.0.0 preserved
+
+**v2.0.0 Features** (included in this release):
 - 🎯 **Hybrid MCP + Agent Skills Architecture**: Template/guidance tools moved to Claude Code Agent Skills for ~55% token savings
-- ✅ **7 Agent Skills**: sdd-requirements, sdd-design, sdd-tasks, sdd-implement, sdd-steering, sdd-steering-custom, sdd-commit
+- ✅ **8 Agent Skills**: simple-task, sdd-requirements, sdd-design, sdd-tasks, sdd-implement, sdd-steering, sdd-steering-custom, sdd-commit
 - ✅ **Skill Installation CLI**: `npx sdd-mcp install-skills` to install skills to `.claude/skills/`
 - ✅ **New MCP Tool**: `sdd-list-skills` to list available skills
 - ✅ **Token Efficiency**: Guidance loaded on-demand instead of always-on steering
@@ -288,6 +295,10 @@ npx sdd-mcp install-skills
 ```
 
 ## Previous Versions
+
+### v2.0.x
+- v2.0.0: Hybrid MCP + Agent Skills architecture, ~55% token savings
+- v2.0.1: Codebase simplification, removed 7,131 lines of dead code
 
 ### v1.8.x
 - MCP tool standardization (standard tool calls vs slash commands)

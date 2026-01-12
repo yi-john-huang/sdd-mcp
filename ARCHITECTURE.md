@@ -1,7 +1,7 @@
 # MCP SDD Server Architecture
 
-**Version**: 1.6.2  
-**Last Updated**: 2025-11-05  
+**Version**: 2.0.1
+**Last Updated**: 2026-01-12
 **Status**: Production
 
 ---
@@ -842,4 +842,4 @@ graph TD
 
 **Maintained by**: SDD MCP Server Team  
 **License**: MIT  
-**Last Review**: 2025-11-05
+**Last Review**: 2026-01-12

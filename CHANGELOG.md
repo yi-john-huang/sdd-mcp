@@ -5,6 +5,19 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.0.1] - 2026-01-12
+
+### Changed
+- **Codebase Simplification**: Removed 7,131 lines of dead code and legacy tests
+  - Cleaned up unused utility functions and helper methods
+  - Removed legacy test files that were no longer relevant to current architecture
+  - Streamlined codebase for better maintainability
+
+### Technical
+- **Code Reduction**: -7,131 lines removed
+- **Improved Maintainability**: Cleaner codebase with only active, relevant code
+- **No Breaking Changes**: All existing functionality preserved
+
 ## [2.0.0] - 2026-01-12
 
 ### BREAKING CHANGES
