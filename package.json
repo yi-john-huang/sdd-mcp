@@ -13,6 +13,7 @@
     "dist/**/*",
     "skills/**/*",
     "mcp-server.js",
+    "atomicWrite.js",
     "documentGenerator.js",
     "specGenerator.js",
     "README.md",
