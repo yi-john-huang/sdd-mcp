@@ -6,11 +6,13 @@
 
 A Model Context Protocol (MCP) server implementing Spec-Driven Development (SDD) workflows for AI-agent CLIs and IDEs like Claude Code, Cursor, and others.
 
-> 🎯 **v2.2.0 - Unified Installation & Crash Safety**: New `npx sdd-mcp install` command installs both skills (to `.claude/skills/`) AND steering documents (to `.spec/steering/`) in one step! Skills now explicitly reference their relevant steering documents for better guidance. Also includes **atomic file writes** for spec.json crash safety - files are never left in a corrupted state even if the process is interrupted. (Thanks to @Lucas Wang for the atomic writes contribution!)
+> 🔧 **v2.2.1 - CLI Fix**: Fixed `npx sdd-mcp` not working due to npm package name collision. Now use `npx sdd-mcp-server` for all CLI commands. The unified entry point handles both CLI commands and MCP server mode.
 
-> 🔄 **v2.1.0 - Directory Migration**: The SDD specification directory has been renamed from `.kiro` to `.spec`. Use `npx sdd-mcp migrate-kiro` to migrate existing projects. Legacy `.kiro` directories are still supported for backwards compatibility.
+> 🎯 **v2.2.0 - Unified Installation & Crash Safety**: `npx sdd-mcp-server install` command installs both skills (to `.claude/skills/`) AND steering documents (to `.spec/steering/`) in one step! Skills now explicitly reference their relevant steering documents for better guidance. Also includes **atomic file writes** for spec.json crash safety - files are never left in a corrupted state even if the process is interrupted. (Thanks to @Lucas Wang for the atomic writes contribution!)
 
-> 🔧 **v2.0.3 - CLI Subcommand Support**: `npx sdd-mcp install-skills` now works correctly! Created proper CLI entry point with subcommand support.
+> 🔄 **v2.1.0 - Directory Migration**: The SDD specification directory has been renamed from `.kiro` to `.spec`. Use `npx sdd-mcp-server migrate-kiro` to migrate existing projects. Legacy `.kiro` directories are still supported for backwards compatibility.
+
+> 🔧 **v2.0.3 - CLI Subcommand Support**: `npx sdd-mcp-server install-skills` now works correctly! Created proper CLI entry point with subcommand support.
 
 > 🚀 **v2.0.0 - Hybrid MCP + Agent Skills Architecture**: Restructured for token efficiency! Template/guidance tools (requirements, design, tasks, steering, implement) are now **Claude Code Agent Skills** loaded on-demand. Action-oriented tools remain as MCP tools. ~55% token savings in typical operations.
 
@@ -167,19 +169,19 @@ SDD now uses a **hybrid architecture** for better token efficiency:
 
 ```bash
 # Recommended: Install both skills AND steering documents
-npx sdd-mcp install
+npx sdd-mcp-server install
 
 # Install skills only (to .claude/skills/)
-npx sdd-mcp install --skills
+npx sdd-mcp-server install --skills
 
 # Install steering documents only (to .spec/steering/)
-npx sdd-mcp install --steering
+npx sdd-mcp-server install --steering
 
 # List available skills and steering documents
-npx sdd-mcp install --list
+npx sdd-mcp-server install --list
 
 # Legacy: Install skills only (same as --skills)
-npx sdd-mcp install-skills
+npx sdd-mcp-server install-skills
 ```
 
 **What gets installed:**
@@ -192,13 +194,13 @@ If you have existing projects using the legacy `.kiro` directory, migrate to the
 
 ```bash
 # Preview migration (dry run)
-npx sdd-mcp migrate-kiro --dry-run
+npx sdd-mcp-server migrate-kiro --dry-run
 
 # Perform migration
-npx sdd-mcp migrate-kiro
+npx sdd-mcp-server migrate-kiro
 
 # Migrate a specific project
-npx sdd-mcp migrate-kiro --path ./my-project
+npx sdd-mcp-server migrate-kiro --path ./my-project
 ```
 
 **Note**: Legacy `.kiro` directories are still supported for backwards compatibility, but new projects will use `.spec`.
@@ -241,14 +243,14 @@ Once connected to your AI client, you can use these MCP tools:
 | `sdd-spec-impl` | Execute tasks with TDD | Kent Beck's Red-Green-Refactor methodology |
 | `sdd-list-skills` | List available Agent Skills | Shows skills that can be installed for Claude Code |
 
-> **Note**: Template/guidance tools (`sdd-requirements`, `sdd-design`, `sdd-tasks`, `sdd-steering`, `sdd-implement`) are now **Agent Skills**. Install them with `npx sdd-mcp install-skills` and use as `/sdd-requirements`, `/sdd-design`, etc.
+> **Note**: Template/guidance tools (`sdd-requirements`, `sdd-design`, `sdd-tasks`, `sdd-steering`, `sdd-implement`) are now **Agent Skills**. Install them with `npx sdd-mcp-server install-skills` and use as `/sdd-requirements`, `/sdd-design`, etc.
 
 ## 💡 Basic Workflow
 
 1. **Setup: Install Skills & Steering, Initialize Project**
    ```bash
    # Install skills and steering documents (recommended)
-   npx sdd-mcp install
+   npx sdd-mcp-server install
 
    # Initialize project with MCP tool
    Use sdd-init to create a new SDD project
@@ -303,7 +305,7 @@ Once connected to your AI client, you can use these MCP tools:
 ## Latest Updates (v2.2.0)
 
 **What's New**:
-- 🎯 **Unified Installation**: `npx sdd-mcp install` installs both skills AND steering documents
+- 🎯 **Unified Installation**: `npx sdd-mcp-server install` installs both skills AND steering documents
 - ✅ **Skill-Steering References**: Each skill now explicitly references relevant steering documents
 - ✅ **Steering Source Files**: Static steering docs moved to package for consistent installation
 - ✅ **Improved `/sdd-steering` Output**: Clearer distinction between dynamic and static documents
@@ -311,29 +313,29 @@ Once connected to your AI client, you can use these MCP tools:
 **Upgrade Commands**:
 ```bash
 # Install skills AND steering (recommended)
-npx sdd-mcp install
+npx sdd-mcp-server install
 
 # Install skills only
-npx sdd-mcp install --skills
+npx sdd-mcp-server install --skills
 
 # Install steering only
-npx sdd-mcp install --steering
+npx sdd-mcp-server install --steering
 
 # List available content
-npx sdd-mcp install --list
+npx sdd-mcp-server install --list
 
 # Show CLI help
-npx sdd-mcp --help
+npx sdd-mcp-server --help
 ```
 
 **Previous Versions (v2.0.x)**:
-- v2.0.3: CLI subcommand support (`npx sdd-mcp install-skills` works)
+- v2.0.3: CLI subcommand support (`npx sdd-mcp-server install-skills` works)
 - v2.0.0: Hybrid MCP + Agent Skills architecture, ~55% token savings
 
 ## Previous Versions
 
 ### v2.0.x
-- v2.0.3: CLI subcommand support (`npx sdd-mcp install-skills` works)
+- v2.0.3: CLI subcommand support (`npx sdd-mcp-server install-skills` works)
 - v2.0.2: ESM compatibility fix for install-skills CLI
 - v2.0.1: Codebase simplification, removed 7,131 lines of dead code
 - v2.0.0: Hybrid MCP + Agent Skills architecture, ~55% token savings

@@ -52,7 +52,7 @@ This project uses a **hybrid architecture** for token efficiency:
 ### Install Agent Skills
 
 ```bash
-npx sdd-mcp install-skills
+npx sdd-mcp-server install-skills
 ```
 
 ## Project Context
@@ -80,7 +80,7 @@ npx sdd-mcp install-skills
 ### Phase 0: Setup (One-time)
 ```bash
 # Install Agent Skills to your project
-npx sdd-mcp install-skills
+npx sdd-mcp-server install-skills
 ```
 
 ### Phase 1: Steering (Optional)
@@ -146,7 +146,7 @@ Skills are loaded **on-demand** instead of always-on steering:
 
 ## Development Rules
 
-1. **Install skills first**: Run `npx sdd-mcp install-skills`
+1. **Install skills first**: Run `npx sdd-mcp-server install-skills`
 2. **Use skills for guidance**: `/sdd-requirements`, `/sdd-design`, `/sdd-tasks`, `/sdd-implement`
 3. **Use MCP tools for actions**: `sdd-init`, `sdd-approve`, `sdd-status`, `sdd-spec-impl`
 4. **Follow 3-phase approval workflow**: Requirements → Design → Tasks → Implementation

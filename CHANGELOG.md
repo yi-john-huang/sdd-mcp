@@ -5,6 +5,24 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.2.1] - 2026-01-15
+
+### Fixed
+- **CLI Command Fix**: Fixed `npx sdd-mcp` not working due to npm package name collision
+  - Another npm package named `sdd-mcp` exists, causing `npx sdd-mcp` to run the wrong package
+  - Now use `npx sdd-mcp-server` for all CLI commands
+  - Created unified entry point (`sdd-entry.js`) that handles both CLI and MCP server mode
+
+### Changed
+- **Unified Entry Point**: `sdd-mcp-server` bin now handles CLI commands AND MCP server
+  - `npx sdd-mcp-server install` - Install skills and steering
+  - `npx sdd-mcp-server install --list` - List available content
+  - `npx sdd-mcp-server migrate-kiro` - Migrate .kiro to .spec
+  - `npx sdd-mcp-server --help` - Show help
+  - `npx sdd-mcp-server` (no args) - Start MCP server
+- **Removed bin entry**: Removed `sdd-mcp` bin entry to avoid confusion
+- Updated all documentation to use `npx sdd-mcp-server` instead of `npx sdd-mcp`
+
 ## [2.1.0] - 2026-01-12
 
 ### BREAKING CHANGES
@@ -13,7 +31,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Legacy `.kiro/` directories still supported for backwards compatibility
 
 ### Added
-- **Migration CLI Tool**: `npx sdd-mcp migrate-kiro` to migrate existing projects
+- **Migration CLI Tool**: `npx sdd-mcp-server migrate-kiro` to migrate existing projects
   - `--dry-run` flag to preview changes
   - `--force` flag to overwrite existing `.spec/` directory
   - `--path` flag to specify project directory
@@ -27,19 +45,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Migration Guide
 ```bash
 # Preview what will be migrated
-npx sdd-mcp migrate-kiro --dry-run
+npx sdd-mcp-server migrate-kiro --dry-run
 
 # Perform migration
-npx sdd-mcp migrate-kiro
+npx sdd-mcp-server migrate-kiro
 ```
 
 ## [2.0.3] - 2026-01-12
 
 ### Added
-- **CLI Subcommand Support**: `npx sdd-mcp install-skills` now works correctly
+- **CLI Subcommand Support**: `npx sdd-mcp-server install-skills` now works correctly
   - Created new `sdd-mcp-cli.ts` as the main CLI entry point
   - Supports `install-skills` subcommand with all existing options
-  - Shows help with `npx sdd-mcp --help`
+  - Shows help with `npx sdd-mcp-server --help`
 
 ### Technical
 - `sdd-mcp` binary now points to `dist/cli/sdd-mcp-cli.js` instead of `dist/index.js`
@@ -48,7 +66,7 @@ npx sdd-mcp migrate-kiro
 ## [2.0.2] - 2026-01-12
 
 ### Fixed
-- **Skill Installation CLI**: Fixed `npx sdd-mcp install-skills --list` returning empty results
+- **Skill Installation CLI**: Fixed `npx sdd-mcp-server install-skills --list` returning empty results
   - Added proper ESM support using `import.meta.url` for `__dirname` resolution
   - Fixed path resolution to check multiple paths and return the first existing one
   - Fixed ESM main module detection (was incorrectly checking for `require` which doesn't exist in ESM)
@@ -93,7 +111,7 @@ npx sdd-mcp migrate-kiro
   - `/sdd-steering`: Project-specific steering documents
   - `/sdd-steering-custom`: Custom steering with inclusion modes
   - `/sdd-commit`: Commit/PR guidelines with conventional commits
-- **Skill Installation CLI**: `npx sdd-mcp install-skills` to install skills to project
+- **Skill Installation CLI**: `npx sdd-mcp-server install-skills` to install skills to project
 - **SkillManager**: New `src/skills/SkillManager.ts` for skill discovery and installation
 - **New MCP Tool**: `sdd-list-skills` to list available Agent Skills
 - **Two Development Paths**: Users choose between `/simple-task` (quick) or full SDD workflow (formal)
@@ -138,7 +156,7 @@ npx sdd-mcp migrate-kiro
 npm update sdd-mcp-server
 
 # 2. Install skills to your project
-npx sdd-mcp install-skills
+npx sdd-mcp-server install-skills
 
 # 3. (Optional) Rename directories for new projects
 mv .kiro .spec

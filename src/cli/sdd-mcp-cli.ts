@@ -16,7 +16,7 @@ import { main as migrateKiroMain } from './migrate-kiro.js';
 const HELP = `
 SDD MCP CLI
 
-Usage: npx sdd-mcp <command> [options]
+Usage: npx sdd-mcp-server <command> [options]
 
 Commands:
   install           Install SDD skills AND steering documents (recommended)
@@ -27,16 +27,16 @@ Options:
   --help, -h        Show this help message
 
 Examples:
-  npx sdd-mcp install                     # Install skills to .claude/skills + steering to .spec/steering
-  npx sdd-mcp install --skills            # Install skills only
-  npx sdd-mcp install --steering          # Install steering only
-  npx sdd-mcp install --list              # List available skills and steering docs
-  npx sdd-mcp install-skills              # Legacy: Install skills to .claude/skills
-  npx sdd-mcp install-skills --list       # List available skills
-  npx sdd-mcp migrate-kiro                # Migrate .kiro to .spec
-  npx sdd-mcp migrate-kiro --dry-run      # Preview migration
+  npx sdd-mcp-server install                     # Install skills + steering
+  npx sdd-mcp-server install --skills            # Install skills only
+  npx sdd-mcp-server install --steering          # Install steering only
+  npx sdd-mcp-server install --list              # List available content
+  npx sdd-mcp-server install-skills              # Legacy: Install skills
+  npx sdd-mcp-server install-skills --list       # List available skills
+  npx sdd-mcp-server migrate-kiro                # Migrate .kiro to .spec
+  npx sdd-mcp-server migrate-kiro --dry-run      # Preview migration
 
-For MCP server usage, use: npx sdd-mcp-server
+Running without a command starts the MCP server (for IDE integrations).
 `;
 
 async function main() {

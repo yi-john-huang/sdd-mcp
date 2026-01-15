@@ -220,7 +220,7 @@ export class InstallSkillsCLI {
     }
 
     console.log(`Total: ${skills.length} skills\n`);
-    console.log('Run "npx sdd-mcp install-skills" to install all skills.\n');
+    console.log('Run "npx sdd-mcp-server install-skills" to install all skills.\n');
   }
 
   /**
@@ -274,7 +274,7 @@ export class InstallSkillsCLI {
       console.log(`\n  Total: ${steeringDocs.length} steering documents\n`);
     }
 
-    console.log('Run "npx sdd-mcp install" to install all skills and steering documents.\n');
+    console.log('Run "npx sdd-mcp-server install" to install all skills and steering documents.\n');
   }
 
   /**
@@ -377,7 +377,7 @@ export class InstallSkillsCLI {
     return `
 SDD Skills Installer
 
-Usage: npx sdd-mcp install-skills [options]
+Usage: npx sdd-mcp-server install-skills [options]
 
 Options:
   --path <dir>   Target directory for skills (default: .claude/skills)
@@ -385,9 +385,9 @@ Options:
   --help, -h     Show this help message
 
 Examples:
-  npx sdd-mcp install-skills              # Install to .claude/skills
-  npx sdd-mcp install-skills --path ./    # Install to current directory
-  npx sdd-mcp install-skills --list       # List available skills
+  npx sdd-mcp-server install-skills              # Install to .claude/skills
+  npx sdd-mcp-server install-skills --path ./    # Install to current directory
+  npx sdd-mcp-server install-skills --list       # List available skills
 
 Skills will be installed to your project's .claude/skills directory.
 After installation, you can use them in Claude Code with:
@@ -408,7 +408,7 @@ After installation, you can use them in Claude Code with:
     return `
 SDD Unified Installer
 
-Usage: npx sdd-mcp install [options]
+Usage: npx sdd-mcp-server install [options]
 
 Installs both SDD skills and steering documents to your project.
 
@@ -421,10 +421,10 @@ Options:
   --help, -h            Show this help message
 
 Examples:
-  npx sdd-mcp install                     # Install both skills and steering
-  npx sdd-mcp install --skills            # Install skills only
-  npx sdd-mcp install --steering          # Install steering only
-  npx sdd-mcp install --list              # List available content
+  npx sdd-mcp-server install                     # Install both skills and steering
+  npx sdd-mcp-server install --skills            # Install skills only
+  npx sdd-mcp-server install --steering          # Install steering only
+  npx sdd-mcp-server install --list              # List available content
 
 Skills are installed to .claude/skills/ and provide workflow guidance.
 Steering documents are installed to .spec/steering/ and provide project-wide rules.

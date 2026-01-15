@@ -8,7 +8,7 @@ SDD Directory Migration Tool
 
 Migrates .kiro directory to .spec for updated SDD workflow.
 
-Usage: npx sdd-mcp migrate-kiro [options]
+Usage: npx sdd-mcp-server migrate-kiro [options]
 
 Options:
   --path <dir>     Project directory (default: current directory)
@@ -17,9 +17,9 @@ Options:
   --help, -h       Show this help
 
 Examples:
-  npx sdd-mcp migrate-kiro
-  npx sdd-mcp migrate-kiro --dry-run
-  npx sdd-mcp migrate-kiro --path ./my-project
+  npx sdd-mcp-server migrate-kiro
+  npx sdd-mcp-server migrate-kiro --dry-run
+  npx sdd-mcp-server migrate-kiro --path ./my-project
 `;
 
 function getAllFiles(dir: string): string[] {

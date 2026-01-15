@@ -360,7 +360,7 @@ No skills found in the package. Skills may not be installed correctly.
 
 **Expected location**: \`${skillsPath}\`
 
-**Installation**: Run \`npx sdd-mcp install-skills\` to install skills to your project.`,
+**Installation**: Run \`npx sdd-mcp-server install-skills\` to install skills to your project.`,
           },
         ],
       };
@@ -382,7 +382,7 @@ ${skillsList}
 
 **Total**: ${skills.length} skills
 
-**Installation**: Run \`npx sdd-mcp install-skills\` to install all skills to \`.claude/skills/\`
+**Installation**: Run \`npx sdd-mcp-server install-skills\` to install all skills to \`.claude/skills/\`
 
 After installation, you can use these skills in Claude Code with:
 - \`/sdd-requirements <feature-name>\`

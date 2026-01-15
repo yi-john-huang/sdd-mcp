@@ -569,7 +569,7 @@ export class SDDToolAdapter {
 - Existing steering: Updated preserving customizations
 
 **Tip**: For a unified installation of skills and steering documents, run:
-\`npx sdd-mcp install\`
+\`npx sdd-mcp-server install\`
 
 This installs both \`.claude/skills/\` (workflow guides) and \`.spec/steering/\` (project rules).`;
     } catch (error) {

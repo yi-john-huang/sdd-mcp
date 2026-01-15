@@ -133,8 +133,15 @@ Before completing requirements:
 - [ ] No ambiguous terms (avoid "should", "may", "might")
 - [ ] Each FR has clear acceptance criteria
 
-## Coding Principles Applied
+## Steering Document References
 
-- **SOLID**: Single Responsibility - each requirement addresses one concern
+Apply these steering documents during requirements generation:
+
+| Document | Purpose | Key Application |
+|----------|---------|-----------------|
+| `.spec/steering/principles.md` | SOLID, DRY, KISS, YAGNI | Ensure requirements follow KISS (simple, unambiguous) and YAGNI (only what's needed now) |
+
+**Key Principles for Requirements:**
 - **KISS**: Keep requirements simple and unambiguous
 - **YAGNI**: Only specify what's actually needed now
+- **Single Responsibility**: Each requirement addresses one concern
