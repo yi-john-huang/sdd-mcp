@@ -248,6 +248,21 @@ Before finalizing, validate against these principles:
 | `sdd-validate-design` | Perform GO/NO-GO review |
 | `sdd-approve` | Mark design phase as approved |
 
+## Steering Document References
+
+Apply these steering documents during design:
+
+| Document | Purpose | Key Application |
+|----------|---------|-----------------|
+| `.spec/steering/principles.md` | SOLID, DRY, KISS, YAGNI | Apply SOLID principles to component design, ensure interfaces follow ISP and DIP |
+| `.spec/steering/linus-review.md` | Code quality, data structures | Focus on data structures first, eliminate special cases, ensure backward compatibility |
+
+**Key Linus Principles for Design:**
+1. **Data Structures First**: "Bad programmers worry about the code. Good programmers worry about data structures."
+2. **Eliminate Special Cases**: "Good code has no special cases"
+3. **Simplicity**: "If implementation needs more than 3 levels of indentation, redesign it"
+4. **Never Break Userspace**: Ensure backward compatibility
+
 ## Quality Checklist
 
 - [ ] All FR-* requirements have corresponding components

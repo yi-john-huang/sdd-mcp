@@ -6,11 +6,13 @@
 
 A Model Context Protocol (MCP) server implementing Spec-Driven Development (SDD) workflows for AI-agent CLIs and IDEs like Claude Code, Cursor, and others.
 
+> 🎯 **v2.2.0 - Unified Installation & Crash Safety**: New `npx sdd-mcp install` command installs both skills (to `.claude/skills/`) AND steering documents (to `.spec/steering/`) in one step! Skills now explicitly reference their relevant steering documents for better guidance. Also includes **atomic file writes** for spec.json crash safety - files are never left in a corrupted state even if the process is interrupted. (Thanks to @Lucas Wang for the atomic writes contribution!)
+
 > 🔄 **v2.1.0 - Directory Migration**: The SDD specification directory has been renamed from `.kiro` to `.spec`. Use `npx sdd-mcp migrate-kiro` to migrate existing projects. Legacy `.kiro` directories are still supported for backwards compatibility.
 
 > 🔧 **v2.0.3 - CLI Subcommand Support**: `npx sdd-mcp install-skills` now works correctly! Created proper CLI entry point with subcommand support.
 
-> 🚀 **v2.0.0 - Hybrid MCP + Agent Skills Architecture**: Restructured for token efficiency! Template/guidance tools (requirements, design, tasks, steering, implement) are now **Claude Code Agent Skills** loaded on-demand. Action-oriented tools remain as MCP tools. ~55% token savings in typical operations. Install skills with `npx sdd-mcp install-skills`.
+> 🚀 **v2.0.0 - Hybrid MCP + Agent Skills Architecture**: Restructured for token efficiency! Template/guidance tools (requirements, design, tasks, steering, implement) are now **Claude Code Agent Skills** loaded on-demand. Action-oriented tools remain as MCP tools. ~55% token savings in typical operations.
 
 > 🤖 **v1.8.0 - MCP Tool Standardization**: Updated `AGENTS.md` generation to use standard MCP tool calls (e.g., `sdd-init`) instead of legacy slash commands. Fixed `sdd-steering` to correctly generate `AGENTS.md` with the new format. Ensures consistent tool usage across all AI agents.
 
@@ -161,18 +163,28 @@ SDD now uses a **hybrid architecture** for better token efficiency:
 - **MCP Tools**: Action-oriented operations (init, status, approve, quality-check, validate, spec-impl)
 - **Agent Skills**: Template/guidance-heavy operations (requirements, design, tasks, steering, implement, commit)
 
-### Installing Agent Skills
+### Installing Agent Skills and Steering Documents
 
 ```bash
-# Install skills to your project's .claude/skills/ directory
+# Recommended: Install both skills AND steering documents
+npx sdd-mcp install
+
+# Install skills only (to .claude/skills/)
+npx sdd-mcp install --skills
+
+# Install steering documents only (to .spec/steering/)
+npx sdd-mcp install --steering
+
+# List available skills and steering documents
+npx sdd-mcp install --list
+
+# Legacy: Install skills only (same as --skills)
 npx sdd-mcp install-skills
-
-# Or specify a custom path
-npx sdd-mcp install-skills --path ./my-skills
-
-# List available skills
-npx sdd-mcp install-skills --list
 ```
+
+**What gets installed:**
+- **Skills** (`.claude/skills/`): Workflow guidance for Claude Code - requirements, design, tasks, implement, etc.
+- **Steering** (`.spec/steering/`): Project-wide rules - TDD guidelines, SOLID principles, security checklist, etc.
 
 ### Migrating from .kiro to .spec (v2.1.0+)
 
@@ -233,15 +245,15 @@ Once connected to your AI client, you can use these MCP tools:
 
 ## 💡 Basic Workflow
 
-1. **Setup: Install Skills & Initialize Project**
+1. **Setup: Install Skills & Steering, Initialize Project**
    ```bash
-   # Install SDD Agent Skills to your project
-   npx sdd-mcp install-skills
+   # Install skills and steering documents (recommended)
+   npx sdd-mcp install
 
    # Initialize project with MCP tool
    Use sdd-init to create a new SDD project
 
-   # Generate steering documents with Agent Skill
+   # Generate project-specific steering documents with Agent Skill
    Use /sdd-steering to generate product.md, tech.md, structure.md
    ```
 
@@ -288,34 +300,35 @@ Once connected to your AI client, you can use these MCP tools:
    Use sdd-context-load to restore project memory
    ```
 
-## Latest Updates (v2.0.3)
+## Latest Updates (v2.2.0)
 
 **What's New**:
-- 🔧 **CLI Subcommand Support**: `npx sdd-mcp install-skills` now works correctly
-- ✅ **ESM Compatibility**: Fixed path resolution for all execution contexts (npx, global, local)
-- ✅ **Proper CLI Entry Point**: New `sdd-mcp-cli.ts` handles subcommands
-
-**v2.0.0 Features** (included in this release):
-- 🎯 **Hybrid MCP + Agent Skills Architecture**: Template/guidance tools moved to Claude Code Agent Skills for ~55% token savings
-- ✅ **8 Agent Skills**: simple-task, sdd-requirements, sdd-design, sdd-tasks, sdd-implement, sdd-steering, sdd-steering-custom, sdd-commit
-- ✅ **Skill Installation CLI**: `npx sdd-mcp install-skills` to install skills to `.claude/skills/`
-- ✅ **New MCP Tool**: `sdd-list-skills` to list available skills
-- ✅ **Token Efficiency**: Guidance loaded on-demand instead of always-on steering
+- 🎯 **Unified Installation**: `npx sdd-mcp install` installs both skills AND steering documents
+- ✅ **Skill-Steering References**: Each skill now explicitly references relevant steering documents
+- ✅ **Steering Source Files**: Static steering docs moved to package for consistent installation
+- ✅ **Improved `/sdd-steering` Output**: Clearer distinction between dynamic and static documents
 
 **Upgrade Commands**:
 ```bash
-# Install Agent Skills to your project
-npx sdd-mcp install-skills
+# Install skills AND steering (recommended)
+npx sdd-mcp install
 
-# List available skills
-npx sdd-mcp install-skills --list
+# Install skills only
+npx sdd-mcp install --skills
+
+# Install steering only
+npx sdd-mcp install --steering
+
+# List available content
+npx sdd-mcp install --list
 
 # Show CLI help
 npx sdd-mcp --help
-
-# MCP server (for AI client integration)
-npx sdd-mcp-server
 ```
+
+**Previous Versions (v2.0.x)**:
+- v2.0.3: CLI subcommand support (`npx sdd-mcp install-skills` works)
+- v2.0.0: Hybrid MCP + Agent Skills architecture, ~55% token savings
 
 ## Previous Versions
 

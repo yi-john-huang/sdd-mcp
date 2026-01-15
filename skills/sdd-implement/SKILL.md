@@ -269,6 +269,21 @@ After implementing each task:
 - [ ] SOLID principles applied
 - [ ] Code self-documenting or commented where needed
 
+## Steering Document References
+
+Apply these steering documents during implementation:
+
+| Document | Purpose | Key Application |
+|----------|---------|-----------------|
+| `.spec/steering/tdd-guideline.md` | Test-Driven Development | Follow Red-Green-Refactor cycle for all code |
+| `.spec/steering/principles.md` | SOLID, DRY, KISS, YAGNI | Apply SOLID principles, keep code simple and focused |
+| `.spec/steering/owasp-top10-check.md` | Security checklist | Verify all OWASP Top 10 security requirements before completion |
+
+**Critical Implementation Rules:**
+1. **TDD First**: Never write production code without a failing test
+2. **SOLID Always**: Apply all five principles (SRP, OCP, LSP, ISP, DIP)
+3. **Security Required**: Complete OWASP checklist before marking done
+
 ## Common Anti-Patterns to Avoid
 
 | Anti-Pattern | Problem | Solution |

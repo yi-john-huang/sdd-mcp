@@ -222,6 +222,20 @@ describe('{Component}', () => {
 - [ ] Implementation order respects dependencies
 - [ ] Definition of Done is clear
 
+## Steering Document References
+
+Apply these steering documents during task breakdown:
+
+| Document | Purpose | Key Application |
+|----------|---------|-----------------|
+| `.spec/steering/tdd-guideline.md` | Test-Driven Development | Structure all tasks using Red-Green-Refactor cycle, follow test pyramid (70/20/10) |
+
+**Key TDD Principles for Tasks:**
+1. **RED**: Every task starts with writing a failing test
+2. **GREEN**: Implement minimal code to pass the test
+3. **REFACTOR**: Clean up while keeping tests green
+4. **Test Pyramid**: 70% unit, 20% integration, 10% E2E
+
 ## Common Anti-Patterns to Avoid
 
 | Anti-Pattern | Problem | Solution |
