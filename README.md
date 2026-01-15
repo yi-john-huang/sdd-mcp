@@ -6,7 +6,7 @@
 
 A Model Context Protocol (MCP) server implementing Spec-Driven Development (SDD) workflows for AI-agent CLIs and IDEs like Claude Code, Cursor, and others.
 
-> 🎯 **v2.2.0 - Unified Installation**: New `npx sdd-mcp install` command installs both skills (to `.claude/skills/`) AND steering documents (to `.spec/steering/`) in one step! Skills now explicitly reference their relevant steering documents for better guidance.
+> 🎯 **v2.2.0 - Unified Installation & Crash Safety**: New `npx sdd-mcp install` command installs both skills (to `.claude/skills/`) AND steering documents (to `.spec/steering/`) in one step! Skills now explicitly reference their relevant steering documents for better guidance. Also includes **atomic file writes** for spec.json crash safety - files are never left in a corrupted state even if the process is interrupted. (Thanks to @Lucas Wang for the atomic writes contribution!)
 
 > 🔄 **v2.1.0 - Directory Migration**: The SDD specification directory has been renamed from `.kiro` to `.spec`. Use `npx sdd-mcp migrate-kiro` to migrate existing projects. Legacy `.kiro` directories are still supported for backwards compatibility.
 
