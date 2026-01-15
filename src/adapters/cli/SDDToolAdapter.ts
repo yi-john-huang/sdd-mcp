@@ -551,17 +551,27 @@ export class SDDToolAdapter {
 **Project**: ${packageJson.name || "Unknown"}
 **Mode**: ${updateMode}
 
-**Updated Files**:
+**Dynamic Documents** (project-specific, generated from analysis):
 - \`.spec/steering/product.md\` - Product overview and business context
 - \`.spec/steering/tech.md\` - Technology stack and development environment
 - \`.spec/steering/structure.md\` - Project organization and architectural decisions
+
+**Static Documents** (best practices, installed from package):
+- \`.spec/steering/tdd-guideline.md\` - Test-Driven Development workflow
+- \`.spec/steering/principles.md\` - SOLID, DRY, KISS, YAGNI principles
+- \`.spec/steering/linus-review.md\` - Code quality review standards
+- \`.spec/steering/commit.md\` - Commit message conventions
+- \`.spec/steering/owasp-top10-check.md\` - Security checklist
 
 **Analysis**:
 - Technology stack: ${Object.keys({ ...packageJson.dependencies, ...packageJson.devDependencies }).length} dependencies detected
 - Project type: ${packageJson.type || "Unknown"}
 - Existing steering: Updated preserving customizations
 
-These steering documents provide consistent project context for all AI interactions and spec-driven development workflows.`;
+**Tip**: For a unified installation of skills and steering documents, run:
+\`npx sdd-mcp install\`
+
+This installs both \`.claude/skills/\` (workflow guides) and \`.spec/steering/\` (project rules).`;
     } catch (error) {
       this.logger.error(
         "Failed to generate steering documents",
