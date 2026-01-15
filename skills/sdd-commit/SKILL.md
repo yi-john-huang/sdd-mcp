@@ -271,6 +271,20 @@ git rebase origin/main
 git push origin feature/AUTH-123-jwt-auth
 ```
 
+## Steering Document References
+
+Apply these steering documents for commits and PRs:
+
+| Document | Purpose | Key Application |
+|----------|---------|-----------------|
+| `.spec/steering/commit.md` | Commit message conventions | Follow type prefixes, scope, and format guidelines |
+
+**Key Commit Rules:**
+1. Use type prefixes: `feat`, `fix`, `docs`, `refactor`, `test`, etc.
+2. Keep subject line under 72 characters
+3. Use imperative mood ("add" not "added")
+4. Reference issues in footer
+
 ## Quality Checklist
 
 - [ ] Commit message follows format

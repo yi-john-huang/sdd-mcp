@@ -42,6 +42,7 @@ describe('InstallSkillsCLI', () => {
       const options = cli.parseArgs(args);
 
       expect(options.targetPath).toBe('.claude/skills');
+      expect(options.steeringPath).toBe('.spec/steering');
     });
 
     it('should parse --list flag', () => {
@@ -79,11 +80,39 @@ describe('InstallSkillsCLI', () => {
       expect(options.targetPath).toBe('/custom');
       expect(options.listOnly).toBe(true);
     });
+
+    it('should parse --steering-path argument', () => {
+      const args = ['--steering-path', '/custom/steering'];
+      const options = cli.parseArgs(args);
+
+      expect(options.steeringPath).toBe('/custom/steering');
+    });
+
+    it('should parse --skills flag', () => {
+      const args = ['--skills'];
+      const options = cli.parseArgs(args);
+
+      expect(options.skillsOnly).toBe(true);
+    });
+
+    it('should parse --steering flag', () => {
+      const args = ['--steering'];
+      const options = cli.parseArgs(args);
+
+      expect(options.steeringOnly).toBe(true);
+    });
   });
 
   describe('run', () => {
     it('should display help when --help is passed', async () => {
-      const options: CLIOptions = { showHelp: true, listOnly: false, targetPath: '' };
+      const options: CLIOptions = {
+        showHelp: true,
+        listOnly: false,
+        targetPath: '',
+        steeringPath: '.spec/steering',
+        skillsOnly: false,
+        steeringOnly: false,
+      };
 
       await cli.run(options);
 
@@ -91,7 +120,14 @@ describe('InstallSkillsCLI', () => {
     });
 
     it('should list skills when --list is passed', async () => {
-      const options: CLIOptions = { showHelp: false, listOnly: true, targetPath: '' };
+      const options: CLIOptions = {
+        showHelp: false,
+        listOnly: true,
+        targetPath: '',
+        steeringPath: '.spec/steering',
+        skillsOnly: false,
+        steeringOnly: false,
+      };
 
       mockSkillManager.listSkills.mockResolvedValue([
         { name: 'sdd-requirements', description: 'Generate requirements', path: '/skills/sdd-requirements' },
@@ -111,6 +147,9 @@ describe('InstallSkillsCLI', () => {
         showHelp: false,
         listOnly: false,
         targetPath: '/target/.claude/skills',
+        steeringPath: '.spec/steering',
+        skillsOnly: false,
+        steeringOnly: false,
       };
 
       mockSkillManager.installSkills.mockResolvedValue({
@@ -129,6 +168,9 @@ describe('InstallSkillsCLI', () => {
         showHelp: false,
         listOnly: false,
         targetPath: '/target/.claude/skills',
+        steeringPath: '.spec/steering',
+        skillsOnly: false,
+        steeringOnly: false,
       };
 
       mockSkillManager.installSkills.mockResolvedValue({
@@ -144,7 +186,14 @@ describe('InstallSkillsCLI', () => {
     });
 
     it('should handle empty skill list gracefully', async () => {
-      const options: CLIOptions = { showHelp: false, listOnly: true, targetPath: '' };
+      const options: CLIOptions = {
+        showHelp: false,
+        listOnly: true,
+        targetPath: '',
+        steeringPath: '.spec/steering',
+        skillsOnly: false,
+        steeringOnly: false,
+      };
 
       mockSkillManager.listSkills.mockResolvedValue([]);
 
