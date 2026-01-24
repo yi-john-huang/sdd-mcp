@@ -1,0 +1,297 @@
+{
+  "$schema": "https://raw.githubusercontent.com/anthropics/claude-code-plugins/main/schema/plugin.json",
+  "name": "sdd-mcp",
+  "displayName": "SDD MCP Server",
+  "version": "3.0.0",
+  "description": "Spec-Driven Development (SDD) plugin for Claude Code providing a comprehensive workflow for building features with requirements, design, tasks, and implementation phases.",
+  "author": "SDD Team",
+  "license": "MIT",
+  "repository": "https://github.com/yi-john-huang/sdd-mcp",
+
+  "mcpServer": {
+    "command": "npx",
+    "args": ["sdd-mcp-server"],
+    "env": {}
+  },
+
+  "components": {
+    "skills": {
+      "description": "Workflow guidance for SDD phases",
+      "directory": "skills/",
+      "installPath": ".claude/skills/",
+      "items": [
+        {
+          "name": "sdd-requirements",
+          "description": "Generate EARS-formatted requirements documents",
+          "command": "/sdd-requirements"
+        },
+        {
+          "name": "sdd-design",
+          "description": "Create technical design specifications",
+          "command": "/sdd-design"
+        },
+        {
+          "name": "sdd-tasks",
+          "description": "Generate TDD task breakdown",
+          "command": "/sdd-tasks"
+        },
+        {
+          "name": "sdd-implement",
+          "description": "Implementation guidelines with TDD methodology",
+          "command": "/sdd-implement"
+        },
+        {
+          "name": "sdd-commit",
+          "description": "Guide commit message and PR creation",
+          "command": "/sdd-commit"
+        },
+        {
+          "name": "sdd-steering",
+          "description": "Create project steering documents",
+          "command": "/sdd-steering"
+        },
+        {
+          "name": "sdd-steering-custom",
+          "description": "Create custom steering documents",
+          "command": "/sdd-steering-custom"
+        },
+        {
+          "name": "simple-task",
+          "description": "Implement simple features without full SDD workflow",
+          "command": "/simple-task"
+        },
+        {
+          "name": "sdd-review",
+          "description": "Linus-style code review",
+          "command": "/sdd-review"
+        },
+        {
+          "name": "sdd-security-check",
+          "description": "OWASP security audit",
+          "command": "/sdd-security-check"
+        },
+        {
+          "name": "sdd-test-gen",
+          "description": "TDD test generation",
+          "command": "/sdd-test-gen"
+        }
+      ]
+    },
+
+    "steering": {
+      "description": "Project-wide rules and conventions",
+      "directory": "steering/",
+      "installPath": ".spec/steering/",
+      "autoLoad": true
+    },
+
+    "rules": {
+      "description": "Always-active guidelines",
+      "directory": "rules/",
+      "installPath": ".claude/rules/",
+      "items": [
+        {
+          "name": "coding-style",
+          "description": "Enforce consistent coding style",
+          "priority": 100,
+          "alwaysActive": true
+        },
+        {
+          "name": "testing",
+          "description": "Testing best practices and TDD requirements",
+          "priority": 95,
+          "alwaysActive": true
+        },
+        {
+          "name": "security",
+          "description": "Security best practices and OWASP guidelines",
+          "priority": 90,
+          "alwaysActive": true
+        },
+        {
+          "name": "git-workflow",
+          "description": "Git workflow and commit conventions",
+          "priority": 85,
+          "alwaysActive": true
+        },
+        {
+          "name": "error-handling",
+          "description": "Error handling patterns",
+          "priority": 80,
+          "alwaysActive": true
+        },
+        {
+          "name": "sdd-workflow",
+          "description": "SDD workflow phase rules",
+          "priority": 100,
+          "alwaysActive": true
+        }
+      ]
+    },
+
+    "contexts": {
+      "description": "Mode-specific system prompts",
+      "directory": "contexts/",
+      "installPath": ".claude/contexts/",
+      "items": [
+        {
+          "name": "dev",
+          "mode": "development",
+          "description": "Development context with coding focus"
+        },
+        {
+          "name": "review",
+          "mode": "review",
+          "description": "Code review context with quality focus"
+        },
+        {
+          "name": "planning",
+          "mode": "planning",
+          "description": "Planning context for architecture and design"
+        },
+        {
+          "name": "security-audit",
+          "mode": "security",
+          "description": "Security audit context with OWASP focus"
+        },
+        {
+          "name": "research",
+          "mode": "research",
+          "description": "Research context for exploration and learning"
+        }
+      ]
+    },
+
+    "agents": {
+      "description": "Specialized AI personas",
+      "directory": "agents/",
+      "installPath": ".claude/agents/",
+      "items": [
+        {
+          "name": "planner",
+          "role": "architect",
+          "description": "Strategic planning and roadmap creation"
+        },
+        {
+          "name": "architect",
+          "role": "designer",
+          "description": "System architecture and design patterns"
+        },
+        {
+          "name": "reviewer",
+          "role": "reviewer",
+          "description": "Linus-style code review"
+        },
+        {
+          "name": "implementer",
+          "role": "developer",
+          "description": "Code implementation with TDD"
+        },
+        {
+          "name": "security-auditor",
+          "role": "security",
+          "description": "Security vulnerability analysis"
+        },
+        {
+          "name": "tdd-guide",
+          "role": "tester",
+          "description": "TDD methodology guidance"
+        }
+      ]
+    },
+
+    "hooks": {
+      "description": "Event-driven automation",
+      "directory": "hooks/",
+      "installPath": ".claude/hooks/",
+      "events": [
+        "pre-tool-use",
+        "post-tool-use",
+        "session-start",
+        "session-end"
+      ]
+    }
+  },
+
+  "tools": [
+    {
+      "name": "sdd-init",
+      "description": "Initialize a new SDD project with interactive requirements clarification"
+    },
+    {
+      "name": "sdd-requirements",
+      "description": "Generate requirements document"
+    },
+    {
+      "name": "sdd-design",
+      "description": "Create design specifications"
+    },
+    {
+      "name": "sdd-tasks",
+      "description": "Generate task breakdown"
+    },
+    {
+      "name": "sdd-implement",
+      "description": "Implementation guidelines"
+    },
+    {
+      "name": "sdd-status",
+      "description": "Check workflow progress"
+    },
+    {
+      "name": "sdd-approve",
+      "description": "Approve workflow phases"
+    },
+    {
+      "name": "sdd-quality-check",
+      "description": "Code quality analysis"
+    },
+    {
+      "name": "sdd-context-load",
+      "description": "Load project context"
+    },
+    {
+      "name": "sdd-template-render",
+      "description": "Render templates"
+    },
+    {
+      "name": "sdd-steering",
+      "description": "Create or update steering documents"
+    },
+    {
+      "name": "sdd-steering-custom",
+      "description": "Create custom steering documents"
+    },
+    {
+      "name": "sdd-validate-design",
+      "description": "Interactive design quality review"
+    },
+    {
+      "name": "sdd-validate-gap",
+      "description": "Analyze implementation gap"
+    },
+    {
+      "name": "sdd-spec-impl",
+      "description": "Execute spec tasks using TDD"
+    }
+  ],
+
+  "installation": {
+    "command": "npx sdd-mcp-server install",
+    "postInstall": [
+      "echo 'SDD MCP plugin installed successfully!'",
+      "echo 'Run /sdd-requirements <feature> to start your first feature specification.'"
+    ]
+  },
+
+  "keywords": [
+    "sdd",
+    "spec-driven-development",
+    "tdd",
+    "requirements",
+    "design",
+    "workflow",
+    "claude-code",
+    "mcp"
+  ]
+}

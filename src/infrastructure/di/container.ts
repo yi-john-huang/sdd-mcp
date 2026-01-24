@@ -71,6 +71,14 @@ import { HookSystem } from "../plugins/HookSystem.js";
 import { PluginToolRegistry } from "../plugins/PluginToolRegistry.js";
 import { PluginSteeringRegistry } from "../plugins/PluginSteeringRegistry.js";
 
+// Component managers
+import { RulesManager } from "../../rules/RulesManager.js";
+import { ContextManager } from "../../contexts/ContextManager.js";
+import { AgentManager } from "../../agents/AgentManager.js";
+import { HookLoader } from "../../hooks/HookLoader.js";
+import * as path from "path";
+import { fileURLToPath } from "url";
+
 // Application services
 import { ProjectService } from "../../application/services/ProjectService.js";
 import { WorkflowService } from "../../application/services/WorkflowService.js";
@@ -144,6 +152,28 @@ export function createContainer(): Container {
     .bind<PluginSteeringRegistry>(TYPES.PluginSteeringRegistry)
     .to(PluginSteeringRegistry);
   container.bind<PluginManager>(TYPES.PluginManager).to(PluginManager);
+
+  // Bind component managers
+  // Calculate paths relative to package root
+  const currentFileUrl = import.meta.url;
+  const currentFilePath = fileURLToPath(currentFileUrl);
+  const packageRoot = path.resolve(path.dirname(currentFilePath), "..", "..", "..");
+
+  container.bind<RulesManager>(TYPES.RulesManager).toDynamicValue(() => {
+    return new RulesManager(path.join(packageRoot, "rules"));
+  }).inSingletonScope();
+
+  container.bind<ContextManager>(TYPES.ContextManager).toDynamicValue(() => {
+    return new ContextManager(path.join(packageRoot, "contexts"));
+  }).inSingletonScope();
+
+  container.bind<AgentManager>(TYPES.AgentManager).toDynamicValue(() => {
+    return new AgentManager(path.join(packageRoot, "agents"));
+  }).inSingletonScope();
+
+  container.bind<HookLoader>(TYPES.HookLoader).toDynamicValue(() => {
+    return new HookLoader(path.join(packageRoot, "hooks"));
+  }).inSingletonScope();
 
   // Bind MCP components
   container.bind<MCPServer>(TYPES.MCPServer).to(MCPServer);

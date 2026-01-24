@@ -52,7 +52,7 @@ async function main() {
       } else if (m.id === 2 && !steeringCalled) {
         steeringCalled = true;
         // Verify files
-        const steeringDir = path.join(proj, '.kiro', 'steering');
+        const steeringDir = path.join(proj, '.spec', 'steering');
         const files = await fs.readdir(steeringDir).catch(() => []);
         const secPath = path.join(steeringDir, 'security-check.md');
         const exists = files.includes('security-check.md');
