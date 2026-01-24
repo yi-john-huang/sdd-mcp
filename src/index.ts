@@ -695,7 +695,7 @@ async function handleInitSimplified(args: any) {
   const path = await import("path");
 
   try {
-    const { description } = args;
+    const { projectName, description } = args;
 
     if (!description || typeof description !== "string") {
       throw new Error("Description is required for project initialization");
@@ -703,8 +703,10 @@ async function handleInitSimplified(args: any) {
 
     const projectPath = process.cwd();
 
-    // Generate feature name from description
-    const baseFeatureName = generateFeatureName(description);
+    // Generate feature name from projectName (if provided) or description
+    const baseFeatureName = projectName && typeof projectName === "string" 
+      ? projectName 
+      : generateFeatureName(description);
     const featureName = await ensureUniqueFeatureName(baseFeatureName);
 
     // Create .spec/specs/[feature-name] directory (use .spec for new projects)
