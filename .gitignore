@@ -22,6 +22,9 @@ build/
 *.swp
 *.swo
 
+# AI tool configs
+.serena/
+
 # OS files
 .DS_Store
 Thumbs.db
