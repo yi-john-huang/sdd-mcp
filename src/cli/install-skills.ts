@@ -9,25 +9,40 @@ import { AgentManager } from '../agents/AgentManager.js';
 import { HookLoader } from '../hooks/HookLoader.js';
 
 // Get directory name - works in both ESM and test environments
-// In test environments, we use process.cwd() as a fallback
+// Handles: local dev, global install, npx execution
 function getDirname(): string {
-  // Try to find the package root by looking for package.json
-  let dir = process.cwd();
-  while (dir !== path.dirname(dir)) {
-    if (fs.existsSync(path.join(dir, 'package.json'))) {
-      try {
-        const pkg = JSON.parse(fs.readFileSync(path.join(dir, 'package.json'), 'utf-8'));
-        if (pkg.name === 'sdd-mcp-server') {
-          // Found the package root, return the expected cli directory
-          return path.join(dir, 'dist', 'cli');
+  // Helper to find package root from a starting directory
+  const findPackageRoot = (startDir: string): string | null => {
+    let dir = startDir;
+    while (dir !== path.dirname(dir)) {
+      const pkgPath = path.join(dir, 'package.json');
+      if (fs.existsSync(pkgPath)) {
+        try {
+          const pkg = JSON.parse(fs.readFileSync(pkgPath, 'utf-8'));
+          if (pkg.name === 'sdd-mcp-server') {
+            return path.join(dir, 'dist', 'cli');
+          }
+        } catch {
+          // Continue searching
         }
-      } catch {
-        // Continue searching
       }
+      dir = path.dirname(dir);
     }
-    dir = path.dirname(dir);
+    return null;
+  };
+
+  // Strategy 1: Check from the script's actual location (works with npx)
+  if (process.argv[1]) {
+    const scriptDir = path.dirname(path.resolve(process.argv[1]));
+    const fromScript = findPackageRoot(scriptDir);
+    if (fromScript) return fromScript;
   }
-  // Fallback to process.cwd() based path
+
+  // Strategy 2: Check from process.cwd() (works in local dev)
+  const fromCwd = findPackageRoot(process.cwd());
+  if (fromCwd) return fromCwd;
+
+  // Strategy 3: Fallback to process.cwd() based path
   return path.join(process.cwd(), 'dist', 'cli');
 }
 
