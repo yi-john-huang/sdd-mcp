@@ -58,7 +58,7 @@ const server = new McpServer(
 
 // Helper functions for file operations
 async function createKiroDirectory(projectPath) {
-  const kiroPath = path.join(projectPath, ".kiro");
+  const kiroPath = path.join(projectPath, ".spec");
   const specsPath = path.join(kiroPath, "specs");
   const steeringPath = path.join(kiroPath, "steering");
 
@@ -393,12 +393,12 @@ server.registerTool(
       }
 
       // Proceed with spec creation (either quality is good or answers were provided)
-      // Create .kiro directory structure in current directory (not in a subdirectory)
+      // Create .spec directory structure in current directory (not in a subdirectory)
       const { specsPath, steeringPath } =
         await createKiroDirectory(currentPath);
 
       // Generate feature name from description
-      const featureName = await generateFeatureName(description || projectName);
+      const featureName = projectName || await generateFeatureName(description);
       const featurePath = path.join(specsPath, featureName);
       await fs.mkdir(featurePath, { recursive: true });
 
@@ -477,7 +477,7 @@ server.registerTool(
         content: [
           {
             type: "text",
-            text: `## Spec Initialization Complete\n\n**Generated Feature Name**: ${featureName}\n**Project Name**: ${projectName}\n**Project Description**: ${description}${clarificationNote}\n\n**Created Files**:\n- \`.kiro/specs/${featureName}/spec.json\` - Metadata and approval tracking\n- \`.kiro/specs/${featureName}/requirements.md\` - Requirements template with enriched description\n\n**Next Step**: Use \`sdd-requirements ${featureName}\` to generate comprehensive requirements\n\nThe spec has been initialized following stage-by-stage development principles.`,
+            text: `## Spec Initialization Complete\n\n**Generated Feature Name**: ${featureName}\n**Project Name**: ${projectName}\n**Project Description**: ${description}${clarificationNote}\n\n**Created Files**:\n- \`.spec/specs/${featureName}/spec.json\` - Metadata and approval tracking\n- \`.spec/specs/${featureName}/requirements.md\` - Requirements template with enriched description\n\n**Next Step**: Use \`sdd-requirements ${featureName}\` to generate comprehensive requirements\n\nThe spec has been initialized following stage-by-stage development principles.`,
           },
         ],
       };
@@ -507,7 +507,7 @@ server.registerTool(
   async ({ featureName }) => {
     try {
       const currentPath = process.cwd();
-      const featurePath = path.join(currentPath, ".kiro", "specs", featureName);
+      const featurePath = path.join(currentPath, ".spec", "specs", featureName);
 
       // Check if spec exists
       const specPath = path.join(featurePath, "spec.json");
@@ -558,7 +558,7 @@ server.registerTool(
         content: [
           {
             type: "text",
-            text: `## Requirements Generated\n\nRequirements document generated for feature: **${featureName}**\n\n**Generated**: .kiro/specs/${featureName}/requirements.md\n**Status**: Requirements phase completed\n\n**Next Step**: Review the requirements, then use \`sdd-design\` to proceed to design phase`,
+            text: `## Requirements Generated\n\nRequirements document generated for feature: **${featureName}**\n\n**Generated**: .spec/specs/${featureName}/requirements.md\n**Status**: Requirements phase completed\n\n**Next Step**: Review the requirements, then use \`sdd-design\` to proceed to design phase`,
           },
         ],
       };
@@ -588,7 +588,7 @@ server.registerTool(
   async ({ featureName }) => {
     try {
       const currentPath = process.cwd();
-      const featurePath = path.join(currentPath, ".kiro", "specs", featureName);
+      const featurePath = path.join(currentPath, ".spec", "specs", featureName);
       const specPath = path.join(featurePath, "spec.json");
 
       // Read and validate spec
@@ -640,7 +640,7 @@ server.registerTool(
         content: [
           {
             type: "text",
-            text: `## Design Generated\n\nTechnical design document generated for feature: **${featureName}**\n\n**Generated**: .kiro/specs/${featureName}/design.md\n**Status**: Design phase completed\n\n**Next Step**: Review the design document, then use \`sdd-tasks\` to proceed to task planning phase`,
+            text: `## Design Generated\n\nTechnical design document generated for feature: **${featureName}**\n\n**Generated**: .spec/specs/${featureName}/design.md\n**Status**: Design phase completed\n\n**Next Step**: Review the design document, then use \`sdd-tasks\` to proceed to task planning phase`,
           },
         ],
       };
@@ -670,7 +670,7 @@ server.registerTool(
   async ({ featureName }) => {
     try {
       const currentPath = process.cwd();
-      const featurePath = path.join(currentPath, ".kiro", "specs", featureName);
+      const featurePath = path.join(currentPath, ".spec", "specs", featureName);
       const specPath = path.join(featurePath, "spec.json");
 
       // Read and validate spec
@@ -778,7 +778,7 @@ ${designContext.substring(0, 1000)}${designContext.length > 1000 ? "...\n[Design
         content: [
           {
             type: "text",
-            text: `## Implementation Tasks Generated\n\nImplementation tasks document generated for feature: **${featureName}**\n\n**Generated**: .kiro/specs/${featureName}/tasks.md\n**Status**: Tasks phase completed\n**Ready for Implementation**: Yes\n\n**Next Step**: Review tasks, then use \`sdd-implement\` to begin implementation or \`sdd-status\` to check progress`,
+            text: `## Implementation Tasks Generated\n\nImplementation tasks document generated for feature: **${featureName}**\n\n**Generated**: .spec/specs/${featureName}/tasks.md\n**Status**: Tasks phase completed\n**Ready for Implementation**: Yes\n\n**Next Step**: Review tasks, then use \`sdd-implement\` to begin implementation or \`sdd-status\` to check progress`,
           },
         ],
       };
@@ -808,7 +808,7 @@ server.registerTool(
   async ({ featureName }) => {
     try {
       const currentPath = process.cwd();
-      const featurePath = path.join(currentPath, ".kiro", "specs", featureName);
+      const featurePath = path.join(currentPath, ".spec", "specs", featureName);
       const specPath = path.join(featurePath, "spec.json");
 
       // Read spec
@@ -863,9 +863,9 @@ server.registerTool(
   async ({ featureName }) => {
     try {
       const currentPath = process.cwd();
-      const kiroPath = path.join(currentPath, ".kiro");
+      const kiroPath = path.join(currentPath, ".spec");
 
-      // Check if .kiro directory exists
+      // Check if .spec directory exists
       const kiroExists = await fs
         .access(kiroPath)
         .then(() => true)
@@ -1013,7 +1013,7 @@ server.registerTool(
   async ({ featureName, phase }) => {
     try {
       const currentPath = process.cwd();
-      const featurePath = path.join(currentPath, ".kiro", "specs", featureName);
+      const featurePath = path.join(currentPath, ".spec", "specs", featureName);
       const specPath = path.join(featurePath, "spec.json");
 
       // Read spec
@@ -1165,7 +1165,7 @@ server.registerTool(
   async ({ featureName }) => {
     try {
       const currentPath = process.cwd();
-      const featurePath = path.join(currentPath, ".kiro", "specs", featureName);
+      const featurePath = path.join(currentPath, ".spec", "specs", featureName);
 
       // Load all context files
       const files = ["spec.json", "requirements.md", "design.md", "tasks.md"];
@@ -1252,7 +1252,7 @@ server.registerTool(
   async ({ templateType, featureName, customTemplate }) => {
     try {
       const currentPath = process.cwd();
-      const featurePath = path.join(currentPath, ".kiro", "specs", featureName);
+      const featurePath = path.join(currentPath, ".spec", "specs", featureName);
       const specPath = path.join(featurePath, "spec.json");
 
       // Load spec for context
@@ -1335,7 +1335,7 @@ server.registerTool(
   async ({ updateMode }) => {
     try {
       const currentPath = process.cwd();
-      const steeringPath = path.join(currentPath, ".kiro", "steering");
+      const steeringPath = path.join(currentPath, ".spec", "steering");
 
       // Create steering directory if it doesn't exist
       await fs.mkdir(steeringPath, { recursive: true });
@@ -1636,17 +1636,17 @@ Kiro-style Spec Driven Development implementation using ai agent slash commands,
 ## Project Context
 
 ### Paths
-- Steering: \`.kiro/steering/\`
-- Specs: \`.kiro/specs/\`
+- Steering: \`.spec/steering/\`
+- Specs: \`.spec/specs/\`
 - Commands: \`.ai agent/commands/\`
 
 ### Steering vs Specification
 
-**Steering** (\`.kiro/steering/\`) - Guide AI with project-wide rules and context
-**Specs** (\`.kiro/specs/\`) - Formalize development process for individual features
+**Steering** (\`.spec/steering/\`) - Guide AI with project-wide rules and context
+**Specs** (\`.spec/specs/\`) - Formalize development process for individual features
 
 ### Active Specifications
-- Check \`.kiro/specs/\` for active specifications
+- Check \`.spec/specs/\` for active specifications
 - Use \`/kiro:spec-status [feature-name]\` to check progress
 
 **Current Specifications:**
@@ -2082,14 +2082,14 @@ Refer to full principles.md for detailed examples and language-specific guidance
 **Generated**: ${new Date().toISOString()}
 
 **${mode} Files**:
-- \`.kiro/steering/product.md\` - Product overview and business context (AI analysis template)
-- \`.kiro/steering/tech.md\` - Technology stack and development environment (AI analysis template)
-- \`.kiro/steering/structure.md\` - Project organization and architectural decisions (AI analysis template)
-- \`.kiro/steering/linus-review.md\` - Code review guidelines (full content)
-- \`.kiro/steering/commit.md\` - Commit message standards (full content)
-- \`.kiro/steering/tdd-guideline.md\` - Test-Driven Development practices and workflow (full content)
-- \`.kiro/steering/security-check.md\` - Security checklist aligned to OWASP Top 10 (full content)
-- \`.kiro/steering/AGENTS.md\` - Universal AI agent workflow guidance
+- \`.spec/steering/product.md\` - Product overview and business context (AI analysis template)
+- \`.spec/steering/tech.md\` - Technology stack and development environment (AI analysis template)
+- \`.spec/steering/structure.md\` - Project organization and architectural decisions (AI analysis template)
+- \`.spec/steering/linus-review.md\` - Code review guidelines (full content)
+- \`.spec/steering/commit.md\` - Commit message standards (full content)
+- \`.spec/steering/tdd-guideline.md\` - Test-Driven Development practices and workflow (full content)
+- \`.spec/steering/security-check.md\` - Security checklist aligned to OWASP Top 10 (full content)
+- \`.spec/steering/AGENTS.md\` - Universal AI agent workflow guidance
 
 **AI-Driven Approach**:
 The steering documents now contain analysis instructions for AI agents rather than hardcoded templates. This ensures:
@@ -2150,7 +2150,7 @@ server.registerTool(
   async ({ fileName, topic, inclusionMode, filePattern }) => {
     try {
       const currentPath = process.cwd();
-      const steeringPath = path.join(currentPath, ".kiro", "steering");
+      const steeringPath = path.join(currentPath, ".spec", "steering");
 
       // Create steering directory if it doesn't exist
       await fs.mkdir(steeringPath, { recursive: true });
@@ -2230,7 +2230,7 @@ ${
             type: "text",
             text: `## Custom Steering Document Created
 
-**File**: .kiro/steering/${fileName}
+**File**: .spec/steering/${fileName}
 **Topic**: ${topic}
 **Inclusion Mode**: ${inclusionMode}${inclusionMode === "conditional" ? ` (Pattern: "${filePattern}")` : ""}
 
@@ -2273,7 +2273,7 @@ server.registerTool(
   async ({ featureName }) => {
     try {
       const currentPath = process.cwd();
-      const featurePath = path.join(currentPath, ".kiro", "specs", featureName);
+      const featurePath = path.join(currentPath, ".spec", "specs", featureName);
       const designPath = path.join(featurePath, "design.md");
       const specPath = path.join(featurePath, "spec.json");
 
@@ -2444,7 +2444,7 @@ server.registerTool(
   async ({ featureName }) => {
     try {
       const currentPath = process.cwd();
-      const featurePath = path.join(currentPath, ".kiro", "specs", featureName);
+      const featurePath = path.join(currentPath, ".spec", "specs", featureName);
       const requirementsPath = path.join(featurePath, "requirements.md");
       const specPath = path.join(featurePath, "spec.json");
 
@@ -2664,7 +2664,7 @@ server.registerTool(
   async ({ featureName, taskNumbers }) => {
     try {
       const currentPath = process.cwd();
-      const featurePath = path.join(currentPath, ".kiro", "specs", featureName);
+      const featurePath = path.join(currentPath, ".spec", "specs", featureName);
       const tasksPath = path.join(featurePath, "tasks.md");
       const requirementsPath = path.join(featurePath, "requirements.md");
       const designPath = path.join(featurePath, "design.md");
@@ -2788,10 +2788,10 @@ server.registerTool(
       report += `**TDD Methodology**: Kent Beck's Red → Green → Refactor cycle\n\n`;
 
       report += `### Context Loaded\n`;
-      report += `- ✅ Requirements: .kiro/specs/${featureName}/requirements.md\n`;
-      report += `- ✅ Design: .kiro/specs/${featureName}/design.md\n`;
-      report += `- ✅ Tasks: .kiro/specs/${featureName}/tasks.md\n`;
-      report += `- ✅ Metadata: .kiro/specs/${featureName}/spec.json\n\n`;
+      report += `- ✅ Requirements: .spec/specs/${featureName}/requirements.md\n`;
+      report += `- ✅ Design: .spec/specs/${featureName}/design.md\n`;
+      report += `- ✅ Tasks: .spec/specs/${featureName}/tasks.md\n`;
+      report += `- ✅ Metadata: .spec/specs/${featureName}/spec.json\n\n`;
 
       report += `### TDD Implementation Plan\n\n`;
 
