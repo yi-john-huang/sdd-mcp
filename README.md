@@ -608,6 +608,7 @@ As of v1.4.3, comprehensive codebase analysis is automatic with multi-language d
 
 For detailed documentation on:
 - **📥 Installation Guide**: See [docs/INSTALL-GUIDE.md](docs/INSTALL-GUIDE.md) for complete CLI usage examples with real output
+- **🔄 Workflow Diagrams**: See [docs/WORKFLOW.md](docs/WORKFLOW.md) for sequence diagrams showing component interactions
 - **🤖 AI Agent Guide**: See [AGENTS.md](AGENTS.md) for detailed instructions on using this server with AI agents
 - **🏗️ Architecture Overview**: See [ARCHITECTURE.md](ARCHITECTURE.md) for complete system design, layered architecture, module loading, and Mermaid diagrams
 - **📦 Plugin Manifest**: See [.claude-plugin/plugin.json](.claude-plugin/plugin.json) for Claude Code plugin configuration

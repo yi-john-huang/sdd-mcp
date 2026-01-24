@@ -2,7 +2,6 @@
 
 import * as fs from 'fs';
 import * as path from 'path';
-import { fileURLToPath } from 'url';
 import { SkillManager } from '../skills/SkillManager.js';
 import { RulesManager } from '../rules/RulesManager.js';
 import { ContextManager } from '../contexts/ContextManager.js';
@@ -448,198 +447,121 @@ export class InstallSkillsCLI {
 
   /**
    * Install skills to target directory
-   * @param targetPath - Target directory
    */
   private async installSkills(targetPath: string): Promise<void> {
-    console.log(`\n📦 Installing SDD skills to: ${targetPath}\n`);
-
+    console.log(`\nInstalling SDD skills to: ${targetPath}\n`);
     const result = await this.skillManager.installSkills(targetPath);
+    this.logInstallResult(result, 'skills');
 
     if (result.installed.length > 0) {
-      const plural = result.installed.length === 1 ? 'skill' : 'skills';
-      console.log(`✅ Installed ${result.installed.length} ${plural}:`);
-      for (const name of result.installed) {
-        console.log(`   • ${name}`);
-      }
-      console.log('');
-    }
-
-    if (result.failed.length > 0) {
-      console.error(`❌ Failed to install ${result.failed.length} skill(s):`);
-      for (const failure of result.failed) {
-        console.error(`   • ${failure.name}: ${failure.error}`);
-      }
-      console.log('');
-    }
-
-    if (result.installed.length > 0) {
-      console.log('🎉 Skills installed successfully!');
+      console.log('Skills installed successfully!');
       console.log('   Use /sdd-requirements, /sdd-design, etc. in Claude Code.\n');
     }
   }
 
   /**
    * Install steering documents to target directory
-   * @param targetPath - Target directory (e.g., .spec/steering)
    */
   private async installSteering(targetPath: string): Promise<void> {
-    console.log(`\n📄 Installing steering documents to: ${targetPath}\n`);
+    console.log(`\nInstalling steering documents to: ${targetPath}\n`);
 
-    const installed: string[] = [];
-    const failed: Array<{ name: string; error: string }> = [];
+    const result = await this.installSteeringFiles(targetPath);
+    this.logInstallResult(result, 'steering documents');
 
-    try {
-      // Create target directory
-      await fs.promises.mkdir(targetPath, { recursive: true });
-
-      // Read source steering directory
-      const entries = await fs.promises.readdir(this.steeringPath);
-
-      for (const entry of entries) {
-        if (entry.endsWith('.md')) {
-          try {
-            const sourceFile = path.join(this.steeringPath, entry);
-            const destFile = path.join(targetPath, entry);
-            await fs.promises.copyFile(sourceFile, destFile);
-            installed.push(entry);
-          } catch (error) {
-            failed.push({
-              name: entry,
-              error: error instanceof Error ? error.message : String(error),
-            });
-          }
-        }
-      }
-    } catch (error) {
-      console.error(`❌ Failed to read steering directory: ${error instanceof Error ? error.message : String(error)}`);
-      return;
-    }
-
-    if (installed.length > 0) {
-      const plural = installed.length === 1 ? 'document' : 'documents';
-      console.log(`✅ Installed ${installed.length} steering ${plural}:`);
-      for (const name of installed) {
-        console.log(`   • ${name}`);
-      }
-      console.log('');
-    }
-
-    if (failed.length > 0) {
-      console.error(`❌ Failed to install ${failed.length} document(s):`);
-      for (const failure of failed) {
-        console.error(`   • ${failure.name}: ${failure.error}`);
-      }
-      console.log('');
-    }
-
-    if (installed.length > 0) {
-      console.log('🎉 Steering documents installed successfully!');
+    if (result.installed.length > 0) {
+      console.log('Steering documents installed successfully!');
       console.log('   These provide project-wide guidance for AI interactions.\n');
     }
   }
 
   /**
-   * Install rules to target directory
-   * @param targetPath - Target directory (e.g., .claude/rules)
+   * Copy steering files to target directory
    */
-  private async installRules(targetPath: string): Promise<void> {
-    console.log(`📏 Installing rules to: ${targetPath}\n`);
+  private async installSteeringFiles(targetPath: string): Promise<{ installed: string[]; failed: Array<{ name: string; error: string }> }> {
+    const installed: string[] = [];
+    const failed: Array<{ name: string; error: string }> = [];
 
-    const result = await this.rulesManager.installComponents(targetPath);
+    try {
+      await fs.promises.mkdir(targetPath, { recursive: true });
+      const entries = await fs.promises.readdir(this.steeringPath);
 
+      for (const entry of entries) {
+        if (!entry.endsWith('.md')) continue;
+
+        try {
+          const sourceFile = path.join(this.steeringPath, entry);
+          const destFile = path.join(targetPath, entry);
+          await fs.promises.copyFile(sourceFile, destFile);
+          installed.push(entry);
+        } catch (error) {
+          failed.push({
+            name: entry,
+            error: error instanceof Error ? error.message : String(error),
+          });
+        }
+      }
+    } catch (error) {
+      console.error(`Failed to read steering directory: ${error instanceof Error ? error.message : String(error)}`);
+    }
+
+    return { installed, failed };
+  }
+
+  /**
+   * Log installation results with consistent formatting
+   */
+  private logInstallResult(result: { installed: string[]; failed: Array<{ name: string; error: string }> }, typeName: string): void {
     if (result.installed.length > 0) {
-      console.log(`✅ Installed ${result.installed.length} rules:`);
+      console.log(`Installed ${result.installed.length} ${typeName}:`);
       for (const name of result.installed) {
-        console.log(`   • ${name}`);
+        console.log(`   - ${name}`);
       }
       console.log('');
     }
 
     if (result.failed.length > 0) {
-      console.error(`❌ Failed to install ${result.failed.length} rule(s):`);
+      console.error(`Failed to install ${result.failed.length} ${typeName}:`);
       for (const failure of result.failed) {
-        console.error(`   • ${failure.name}: ${failure.error}`);
+        console.error(`   - ${failure.name}: ${failure.error}`);
       }
       console.log('');
     }
+  }
+
+  /**
+   * Install rules to target directory
+   */
+  private async installRules(targetPath: string): Promise<void> {
+    console.log(`Installing rules to: ${targetPath}\n`);
+    const result = await this.rulesManager.installComponents(targetPath);
+    this.logInstallResult(result, 'rules');
   }
 
   /**
    * Install contexts to target directory
-   * @param targetPath - Target directory (e.g., .claude/contexts)
    */
   private async installContexts(targetPath: string): Promise<void> {
-    console.log(`🎭 Installing contexts to: ${targetPath}\n`);
-
+    console.log(`Installing contexts to: ${targetPath}\n`);
     const result = await this.contextManager.installComponents(targetPath);
-
-    if (result.installed.length > 0) {
-      console.log(`✅ Installed ${result.installed.length} contexts:`);
-      for (const name of result.installed) {
-        console.log(`   • ${name}`);
-      }
-      console.log('');
-    }
-
-    if (result.failed.length > 0) {
-      console.error(`❌ Failed to install ${result.failed.length} context(s):`);
-      for (const failure of result.failed) {
-        console.error(`   • ${failure.name}: ${failure.error}`);
-      }
-      console.log('');
-    }
+    this.logInstallResult(result, 'contexts');
   }
 
   /**
    * Install agents to target directory
-   * @param targetPath - Target directory (e.g., .claude/agents)
    */
   private async installAgents(targetPath: string): Promise<void> {
-    console.log(`🤖 Installing agents to: ${targetPath}\n`);
-
+    console.log(`Installing agents to: ${targetPath}\n`);
     const result = await this.agentManager.installComponents(targetPath);
-
-    if (result.installed.length > 0) {
-      console.log(`✅ Installed ${result.installed.length} agents:`);
-      for (const name of result.installed) {
-        console.log(`   • ${name}`);
-      }
-      console.log('');
-    }
-
-    if (result.failed.length > 0) {
-      console.error(`❌ Failed to install ${result.failed.length} agent(s):`);
-      for (const failure of result.failed) {
-        console.error(`   • ${failure.name}: ${failure.error}`);
-      }
-      console.log('');
-    }
+    this.logInstallResult(result, 'agents');
   }
 
   /**
    * Install hooks to target directory
-   * @param targetPath - Target directory (e.g., .claude/hooks)
    */
   private async installHooks(targetPath: string): Promise<void> {
-    console.log(`🪝 Installing hooks to: ${targetPath}\n`);
-
+    console.log(`Installing hooks to: ${targetPath}\n`);
     const result = await this.hookLoader.installComponents(targetPath);
-
-    if (result.installed.length > 0) {
-      console.log(`✅ Installed ${result.installed.length} hooks:`);
-      for (const name of result.installed) {
-        console.log(`   • ${name}`);
-      }
-      console.log('');
-    }
-
-    if (result.failed.length > 0) {
-      console.error(`❌ Failed to install ${result.failed.length} hook(s):`);
-      for (const failure of result.failed) {
-        console.error(`   • ${failure.name}: ${failure.error}`);
-      }
-      console.log('');
-    }
+    this.logInstallResult(result, 'hooks');
   }
 
   /**
