@@ -6,27 +6,7 @@
 
 A Model Context Protocol (MCP) server implementing Spec-Driven Development (SDD) workflows for AI-agent CLIs and IDEs like Claude Code, Cursor, and others.
 
-> 🚀 **v3.0.0 - Comprehensive Plugin Architecture**: SDD-MCP is now a full-featured Claude Code plugin system! Adds **6 component types** (skills, steering, rules, contexts, agents, hooks), **4 new managers** (RulesManager, ContextManager, AgentManager, HookLoader), and **3 new skills** (sdd-review, sdd-security-check, sdd-test-gen). Unified install CLI supports `--rules`, `--contexts`, `--agents`, `--hooks`, `--all` flags. Inspired by everything-claude-code architecture.
-
-> 🔧 **v2.2.1 - CLI Fix**: Fixed `npx sdd-mcp` not working due to npm package name collision. Now use `npx sdd-mcp-server` for all CLI commands. The unified entry point handles both CLI commands and MCP server mode.
-
-> 🎯 **v2.2.0 - Unified Installation & Crash Safety**: `npx sdd-mcp-server install` command installs both skills (to `.claude/skills/`) AND steering documents (to `.spec/steering/`) in one step! Skills now explicitly reference their relevant steering documents for better guidance. Also includes **atomic file writes** for spec.json crash safety - files are never left in a corrupted state even if the process is interrupted. (Thanks to @Lucas Wang for the atomic writes contribution!)
-
-> 🔄 **v2.1.0 - Directory Migration**: The SDD specification directory has been renamed from `.kiro` to `.spec`. Use `npx sdd-mcp-server migrate-kiro` to migrate existing projects. Legacy `.kiro` directories are still supported for backwards compatibility.
-
-> 🔧 **v2.0.3 - CLI Subcommand Support**: `npx sdd-mcp-server install-skills` now works correctly! Created proper CLI entry point with subcommand support.
-
-> 🚀 **v2.0.0 - Hybrid MCP + Agent Skills Architecture**: Restructured for token efficiency! Template/guidance tools (requirements, design, tasks, steering, implement) are now **Claude Code Agent Skills** loaded on-demand. Action-oriented tools remain as MCP tools. ~55% token savings in typical operations.
-
-> 🤖 **v1.8.0 - MCP Tool Standardization**: Updated `AGENTS.md` generation to use standard MCP tool calls (e.g., `sdd-init`) instead of legacy slash commands. Fixed `sdd-steering` to correctly generate `AGENTS.md` with the new format. Ensures consistent tool usage across all AI agents.
-
-> 🔧 **v1.6.2 - Module Loading Fix**: Fixed critical bug where `sdd-steering` generated generic templates instead of analyzing actual codebases when run via `npx`. Root cause: hardcoded import paths didn't account for different execution contexts. Solution: Unified module loading system with **4-path fallback resolution** handling npm start, npm dev, node dist/index.js, and npx contexts. Comprehensive error handling with all attempted paths in error messages. Debug logging for troubleshooting. **100% test coverage** (71 tests passing, 6 new moduleLoader tests). Code review score: **9/10 (Excellent)** ✅. Production-ready with zero security issues!
-
-> 🚀 **v1.6.0 - Architecture Refactoring**: Decomposed requirements clarification into **5 focused services** following Single Responsibility Principle! Each service now has one clear purpose: `SteeringContextLoader` (I/O), `DescriptionAnalyzer` (scored semantic detection 0-100), `QuestionGenerator` (template-based), `AnswerValidator` (validation + security), `DescriptionEnricher` (5W1H synthesis). Replaced brittle boolean regex with **scored semantic detection** for better accuracy. Externalized question templates to configuration. **62 new unit tests** (65 total passing) ✅. Services average ~100 LOC vs previous 500 LOC monolith. Better maintainability, testability, and type safety!
-
-> 🎯 **v1.5.0 - Interactive Requirements Clarification**: `sdd-init` now **blocks vague requirements**! The agent analyzes your project description (quality score 0-100) and interactively asks targeted clarification questions if score < 70%. Focuses on **WHY** (business justification), WHO (target users), WHAT (core features), and success criteria. Context-aware using existing steering docs. Prevents "garbage in, garbage out" with enriched 5W1H structured descriptions.
-
-> ✅ **v1.4.5**: Internal improvements! Reorganized test structure for better maintainability, centralized static steering document creation following DRY principle, improved code organization with better separation of concerns.
+> **v3.1** - Steering consolidation: Static guidance merged into agents/rules/skills. Now with `migrate-steering` CLI command. See [CHANGELOG.md](CHANGELOG.md) for full version history.
 
 ## 🚀 Quick Start
 
@@ -198,11 +178,91 @@ npx sdd-mcp-server install-skills
 | Component | Install Path | Purpose |
 |-----------|--------------|---------|
 | **Skills** | `.claude/skills/` | Workflow guidance (requirements, design, tasks, implement, etc.) |
-| **Steering** | `.spec/steering/` | Project-wide conventions (TDD guidelines, SOLID principles, security) |
+| **Steering** | `.spec/steering/` | Project-specific templates (product, tech, structure) |
 | **Rules** | `.claude/rules/` | Always-active guidelines (coding-style, testing, security, git-workflow) |
 | **Contexts** | `.claude/contexts/` | Mode-specific prompts (dev, review, planning, security-audit, research) |
 | **Agents** | `.claude/agents/` | Specialized AI personas (planner, architect, reviewer, implementer) |
 | **Hooks** | `.claude/hooks/` | Event-driven automation (pre-tool-use, post-tool-use, session events) |
+
+### Component Architecture & Relationships
+
+The 6 component types work together in a **layered guidance model**:
+
+```
+┌──────────────────────────────────────────────────────────────┐
+│                     User Request                             │
+└──────────────────────────────────────────────────────────────┘
+                              │
+                              ▼
+┌──────────────────────────────────────────────────────────────┐
+│  HOOKS (pre-tool-use)                                        │
+│  • Validate workflow order (e.g., requirements before design)│
+│  • Check test coverage before implementation                 │
+│  • Triggered automatically on events                         │
+└──────────────────────────────────────────────────────────────┘
+                              │
+                              ▼
+┌──────────────────────────────────────────────────────────────┐
+│  RULES (always active)                                       │
+│  • coding-style.md → TypeScript/JS conventions               │
+│  • testing.md → TDD requirements                             │
+│  • security.md → OWASP guidelines                            │
+│  • Loaded at session start, apply to ALL operations          │
+└──────────────────────────────────────────────────────────────┘
+                              │
+                              ▼
+┌──────────────────────────────────────────────────────────────┐
+│  CONTEXTS (mode-specific)                                    │
+│  • dev.md → Implementation focus                             │
+│  • review.md → Quality focus                                 │
+│  • planning.md → Architecture focus                          │
+│  • Activated based on current task type                      │
+└──────────────────────────────────────────────────────────────┘
+                              │
+                              ▼
+┌──────────────────────────────────────────────────────────────┐
+│  AGENTS (specialized personas)                               │
+│  • reviewer.md → Linus-style code review                     │
+│  • architect.md → System design expertise                    │
+│  • implementer.md → TDD implementation                       │
+│  • Invoked for specific expertise needs                      │
+└──────────────────────────────────────────────────────────────┘
+                              │
+                              ▼
+┌──────────────────────────────────────────────────────────────┐
+│  SKILLS (on-demand workflows)                                │
+│  • /sdd-requirements → EARS requirements template            │
+│  • /sdd-design → Architecture design template                │
+│  • /sdd-implement → Implementation checklist                 │
+│  • User-invoked via slash commands                           │
+└──────────────────────────────────────────────────────────────┘
+                              │
+                              ▼
+┌──────────────────────────────────────────────────────────────┐
+│  STEERING (project-specific templates - v3.1+)               │
+│  • product.md → Product description                          │
+│  • tech.md → Technology stack                                │
+│  • structure.md → Project structure                          │
+│  • (Static guidance now in agents/rules/skills)              │
+└──────────────────────────────────────────────────────────────┘
+                              │
+                              ▼
+┌──────────────────────────────────────────────────────────────┐
+│  MCP TOOLS (actions)                                         │
+│  • sdd-init, sdd-approve, sdd-status, sdd-spec-impl          │
+│  • Execute actual operations                                 │
+└──────────────────────────────────────────────────────────────┘
+```
+
+**When Each Component Activates:**
+| Component | Activation | Example |
+|-----------|------------|---------|
+| **Rules** | Session start (always) | `coding-style.md` enforces conventions on every response |
+| **Contexts** | Task type detection | `review.md` activates when reviewing code |
+| **Agents** | Explicit invocation | `reviewer.md` invoked by `/sdd-review` skill |
+| **Skills** | User command (`/skill-name`) | `/sdd-requirements` loads requirements template |
+| **Steering** | Project customization | `/sdd-steering` generates `product.md`, `tech.md` |
+| **Hooks** | Events (pre/post tool, session) | `validate-sdd-workflow` runs before `sdd-design` |
 
 ### Migrating from .kiro to .spec (v2.1.0+)
 
@@ -220,6 +280,27 @@ npx sdd-mcp-server migrate-kiro --path ./my-project
 ```
 
 **Note**: Legacy `.kiro` directories are still supported for backwards compatibility, but new projects will use `.spec`.
+
+### Migrating Steering Documents (v3.1.0+)
+
+If you have existing projects with static steering documents, migrate to the new consolidated architecture:
+
+```bash
+# Preview migration (dry run)
+npx sdd-mcp-server migrate-steering --dry-run
+
+# Perform migration (backs up existing steering first)
+npx sdd-mcp-server migrate-steering
+
+# Migrate a specific project
+npx sdd-mcp-server migrate-steering --path ./my-project
+```
+
+**What this does:**
+- Backs up existing `.spec/steering/` to `.spec/steering.backup/`
+- Removes static steering docs (principles.md, tdd-guideline.md, linus-review.md, etc.)
+- Preserves project-specific templates (product.md, tech.md, structure.md)
+- The static content now lives in enhanced `.claude/` components
 
 ### Available Skills
 
@@ -320,77 +401,6 @@ Once connected to your AI client, you can use these MCP tools:
    Use sdd-status to check workflow progress and phase approvals
    Use sdd-context-load to restore project memory
    ```
-
-## Latest Updates (v3.0.0)
-
-**What's New - Comprehensive Plugin Architecture**:
-- 🚀 **6 Component Types**: Skills, Steering, Rules, Contexts, Agents, Hooks
-- 🤖 **4 New Managers**: RulesManager, ContextManager, AgentManager, HookLoader
-- ✨ **3 New Skills**: sdd-review (Linus-style review), sdd-security-check (OWASP audit), sdd-test-gen (TDD)
-- 🎯 **Unified CLI**: `--rules`, `--contexts`, `--agents`, `--hooks`, `--all` flags
-- 📦 **Plugin Manifest**: `.claude-plugin/plugin.json` for Claude Code integration
-- ✅ **199 Tests**: 58 new tests for component managers, full TDD coverage
-
-**New Component Details**:
-| Component | Count | Examples |
-|-----------|-------|----------|
-| Rules | 6 | coding-style, testing, security, git-workflow, error-handling, sdd-workflow |
-| Contexts | 5 | dev, review, planning, security-audit, research |
-| Agents | 6 | planner, architect, reviewer, implementer, security-auditor, tdd-guide |
-| Hooks | 7 | validate-sdd-workflow, check-test-coverage, update-spec-status, load-project-context |
-
-**Upgrade Commands**:
-```bash
-# Install ALL components (recommended for v3.0)
-npx sdd-mcp-server install --all
-
-# Install specific components
-npx sdd-mcp-server install --skills --rules --agents
-
-# List all available components
-npx sdd-mcp-server install --list
-
-# Show CLI help
-npx sdd-mcp-server --help
-```
-
-**Previous Versions (v2.x)**:
-- v2.2.1: CLI fix for npm package name collision
-- v2.2.0: Unified installation, atomic file writes, skill-steering references
-- v2.1.0: Directory migration from .kiro to .spec
-- v2.0.3: CLI subcommand support
-- v2.0.0: Hybrid MCP + Agent Skills architecture, ~55% token savings
-
-## Previous Versions
-
-### v2.2.x
-- v2.2.1: CLI fix for npm package name collision
-- v2.2.0: Unified installation, atomic file writes, skill-steering references
-
-### v2.1.x
-- v2.1.0: Directory migration from `.kiro` to `.spec`
-
-### v2.0.x
-- v2.0.3: CLI subcommand support (`npx sdd-mcp-server install-skills` works)
-- v2.0.2: ESM compatibility fix for install-skills CLI
-- v2.0.1: Codebase simplification, removed 7,131 lines of dead code
-- v2.0.0: Hybrid MCP + Agent Skills architecture, ~55% token savings
-
-### v1.8.x
-- MCP tool standardization (standard tool calls vs slash commands)
-- Updated AGENTS.md generation
-
-### v1.6.x
-- Module loading fixes and architecture refactoring
-- Improved requirements clarification service
-
-### v1.5.0
-- Interactive requirements clarification with 5W1H analysis
-
-### v1.4.x
-- Comprehensive codebase analysis
-- TDD task generation default
-- Security and principles steering documents
 
 ## ⚙️ Configuration
 
@@ -621,11 +631,20 @@ For detailed documentation on:
 - **Agents**: See `agents/*.md` for specialized AI personas
 - **Hooks**: See `hooks/**/*.md` for event-driven automation
 
-**Steering Documents**:
-- **Code Quality Standards**: Review `.spec/steering/linus-review.md`
-- **TDD Guidelines**: See `.spec/steering/tdd-guideline.md` for complete Test-Driven Development workflow
-- **Coding Principles**: Review `.spec/steering/principles.md` for SOLID, DRY, KISS, YAGNI, SoC, and Modularity guidance
-- **Security Checklist**: Check `.spec/steering/security-check.md` for OWASP Top 10 aligned security practices
+**Steering Documents (v3.1+)**:
+
+As of v3.1, static steering content has been consolidated into enhanced components:
+- **Design Principles**: `.claude/rules/coding-style.md` (includes SOLID, DRY, KISS, YAGNI, SoC)
+- **TDD Methodology**: `.claude/agents/tdd-guide.md` (Red-Green-Refactor workflow)
+- **Code Review**: `.claude/agents/reviewer.md` (Linus-style 5-layer thinking)
+- **Security Checklist**: `.claude/agents/security-auditor.md` (OWASP Top 10)
+
+The `.spec/steering/` directory now contains only project-specific templates:
+- `product.md` - Product description template
+- `tech.md` - Technology stack template
+- `structure.md` - Project structure template
+
+**Migration from v3.0**: Run `npx sdd-mcp-server migrate-steering` to update existing projects.
 
 ## 🐛 Support & Issues
 

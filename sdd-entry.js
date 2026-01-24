@@ -12,7 +12,7 @@
  *   npx sdd-mcp-server                     # MCP: Start MCP server
  */
 
-const CLI_COMMANDS = ['install', 'install-skills', 'migrate-kiro'];
+const CLI_COMMANDS = ['install', 'install-skills', 'migrate-kiro', 'migrate-steering'];
 const args = process.argv.slice(2);
 const command = args[0];
 

@@ -12,6 +12,7 @@
 
 import { main as installSkillsMain, mainInstall as installMain } from './install-skills.js';
 import { main as migrateKiroMain } from './migrate-kiro.js';
+import { main as migrateSteeringMain } from './migrate-steering.js';
 
 const HELP = `
 SDD MCP CLI
@@ -22,6 +23,7 @@ Commands:
   install           Install SDD skills AND steering documents (recommended)
   install-skills    Install SDD skills only (legacy)
   migrate-kiro      Migrate .kiro directory to .spec (v2.1.0+)
+  migrate-steering  Migrate steering docs to consolidated components (v3.1.0+)
 
 Options:
   --help, -h        Show this help message
@@ -35,6 +37,8 @@ Examples:
   npx sdd-mcp-server install-skills --list       # List available skills
   npx sdd-mcp-server migrate-kiro                # Migrate .kiro to .spec
   npx sdd-mcp-server migrate-kiro --dry-run      # Preview migration
+  npx sdd-mcp-server migrate-steering            # Migrate static steering docs
+  npx sdd-mcp-server migrate-steering --dry-run  # Preview steering migration
 
 Running without a command starts the MCP server (for IDE integrations).
 `;
@@ -65,6 +69,12 @@ async function main() {
       // Remove the command from args and pass the rest to migrate-kiro
       process.argv = [process.argv[0], process.argv[1], ...args.slice(1)];
       await migrateKiroMain();
+      break;
+
+    case 'migrate-steering':
+      // Remove the command from args and pass the rest to migrate-steering
+      process.argv = [process.argv[0], process.argv[1], ...args.slice(1)];
+      await migrateSteeringMain();
       break;
 
     default:

@@ -59,4 +59,10 @@ pids/
 # Temporary directories
 tmp/
 temp/
+
+# SDD migration backups
+.spec/steering.backup/
+.spec/steering.backup-*/
+
+# Claude Code local settings
 .claude/settings.local.json

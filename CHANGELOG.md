@@ -5,6 +5,139 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.1.0] - 2026-01-25
+
+### BREAKING CHANGES
+- **Steering Consolidation**: Static steering documents merged into agents/rules/skills
+  - `principles.md` → merged into `rules/coding-style.md`
+  - `tdd-guideline.md` → merged into `agents/tdd-guide.md`
+  - `linus-review.md` → merged into `agents/reviewer.md`
+  - `owasp-top10-check.md` → merged into `agents/security-auditor.md`
+  - `commit.md` → merged into `skills/sdd-commit/SKILL.md`
+  - `AGENTS.md` → removed (meta-documentation)
+- **Steering directory now only contains project-specific templates**:
+  - `product.md` - Product description template
+  - `tech.md` - Technology stack template
+  - `structure.md` - Project structure template
+
+### Added
+- **`migrate-steering` CLI command**: Migrate existing projects to new consolidated structure
+  - `npx sdd-mcp-server migrate-steering` - Migrate current directory
+  - `npx sdd-mcp-server migrate-steering --dry-run` - Preview changes
+  - `npx sdd-mcp-server migrate-steering --path ./my-project` - Migrate specific project
+  - Automatically backs up existing steering to `.spec/steering.backup/`
+  - Preserves project-specific templates (product.md, tech.md, structure.md)
+
+### Changed
+- **Enhanced `rules/coding-style.md`**: Now includes complete SOLID, DRY, KISS, YAGNI, SoC principles with code examples and anti-patterns
+- **Enhanced `agents/reviewer.md`**: Now includes Linus-style 5-layer thinking framework, "Good Taste" philosophy, and backward compatibility rules
+- **Enhanced `agents/tdd-guide.md`**: Now includes comprehensive TDD methodology, test pyramid guidance, coverage targets, and language-specific tooling
+- **Enhanced `agents/security-auditor.md`**: Now includes detailed OWASP Top 10 checklist with code examples and remediation guidance
+- **Enhanced `skills/sdd-commit/SKILL.md`**: Now self-contained with complete conventional commits format
+
+### Removed
+- **Static steering documents** (merged into components):
+  - `steering/AGENTS.md`
+  - `steering/commit.md`
+  - `steering/linus-review.md`
+  - `steering/owasp-top10-check.md`
+  - `steering/principles.md`
+  - `steering/tdd-guideline.md`
+
+### Migration Guide
+```bash
+# 1. Update to v3.1
+npm update sdd-mcp-server
+
+# 2. Preview migration (recommended)
+npx sdd-mcp-server migrate-steering --dry-run
+
+# 3. Run migration
+npx sdd-mcp-server migrate-steering
+
+# 4. Update .claude/ components with latest versions
+npx sdd-mcp-server install --all
+```
+
+The static steering content now lives in enhanced components:
+- Design principles: `.claude/rules/coding-style.md`
+- TDD methodology: `.claude/agents/tdd-guide.md`
+- Review criteria: `.claude/agents/reviewer.md`
+- Security checklist: `.claude/agents/security-auditor.md`
+- Commit format: `.claude/skills/sdd-commit/SKILL.md`
+
+## [3.0.3] - 2026-01-24
+
+### Fixed
+- **npm Package Missing Directories**: Added `rules/`, `contexts/`, `agents/`, `hooks/` to package.json `files` array
+  - v3.0 component directories were not being published to npm
+  - Caused `ENOENT: no such file or directory` errors when using `npx sdd-mcp-server install --all`
+  - All 6 component types now correctly included in npm package
+
+## [3.0.2] - 2026-01-24
+
+### Fixed
+- **npx Path Resolution**: Fixed `getDirname()` to resolve paths correctly when running via npx
+  - Script location now found via `process.argv[1]` first (works with npx)
+  - Falls back to `process.cwd()` for local development
+  - Package root detection via `package.json` with `name: 'sdd-mcp-server'` check
+  - Resolves steering directory not found errors in npx execution
+
+## [3.0.1] - 2026-01-24
+
+### Added
+- **Workflow Documentation**: Created `docs/WORKFLOW.md` with 5 Mermaid sequence diagrams
+  - Session start flow with hooks and steering
+  - SDD workflow (feature development)
+  - Code review flow
+  - Pre-tool hook flow
+  - Component installation sequence
+
+### Fixed
+- **HookLoader ESM Import**: Added missing `.js` extension to BaseManager import
+
+### Changed
+- **Code Simplification**: Ran code-simplifier agent on install-skills.ts (~50 lines reduced)
+- **gitignore**: Added `.serena/` to AI tool configs section
+
+## [3.0.0] - 2026-01-23
+
+### BREAKING CHANGES
+- **Plugin Architecture**: Transformed from basic MCP server to comprehensive Claude Code plugin system
+- **6 Component Types**: Skills, Steering, Rules, Contexts, Agents, Hooks
+- **Unified CLI**: `npx sdd-mcp-server install` with `--rules`, `--contexts`, `--agents`, `--hooks`, `--all` flags
+
+### Added
+- **4 New Managers**: RulesManager, ContextManager, AgentManager, HookLoader
+  - All extend BaseManager for consistent discovery/install patterns
+  - Full DI container integration
+- **6 Rule Files**: coding-style, testing, security, git-workflow, error-handling, sdd-workflow
+- **5 Context Files**: dev, review, planning, security-audit, research
+- **6 Agent Files**: planner, architect, reviewer, implementer, security-auditor, tdd-guide
+- **7 Hook Files**: validate-sdd-workflow, check-test-coverage, update-spec-status, log-tool-execution, load-project-context, save-session-summary, remind-uncommitted-changes
+- **3 New Skills**: sdd-review (Linus-style code review), sdd-security-check (OWASP audit), sdd-test-gen (TDD)
+- **Plugin Manifest**: `.claude-plugin/plugin.json` for Claude Code integration
+- **58 New Tests**: Full TDD coverage for component managers
+
+### Changed
+- **Install CLI**: Unified command supports all component types
+  - `--all` installs everything (skills, steering, rules, contexts, agents, hooks)
+  - `--skills`, `--steering`, `--rules`, `--contexts`, `--agents`, `--hooks` for selective install
+  - Default behavior unchanged (skills + steering)
+- **Directory Structure**: New component directories at package root
+  - `agents/*.md` - AI personas
+  - `rules/*.md` - Always-active guidelines
+  - `contexts/*.md` - Mode-specific prompts
+  - `hooks/**/*.md` - Event-driven automation
+
+### Technical
+- **BaseManager Pattern**: Extracted common functionality from SkillManager
+- **DI Container**: New TYPES symbols for each manager
+- **199 Total Tests**: All passing with full coverage
+
+### Inspired By
+- everything-claude-code architecture patterns for comprehensive AI guidance
+
 ## [2.2.1] - 2026-01-15
 
 ### Fixed
