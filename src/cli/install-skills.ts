@@ -4,10 +4,38 @@ import * as fs from 'fs';
 import * as path from 'path';
 import { fileURLToPath } from 'url';
 import { SkillManager } from '../skills/SkillManager.js';
+import { RulesManager } from '../rules/RulesManager.js';
+import { ContextManager } from '../contexts/ContextManager.js';
+import { AgentManager } from '../agents/AgentManager.js';
+import { HookLoader } from '../hooks/HookLoader.js';
 
-// ESM equivalent of __dirname
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
+// Get directory name - works in both ESM and test environments
+// In test environments, we use process.cwd() as a fallback
+function getDirname(): string {
+  // Try to find the package root by looking for package.json
+  let dir = process.cwd();
+  while (dir !== path.dirname(dir)) {
+    if (fs.existsSync(path.join(dir, 'package.json'))) {
+      try {
+        const pkg = JSON.parse(fs.readFileSync(path.join(dir, 'package.json'), 'utf-8'));
+        if (pkg.name === 'sdd-mcp-server') {
+          // Found the package root, return the expected cli directory
+          return path.join(dir, 'dist', 'cli');
+        }
+      } catch {
+        // Continue searching
+      }
+    }
+    dir = path.dirname(dir);
+  }
+  // Fallback to process.cwd() based path
+  return path.join(process.cwd(), 'dist', 'cli');
+}
+
+/**
+ * Component types that can be installed
+ */
+export type ComponentType = 'skills' | 'steering' | 'rules' | 'contexts' | 'agents' | 'hooks';
 
 /**
  * CLI options for install-skills command
@@ -17,6 +45,14 @@ export interface CLIOptions {
   targetPath: string;
   /** Target path for steering installation */
   steeringPath: string;
+  /** Target path for rules installation */
+  rulesPath: string;
+  /** Target path for contexts installation */
+  contextsPath: string;
+  /** Target path for agents installation */
+  agentsPath: string;
+  /** Target path for hooks installation */
+  hooksPath: string;
   /** Only list skills, don't install */
   listOnly: boolean;
   /** Show help message */
@@ -25,13 +61,27 @@ export interface CLIOptions {
   skillsOnly: boolean;
   /** Install steering only (for unified install) */
   steeringOnly: boolean;
+  /** Install rules only */
+  rulesOnly: boolean;
+  /** Install contexts only */
+  contextsOnly: boolean;
+  /** Install agents only */
+  agentsOnly: boolean;
+  /** Install hooks only */
+  hooksOnly: boolean;
+  /** Components to install (empty means all) */
+  components: ComponentType[];
 }
 
 /**
- * CLI for installing SDD skills to a project
+ * CLI for installing SDD components to a project
  */
 export class InstallSkillsCLI {
   private skillManager: SkillManager;
+  private rulesManager: RulesManager;
+  private contextManager: ContextManager;
+  private agentManager: AgentManager;
+  private hookLoader: HookLoader;
   private steeringPath: string;
 
   /**
@@ -41,27 +91,37 @@ export class InstallSkillsCLI {
    */
   constructor(skillsPath?: string, steeringPath?: string) {
     // If no path provided, determine from package location
-    const resolvedSkillsPath = skillsPath || this.getDefaultSkillsPath();
-    const resolvedSteeringPath = steeringPath || this.getDefaultSteeringPath();
+    const resolvedSkillsPath = skillsPath || this.getDefaultPath('skills');
+    const resolvedSteeringPath = steeringPath || this.getDefaultPath('steering');
+    const resolvedRulesPath = this.getDefaultPath('rules');
+    const resolvedContextsPath = this.getDefaultPath('contexts');
+    const resolvedAgentsPath = this.getDefaultPath('agents');
+    const resolvedHooksPath = this.getDefaultPath('hooks');
+
     this.skillManager = new SkillManager(resolvedSkillsPath);
+    this.rulesManager = new RulesManager(resolvedRulesPath);
+    this.contextManager = new ContextManager(resolvedContextsPath);
+    this.agentManager = new AgentManager(resolvedAgentsPath);
+    this.hookLoader = new HookLoader(resolvedHooksPath);
     this.steeringPath = resolvedSteeringPath;
   }
 
   /**
-   * Get the default skills path based on package location
+   * Get the default path for a component type based on package location
+   * @param componentDir - The component directory name (skills, steering, rules, etc.)
    */
-  private getDefaultSkillsPath(): string {
+  private getDefaultPath(componentDir: string): string {
     // Try multiple paths and return the first one that exists
     const possiblePaths = [
-      // Relative to this file (dist/cli/install-skills.js -> skills/)
-      path.resolve(__dirname, '../../skills'),
+      // Relative to this file (dist/cli/install-skills.js -> componentDir/)
+      path.resolve(getDirname(), `../../${componentDir}`),
       // Alternative: one level up
-      path.resolve(__dirname, '../skills'),
+      path.resolve(getDirname(), `../${componentDir}`),
       // From package root when installed globally or via npx
-      path.resolve(__dirname, '../../../skills'),
+      path.resolve(getDirname(), `../../../${componentDir}`),
       // From current working directory
-      path.resolve(process.cwd(), 'node_modules/sdd-mcp-server/skills'),
-      path.resolve(process.cwd(), 'skills'),
+      path.resolve(process.cwd(), `node_modules/sdd-mcp-server/${componentDir}`),
+      path.resolve(process.cwd(), componentDir),
     ];
 
     // Return the first path that exists
@@ -71,35 +131,7 @@ export class InstallSkillsCLI {
       }
     }
 
-    // Fallback to first path (will error in SkillManager if not found)
-    return possiblePaths[0];
-  }
-
-  /**
-   * Get the default steering path based on package location
-   */
-  private getDefaultSteeringPath(): string {
-    // Try multiple paths and return the first one that exists
-    const possiblePaths = [
-      // Relative to this file (dist/cli/install-skills.js -> steering/)
-      path.resolve(__dirname, '../../steering'),
-      // Alternative: one level up
-      path.resolve(__dirname, '../steering'),
-      // From package root when installed globally or via npx
-      path.resolve(__dirname, '../../../steering'),
-      // From current working directory
-      path.resolve(process.cwd(), 'node_modules/sdd-mcp-server/steering'),
-      path.resolve(process.cwd(), 'steering'),
-    ];
-
-    // Return the first path that exists
-    for (const p of possiblePaths) {
-      if (fs.existsSync(p)) {
-        return p;
-      }
-    }
-
-    // Fallback to first path
+    // Fallback to first path (will error in manager if not found)
     return possiblePaths[0];
   }
 
@@ -112,10 +144,19 @@ export class InstallSkillsCLI {
     const options: CLIOptions = {
       targetPath: '.claude/skills',
       steeringPath: '.spec/steering',
+      rulesPath: '.claude/rules',
+      contextsPath: '.claude/contexts',
+      agentsPath: '.claude/agents',
+      hooksPath: '.claude/hooks',
       listOnly: false,
       showHelp: false,
       skillsOnly: false,
       steeringOnly: false,
+      rulesOnly: false,
+      contextsOnly: false,
+      agentsOnly: false,
+      hooksOnly: false,
+      components: [],
     };
 
     for (let i = 0; i < args.length; i++) {
@@ -132,6 +173,26 @@ export class InstallSkillsCLI {
             options.steeringPath = args[++i];
           }
           break;
+        case '--rules-path':
+          if (i + 1 < args.length) {
+            options.rulesPath = args[++i];
+          }
+          break;
+        case '--contexts-path':
+          if (i + 1 < args.length) {
+            options.contextsPath = args[++i];
+          }
+          break;
+        case '--agents-path':
+          if (i + 1 < args.length) {
+            options.agentsPath = args[++i];
+          }
+          break;
+        case '--hooks-path':
+          if (i + 1 < args.length) {
+            options.hooksPath = args[++i];
+          }
+          break;
         case '--list':
         case '-l':
           options.listOnly = true;
@@ -142,9 +203,31 @@ export class InstallSkillsCLI {
           break;
         case '--skills':
           options.skillsOnly = true;
+          options.components.push('skills');
           break;
         case '--steering':
           options.steeringOnly = true;
+          options.components.push('steering');
+          break;
+        case '--rules':
+          options.rulesOnly = true;
+          options.components.push('rules');
+          break;
+        case '--contexts':
+          options.contextsOnly = true;
+          options.components.push('contexts');
+          break;
+        case '--agents':
+          options.agentsOnly = true;
+          options.components.push('agents');
+          break;
+        case '--hooks':
+          options.hooksOnly = true;
+          options.components.push('hooks');
+          break;
+        case '--all':
+          // Install all component types
+          options.components = ['skills', 'steering', 'rules', 'contexts', 'agents', 'hooks'];
           break;
       }
     }
@@ -171,7 +254,7 @@ export class InstallSkillsCLI {
   }
 
   /**
-   * Run unified install (skills + steering)
+   * Run unified install (all components)
    * @param options - CLI options
    */
   async runUnified(options: CLIOptions): Promise<void> {
@@ -185,17 +268,38 @@ export class InstallSkillsCLI {
       return;
     }
 
-    // Determine what to install
-    const installSkills = !options.steeringOnly;
-    const installSteering = !options.skillsOnly;
+    // If specific components requested, install only those
+    const hasSpecificComponents = options.components.length > 0;
+    const componentsToInstall = hasSpecificComponents
+      ? options.components
+      : ['skills', 'steering', 'rules', 'contexts', 'agents', 'hooks'] as ComponentType[];
 
-    if (installSkills) {
-      await this.installSkills(options.targetPath);
+    console.log('\n🚀 SDD Component Installer\n');
+
+    for (const component of componentsToInstall) {
+      switch (component) {
+        case 'skills':
+          await this.installSkills(options.targetPath);
+          break;
+        case 'steering':
+          await this.installSteering(options.steeringPath);
+          break;
+        case 'rules':
+          await this.installRules(options.rulesPath);
+          break;
+        case 'contexts':
+          await this.installContexts(options.contextsPath);
+          break;
+        case 'agents':
+          await this.installAgents(options.agentsPath);
+          break;
+        case 'hooks':
+          await this.installHooks(options.hooksPath);
+          break;
+      }
     }
 
-    if (installSteering) {
-      await this.installSteering(options.steeringPath);
-    }
+    console.log('\n✨ Installation complete!\n');
   }
 
   /**
@@ -244,11 +348,15 @@ export class InstallSkillsCLI {
   }
 
   /**
-   * List all available skills and steering documents
+   * List all available components
    */
   private async listAll(): Promise<void> {
     const skills = await this.skillManager.listSkills();
     const steeringDocs = await this.listSteering();
+    const rules = await this.rulesManager.listComponents();
+    const contexts = await this.contextManager.listComponents();
+    const agents = await this.agentManager.listComponents();
+    const hooks = await this.hookLoader.listComponents();
 
     console.log('\n📚 Available Skills:\n');
     if (skills.length === 0) {
@@ -264,17 +372,78 @@ export class InstallSkillsCLI {
       console.log(`  Total: ${skills.length} skills\n`);
     }
 
-    console.log('📄 Available Steering Documents:\n');
+    console.log('📄 Steering Documents:\n');
     if (steeringDocs.length === 0) {
       console.log('  (none)\n');
     } else {
       for (const doc of steeringDocs) {
         console.log(`  • ${doc}`);
       }
-      console.log(`\n  Total: ${steeringDocs.length} steering documents\n`);
+      console.log(`\n  Total: ${steeringDocs.length} documents\n`);
     }
 
-    console.log('Run "npx sdd-mcp-server install" to install all skills and steering documents.\n');
+    console.log('📏 Rules:\n');
+    if (rules.length === 0) {
+      console.log('  (none)\n');
+    } else {
+      for (const rule of rules) {
+        console.log(`  • ${rule.name} (priority: ${rule.priority})`);
+        if (rule.description) {
+          console.log(`    ${rule.description}`);
+        }
+      }
+      console.log(`\n  Total: ${rules.length} rules\n`);
+    }
+
+    console.log('🎭 Contexts:\n');
+    if (contexts.length === 0) {
+      console.log('  (none)\n');
+    } else {
+      for (const ctx of contexts) {
+        console.log(`  • ${ctx.name} (mode: ${ctx.mode})`);
+        if (ctx.description) {
+          console.log(`    ${ctx.description}`);
+        }
+      }
+      console.log(`\n  Total: ${contexts.length} contexts\n`);
+    }
+
+    console.log('🤖 Agents:\n');
+    if (agents.length === 0) {
+      console.log('  (none)\n');
+    } else {
+      for (const agent of agents) {
+        console.log(`  • ${agent.name} (${agent.role})`);
+        if (agent.description) {
+          console.log(`    ${agent.description}`);
+        }
+      }
+      console.log(`\n  Total: ${agents.length} agents\n`);
+    }
+
+    console.log('🪝 Hooks:\n');
+    if (hooks.length === 0) {
+      console.log('  (none)\n');
+    } else {
+      // Group hooks by event type
+      const hooksByEvent = new Map<string, typeof hooks>();
+      for (const hook of hooks) {
+        const existing = hooksByEvent.get(hook.event) || [];
+        existing.push(hook);
+        hooksByEvent.set(hook.event, existing);
+      }
+
+      for (const [event, eventHooks] of hooksByEvent) {
+        console.log(`  ${event}/`);
+        for (const hook of eventHooks) {
+          const status = hook.enabled ? '✓' : '○';
+          console.log(`    ${status} ${hook.name}`);
+        }
+      }
+      console.log(`\n  Total: ${hooks.length} hooks\n`);
+    }
+
+    console.log('Run "npx sdd-mcp-server install" to install all components.\n');
   }
 
   /**
@@ -370,6 +539,110 @@ export class InstallSkillsCLI {
   }
 
   /**
+   * Install rules to target directory
+   * @param targetPath - Target directory (e.g., .claude/rules)
+   */
+  private async installRules(targetPath: string): Promise<void> {
+    console.log(`📏 Installing rules to: ${targetPath}\n`);
+
+    const result = await this.rulesManager.installComponents(targetPath);
+
+    if (result.installed.length > 0) {
+      console.log(`✅ Installed ${result.installed.length} rules:`);
+      for (const name of result.installed) {
+        console.log(`   • ${name}`);
+      }
+      console.log('');
+    }
+
+    if (result.failed.length > 0) {
+      console.error(`❌ Failed to install ${result.failed.length} rule(s):`);
+      for (const failure of result.failed) {
+        console.error(`   • ${failure.name}: ${failure.error}`);
+      }
+      console.log('');
+    }
+  }
+
+  /**
+   * Install contexts to target directory
+   * @param targetPath - Target directory (e.g., .claude/contexts)
+   */
+  private async installContexts(targetPath: string): Promise<void> {
+    console.log(`🎭 Installing contexts to: ${targetPath}\n`);
+
+    const result = await this.contextManager.installComponents(targetPath);
+
+    if (result.installed.length > 0) {
+      console.log(`✅ Installed ${result.installed.length} contexts:`);
+      for (const name of result.installed) {
+        console.log(`   • ${name}`);
+      }
+      console.log('');
+    }
+
+    if (result.failed.length > 0) {
+      console.error(`❌ Failed to install ${result.failed.length} context(s):`);
+      for (const failure of result.failed) {
+        console.error(`   • ${failure.name}: ${failure.error}`);
+      }
+      console.log('');
+    }
+  }
+
+  /**
+   * Install agents to target directory
+   * @param targetPath - Target directory (e.g., .claude/agents)
+   */
+  private async installAgents(targetPath: string): Promise<void> {
+    console.log(`🤖 Installing agents to: ${targetPath}\n`);
+
+    const result = await this.agentManager.installComponents(targetPath);
+
+    if (result.installed.length > 0) {
+      console.log(`✅ Installed ${result.installed.length} agents:`);
+      for (const name of result.installed) {
+        console.log(`   • ${name}`);
+      }
+      console.log('');
+    }
+
+    if (result.failed.length > 0) {
+      console.error(`❌ Failed to install ${result.failed.length} agent(s):`);
+      for (const failure of result.failed) {
+        console.error(`   • ${failure.name}: ${failure.error}`);
+      }
+      console.log('');
+    }
+  }
+
+  /**
+   * Install hooks to target directory
+   * @param targetPath - Target directory (e.g., .claude/hooks)
+   */
+  private async installHooks(targetPath: string): Promise<void> {
+    console.log(`🪝 Installing hooks to: ${targetPath}\n`);
+
+    const result = await this.hookLoader.installComponents(targetPath);
+
+    if (result.installed.length > 0) {
+      console.log(`✅ Installed ${result.installed.length} hooks:`);
+      for (const name of result.installed) {
+        console.log(`   • ${name}`);
+      }
+      console.log('');
+    }
+
+    if (result.failed.length > 0) {
+      console.error(`❌ Failed to install ${result.failed.length} hook(s):`);
+      for (const failure of result.failed) {
+        console.error(`   • ${failure.name}: ${failure.error}`);
+      }
+      console.log('');
+    }
+  }
+
+  /**
    * Get help text
    * @returns Help message
    */
@@ -410,34 +683,50 @@ SDD Unified Installer
 
 Usage: npx sdd-mcp-server install [options]
 
-Installs both SDD skills and steering documents to your project.
+Installs SDD components (skills, steering, rules, contexts, agents, hooks) to your project.
 
-Options:
+Component Options (install specific types):
   --skills              Install skills only (to .claude/skills)
   --steering            Install steering documents only (to .spec/steering)
-  --path <dir>          Target directory for skills (default: .claude/skills)
-  --steering-path <dir> Target directory for steering (default: .spec/steering)
-  --list, -l            List available skills and steering documents
+  --rules               Install rules only (to .claude/rules)
+  --contexts            Install contexts only (to .claude/contexts)
+  --agents              Install agents only (to .claude/agents)
+  --hooks               Install hooks only (to .claude/hooks)
+  --all                 Install all component types (default behavior)
+
+Path Options (customize installation targets):
+  --path <dir>          Target for skills (default: .claude/skills)
+  --steering-path <dir> Target for steering (default: .spec/steering)
+  --rules-path <dir>    Target for rules (default: .claude/rules)
+  --contexts-path <dir> Target for contexts (default: .claude/contexts)
+  --agents-path <dir>   Target for agents (default: .claude/agents)
+  --hooks-path <dir>    Target for hooks (default: .claude/hooks)
+
+Other Options:
+  --list, -l            List all available components
   --help, -h            Show this help message
 
 Examples:
-  npx sdd-mcp-server install                     # Install both skills and steering
-  npx sdd-mcp-server install --skills            # Install skills only
-  npx sdd-mcp-server install --steering          # Install steering only
-  npx sdd-mcp-server install --list              # List available content
+  npx sdd-mcp-server install                     # Install all components
+  npx sdd-mcp-server install --skills --rules    # Install skills and rules only
+  npx sdd-mcp-server install --list              # List available components
 
-Skills are installed to .claude/skills/ and provide workflow guidance.
-Steering documents are installed to .spec/steering/ and provide project-wide rules.
+Component Types:
+  Skills    - Workflow guidance for SDD phases (/sdd-requirements, /sdd-design, etc.)
+  Steering  - Project-wide rules and conventions
+  Rules     - Always-active guidelines (coding-style, security, etc.)
+  Contexts  - Mode-specific system prompts (dev, review, planning)
+  Agents    - Specialized AI personas (planner, architect, reviewer)
+  Hooks     - Event-driven automation (pre-tool-use, post-tool-use, etc.)
 
 After installation, use skills in Claude Code:
   /sdd-requirements <feature-name>
   /sdd-design <feature-name>
   /sdd-tasks <feature-name>
   /sdd-implement <feature-name>
-  /sdd-steering
-  /sdd-commit
-
-Steering documents are automatically loaded by the SDD MCP server.
+  /sdd-review [file-path]
+  /sdd-security-check [scope]
+  /sdd-test-gen [file-path]
 `;
   }
 }
@@ -457,10 +746,12 @@ export async function mainInstall() {
 }
 
 // ESM main module detection: check if this file is the entry point
+// Use path matching instead of import.meta.url for Jest compatibility
 const isMainModule = process.argv[1] && (
-  process.argv[1] === __filename ||
   process.argv[1].endsWith('/install-skills.js') ||
-  process.argv[1].endsWith('/sdd-install-skills')
+  process.argv[1].endsWith('/sdd-install-skills') ||
+  process.argv[1].endsWith('\\install-skills.js') ||
+  process.argv[1].endsWith('\\sdd-install-skills')
 );
 
 if (isMainModule) {

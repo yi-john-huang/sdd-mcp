@@ -6,6 +6,8 @@
 
 A Model Context Protocol (MCP) server implementing Spec-Driven Development (SDD) workflows for AI-agent CLIs and IDEs like Claude Code, Cursor, and others.
 
+> 🚀 **v3.0.0 - Comprehensive Plugin Architecture**: SDD-MCP is now a full-featured Claude Code plugin system! Adds **6 component types** (skills, steering, rules, contexts, agents, hooks), **4 new managers** (RulesManager, ContextManager, AgentManager, HookLoader), and **3 new skills** (sdd-review, sdd-security-check, sdd-test-gen). Unified install CLI supports `--rules`, `--contexts`, `--agents`, `--hooks`, `--all` flags. Inspired by everything-claude-code architecture.
+
 > 🔧 **v2.2.1 - CLI Fix**: Fixed `npx sdd-mcp` not working due to npm package name collision. Now use `npx sdd-mcp-server` for all CLI commands. The unified entry point handles both CLI commands and MCP server mode.
 
 > 🎯 **v2.2.0 - Unified Installation & Crash Safety**: `npx sdd-mcp-server install` command installs both skills (to `.claude/skills/`) AND steering documents (to `.spec/steering/`) in one step! Skills now explicitly reference their relevant steering documents for better guidance. Also includes **atomic file writes** for spec.json crash safety - files are never left in a corrupted state even if the process is interrupted. (Thanks to @Lucas Wang for the atomic writes contribution!)
@@ -165,28 +167,42 @@ SDD now uses a **hybrid architecture** for better token efficiency:
 - **MCP Tools**: Action-oriented operations (init, status, approve, quality-check, validate, spec-impl)
 - **Agent Skills**: Template/guidance-heavy operations (requirements, design, tasks, steering, implement, commit)
 
-### Installing Agent Skills and Steering Documents
+### Installing Components (v3.0+)
 
 ```bash
-# Recommended: Install both skills AND steering documents
+# Recommended: Install ALL components (skills, steering, rules, contexts, agents, hooks)
+npx sdd-mcp-server install --all
+
+# Install specific component types
+npx sdd-mcp-server install --skills      # Skills to .claude/skills/
+npx sdd-mcp-server install --steering    # Steering to .spec/steering/
+npx sdd-mcp-server install --rules       # Rules to .claude/rules/
+npx sdd-mcp-server install --contexts    # Contexts to .claude/contexts/
+npx sdd-mcp-server install --agents      # Agents to .claude/agents/
+npx sdd-mcp-server install --hooks       # Hooks to .claude/hooks/
+
+# Install multiple component types
+npx sdd-mcp-server install --skills --rules --agents
+
+# Default: Install skills + steering (backward compatible)
 npx sdd-mcp-server install
 
-# Install skills only (to .claude/skills/)
-npx sdd-mcp-server install --skills
-
-# Install steering documents only (to .spec/steering/)
-npx sdd-mcp-server install --steering
-
-# List available skills and steering documents
+# List all available components
 npx sdd-mcp-server install --list
 
-# Legacy: Install skills only (same as --skills)
+# Legacy: Install skills only
 npx sdd-mcp-server install-skills
 ```
 
-**What gets installed:**
-- **Skills** (`.claude/skills/`): Workflow guidance for Claude Code - requirements, design, tasks, implement, etc.
-- **Steering** (`.spec/steering/`): Project-wide rules - TDD guidelines, SOLID principles, security checklist, etc.
+**Component Types (v3.0):**
+| Component | Install Path | Purpose |
+|-----------|--------------|---------|
+| **Skills** | `.claude/skills/` | Workflow guidance (requirements, design, tasks, implement, etc.) |
+| **Steering** | `.spec/steering/` | Project-wide conventions (TDD guidelines, SOLID principles, security) |
+| **Rules** | `.claude/rules/` | Always-active guidelines (coding-style, testing, security, git-workflow) |
+| **Contexts** | `.claude/contexts/` | Mode-specific prompts (dev, review, planning, security-audit, research) |
+| **Agents** | `.claude/agents/` | Specialized AI personas (planner, architect, reviewer, implementer) |
+| **Hooks** | `.claude/hooks/` | Event-driven automation (pre-tool-use, post-tool-use, session events) |
 
 ### Migrating from .kiro to .spec (v2.1.0+)
 
@@ -219,6 +235,9 @@ After installation, use these skills in Claude Code:
 | `/sdd-steering` | Create/update project-specific steering documents |
 | `/sdd-steering-custom` | Create custom steering with inclusion modes |
 | `/sdd-commit` | Commit/PR guidelines with conventional commits |
+| `/sdd-review` | **NEW in v3.0** - Linus-style direct code review with severity levels |
+| `/sdd-security-check` | **NEW in v3.0** - OWASP Top 10 security audit checklist |
+| `/sdd-test-gen` | **NEW in v3.0** - TDD test generation with Red-Green-Refactor workflow |
 
 ### Token Efficiency
 
@@ -302,37 +321,54 @@ Once connected to your AI client, you can use these MCP tools:
    Use sdd-context-load to restore project memory
    ```
 
-## Latest Updates (v2.2.0)
+## Latest Updates (v3.0.0)
 
-**What's New**:
-- 🎯 **Unified Installation**: `npx sdd-mcp-server install` installs both skills AND steering documents
-- ✅ **Skill-Steering References**: Each skill now explicitly references relevant steering documents
-- ✅ **Steering Source Files**: Static steering docs moved to package for consistent installation
-- ✅ **Improved `/sdd-steering` Output**: Clearer distinction between dynamic and static documents
+**What's New - Comprehensive Plugin Architecture**:
+- 🚀 **6 Component Types**: Skills, Steering, Rules, Contexts, Agents, Hooks
+- 🤖 **4 New Managers**: RulesManager, ContextManager, AgentManager, HookLoader
+- ✨ **3 New Skills**: sdd-review (Linus-style review), sdd-security-check (OWASP audit), sdd-test-gen (TDD)
+- 🎯 **Unified CLI**: `--rules`, `--contexts`, `--agents`, `--hooks`, `--all` flags
+- 📦 **Plugin Manifest**: `.claude-plugin/plugin.json` for Claude Code integration
+- ✅ **199 Tests**: 58 new tests for component managers, full TDD coverage
+
+**New Component Details**:
+| Component | Count | Examples |
+|-----------|-------|----------|
+| Rules | 6 | coding-style, testing, security, git-workflow, error-handling, sdd-workflow |
+| Contexts | 5 | dev, review, planning, security-audit, research |
+| Agents | 6 | planner, architect, reviewer, implementer, security-auditor, tdd-guide |
+| Hooks | 7 | validate-sdd-workflow, check-test-coverage, update-spec-status, load-project-context |
 
 **Upgrade Commands**:
 ```bash
-# Install skills AND steering (recommended)
-npx sdd-mcp-server install
+# Install ALL components (recommended for v3.0)
+npx sdd-mcp-server install --all
 
-# Install skills only
-npx sdd-mcp-server install --skills
+# Install specific components
+npx sdd-mcp-server install --skills --rules --agents
 
-# Install steering only
-npx sdd-mcp-server install --steering
-
-# List available content
+# List all available components
 npx sdd-mcp-server install --list
 
 # Show CLI help
 npx sdd-mcp-server --help
 ```
 
-**Previous Versions (v2.0.x)**:
-- v2.0.3: CLI subcommand support (`npx sdd-mcp-server install-skills` works)
+**Previous Versions (v2.x)**:
+- v2.2.1: CLI fix for npm package name collision
+- v2.2.0: Unified installation, atomic file writes, skill-steering references
+- v2.1.0: Directory migration from .kiro to .spec
+- v2.0.3: CLI subcommand support
 - v2.0.0: Hybrid MCP + Agent Skills architecture, ~55% token savings
 
 ## Previous Versions
+
+### v2.2.x
+- v2.2.1: CLI fix for npm package name collision
+- v2.2.0: Unified installation, atomic file writes, skill-steering references
+
+### v2.1.x
+- v2.1.0: Directory migration from `.kiro` to `.spec`
 
 ### v2.0.x
 - v2.0.3: CLI subcommand support (`npx sdd-mcp-server install-skills` works)
@@ -423,15 +459,28 @@ claude mcp add sdd "sdd-mcp-server"
 
 ## 🏗️ Key Features
 
+### Core SDD Workflow
 - **5-Phase SDD Workflow**: INIT → REQUIREMENTS → DESIGN → TASKS → IMPLEMENTATION
+- **TDD-First Task Generation**: All implementation tasks follow Test-Driven Development (RED-GREEN-REFACTOR) methodology
+- **EARS-Formatted Requirements**: Generate acceptance criteria based on actual npm scripts and dependencies
+- **Quality Enforcement**: Linus-style 5-layer code review system with security (OWASP Top 10) checks
+
+### Plugin Architecture (v3.0)
+- **6 Component Types**: Skills, Steering, Rules, Contexts, Agents, Hooks for comprehensive AI guidance
+- **Specialized Agents**: Planner, Architect, Reviewer, Implementer, Security-Auditor, TDD-Guide personas
+- **Always-Active Rules**: Coding-style, Testing, Security, Git-workflow, Error-handling enforcement
+- **Mode-Specific Contexts**: Development, Review, Planning, Security-audit, Research modes
+- **Event-Driven Hooks**: Pre/post tool-use and session lifecycle automation
+- **Plugin Manifest**: `.claude-plugin/plugin.json` for Claude Code integration
+
+### Codebase Analysis
 - **Comprehensive Multi-Language Analysis**: Automatic detection of TypeScript, JavaScript, Java, Python, Go, Ruby, PHP, Rust, C#, Scala projects with framework-specific insights
 - **Framework Detection**: Recognizes Spring Boot, Django, FastAPI, Flask, Rails, Laravel, Express, React, Vue, Angular, Next.js, and 20+ other frameworks
-- **TDD-First Task Generation**: All implementation tasks follow Test-Driven Development (RED-GREEN-REFACTOR) methodology
-- **Coding Principles Enforcement**: Built-in SOLID, DRY, KISS, YAGNI, Separation of Concerns, and Modularity guidance
-- **Context-Aware Generation**: Analyzes package.json, dependencies, build tools, test frameworks, and project structure for real content
-- **EARS-Formatted Requirements**: Generate acceptance criteria based on actual npm scripts and dependencies
 - **Architecture Pattern Recognition**: Detects DDD, MVC, Microservices, Clean Architecture patterns in your codebase
-- **Quality Enforcement**: Linus-style 5-layer code review system with security (OWASP Top 10) checks
+- **Context-Aware Generation**: Analyzes package.json, dependencies, build tools, test frameworks, and project structure for real content
+
+### Guidelines & Standards
+- **Coding Principles Enforcement**: Built-in SOLID, DRY, KISS, YAGNI, Separation of Concerns, and Modularity guidance
 - **Comprehensive Steering Documents**: 8 auto-generated guidance docs (product, tech, structure, linus-review, commit, tdd-guideline, security-check, principles)
 - **Multi-Language Support**: 10 languages with cultural adaptation (en, es, fr, de, it, pt, ru, ja, zh, ko)
 - **Template Engine**: Handlebars-based file generation with project-specific data
@@ -558,10 +607,20 @@ As of v1.4.3, comprehensive codebase analysis is automatic with multi-language d
 ## 📖 Advanced Documentation
 
 For detailed documentation on:
+- **📥 Installation Guide**: See [docs/INSTALL-GUIDE.md](docs/INSTALL-GUIDE.md) for complete CLI usage examples with real output
 - **🤖 AI Agent Guide**: See [AGENTS.md](AGENTS.md) for detailed instructions on using this server with AI agents
 - **🏗️ Architecture Overview**: See [ARCHITECTURE.md](ARCHITECTURE.md) for complete system design, layered architecture, module loading, and Mermaid diagrams
+- **📦 Plugin Manifest**: See [.claude-plugin/plugin.json](.claude-plugin/plugin.json) for Claude Code plugin configuration
 - **Plugin Development**: See [DEPLOYMENT.md](DEPLOYMENT.md)
 - **Docker Deployment**: See [Dockerfile](Dockerfile) and [docker-compose.yml](docker-compose.yml)
+
+**Component Documentation (v3.0)**:
+- **Rules**: See `rules/*.md` for always-active coding guidelines
+- **Contexts**: See `contexts/*.md` for mode-specific system prompts
+- **Agents**: See `agents/*.md` for specialized AI personas
+- **Hooks**: See `hooks/**/*.md` for event-driven automation
+
+**Steering Documents**:
 - **Code Quality Standards**: Review `.spec/steering/linus-review.md`
 - **TDD Guidelines**: See `.spec/steering/tdd-guideline.md` for complete Test-Driven Development workflow
 - **Coding Principles**: Review `.spec/steering/principles.md` for SOLID, DRY, KISS, YAGNI, SoC, and Modularity guidance

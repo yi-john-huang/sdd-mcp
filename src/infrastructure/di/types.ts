@@ -54,4 +54,10 @@ export const TYPES = {
   HookSystem: Symbol.for("HookSystem"),
   PluginToolRegistry: Symbol.for("PluginToolRegistry"),
   PluginSteeringRegistry: Symbol.for("PluginSteeringRegistry"),
+
+  // Component managers
+  RulesManager: Symbol.for("RulesManager"),
+  ContextManager: Symbol.for("ContextManager"),
+  AgentManager: Symbol.for("AgentManager"),
+  HookLoader: Symbol.for("HookLoader"),
 } as const;
