@@ -5,6 +5,14 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.1.1] - 2026-01-28
+
+### Fixed
+- **npx symlink resolution**: Fixed path resolution when running via `npx`
+  - `npx sdd-mcp-server install --all` now works correctly
+  - Issue was `path.resolve` not following `.bin/` symlinks
+  - Fix: Use `fs.realpathSync` to resolve symlinks before walking up directory tree
+
 ## [3.1.0] - 2026-01-25
 
 ### BREAKING CHANGES

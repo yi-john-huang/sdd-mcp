@@ -32,10 +32,16 @@ function getDirname(): string {
   };
 
   // Strategy 1: Check from the script's actual location (works with npx)
+  // Use realpathSync to resolve symlinks (npx runs via .bin/ symlink)
   if (process.argv[1]) {
-    const scriptDir = path.dirname(path.resolve(process.argv[1]));
-    const fromScript = findPackageRoot(scriptDir);
-    if (fromScript) return fromScript;
+    try {
+      const realPath = fs.realpathSync(process.argv[1]);
+      const scriptDir = path.dirname(realPath);
+      const fromScript = findPackageRoot(scriptDir);
+      if (fromScript) return fromScript;
+    } catch {
+      // If realpathSync fails, fall through to other strategies
+    }
   }
 
   // Strategy 2: Check from process.cwd() (works in local dev)
@@ -125,18 +131,28 @@ export class InstallSkillsCLI {
    * @param componentDir - The component directory name (skills, steering, rules, etc.)
    */
   private getDefaultPath(componentDir: string): string {
+    const dirname = getDirname();
     // Try multiple paths and return the first one that exists
     const possiblePaths = [
       // Relative to this file (dist/cli/install-skills.js -> componentDir/)
-      path.resolve(getDirname(), `../../${componentDir}`),
+      path.resolve(dirname, `../../${componentDir}`),
       // Alternative: one level up
-      path.resolve(getDirname(), `../${componentDir}`),
+      path.resolve(dirname, `../${componentDir}`),
       // From package root when installed globally or via npx
-      path.resolve(getDirname(), `../../../${componentDir}`),
+      path.resolve(dirname, `../../../${componentDir}`),
       // From current working directory
       path.resolve(process.cwd(), `node_modules/sdd-mcp-server/${componentDir}`),
       path.resolve(process.cwd(), componentDir),
     ];
+
+    // Debug output when DEBUG env is set
+    if (process.env.DEBUG) {
+      console.error(`[DEBUG] getDirname() = ${dirname}`);
+      console.error(`[DEBUG] Looking for ${componentDir}:`);
+      for (const p of possiblePaths) {
+        console.error(`  ${fs.existsSync(p) ? '✓' : '✗'} ${p}`);
+      }
+    }
 
     // Return the first path that exists
     for (const p of possiblePaths) {
