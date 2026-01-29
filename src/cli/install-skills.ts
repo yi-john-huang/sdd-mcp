@@ -329,7 +329,51 @@ export class InstallSkillsCLI {
       }
     }
 
+    // Generate CLAUDE.md in project root
+    this.generateClaudeMd();
+
     console.log('\n✨ Installation complete!\n');
+  }
+
+  /**
+   * Generate CLAUDE.md in the user's project root from the template
+   */
+  private generateClaudeMd(): void {
+    const targetPath = path.resolve(process.cwd(), 'CLAUDE.md');
+
+    // Don't overwrite if user already has one
+    if (fs.existsSync(targetPath)) {
+      console.log('  ⏭️  CLAUDE.md already exists, skipping');
+      return;
+    }
+
+    // Find the template
+    const dirname = getDirname();
+    const possiblePaths = [
+      path.resolve(dirname, '../../templates/CLAUDE.md'),
+      path.resolve(dirname, '../templates/CLAUDE.md'),
+      path.resolve(dirname, '../../../templates/CLAUDE.md'),
+    ];
+
+    let templatePath: string | null = null;
+    for (const p of possiblePaths) {
+      if (fs.existsSync(p)) {
+        templatePath = p;
+        break;
+      }
+    }
+
+    if (!templatePath) {
+      console.log('  ⚠️  CLAUDE.md template not found, skipping');
+      return;
+    }
+
+    try {
+      fs.copyFileSync(templatePath, targetPath);
+      console.log('  ✅ Created CLAUDE.md in project root');
+    } catch (error) {
+      console.error('  ❌ Failed to create CLAUDE.md:', (error as Error).message);
+    }
   }
 
   /**
