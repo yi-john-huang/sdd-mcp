@@ -338,7 +338,10 @@ export class InstallSkillsCLI {
     // Multi-tool support: Google Antigravity
     if (options.antigravity || options.allTools) {
       const projectRoot = process.cwd();
-      await createAntigravitySymlinks(projectRoot);
+      await createAntigravitySymlinks(projectRoot, {
+        skillsPath: options.targetPath,
+        rulesPath: options.rulesPath,
+      });
     }
 
     console.log('\n✨ Installation complete!\n');

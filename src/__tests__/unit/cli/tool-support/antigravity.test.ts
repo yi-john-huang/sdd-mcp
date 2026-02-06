@@ -101,4 +101,28 @@ describe('createAntigravitySymlinks', () => {
     // Should still create symlinks inside it
     expect(fs.lstatSync(path.join(tmpDir, '.agent', 'workflows')).isSymbolicLink()).toBe(true);
   });
+
+  it('should use custom paths for symlink targets', async () => {
+    // Create custom directories
+    fs.mkdirSync(path.join(tmpDir, 'custom', 'skills'), { recursive: true });
+    fs.mkdirSync(path.join(tmpDir, 'custom', 'rules'), { recursive: true });
+    fs.writeFileSync(path.join(tmpDir, 'custom', 'skills', 'test.md'), 'custom skill');
+
+    await createAntigravitySymlinks(tmpDir, {
+      skillsPath: 'custom/skills',
+      rulesPath: 'custom/rules',
+    });
+
+    // Symlinks should point to custom paths, not default .claude/ paths
+    const workflowsTarget = fs.readlinkSync(path.join(tmpDir, '.agent', 'workflows'));
+    expect(workflowsTarget).toBe(path.join('..', 'custom', 'skills'));
+    expect(workflowsTarget).not.toContain('.claude');
+
+    const rulesTarget = fs.readlinkSync(path.join(tmpDir, '.agent', 'rules'));
+    expect(rulesTarget).toBe(path.join('..', 'custom', 'rules'));
+
+    // Symlinks should resolve to actual content
+    const files = fs.readdirSync(path.join(tmpDir, '.agent', 'workflows'));
+    expect(files).toContain('test.md');
+  });
 });

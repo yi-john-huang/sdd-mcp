@@ -2,22 +2,37 @@ import * as fs from 'fs';
 import * as path from 'path';
 
 /**
- * Symlink mappings from Antigravity directories to Claude canonical locations.
- * Keys are relative to `.agent/`, values are relative symlink targets.
+ * Antigravity link name → install paths key mapping.
+ * Each entry maps an Antigravity directory name to the corresponding
+ * effective install path field.
  */
-const SYMLINK_MAP: ReadonlyArray<{ link: string; target: string }> = [
-  { link: 'workflows', target: path.join('..', '.claude', 'skills') },
-  { link: 'rules', target: path.join('..', '.claude', 'rules') },
+const LINK_DEFS: ReadonlyArray<{ link: string; pathKey: 'skillsPath' | 'rulesPath' }> = [
+  { link: 'workflows', pathKey: 'skillsPath' },
+  { link: 'rules', pathKey: 'rulesPath' },
 ];
 
 /**
- * Create `.agent/` symlinks pointing to `.claude/` directories
+ * Paths for the component directories that Antigravity symlinks point to.
+ */
+export interface AntigravityPaths {
+  skillsPath: string;
+  rulesPath: string;
+}
+
+/**
+ * Create `.agent/` symlinks pointing to component directories
  * for Google Antigravity compatibility.
  *
  * Uses relative symlinks for portability — the project can be
  * moved or cloned without breaking links.
+ *
+ * Symlink targets are derived from effective install paths,
+ * so custom `--path` / `--rules-path` flags are respected.
  */
-export async function createAntigravitySymlinks(projectRoot: string): Promise<void> {
+export async function createAntigravitySymlinks(
+  projectRoot: string,
+  paths: AntigravityPaths = { skillsPath: '.claude/skills', rulesPath: '.claude/rules' },
+): Promise<void> {
   const agentDir = path.join(projectRoot, '.agent');
 
   // Warn on Windows where symlinks may require elevated privileges
@@ -30,7 +45,9 @@ export async function createAntigravitySymlinks(projectRoot: string): Promise<vo
     fs.mkdirSync(agentDir, { recursive: true });
   }
 
-  for (const { link, target } of SYMLINK_MAP) {
+  for (const { link, pathKey } of LINK_DEFS) {
+    // Compute relative symlink target: from .agent/ back to project root, then to effective path
+    const target = path.join('..', paths[pathKey]);
     const linkPath = path.join(agentDir, link);
 
     // Check if something already exists at the link path
