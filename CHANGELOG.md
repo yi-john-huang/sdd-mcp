@@ -5,6 +5,42 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.3.0] - 2026-02-07
+
+### Added
+- **Multi-Tool Install Support**: New CLI flags to generate support for additional AI tools alongside Claude Code
+  - `--codex` — Generates `AGENTS.md` in project root for OpenAI Codex CLI with component summary tables and file path references
+  - `--antigravity` — Creates `.agent/` directory with relative symlinks (`workflows/` → skills, `rules/` → rules) for Google Antigravity
+  - `--all-tools` — Enables both Codex and Antigravity integrations
+  - Flags are additive: Claude `.claude/` install always runs as the canonical source of truth
+- **Shared `find-package-root` utility**: Extracted duplicated package root discovery logic into `src/cli/utils/find-package-root.ts`
+  - `findPackageRoot()` — Walk up directory tree to find sdd-mcp-server package
+  - `getDistCliDir()` — Resolve `dist/cli` with npx symlink support
+  - `findTemplate()` — Locate template files within the package
+- **New files**: `src/cli/tool-support/codex.ts`, `src/cli/tool-support/antigravity.ts`, `templates/codex-AGENTS.md`
+- **26 new tests**: Full coverage for AGENTS.md generation, symlink creation, CLI flag parsing, custom paths, error handling
+
+### Changed
+- **Custom path support**: Both `--codex` and `--antigravity` respect `--path`, `--rules-path`, `--agents-path`, and `--steering-path` flags
+  - AGENTS.md references effective install paths, not hardcoded defaults
+  - Symlinks point to actual install targets, not assumed `.claude/` layout
+
+### Usage
+```bash
+npx sdd-mcp-server install                       # Claude only (default)
+npx sdd-mcp-server install --codex               # Claude + Codex CLI
+npx sdd-mcp-server install --antigravity         # Claude + Antigravity
+npx sdd-mcp-server install --all-tools           # Claude + all integrations
+```
+
+## [3.2.0] - 2026-02-01
+
+### Added
+- **CLAUDE.md generation**: `install` command now generates `CLAUDE.md` in project root with component overview
+
+### Changed
+- **Steering docs migrated**: Static steering documents moved to `.claude/` component structure
+
 ## [3.1.1] - 2026-01-28
 
 ### Fixed

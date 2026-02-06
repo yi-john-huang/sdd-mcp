@@ -7,50 +7,9 @@ import { RulesManager } from '../rules/RulesManager.js';
 import { ContextManager } from '../contexts/ContextManager.js';
 import { AgentManager } from '../agents/AgentManager.js';
 import { HookLoader } from '../hooks/HookLoader.js';
-
-// Get directory name - works in both ESM and test environments
-// Handles: local dev, global install, npx execution
-function getDirname(): string {
-  // Helper to find package root from a starting directory
-  const findPackageRoot = (startDir: string): string | null => {
-    let dir = startDir;
-    while (dir !== path.dirname(dir)) {
-      const pkgPath = path.join(dir, 'package.json');
-      if (fs.existsSync(pkgPath)) {
-        try {
-          const pkg = JSON.parse(fs.readFileSync(pkgPath, 'utf-8'));
-          if (pkg.name === 'sdd-mcp-server') {
-            return path.join(dir, 'dist', 'cli');
-          }
-        } catch {
-          // Continue searching
-        }
-      }
-      dir = path.dirname(dir);
-    }
-    return null;
-  };
-
-  // Strategy 1: Check from the script's actual location (works with npx)
-  // Use realpathSync to resolve symlinks (npx runs via .bin/ symlink)
-  if (process.argv[1]) {
-    try {
-      const realPath = fs.realpathSync(process.argv[1]);
-      const scriptDir = path.dirname(realPath);
-      const fromScript = findPackageRoot(scriptDir);
-      if (fromScript) return fromScript;
-    } catch {
-      // If realpathSync fails, fall through to other strategies
-    }
-  }
-
-  // Strategy 2: Check from process.cwd() (works in local dev)
-  const fromCwd = findPackageRoot(process.cwd());
-  if (fromCwd) return fromCwd;
-
-  // Strategy 3: Fallback to process.cwd() based path
-  return path.join(process.cwd(), 'dist', 'cli');
-}
+import { generateCodexAgentsMd } from './tool-support/codex.js';
+import { createAntigravitySymlinks } from './tool-support/antigravity.js';
+import { getDistCliDir, findTemplate } from './utils/find-package-root.js';
 
 /**
  * Component types that can be installed
@@ -91,6 +50,12 @@ export interface CLIOptions {
   hooksOnly: boolean;
   /** Components to install (empty means all) */
   components: ComponentType[];
+  /** Generate Codex CLI AGENTS.md */
+  codex: boolean;
+  /** Create Antigravity symlinks (.agent/) */
+  antigravity: boolean;
+  /** Enable all tool integrations (codex + antigravity) */
+  allTools: boolean;
 }
 
 /**
@@ -131,7 +96,7 @@ export class InstallSkillsCLI {
    * @param componentDir - The component directory name (skills, steering, rules, etc.)
    */
   private getDefaultPath(componentDir: string): string {
-    const dirname = getDirname();
+    const dirname = getDistCliDir();
     // Try multiple paths and return the first one that exists
     const possiblePaths = [
       // Relative to this file (dist/cli/install-skills.js -> componentDir/)
@@ -147,7 +112,7 @@ export class InstallSkillsCLI {
 
     // Debug output when DEBUG env is set
     if (process.env.DEBUG) {
-      console.error(`[DEBUG] getDirname() = ${dirname}`);
+      console.error(`[DEBUG] getDistCliDir() = ${dirname}`);
       console.error(`[DEBUG] Looking for ${componentDir}:`);
       for (const p of possiblePaths) {
         console.error(`  ${fs.existsSync(p) ? '✓' : '✗'} ${p}`);
@@ -187,6 +152,9 @@ export class InstallSkillsCLI {
       agentsOnly: false,
       hooksOnly: false,
       components: [],
+      codex: false,
+      antigravity: false,
+      allTools: false,
     };
 
     for (let i = 0; i < args.length; i++) {
@@ -258,6 +226,15 @@ export class InstallSkillsCLI {
         case '--all':
           // Install all component types
           options.components = ['skills', 'steering', 'rules', 'contexts', 'agents', 'hooks'];
+          break;
+        case '--codex':
+          options.codex = true;
+          break;
+        case '--antigravity':
+          options.antigravity = true;
+          break;
+        case '--all-tools':
+          options.allTools = true;
           break;
       }
     }
@@ -332,6 +309,41 @@ export class InstallSkillsCLI {
     // Generate CLAUDE.md in project root
     this.generateClaudeMd();
 
+    // Multi-tool support: Codex CLI
+    if (options.codex || options.allTools) {
+      const projectRoot = process.cwd();
+      await generateCodexAgentsMd(
+        projectRoot,
+        {
+          skillManager: this.skillManager,
+          rulesManager: this.rulesManager,
+          agentManager: this.agentManager,
+          listSteering: () => this.listSteering(),
+        },
+        {
+          skillsPath: options.targetPath,
+          rulesPath: options.rulesPath,
+          agentsPath: options.agentsPath,
+          steeringPath: options.steeringPath,
+        },
+        {
+          skills: componentsToInstall.includes('skills'),
+          rules: componentsToInstall.includes('rules'),
+          agents: componentsToInstall.includes('agents'),
+          steering: componentsToInstall.includes('steering'),
+        },
+      );
+    }
+
+    // Multi-tool support: Google Antigravity
+    if (options.antigravity || options.allTools) {
+      const projectRoot = process.cwd();
+      await createAntigravitySymlinks(projectRoot, {
+        skillsPath: options.targetPath,
+        rulesPath: options.rulesPath,
+      });
+    }
+
     console.log('\n✨ Installation complete!\n');
   }
 
@@ -348,20 +360,7 @@ export class InstallSkillsCLI {
     }
 
     // Find the template
-    const dirname = getDirname();
-    const possiblePaths = [
-      path.resolve(dirname, '../../templates/CLAUDE.md'),
-      path.resolve(dirname, '../templates/CLAUDE.md'),
-      path.resolve(dirname, '../../../templates/CLAUDE.md'),
-    ];
-
-    let templatePath: string | null = null;
-    for (const p of possiblePaths) {
-      if (fs.existsSync(p)) {
-        templatePath = p;
-        break;
-      }
-    }
+    const templatePath = findTemplate('CLAUDE.md');
 
     if (!templatePath) {
       console.log('  ⚠️  CLAUDE.md template not found, skipping');
@@ -699,6 +698,11 @@ Path Options (customize installation targets):
   --agents-path <dir>   Target for agents (default: .claude/agents)
   --hooks-path <dir>    Target for hooks (default: .claude/hooks)
 
+Multi-Tool Support:
+  --codex               Also generate AGENTS.md for OpenAI Codex CLI
+  --antigravity         Also create .agent/ symlinks for Google Antigravity
+  --all-tools           Enable all tool integrations (codex + antigravity)
+
 Other Options:
   --list, -l            List all available components
   --help, -h            Show this help message
@@ -707,6 +711,9 @@ Examples:
   npx sdd-mcp-server install                     # Install all components
   npx sdd-mcp-server install --skills --rules    # Install skills and rules only
   npx sdd-mcp-server install --list              # List available components
+  npx sdd-mcp-server install --codex             # Claude + Codex CLI support
+  npx sdd-mcp-server install --antigravity       # Claude + Antigravity support
+  npx sdd-mcp-server install --all-tools         # Claude + all tool integrations
 
 Component Types:
   Skills    - Workflow guidance for SDD phases (/sdd-requirements, /sdd-design, etc.)
