@@ -79,6 +79,20 @@ describe('createAntigravitySymlinks', () => {
     expect(fs.lstatSync(path.join(tmpDir, '.agent', 'workflows')).isSymbolicLink()).toBe(false);
   });
 
+  it('should warn when replacing a symlink pointing elsewhere', async () => {
+    // Create .agent/ with a symlink pointing to a different target
+    fs.mkdirSync(path.join(tmpDir, '.agent'), { recursive: true });
+    fs.symlinkSync('/some/other/path', path.join(tmpDir, '.agent', 'workflows'), 'dir');
+
+    await createAntigravitySymlinks(tmpDir);
+
+    // Should have warned about the replacement
+    expect(consoleSpy).toHaveBeenCalledWith(expect.stringContaining('replacing with'));
+    // Should have replaced with the correct symlink
+    const target = fs.readlinkSync(path.join(tmpDir, '.agent', 'workflows'));
+    expect(target).toBe(path.join('..', '.claude', 'skills'));
+  });
+
   it('should handle .agent/ directory already existing', async () => {
     fs.mkdirSync(path.join(tmpDir, '.agent'), { recursive: true });
 

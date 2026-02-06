@@ -41,7 +41,8 @@ export async function createAntigravitySymlinks(projectRoot: string): Promise<vo
           console.log(`  ⏭️  .agent/${link} symlink already exists, skipping`);
           continue;
         }
-        // Symlink points somewhere else — remove and recreate
+        // Symlink points somewhere else — warn, remove, and recreate
+        console.log(`  ⚠️  .agent/${link} symlink points to ${existingTarget}, replacing with ${target}`);
         fs.unlinkSync(linkPath);
       } else {
         console.log(`  ⚠️  .agent/${link} exists as a regular directory, skipping`);

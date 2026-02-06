@@ -9,50 +9,7 @@ import { AgentManager } from '../agents/AgentManager.js';
 import { HookLoader } from '../hooks/HookLoader.js';
 import { generateCodexAgentsMd } from './tool-support/codex.js';
 import { createAntigravitySymlinks } from './tool-support/antigravity.js';
-
-// Get directory name - works in both ESM and test environments
-// Handles: local dev, global install, npx execution
-function getDirname(): string {
-  // Helper to find package root from a starting directory
-  const findPackageRoot = (startDir: string): string | null => {
-    let dir = startDir;
-    while (dir !== path.dirname(dir)) {
-      const pkgPath = path.join(dir, 'package.json');
-      if (fs.existsSync(pkgPath)) {
-        try {
-          const pkg = JSON.parse(fs.readFileSync(pkgPath, 'utf-8'));
-          if (pkg.name === 'sdd-mcp-server') {
-            return path.join(dir, 'dist', 'cli');
-          }
-        } catch {
-          // Continue searching
-        }
-      }
-      dir = path.dirname(dir);
-    }
-    return null;
-  };
-
-  // Strategy 1: Check from the script's actual location (works with npx)
-  // Use realpathSync to resolve symlinks (npx runs via .bin/ symlink)
-  if (process.argv[1]) {
-    try {
-      const realPath = fs.realpathSync(process.argv[1]);
-      const scriptDir = path.dirname(realPath);
-      const fromScript = findPackageRoot(scriptDir);
-      if (fromScript) return fromScript;
-    } catch {
-      // If realpathSync fails, fall through to other strategies
-    }
-  }
-
-  // Strategy 2: Check from process.cwd() (works in local dev)
-  const fromCwd = findPackageRoot(process.cwd());
-  if (fromCwd) return fromCwd;
-
-  // Strategy 3: Fallback to process.cwd() based path
-  return path.join(process.cwd(), 'dist', 'cli');
-}
+import { getDistCliDir, findTemplate } from './utils/find-package-root.js';
 
 /**
  * Component types that can be installed
@@ -139,7 +96,7 @@ export class InstallSkillsCLI {
    * @param componentDir - The component directory name (skills, steering, rules, etc.)
    */
   private getDefaultPath(componentDir: string): string {
-    const dirname = getDirname();
+    const dirname = getDistCliDir();
     // Try multiple paths and return the first one that exists
     const possiblePaths = [
       // Relative to this file (dist/cli/install-skills.js -> componentDir/)
@@ -155,7 +112,7 @@ export class InstallSkillsCLI {
 
     // Debug output when DEBUG env is set
     if (process.env.DEBUG) {
-      console.error(`[DEBUG] getDirname() = ${dirname}`);
+      console.error(`[DEBUG] getDistCliDir() = ${dirname}`);
       console.error(`[DEBUG] Looking for ${componentDir}:`);
       for (const p of possiblePaths) {
         console.error(`  ${fs.existsSync(p) ? '✓' : '✗'} ${p}`);
@@ -355,12 +312,27 @@ export class InstallSkillsCLI {
     // Multi-tool support: Codex CLI
     if (options.codex || options.allTools) {
       const projectRoot = process.cwd();
-      await generateCodexAgentsMd(projectRoot, {
-        skillManager: this.skillManager,
-        rulesManager: this.rulesManager,
-        agentManager: this.agentManager,
-        listSteering: () => this.listSteering(),
-      });
+      await generateCodexAgentsMd(
+        projectRoot,
+        {
+          skillManager: this.skillManager,
+          rulesManager: this.rulesManager,
+          agentManager: this.agentManager,
+          listSteering: () => this.listSteering(),
+        },
+        {
+          skillsPath: options.targetPath,
+          rulesPath: options.rulesPath,
+          agentsPath: options.agentsPath,
+          steeringPath: options.steeringPath,
+        },
+        {
+          skills: componentsToInstall.includes('skills'),
+          rules: componentsToInstall.includes('rules'),
+          agents: componentsToInstall.includes('agents'),
+          steering: componentsToInstall.includes('steering'),
+        },
+      );
     }
 
     // Multi-tool support: Google Antigravity
@@ -385,20 +357,7 @@ export class InstallSkillsCLI {
     }
 
     // Find the template
-    const dirname = getDirname();
-    const possiblePaths = [
-      path.resolve(dirname, '../../templates/CLAUDE.md'),
-      path.resolve(dirname, '../templates/CLAUDE.md'),
-      path.resolve(dirname, '../../../templates/CLAUDE.md'),
-    ];
-
-    let templatePath: string | null = null;
-    for (const p of possiblePaths) {
-      if (fs.existsSync(p)) {
-        templatePath = p;
-        break;
-      }
-    }
+    const templatePath = findTemplate('CLAUDE.md');
 
     if (!templatePath) {
       console.log('  ⚠️  CLAUDE.md template not found, skipping');

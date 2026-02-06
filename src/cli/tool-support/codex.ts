@@ -3,6 +3,7 @@ import * as path from 'path';
 import { SkillManager } from '../../skills/SkillManager.js';
 import { RulesManager } from '../../rules/RulesManager.js';
 import { AgentManager } from '../../agents/AgentManager.js';
+import { findTemplate } from '../utils/find-package-root.js';
 
 /**
  * References to manager instances needed for generating AGENTS.md
@@ -15,56 +16,87 @@ export interface ManagerRefs {
 }
 
 /**
- * Resolve the codex-AGENTS.md template from the package.
- *
- * Uses the same strategy as install-skills.ts: walk up from
- * process.argv[1] looking for the sdd-mcp-server package root.
+ * Effective install paths used by the installer.
+ * These may differ from defaults when the user passes --path, --rules-path, etc.
  */
-function findTemplate(): string | null {
-  const findPackageRoot = (startDir: string): string | null => {
-    let dir = startDir;
-    while (dir !== path.dirname(dir)) {
-      const pkgPath = path.join(dir, 'package.json');
-      if (fs.existsSync(pkgPath)) {
-        try {
-          const pkg = JSON.parse(fs.readFileSync(pkgPath, 'utf-8'));
-          if (pkg.name === 'sdd-mcp-server') {
-            return dir;
-          }
-        } catch {
-          // Continue searching
-        }
-      }
-      dir = path.dirname(dir);
-    }
-    return null;
-  };
+export interface InstallPaths {
+  skillsPath: string;
+  rulesPath: string;
+  agentsPath: string;
+  steeringPath: string;
+}
 
-  const searchRoots: string[] = [];
+/**
+ * Which component types were actually installed in this run.
+ * Only installed components are rendered in AGENTS.md.
+ */
+export interface InstalledComponents {
+  skills: boolean;
+  rules: boolean;
+  agents: boolean;
+  steering: boolean;
+}
 
-  // Strategy 1: From the running script's real location
-  if (process.argv[1]) {
-    try {
-      searchRoots.push(path.dirname(fs.realpathSync(process.argv[1])));
-    } catch {
-      // Fall through
-    }
+/** Item with a name, description, and a path to derive a filename from */
+interface TableItem {
+  name: string;
+  description: string;
+  path: string;
+}
+
+/**
+ * Build a markdown table section for a component type.
+ * Returns the section string, or empty string if items is empty.
+ */
+function buildTableSection(
+  title: string,
+  subtitle: string,
+  basePath: string,
+  items: TableItem[],
+  pathFormatter: (item: TableItem) => string,
+): string {
+  if (items.length === 0) return '';
+
+  let section = `### ${title} (\`${basePath}/\`)\n\n`;
+  section += `${subtitle}\n\n`;
+  section += `| ${title.slice(0, -1)} | Description | Path |\n`;
+  section += '|-------|-------------|------|\n';
+  for (const item of items) {
+    section += `| ${item.name} | ${item.description || '—'} | \`${pathFormatter(item)}\` |\n`;
   }
+  section += '\n';
+  return section;
+}
 
-  // Strategy 2: From cwd
-  searchRoots.push(process.cwd());
+/**
+ * Build a markdown bullet list section for steering docs.
+ */
+function buildSteeringSection(basePath: string, docs: string[]): string {
+  if (docs.length === 0) return '';
 
-  for (const root of searchRoots) {
-    const pkgRoot = findPackageRoot(root);
-    if (pkgRoot) {
-      const templatePath = path.join(pkgRoot, 'templates', 'codex-AGENTS.md');
-      if (fs.existsSync(templatePath)) {
-        return templatePath;
-      }
-    }
+  let section = `### Steering (\`${basePath}/\`)\n\n`;
+  section += 'Project-specific context documents:\n\n';
+  for (const doc of docs) {
+    section += `- \`${basePath}/${doc}\`\n`;
   }
+  section += '\n';
+  return section;
+}
 
-  return null;
+/**
+ * Load the template preamble for AGENTS.md
+ */
+function loadPreamble(): string {
+  try {
+    const templatePath = findTemplate('codex-AGENTS.md');
+    if (templatePath) {
+      return fs.readFileSync(templatePath, 'utf-8');
+    }
+    console.log('  ⚠️  AGENTS.md template not found, using minimal header');
+  } catch (error) {
+    console.error('  ⚠️  Failed to read AGENTS.md template:', (error as Error).message);
+  }
+  return '# AGENTS.md — Spec-Driven Development (SDD)\n\n';
 }
 
 /**
@@ -73,10 +105,15 @@ function findTemplate(): string | null {
  * Produces a lightweight summary file containing component names,
  * descriptions, and file path references. Codex CLI reads referenced
  * files on demand — no content duplication needed.
+ *
+ * Only sections for actually-installed component types are included,
+ * and paths reflect the effective install targets (not hardcoded defaults).
  */
 export async function generateCodexAgentsMd(
   projectRoot: string,
   managers: ManagerRefs,
+  paths: InstallPaths,
+  installed: InstalledComponents,
 ): Promise<void> {
   const targetPath = path.join(projectRoot, 'AGENTS.md');
 
@@ -85,70 +122,28 @@ export async function generateCodexAgentsMd(
     return;
   }
 
-  // Load template preamble
-  const templatePath = findTemplate();
-  let content: string;
-  if (templatePath) {
-    content = fs.readFileSync(templatePath, 'utf-8');
-  } else {
-    content = '# AGENTS.md — Spec-Driven Development (SDD)\n\n';
-    console.log('  ⚠️  AGENTS.md template not found, using minimal header');
-  }
+  let content = loadPreamble();
 
-  // Gather component metadata
-  const [skills, rules, agents, steeringDocs] = await Promise.all([
-    managers.skillManager.listSkills(),
-    managers.rulesManager.listComponents(),
-    managers.agentManager.listComponents(),
-    managers.listSteering(),
-  ]);
+  try {
+    const [skills, rules, agents, steeringDocs] = await Promise.all([
+      installed.skills ? managers.skillManager.listSkills() : Promise.resolve([]),
+      installed.rules ? managers.rulesManager.listComponents() : Promise.resolve([]),
+      installed.agents ? managers.agentManager.listComponents() : Promise.resolve([]),
+      installed.steering ? managers.listSteering() : Promise.resolve([]),
+    ]);
 
-  // Append skills section
-  if (skills.length > 0) {
-    content += '### Skills (`.claude/skills/`)\n\n';
-    content += 'Workflow guidance invoked via slash commands:\n\n';
-    content += '| Skill | Description | Path |\n';
-    content += '|-------|-------------|------|\n';
-    for (const skill of skills) {
-      content += `| ${skill.name} | ${skill.description || '—'} | \`.claude/skills/${skill.name}/\` |\n`;
-    }
-    content += '\n';
-  }
+    content += buildTableSection('Skills', 'Workflow guidance invoked via slash commands:', paths.skillsPath,
+      skills, (s) => `${paths.skillsPath}/${s.name}/`);
 
-  // Append rules section
-  if (rules.length > 0) {
-    content += '### Rules (`.claude/rules/`)\n\n';
-    content += 'Always-active coding standards:\n\n';
-    content += '| Rule | Description | Path |\n';
-    content += '|------|-------------|------|\n';
-    for (const rule of rules) {
-      const fileName = path.basename(rule.path);
-      content += `| ${rule.name} | ${rule.description || '—'} | \`.claude/rules/${fileName}\` |\n`;
-    }
-    content += '\n';
-  }
+    content += buildTableSection('Rules', 'Always-active coding standards:', paths.rulesPath,
+      rules, (r) => `${paths.rulesPath}/${path.basename(r.path)}`);
 
-  // Append agents section
-  if (agents.length > 0) {
-    content += '### Agents (`.claude/agents/`)\n\n';
-    content += 'Specialized AI personas:\n\n';
-    content += '| Agent | Description | Path |\n';
-    content += '|-------|-------------|------|\n';
-    for (const agent of agents) {
-      const fileName = path.basename(agent.path);
-      content += `| ${agent.name} | ${agent.description || '—'} | \`.claude/agents/${fileName}\` |\n`;
-    }
-    content += '\n';
-  }
+    content += buildTableSection('Agents', 'Specialized AI personas:', paths.agentsPath,
+      agents, (a) => `${paths.agentsPath}/${path.basename(a.path)}`);
 
-  // Append steering section
-  if (steeringDocs.length > 0) {
-    content += '### Steering (`.spec/steering/`)\n\n';
-    content += 'Project-specific context documents:\n\n';
-    for (const doc of steeringDocs) {
-      content += `- \`.spec/steering/${doc}\`\n`;
-    }
-    content += '\n';
+    content += buildSteeringSection(paths.steeringPath, steeringDocs);
+  } catch (error) {
+    console.error('  ⚠️  Failed to gather component metadata:', (error as Error).message);
   }
 
   try {
