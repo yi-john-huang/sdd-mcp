@@ -6,7 +6,7 @@
 
 A Model Context Protocol (MCP) server implementing Spec-Driven Development (SDD) workflows for AI-agent CLIs and IDEs like Claude Code, Cursor, and others.
 
-> **v3.1** - Steering consolidation: Static guidance merged into agents/rules/skills. Now with `migrate-steering` CLI command. See [CHANGELOG.md](CHANGELOG.md) for full version history.
+> **v3.3** - Multi-tool install support: `--codex` (AGENTS.md for OpenAI Codex CLI), `--antigravity` (.agent/ symlinks for Google Antigravity), `--all-tools`. See [CHANGELOG.md](CHANGELOG.md) for full version history.
 
 ## 🚀 Quick Start
 
@@ -172,6 +172,11 @@ npx sdd-mcp-server install --list
 
 # Legacy: Install skills only
 npx sdd-mcp-server install-skills
+
+# Multi-tool support (v3.3+)
+npx sdd-mcp-server install --codex             # + AGENTS.md for OpenAI Codex CLI
+npx sdd-mcp-server install --antigravity       # + .agent/ symlinks for Google Antigravity
+npx sdd-mcp-server install --all-tools         # + all tool integrations
 ```
 
 **Component Types (v3.0):**
