@@ -32,6 +32,9 @@ function createOptions(overrides: Partial<CLIOptions> = {}): CLIOptions {
     agentsOnly: false,
     hooksOnly: false,
     components: [],
+    codex: false,
+    antigravity: false,
+    allTools: false,
     ...overrides,
   };
 }
@@ -207,6 +210,39 @@ describe('InstallSkillsCLI', () => {
       expect(options.components).toContain('agents');
       expect(options.components).not.toContain('steering');
     });
+
+    it('should parse --codex flag', () => {
+      const args = ['--codex'];
+      const options = cli.parseArgs(args);
+
+      expect(options.codex).toBe(true);
+      expect(options.antigravity).toBe(false);
+      expect(options.allTools).toBe(false);
+    });
+
+    it('should parse --antigravity flag', () => {
+      const args = ['--antigravity'];
+      const options = cli.parseArgs(args);
+
+      expect(options.antigravity).toBe(true);
+      expect(options.codex).toBe(false);
+      expect(options.allTools).toBe(false);
+    });
+
+    it('should parse --all-tools flag', () => {
+      const args = ['--all-tools'];
+      const options = cli.parseArgs(args);
+
+      expect(options.allTools).toBe(true);
+    });
+
+    it('should parse --codex and --antigravity together', () => {
+      const args = ['--codex', '--antigravity'];
+      const options = cli.parseArgs(args);
+
+      expect(options.codex).toBe(true);
+      expect(options.antigravity).toBe(true);
+    });
   });
 
   describe('run', () => {
@@ -298,6 +334,14 @@ describe('InstallSkillsCLI', () => {
       expect(help).toContain('--agents');
       expect(help).toContain('--hooks');
       expect(help).toContain('--all');
+    });
+
+    it('should include multi-tool support flags', () => {
+      const help = cli.getUnifiedHelp();
+
+      expect(help).toContain('--codex');
+      expect(help).toContain('--antigravity');
+      expect(help).toContain('--all-tools');
     });
   });
 });

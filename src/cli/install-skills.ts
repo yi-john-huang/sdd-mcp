@@ -7,6 +7,8 @@ import { RulesManager } from '../rules/RulesManager.js';
 import { ContextManager } from '../contexts/ContextManager.js';
 import { AgentManager } from '../agents/AgentManager.js';
 import { HookLoader } from '../hooks/HookLoader.js';
+import { generateCodexAgentsMd } from './tool-support/codex.js';
+import { createAntigravitySymlinks } from './tool-support/antigravity.js';
 
 // Get directory name - works in both ESM and test environments
 // Handles: local dev, global install, npx execution
@@ -91,6 +93,12 @@ export interface CLIOptions {
   hooksOnly: boolean;
   /** Components to install (empty means all) */
   components: ComponentType[];
+  /** Generate Codex CLI AGENTS.md */
+  codex: boolean;
+  /** Create Antigravity symlinks (.agent/) */
+  antigravity: boolean;
+  /** Enable all tool integrations (codex + antigravity) */
+  allTools: boolean;
 }
 
 /**
@@ -187,6 +195,9 @@ export class InstallSkillsCLI {
       agentsOnly: false,
       hooksOnly: false,
       components: [],
+      codex: false,
+      antigravity: false,
+      allTools: false,
     };
 
     for (let i = 0; i < args.length; i++) {
@@ -258,6 +269,15 @@ export class InstallSkillsCLI {
         case '--all':
           // Install all component types
           options.components = ['skills', 'steering', 'rules', 'contexts', 'agents', 'hooks'];
+          break;
+        case '--codex':
+          options.codex = true;
+          break;
+        case '--antigravity':
+          options.antigravity = true;
+          break;
+        case '--all-tools':
+          options.allTools = true;
           break;
       }
     }
@@ -331,6 +351,23 @@ export class InstallSkillsCLI {
 
     // Generate CLAUDE.md in project root
     this.generateClaudeMd();
+
+    // Multi-tool support: Codex CLI
+    if (options.codex || options.allTools) {
+      const projectRoot = process.cwd();
+      await generateCodexAgentsMd(projectRoot, {
+        skillManager: this.skillManager,
+        rulesManager: this.rulesManager,
+        agentManager: this.agentManager,
+        listSteering: () => this.listSteering(),
+      });
+    }
+
+    // Multi-tool support: Google Antigravity
+    if (options.antigravity || options.allTools) {
+      const projectRoot = process.cwd();
+      await createAntigravitySymlinks(projectRoot);
+    }
 
     console.log('\n✨ Installation complete!\n');
   }
@@ -699,6 +736,11 @@ Path Options (customize installation targets):
   --agents-path <dir>   Target for agents (default: .claude/agents)
   --hooks-path <dir>    Target for hooks (default: .claude/hooks)
 
+Multi-Tool Support:
+  --codex               Also generate AGENTS.md for OpenAI Codex CLI
+  --antigravity         Also create .agent/ symlinks for Google Antigravity
+  --all-tools           Enable all tool integrations (codex + antigravity)
+
 Other Options:
   --list, -l            List all available components
   --help, -h            Show this help message
@@ -707,6 +749,9 @@ Examples:
   npx sdd-mcp-server install                     # Install all components
   npx sdd-mcp-server install --skills --rules    # Install skills and rules only
   npx sdd-mcp-server install --list              # List available components
+  npx sdd-mcp-server install --codex             # Claude + Codex CLI support
+  npx sdd-mcp-server install --antigravity       # Claude + Antigravity support
+  npx sdd-mcp-server install --all-tools         # Claude + all tool integrations
 
 Component Types:
   Skills    - Workflow guidance for SDD phases (/sdd-requirements, /sdd-design, etc.)
