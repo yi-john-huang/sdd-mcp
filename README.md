@@ -172,6 +172,11 @@ npx sdd-mcp-server install --list
 
 # Legacy: Install skills only
 npx sdd-mcp-server install-skills
+
+# Multi-tool support (v3.3+)
+npx sdd-mcp-server install --codex             # + AGENTS.md for OpenAI Codex CLI
+npx sdd-mcp-server install --antigravity       # + .agent/ symlinks for Google Antigravity
+npx sdd-mcp-server install --all-tools         # + all tool integrations
 ```
 
 **Component Types (v3.4.0):**

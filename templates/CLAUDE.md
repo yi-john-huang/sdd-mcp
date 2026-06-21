@@ -1,4 +1,4 @@
-# CLAUDE.md - Spec-Driven Development (SDD)
+# CLAUDE.md — Spec-Driven Development (SDD)
 
 This project uses the SDD workflow powered by `sdd-mcp-server`.
 
@@ -10,8 +10,8 @@ For small features, bug fixes, and quick enhancements.
 ### Path B: Full SDD Workflow
 For complex features requiring formal specification.
 
-```text
-sdd-init -> /sdd-requirements -> /sdd-design -> /sdd-tasks -> /sdd-implement
+```
+sdd-init → /sdd-requirements → /sdd-design → /sdd-tasks → /sdd-implement
 ```
 
 Each phase requires human approval before proceeding.
@@ -50,9 +50,9 @@ Lifecycle events: session start/end, pre/post tool use.
 ### Steering (`.spec/steering/`)
 Project-specific context documents. Edit these to describe your project:
 
-- `product.md` - Product context and business objectives
-- `tech.md` - Technology stack and decisions
-- `structure.md` - File organization and patterns
+- `product.md` — Product context and business objectives
+- `tech.md` — Technology stack and decisions
+- `structure.md` — File organization and patterns
 
 ## MCP Tools
 
@@ -61,19 +61,17 @@ Project-specific context documents. Edit these to describe your project:
 | `sdd-init` | Initialize new SDD spec |
 | `sdd-status` | Check workflow progress |
 | `sdd-approve` | Approve workflow phases |
-| `sdd-review-test-cases` | Mark optional TDD test-case review complete |
 | `sdd-quality-check` | Code quality analysis |
-| `sdd-context-load` | Load compact, standard, or full project context |
+| `sdd-context-load` | Load project context |
 | `sdd-validate-design` | Design quality validation |
 | `sdd-validate-gap` | Implementation gap analysis |
 | `sdd-spec-impl` | Execute tasks with TDD |
 
 ## Workflow
 
-1. **Setup**: `npx sdd-mcp-server install` for lean install, or `npx sdd-mcp-server install --profile full` for all components.
-2. **Steering**: `/sdd-steering` to update project-specific docs when needed.
-3. **Specify**: `sdd-init` -> `/sdd-requirements` -> `/sdd-design` -> `/sdd-tasks`, approving each phase.
-4. **Context**: use `sdd-context-load` compact mode for routine continuation; use `mode: "full"` only when needed.
-5. **Implement**: `/sdd-implement` or `sdd-spec-impl`.
-6. **Review**: `sdd-quality-check`.
-7. **Commit**: `/sdd-commit`.
+1. **Setup**: `npx sdd-mcp-server install --all` (already done)
+2. **Steering** (optional): `/sdd-steering` to generate project-specific docs
+3. **Specify**: `sdd-init` → `/sdd-requirements` → `/sdd-design` → `/sdd-tasks` (approve each phase)
+4. **Implement**: `/sdd-implement` or `sdd-spec-impl`
+5. **Review**: `sdd-quality-check`
+6. **Commit**: `/sdd-commit`

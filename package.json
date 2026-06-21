@@ -16,6 +16,7 @@
     "contexts/**/*",
     "agents/**/*",
     "hooks/**/*",
+    "templates/**/*",
     "sdd-entry.js",
     "mcp-server.js",
     "atomicWrite.js",

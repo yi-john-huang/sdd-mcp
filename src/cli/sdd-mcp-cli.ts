@@ -28,11 +28,18 @@ Commands:
 Options:
   --help, -h        Show this help message
 
+Multi-Tool Support:
+  --codex           Also generate AGENTS.md for OpenAI Codex CLI
+  --antigravity     Also create .agent/ symlinks for Google Antigravity
+  --all-tools       Enable all tool integrations (codex + antigravity)
+
 Examples:
   npx sdd-mcp-server install                     # Install skills + steering
   npx sdd-mcp-server install --skills            # Install skills only
   npx sdd-mcp-server install --steering          # Install steering only
   npx sdd-mcp-server install --list              # List available content
+  npx sdd-mcp-server install --codex             # Claude + Codex CLI
+  npx sdd-mcp-server install --all-tools         # Claude + all tools
   npx sdd-mcp-server install-skills              # Legacy: Install skills
   npx sdd-mcp-server install-skills --list       # List available skills
   npx sdd-mcp-server migrate-kiro                # Migrate .kiro to .spec
