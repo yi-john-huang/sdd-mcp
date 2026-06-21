@@ -537,7 +537,7 @@ Note: Optional for new features or small additions. You can proceed directly to 
 1. \`sdd-init\` - Initialize spec with detailed project description
 2. \`sdd-requirements\` - Generate requirements document
 3. \`sdd-design\` - Interactive: "Have you reviewed requirements.md? [y/N]"
-4. \`sdd-tasks\` - Interactive: Confirms both requirements and design review
+4. \`sdd-tasks\` - Interactive: Confirms both requirements and design review, and asks whether TDD test cases need a review checkpoint
 
 ### Phase 2: Progress Tracking
 \`sdd-status\` - Check current progress and phases
@@ -557,14 +557,15 @@ Note: Optional for new features or small additions. You can proceed directly to 
 Managed by \`sdd-steering\` tool. Updates here reflect tool changes.
 
 ### Active Steering Files
-- \`product.md\`: Always included - Product context and business objectives
-- \`tech.md\`: Always included - Technology stack and architectural decisions
-- \`structure.md\`: Always included - File organization and code patterns
-- \`linus-review.md\`: Always included - Ensuring code quality of the projects
-- \`commit.md\`: Always included - Ensuring the commit / merge request / pull request title and message context
-- \`security-check.md\`: Always included - OWASP Top 10 security checklist (REQUIRED for code generation and review)
-- \`tdd-guideline.md\`: Always included - Test-Driven Development workflow (REQUIRED for all new features)
-- \`principles.md\`: Always included - Core coding principles (SOLID, DRY, KISS, YAGNI, Separation of Concerns, Modularity)
+Load steering documents on demand to control token usage:
+- \`product.md\`: Product context and business objectives
+- \`tech.md\`: Technology stack and architectural decisions
+- \`structure.md\`: File organization and code patterns
+- \`linus-review.md\`: Code quality review standards
+- \`commit.md\`: Commit and PR conventions
+- \`security-check.md\`: OWASP Top 10 checklist for code generation and review
+- \`tdd-guideline.md\`: TDD workflow for new features
+- \`principles.md\`: SOLID, DRY, KISS, YAGNI, Separation of Concerns, Modularity
 
 ### Custom Steering Files
 <!-- Added by sdd-steering-custom tool -->

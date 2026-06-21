@@ -158,6 +158,15 @@ export class ResourceManager {
           design: { generated: false, approved: false },
           tasks: { generated: false, approved: false }
         },
+        workflow_options: {
+          review_test_cases: false
+        },
+        checkpoints: {
+          test_cases: {
+            required: false,
+            reviewed: true
+          }
+        },
         ready_for_implementation: false
       }, null, 2),
       'sdd://templates/requirements.md': `# Requirements Document
@@ -222,7 +231,18 @@ export class ResourceManager {
           language: project.metadata.language,
           phase: project.phase,
           approvals: project.metadata.approvals,
-          ready_for_implementation: project.phase === 'implementation-ready'
+          workflow_options: {
+            review_test_cases: project.metadata.workflowOptions?.reviewTestCases ?? false
+          },
+          checkpoints: {
+            test_cases: {
+              required: project.metadata.checkpoints?.testCases.required ?? false,
+              reviewed: project.metadata.checkpoints?.testCases.reviewed ?? true
+            }
+          },
+          ready_for_implementation: project.phase === 'implementation-ready' &&
+            (project.metadata.checkpoints?.testCases.required !== true ||
+              project.metadata.checkpoints.testCases.reviewed)
         }, null, 2);
         break;
       

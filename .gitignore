@@ -25,6 +25,16 @@ build/
 # AI tool configs
 .serena/
 
+# Generated SDD agent installs
+# Created by: npx sdd-mcp-server@latest install --all
+.claude/agents/
+.claude/contexts/
+.claude/hooks/
+.claude/rules/
+.claude/skills/
+.agents/
+.codex/
+
 # OS files
 .DS_Store
 Thumbs.db

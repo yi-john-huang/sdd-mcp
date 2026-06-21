@@ -17,6 +17,7 @@ import {
 } from '../../domain/workflow/WorkflowStateMachine.js';
 import { ProjectService } from './ProjectService.js';
 import { TemplateService } from './TemplateService.js';
+import { ContextCompactionService, HandoffResult } from './ContextCompactionService.js';
 
 export interface WorkflowProgressionResult {
   success: boolean;
@@ -41,6 +42,7 @@ export class WorkflowEngineService {
     @inject(TYPES.ProjectRepository) private readonly projectRepository: ProjectRepository,
     @inject(TYPES.ProjectService) private readonly projectService: ProjectService,
     @inject(TYPES.TemplateService) private readonly templateService: TemplateService,
+    @inject(TYPES.ContextCompactionService) private readonly contextCompactionService: ContextCompactionService,
     @inject(TYPES.LoggerPort) private readonly logger: LoggerPort,
     @inject(TYPES.ValidationPort) private readonly validation: ValidationPort
   ) {
@@ -260,6 +262,11 @@ export class WorkflowEngineService {
     const specContent = await this.templateService.generateSpecJson(updatedProject);
     await this.templateService.writeProjectFile(updatedProject, 'spec.json', specContent);
 
+    let handoffResult: HandoffResult | undefined;
+    if (approval.approved) {
+      handoffResult = await this.contextCompactionService.generatePhaseHandoff(updatedProject, phase);
+    }
+
     // Check if project can progress to next phase
     const nextPhase = this.stateMachine.getNextPhase(updatedProject.phase);
     let canProgressToNext = false;
@@ -272,6 +279,9 @@ export class WorkflowEngineService {
     const message = approval.approved 
       ? `${phase} phase approved and ready for progression`
       : `${phase} phase approval status updated`;
+    const messageWithHandoff = handoffResult
+      ? `${message}. Compact handoff: ${handoffResult.path} (${handoffResult.estimate.reductionPercentage}% estimated context reduction, ~${handoffResult.estimate.sourceTokens} -> ~${handoffResult.estimate.compactTokens} tokens)`
+      : message;
 
     this.logger.info('Approval status updated successfully', {
       correlationId,
@@ -283,7 +293,7 @@ export class WorkflowEngineService {
     return {
       success: true,
       updatedProject,
-      message,
+      message: messageWithHandoff,
       canProgressToNext
     };
   }
@@ -448,6 +458,9 @@ export class WorkflowEngineService {
       case WorkflowPhase.TASKS:
         if (!project.metadata.approvals.tasks.approved) {
           steps.push('Review and approve task breakdown');
+          if (project.metadata.checkpoints?.testCases.required && !project.metadata.checkpoints.testCases.reviewed) {
+            steps.push('Review TDD test cases and run sdd-review-test-cases');
+          }
           steps.push('Begin implementation after tasks approval');
         } else {
           steps.push('Begin implementation following the task breakdown');

@@ -249,7 +249,23 @@ export class ToolRegistry {
       ],
       'sdd-tasks': [
         {
-          description: 'Generate implementation tasks',
+          description: 'Generate implementation tasks without extra TDD test-case review',
+          arguments: {
+            projectId: 'proj_123456',
+            reviewTestCases: false
+          }
+        },
+        {
+          description: 'Generate implementation tasks and require TDD test-case review before implementation',
+          arguments: {
+            projectId: 'proj_123456',
+            reviewTestCases: true
+          }
+        }
+      ],
+      'sdd-review-test-cases': [
+        {
+          description: 'Mark optional TDD test-case review checkpoint as reviewed',
           arguments: {
             projectId: 'proj_123456'
           }
@@ -261,6 +277,22 @@ export class ToolRegistry {
           arguments: {
             code: 'function example() {\n  if (condition) {\n    return result;\n  }\n}',
             language: 'typescript'
+          }
+        }
+      ],
+      'sdd-context-load': [
+        {
+          description: 'Load compact handoff context for routine continuation',
+          arguments: {
+            projectId: 'proj_123456',
+            mode: 'compact'
+          }
+        },
+        {
+          description: 'Load full phase documents only when detailed audit context is required',
+          arguments: {
+            projectId: 'proj_123456',
+            mode: 'full'
           }
         }
       ]
@@ -277,7 +309,7 @@ export class ToolRegistry {
     const tools = Array.from(this.tools.keys());
     
     const toolsByCategory: Record<string, string[]> = {
-      'Project Management': ['sdd-init', 'sdd-status'],
+      'Project Management': ['sdd-init', 'sdd-status', 'sdd-context-load'],
       'Workflow': ['sdd-requirements', 'sdd-design', 'sdd-tasks'],
       'Quality Assurance': ['sdd-quality-check']
     };
