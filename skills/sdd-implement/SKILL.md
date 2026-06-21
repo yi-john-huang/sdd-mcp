@@ -11,16 +11,18 @@ Execute implementation following TDD methodology, SOLID principles, and security
 
 Before implementing:
 1. Tasks must be approved (use `sdd-status` to verify)
-2. Review tasks in `.spec/specs/{feature}/tasks.md`
-3. Understand the design in `.spec/specs/{feature}/design.md`
+2. If the TDD test-case review checkpoint is enabled, test cases must be reviewed first (`sdd-review-test-cases`)
+3. Review tasks in `.spec/specs/{feature}/tasks.md`
+4. Understand the design in `.spec/specs/{feature}/design.md`
 
 ## Implementation Workflow
 
 ### Step 1: Load Context
 
 1. Use `sdd-status` MCP tool to verify all phases approved
-2. Read the tasks document for current implementation
-3. Identify the next task to implement
+2. Confirm `TDD Test Case Review` is reviewed when that checkpoint appears in status
+3. Read the tasks document for current implementation
+4. Identify the next task to implement
 
 ### Step 2: Execute TDD Cycle
 

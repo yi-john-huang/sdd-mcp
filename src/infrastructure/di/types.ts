@@ -30,6 +30,7 @@ export const TYPES = {
   CodebaseAnalysisService: Symbol.for("CodebaseAnalysisService"),
   SteeringDocumentService: Symbol.for("SteeringDocumentService"),
   ProjectContextService: Symbol.for("ProjectContextService"),
+  ContextCompactionService: Symbol.for("ContextCompactionService"),
   RequirementsClarificationService: Symbol.for(
     "RequirementsClarificationService",
   ),

@@ -10,6 +10,7 @@ import { QualityService } from "../../application/services/QualityService.js";
 import { SteeringDocumentService } from "../../application/services/SteeringDocumentService.js";
 import { CodebaseAnalysisService } from "../../application/services/CodebaseAnalysisService.js";
 import { RequirementsClarificationService } from "../../application/services/RequirementsClarificationService.js";
+import { ContextCompactionService, ContextLoadMode } from "../../application/services/ContextCompactionService.js";
 import { LoggerPort } from "../../domain/ports.js";
 import { WorkflowPhase, ClarificationAnswers } from "../../domain/types.js";
 import { ensureStaticSteeringDocuments } from "../../application/services/staticSteering.js";
@@ -37,6 +38,8 @@ export class SDDToolAdapter {
     private readonly codebaseAnalysisService: CodebaseAnalysisService,
     @inject(TYPES.RequirementsClarificationService)
     private readonly clarificationService: RequirementsClarificationService,
+    @inject(TYPES.ContextCompactionService)
+    private readonly contextCompactionService: ContextCompactionService,
     @inject(TYPES.LoggerPort) private readonly logger: LoggerPort,
   ) { }
 
@@ -63,6 +66,11 @@ export class SDDToolAdapter {
                 type: "object",
                 description: "Answers to clarification questions (second pass)",
                 additionalProperties: { type: "string" },
+              },
+              reviewTestCases: {
+                type: "boolean",
+                description:
+                  "Enable an optional checkpoint requiring TDD test-case review before implementation",
               },
             },
             required: ["projectName"],
@@ -97,9 +105,9 @@ export class SDDToolAdapter {
           inputSchema: {
             type: "object",
             properties: {
-              featureName: { type: "string", description: "Feature name" },
+              projectId: { type: "string", description: "Project ID" },
             },
-            required: ["featureName"],
+            required: ["projectId"],
           },
         },
         handler: this.handleRequirements.bind(this),
@@ -112,9 +120,9 @@ export class SDDToolAdapter {
           inputSchema: {
             type: "object",
             properties: {
-              featureName: { type: "string", description: "Feature name" },
+              projectId: { type: "string", description: "Project ID" },
             },
-            required: ["featureName"],
+            required: ["projectId"],
           },
         },
         handler: this.handleDesign.bind(this),
@@ -127,12 +135,33 @@ export class SDDToolAdapter {
           inputSchema: {
             type: "object",
             properties: {
-              featureName: { type: "string", description: "Feature name" },
+              projectId: { type: "string", description: "Project ID" },
+              reviewTestCases: {
+                type: "boolean",
+                description:
+                  "When true, require an explicit TDD test-case review checkpoint before implementation",
+              },
             },
-            required: ["featureName"],
+            required: ["projectId"],
           },
         },
         handler: this.handleTasks.bind(this),
+      },
+      {
+        name: "sdd-review-test-cases",
+        tool: {
+          name: "sdd-review-test-cases",
+          description:
+            "Mark the optional TDD test-case review checkpoint as reviewed",
+          inputSchema: {
+            type: "object",
+            properties: {
+              projectId: { type: "string", description: "Project ID" },
+            },
+            required: ["projectId"],
+          },
+        },
+        handler: this.handleReviewTestCases.bind(this),
       },
       {
         name: "sdd-quality-check",
@@ -149,6 +178,28 @@ export class SDDToolAdapter {
           },
         },
         handler: this.handleQualityCheck.bind(this),
+      },
+      {
+        name: "sdd-context-load",
+        tool: {
+          name: "sdd-context-load",
+          description:
+            "Load compact workflow handoff context by default; use mode=full only when necessary",
+          inputSchema: {
+            type: "object",
+            properties: {
+              projectId: { type: "string", description: "Project ID" },
+              mode: {
+                type: "string",
+                enum: ["compact", "standard", "full"],
+                description:
+                  "Context size mode. compact is default and uses handoff.md.",
+              },
+            },
+            required: ["projectId"],
+          },
+        },
+        handler: this.handleContextLoad.bind(this),
       },
       {
         name: "sdd-steering",
@@ -208,7 +259,12 @@ export class SDDToolAdapter {
   private async handleProjectInit(
     args: Record<string, unknown>,
   ): Promise<string> {
-    const { projectName, description = "", clarificationAnswers } = args;
+    const {
+      projectName,
+      description = "",
+      clarificationAnswers,
+      reviewTestCases = false,
+    } = args;
 
     if (typeof projectName !== "string") {
       throw new Error("Invalid arguments: projectName must be a string");
@@ -267,6 +323,7 @@ export class SDDToolAdapter {
       projectName,
       currentPath,
       "en",
+      { reviewTestCases: reviewTestCases === true },
     );
 
     // Generate initial spec.json
@@ -341,6 +398,10 @@ export class SDDToolAdapter {
     output += `Current Phase: ${status.currentPhase}\n`;
     output += `Next Phase: ${status.nextPhase ?? "Complete"}\n`;
     output += `Can Progress: ${status.canProgress ? "Yes" : "No"}\n`;
+    const testCaseCheckpoint = project.metadata.checkpoints?.testCases;
+    if (testCaseCheckpoint?.required) {
+      output += `TDD Test Cases Reviewed: ${testCaseCheckpoint.reviewed ? "Yes" : "No"}\n`;
+    }
 
     if (status.blockers && status.blockers.length > 0) {
       output += `Blockers:\n`;
@@ -390,10 +451,12 @@ export class SDDToolAdapter {
       projectId,
       WorkflowPhase.REQUIREMENTS,
     );
-    await this.projectService.updateApprovalStatus(projectId, "requirements", {
+    const updatedProject = await this.projectService.updateApprovalStatus(projectId, "requirements", {
       generated: true,
       approved: false,
     });
+    const specContent = await this.templateService.generateSpecJson(updatedProject);
+    await this.templateService.writeProjectFile(updatedProject, "spec.json", specContent);
 
     return `Requirements document generated for project "${project.name}"`;
   }
@@ -429,16 +492,18 @@ export class SDDToolAdapter {
       projectId,
       WorkflowPhase.DESIGN,
     );
-    await this.projectService.updateApprovalStatus(projectId, "design", {
+    const updatedProject = await this.projectService.updateApprovalStatus(projectId, "design", {
       generated: true,
       approved: false,
     });
+    const specContent = await this.templateService.generateSpecJson(updatedProject);
+    await this.templateService.writeProjectFile(updatedProject, "spec.json", specContent);
 
     return `Design document generated for project "${project.name}"`;
   }
 
   private async handleTasks(args: Record<string, unknown>): Promise<string> {
-    const { projectId } = args;
+    const { projectId, reviewTestCases } = args;
 
     if (typeof projectId !== "string") {
       throw new Error("Invalid argument: projectId must be a string");
@@ -463,17 +528,50 @@ export class SDDToolAdapter {
     const content = await this.templateService.generateTasksTemplate(project);
     await this.templateService.writeProjectFile(project, "tasks.md", content);
 
+    if (typeof reviewTestCases === "boolean") {
+      await this.projectService.updateTestCaseReviewCheckpoint(projectId, {
+        required: reviewTestCases,
+        reviewed: !reviewTestCases,
+      });
+    }
+
     // Update project phase and approval status
     await this.projectService.updateProjectPhase(
       projectId,
       WorkflowPhase.TASKS,
     );
-    await this.projectService.updateApprovalStatus(projectId, "tasks", {
+    const updatedProject = await this.projectService.updateApprovalStatus(projectId, "tasks", {
       generated: true,
       approved: false,
     });
+    const specContent = await this.templateService.generateSpecJson(updatedProject);
+    await this.templateService.writeProjectFile(updatedProject, "spec.json", specContent);
 
     return `Tasks document generated for project "${project.name}"`;
+  }
+
+  private async handleReviewTestCases(
+    args: Record<string, unknown>,
+  ): Promise<string> {
+    const { projectId } = args;
+
+    if (typeof projectId !== "string") {
+      throw new Error("Invalid argument: projectId must be a string");
+    }
+
+    const project = await this.projectService.getProject(projectId);
+    if (!project) {
+      throw new Error("Project not found");
+    }
+
+    const updatedProject = await this.projectService.updateTestCaseReviewCheckpoint(
+      projectId,
+      { required: true, reviewed: true },
+    );
+    const specContent = await this.templateService.generateSpecJson(updatedProject);
+    await this.templateService.writeProjectFile(updatedProject, "spec.json", specContent);
+
+    return `TDD test cases reviewed for project "${project.name}"`;
   }
 
   private async handleQualityCheck(
@@ -491,6 +589,31 @@ export class SDDToolAdapter {
     });
 
     return this.qualityService.formatQualityReport(report);
+  }
+
+  private async handleContextLoad(
+    args: Record<string, unknown>,
+  ): Promise<string> {
+    const { projectId, mode = "compact" } = args;
+
+    if (typeof projectId !== "string") {
+      throw new Error("Invalid argument: projectId must be a string");
+    }
+    if (!["compact", "standard", "full"].includes(mode as string)) {
+      throw new Error("Invalid argument: mode must be compact, standard, or full");
+    }
+
+    const project = await this.projectService.getProject(projectId);
+    if (!project) {
+      throw new Error("Project not found");
+    }
+
+    const context = await this.contextCompactionService.loadContext(
+      project,
+      mode as ContextLoadMode,
+    );
+
+    return context;
   }
 
   private async handleSteering(args: Record<string, unknown>): Promise<string> {

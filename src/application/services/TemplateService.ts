@@ -18,6 +18,7 @@ import type {
 } from '../../domain/templates/index.js';
 import { TYPES } from '../../infrastructure/di/types.js';
 import { Project } from '../../domain/types.js';
+import { WorkflowDomainService } from '../../domain/services/DomainService.js';
 import { 
   TemplateEngine, 
   FileSystemPort
@@ -79,11 +80,36 @@ export class TemplateService {
       "approved": {{project.metadata.approvals.tasks.approved}}
     }
   },
+  "workflow_options": {
+    "review_test_cases": {{project.metadata.workflowOptions.reviewTestCases}}
+  },
+  "checkpoints": {
+    "test_cases": {
+      "required": {{project.metadata.checkpoints.testCases.required}},
+      "reviewed": {{project.metadata.checkpoints.testCases.reviewed}}
+    }
+  },
   "ready_for_implementation": {{isReadyForImplementation project}}
 }`;
 
+    const normalizedProject: Project = {
+      ...project,
+      metadata: {
+        ...project.metadata,
+        workflowOptions: project.metadata.workflowOptions ?? {
+          reviewTestCases: false
+        },
+        checkpoints: project.metadata.checkpoints ?? {
+          testCases: {
+            required: false,
+            reviewed: true
+          }
+        }
+      }
+    };
+
     const data: LegacyTemplateData = {
-      project,
+      project: normalizedProject,
       timestamp: new Date().toISOString()
     };
 
@@ -579,10 +605,7 @@ ${tasks.deployment.map((task, index) => `- [ ] ${index + 1}. ${task.title}
 
   private registerCustomHelpers(): void {
     this.templateEngine.registerHelper('isReadyForImplementation', (project: Project) => {
-      const { approvals } = project.metadata;
-      return (approvals.requirements.approved && 
-             approvals.design.approved && 
-             approvals.tasks.approved).toString();
+      return WorkflowDomainService.isReadyForImplementation(project).toString();
     });
 
     this.templateEngine.registerHelper('formatDate', (date: Date) => {

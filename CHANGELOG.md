@@ -5,6 +5,28 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.4.0] - 2026-06-22
+
+### Added
+- **Automatic context handoffs**: Phase approvals now generate compact handoff files under `.spec/specs/{feature}/context/`
+  - `sdd-context-load` defaults to compact context for routine workflow continuation
+  - Supports `compact`, `standard`, and `full` context loading modes
+  - Reports estimated token reduction using deterministic source-vs-handoff estimates
+- **Optional TDD test-case review checkpoint**:
+  - `sdd-init` and `sdd-tasks` can enable `reviewTestCases`
+  - New `sdd-review-test-cases` tool marks the checkpoint reviewed
+  - Task approval and implementation readiness are blocked until review when the checkpoint is required
+
+### Changed
+- **Default install profile is lean**: `npx sdd-mcp-server install` now installs skills, steering, and hooks by default
+  - Use `--profile full` or `--all` to install rules, contexts, and agents too
+- **Context management guidance**: README, architecture docs, and project steering now document compact handoffs and generated install outputs
+- **Generated install artifacts ignored**: `.claude/`, `.agents/`, and `.codex/` generated component outputs are excluded from new tracking
+
+### Fixed
+- **Context-load validation**: `sdd-context-load` now errors for missing features instead of creating synthetic handoff files for mistyped feature names
+- **Version metadata**: package lock metadata is synchronized with the published package version and current bin layout
+
 ## [3.1.1] - 2026-01-28
 
 ### Fixed

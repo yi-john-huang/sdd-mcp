@@ -24,7 +24,12 @@ export class ProjectService {
     @inject(TYPES.LoggerPort) private readonly logger: LoggerPort
   ) {}
 
-  async createProject(name: string, path: string, language = 'en'): Promise<Project> {
+  async createProject(
+    name: string,
+    path: string,
+    language = 'en',
+    options: { reviewTestCases?: boolean } = {}
+  ): Promise<Project> {
     const correlationId = uuidv4();
     
     this.logger.info('Creating new project', {
@@ -47,6 +52,15 @@ export class ProjectService {
           requirements: { generated: false, approved: false },
           design: { generated: false, approved: false },
           tasks: { generated: false, approved: false }
+        },
+        workflowOptions: {
+          reviewTestCases: options.reviewTestCases ?? false
+        },
+        checkpoints: {
+          testCases: {
+            required: options.reviewTestCases ?? false,
+            reviewed: !(options.reviewTestCases ?? false)
+          }
         }
       }
     };
@@ -156,6 +170,63 @@ export class ProjectService {
       correlationId,
       projectId,
       phaseType
+    });
+
+    return updatedProject;
+  }
+
+  async updateTestCaseReviewCheckpoint(
+    projectId: string,
+    checkpoint: Partial<{ required: boolean; reviewed: boolean }>
+  ): Promise<Project> {
+    const correlationId = uuidv4();
+
+    this.logger.info('Updating test case review checkpoint', {
+      correlationId,
+      projectId,
+      checkpoint
+    });
+
+    const project = await this.projectRepository.findById(projectId);
+    if (!project) {
+      throw new Error(`Project not found: ${projectId}`);
+    }
+
+    const current = project.metadata.checkpoints?.testCases ?? {
+      required: false,
+      reviewed: true
+    };
+    const required = checkpoint.required ?? current.required;
+    const reviewed = checkpoint.reviewed ?? (required ? current.reviewed : true);
+
+    const updatedProject: Project = {
+      ...project,
+      metadata: {
+        ...project.metadata,
+        updatedAt: new Date(),
+        workflowOptions: {
+          ...project.metadata.workflowOptions,
+          reviewTestCases: required
+        },
+        checkpoints: {
+          ...project.metadata.checkpoints,
+          testCases: {
+            required,
+            reviewed,
+            reviewedAt: reviewed ? new Date() : undefined
+          }
+        }
+      }
+    };
+
+    await this.validation.validate(updatedProject, projectSchema);
+    await this.projectRepository.save(updatedProject);
+
+    this.logger.info('Test case review checkpoint updated successfully', {
+      correlationId,
+      projectId,
+      required,
+      reviewed
     });
 
     return updatedProject;
