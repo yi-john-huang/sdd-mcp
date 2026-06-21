@@ -3,6 +3,7 @@ import { v4 as uuidv4 } from 'uuid';
 import { TYPES } from '../../infrastructure/di/types.js';
 import { Project, WorkflowPhase } from '../../domain/types.js';
 import { ProjectRepository, LoggerPort } from '../../domain/ports.js';
+import { WorkflowDomainService } from '../../domain/services/DomainService.js';
 
 export interface WorkflowValidationResult {
   canProgress: boolean;
@@ -91,6 +92,13 @@ export class WorkflowService {
             canProgress: false,
             reason: 'Tasks must be generated and approved before implementation phase',
             requiredApprovals: ['tasks']
+          };
+        }
+        if (!WorkflowDomainService.isTestCaseReviewSatisfied(project)) {
+          return {
+            canProgress: false,
+            reason: 'TDD test cases must be reviewed before implementation because the test-case review checkpoint is enabled',
+            requiredApprovals: ['test-cases']
           };
         }
         return { canProgress: true };

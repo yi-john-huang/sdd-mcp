@@ -35,6 +35,7 @@ function createOptions(overrides: Partial<CLIOptions> = {}): CLIOptions {
     codex: false,
     antigravity: false,
     allTools: false,
+    installProfile: 'lean',
     ...overrides,
   };
 }
@@ -101,6 +102,7 @@ describe('InstallSkillsCLI', () => {
       expect(options.contextsPath).toBe('.claude/contexts');
       expect(options.agentsPath).toBe('.claude/agents');
       expect(options.hooksPath).toBe('.claude/hooks');
+      expect(options.installProfile).toBe('lean');
     });
 
     it('should parse --list flag', () => {
@@ -198,7 +200,15 @@ describe('InstallSkillsCLI', () => {
       const args = ['--all'];
       const options = cli.parseArgs(args);
 
+      expect(options.installProfile).toBe('full');
       expect(options.components).toEqual(['skills', 'steering', 'rules', 'contexts', 'agents', 'hooks']);
+    });
+
+    it('should parse --profile full flag', () => {
+      const args = ['--profile', 'full'];
+      const options = cli.parseArgs(args);
+
+      expect(options.installProfile).toBe('full');
     });
 
     it('should parse multiple component flags', () => {

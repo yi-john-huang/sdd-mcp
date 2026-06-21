@@ -15,6 +15,7 @@ import { getDistCliDir, findTemplate } from './utils/find-package-root.js';
  * Component types that can be installed
  */
 export type ComponentType = 'skills' | 'steering' | 'rules' | 'contexts' | 'agents' | 'hooks';
+export type InstallProfile = 'lean' | 'full';
 
 /**
  * CLI options for install-skills command
@@ -56,6 +57,8 @@ export interface CLIOptions {
   antigravity: boolean;
   /** Enable all tool integrations (codex + antigravity) */
   allTools: boolean;
+  /** Installation profile for default unified install */
+  installProfile: InstallProfile;
 }
 
 /**
@@ -155,6 +158,7 @@ export class InstallSkillsCLI {
       codex: false,
       antigravity: false,
       allTools: false,
+      installProfile: 'lean',
     };
 
     for (let i = 0; i < args.length; i++) {
@@ -223,8 +227,17 @@ export class InstallSkillsCLI {
           options.hooksOnly = true;
           options.components.push('hooks');
           break;
+        case '--profile':
+          if (i + 1 < args.length) {
+            const profile = args[++i];
+            if (profile === 'lean' || profile === 'full') {
+              options.installProfile = profile;
+            }
+          }
+          break;
         case '--all':
           // Install all component types
+          options.installProfile = 'full';
           options.components = ['skills', 'steering', 'rules', 'contexts', 'agents', 'hooks'];
           break;
         case '--codex':
@@ -279,9 +292,9 @@ export class InstallSkillsCLI {
     const hasSpecificComponents = options.components.length > 0;
     const componentsToInstall = hasSpecificComponents
       ? options.components
-      : ['skills', 'steering', 'rules', 'contexts', 'agents', 'hooks'] as ComponentType[];
+      : this.getDefaultComponents(options.installProfile);
 
-    console.log('\n🚀 SDD Component Installer\n');
+    console.log(`\n🚀 SDD Component Installer (${options.installProfile} profile)\n`);
 
     for (const component of componentsToInstall) {
       switch (component) {
@@ -345,6 +358,14 @@ export class InstallSkillsCLI {
     }
 
     console.log('\n✨ Installation complete!\n');
+  }
+
+  private getDefaultComponents(profile: InstallProfile): ComponentType[] {
+    if (profile === 'full') {
+      return ['skills', 'steering', 'rules', 'contexts', 'agents', 'hooks'];
+    }
+
+    return ['skills', 'steering', 'hooks'];
   }
 
   /**
@@ -679,7 +700,8 @@ SDD Unified Installer
 
 Usage: npx sdd-mcp-server install [options]
 
-Installs SDD components (skills, steering, rules, contexts, agents, hooks) to your project.
+Installs SDD components to your project. The default lean profile installs skills,
+steering, and hooks only to reduce always-on context and token usage.
 
 Component Options (install specific types):
   --skills              Install skills only (to .claude/skills)
@@ -688,7 +710,9 @@ Component Options (install specific types):
   --contexts            Install contexts only (to .claude/contexts)
   --agents              Install agents only (to .claude/agents)
   --hooks               Install hooks only (to .claude/hooks)
-  --all                 Install all component types (default behavior)
+  --all                 Install all component types
+  --profile <profile>   Install profile when no component flags are provided:
+                        lean (default) or full
 
 Path Options (customize installation targets):
   --path <dir>          Target for skills (default: .claude/skills)
@@ -708,7 +732,8 @@ Other Options:
   --help, -h            Show this help message
 
 Examples:
-  npx sdd-mcp-server install                     # Install all components
+  npx sdd-mcp-server install                     # Lean install for lower token usage
+  npx sdd-mcp-server install --profile full      # Install all components
   npx sdd-mcp-server install --skills --rules    # Install skills and rules only
   npx sdd-mcp-server install --list              # List available components
   npx sdd-mcp-server install --codex             # Claude + Codex CLI support

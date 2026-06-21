@@ -1,96 +1,103 @@
-# Technology Stack
+# Technology Overview
+
+## Stack
+
+### Language and Runtime
+- **Primary language:** TypeScript 5.x
+- **Runtime:** Node.js >= 18
+- **Module system:** ESM (`"type": "module"`)
+- **Build target:** ES2022
+- **Package manager:** npm with `package-lock.json`
+
+### Core Frameworks and Protocols
+- **Model Context Protocol SDK:** MCP server primitives, tools, resources, prompts, and stdio transport.
+- **Inversify:** Dependency injection container for clean architecture wiring.
+- **Handlebars:** Template rendering for generated documents and project artifacts.
+- **AJV and Zod:** Runtime validation for schemas and structured input.
+- **i18next:** Localization infrastructure.
+- **Jest and ts-jest:** Unit testing for TypeScript ESM modules.
+
+### Key Dependencies
+| Package | Purpose |
+|---------|---------|
+| `@modelcontextprotocol/sdk` | MCP server integration and protocol types |
+| `inversify` + `reflect-metadata` | Dependency injection for application and infrastructure services |
+| `handlebars` | Template rendering and document generation |
+| `ajv` + `ajv-formats` | JSON schema validation |
+| `zod` | Structured schema definitions and validation |
+| `@babel/parser`, `acorn`, `esprima`, `typescript-estree` | Source parsing and quality/codebase analysis |
+| `i18next` packages | Localization services |
+| `uuid` | Stable IDs for projects and workflow objects |
 
 ## Architecture
-**Type**: Domain-Driven Design (DDD)  
-**Language**: TypeScript  
-**Module System**: ES Module  
-**Framework**: MCP SDK  
-**Build Tool**: TypeScript Compiler
 
+### Pattern
+The codebase follows a clean architecture / hexagonal style:
 
-### Domain-Driven Design Architecture
-The project follows DDD principles with clear separation between:
-- **Domain Layer**: Business logic and domain models
-- **Application Layer**: Use cases and application services  
-- **Infrastructure Layer**: External dependencies and integrations
-- **Presentation Layer**: API endpoints or UI components
+```text
+src/index.ts, src/cli, src/adapters
+  -> presentation and command/tool adapters
 
+src/application/services
+  -> workflow orchestration and use cases
 
-## Technology Stack
-- **Node.js**: JavaScript runtime for server-side execution
-- **TypeScript**: Typed superset of JavaScript for enhanced developer experience
-- **MCP SDK**: Model Context Protocol SDK for AI agent integration
-- **Jest**: Testing framework for unit and integration tests
-- **TypeScript Compiler**: Build and bundling tool for production optimization
-- **@babel/parser**: Project dependency
-- **@babel/types**: Project dependency
-- **@modelcontextprotocol/sdk**: MCP SDK for AI tool integration
-- **@typescript-eslint/typescript-estree**: Project dependency
-- **acorn**: Project dependency
+src/domain
+  -> ports, types, workflow state, quality contracts, plugin contracts
 
-## Development Environment
-- **Node Version**: >=18.0.0
-- **Package Manager/Build**: npm
-- **Language**: TypeScript with type safety
-- **Testing**: Jest
-
-## Dependencies Analysis
-### Production Dependencies (16)
-- `@babel/parser`: Project dependency
-- `@babel/types`: Project dependency
-- `@modelcontextprotocol/sdk`: MCP SDK for AI tool integration
-- `@typescript-eslint/typescript-estree`: Project dependency
-- `acorn`: Project dependency
-- `ajv`: JSON schema validator
-- `ajv-formats`: Project dependency
-- `esprima`: Project dependency
-- `handlebars`: Template engine
-- `i18next`: Internationalization framework
-- `i18next-fs-backend`: Project dependency
-- `i18next-http-middleware`: Project dependency
-- `inversify`: Dependency injection container
-- `os-locale`: Project dependency
-- `reflect-metadata`: Project dependency
-
-... and 1 more
-
-### Development Dependencies (16)
-- `@types/esprima`: Project dependency
-- `@types/handlebars`: Project dependency
-- `@types/jest`: Project dependency
-- `@types/node`: Project dependency
-- `@types/sinon`: Project dependency
-- `@types/supertest`: Project dependency
-- `@types/uuid`: Project dependency
-- `@typescript-eslint/eslint-plugin`: Project dependency
-- `@typescript-eslint/parser`: Project dependency
-- `eslint`: JavaScript linter
-
-... and 6 more
-
-## Development Commands
-```bash
-npm run dev  # Start development server with hot reload
-npm run start  # Start production server
-npm run build  # Build project for production
-npm run test  # Run test suite
-npm run lint  # Check code quality with linter
-npm run typecheck  # Validate TypeScript types
-npm run test:unit  # jest --testPathPattern=__tests__.*\.test\.ts$ --te...
-npm run test:integration  # jest --testPathPattern=integration.*\.test\.ts$
-npm run test:e2e  # jest --testPathPattern=e2e.*\.test\.ts$
-npm run test:watch  # jest --watch
-npm run test:coverage  # jest --coverage
-npm run test:ci  # jest --coverage --ci --watchAll=false --passWithNo...
-npm run lint:fix  # eslint src --ext .ts --fix
-npm run validate  # npm run typecheck && npm run lint && npm run test:...
+src/infrastructure
+  -> MCP server, filesystem/config adapters, DI, schemas, templates, plugins
 ```
 
-## Quality Assurance
-- **Linting**: Automated code quality checks
-- **Type Checking**: TypeScript compilation validation
+Domain ports live in `src/domain/ports.ts` and are implemented in infrastructure adapters. Application services depend on ports and domain types; `src/infrastructure/di/container.ts` binds concrete implementations with Inversify.
 
-## Deployment Configuration
-- **Containerization**: Docker support for consistent deployments
-- **Build Process**: `npm run build` for production artifacts
-- **Module System**: ES modules for modern JavaScript
+### Main Runtime Paths
+- `src/index.ts` starts the MCP server and includes the simplified MCP mode used by `npx`/stdio clients.
+- `src/infrastructure/mcp/` implements MCP server concerns: tool registry, prompts, resources, sessions, capability negotiation, and errors.
+- `src/adapters/cli/SDDToolAdapter.ts` maps tool calls into application services.
+- `src/cli/` contains install and migration commands.
+- `src/application/services/ContextCompactionService.ts` handles compact handoff generation and context loading.
+
+## Development Environment
+
+### Setup
+```bash
+npm install
+npm run build
+npm start
+```
+
+### Common Commands
+| Command | Purpose |
+|---------|---------|
+| `npm run dev` | Run `src/index.ts` with `tsx watch` |
+| `npm run build` | Compile TypeScript into `dist/` |
+| `npm run start` | Run the compiled server |
+| `npm run typecheck` | Run `tsc --noEmit` |
+| `npm run lint` | Run ESLint over `src/**/*.ts` |
+| `npm run test` | Run Jest |
+| `npm run test:unit` | Run unit tests only; quote the ignore pattern in zsh if invoking manually |
+| `npm run test:coverage` | Generate coverage reports |
+| `npm run validate` | Typecheck, lint, and coverage CI test |
+
+### Packaging
+- Published package name: `sdd-mcp-server`
+- Current version: `3.4.0`
+- Binaries:
+  - `sdd-mcp-server` -> `sdd-entry.js`
+  - `sdd-install-skills` -> `dist/cli/install-skills.js`
+- Published component directories include `skills`, `steering`, `rules`, `contexts`, `agents`, and `hooks`.
+
+### Docker
+The Docker build is multi-stage:
+- `node:18-alpine` builder
+- production dependencies stage
+- `gcr.io/distroless/nodejs18-debian11` runtime
+
+The production image is intended to run with a minimal attack surface and no shell.
+
+## Quality Standards
+- Keep `npm run typecheck` passing before delivery.
+- Use focused Jest unit tests for workflow, installer, context, validation, and service behavior.
+- Maintain the configured global coverage threshold of 80% for branches, functions, lines, and statements in coverage runs.
+- Use existing port/service abstractions before adding new infrastructure dependencies.
+- Keep generated or installed local agent components out of source control unless they are source assets under root `skills/`, `rules/`, `contexts/`, `agents/`, `hooks/`, or `steering/`.

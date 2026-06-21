@@ -13,8 +13,18 @@ export const projectSchema = {
     metadata: {
       type: 'object',
       properties: {
-        createdAt: { type: 'string', format: 'date-time' },
-        updatedAt: { type: 'string', format: 'date-time' },
+        createdAt: {
+          anyOf: [
+            { type: 'string', format: 'date-time' },
+            { type: 'object' }
+          ]
+        },
+        updatedAt: {
+          anyOf: [
+            { type: 'string', format: 'date-time' },
+            { type: 'object' }
+          ]
+        },
         language: { type: 'string', enum: ['en', 'ja', 'zh-TW'] },
         approvals: {
           type: 'object',
@@ -45,6 +55,33 @@ export const projectSchema = {
             }
           },
           required: ['requirements', 'design', 'tasks']
+        },
+        workflowOptions: {
+          type: 'object',
+          properties: {
+            reviewTestCases: { type: 'boolean' }
+          },
+          required: ['reviewTestCases']
+        },
+        checkpoints: {
+          type: 'object',
+          properties: {
+            testCases: {
+              type: 'object',
+              properties: {
+                required: { type: 'boolean' },
+                reviewed: { type: 'boolean' },
+                reviewedAt: {
+                  anyOf: [
+                    { type: 'string', format: 'date-time' },
+                    { type: 'object' }
+                  ]
+                }
+              },
+              required: ['required', 'reviewed']
+            }
+          },
+          required: ['testCases']
         }
       },
       required: ['createdAt', 'updatedAt', 'language', 'approvals']

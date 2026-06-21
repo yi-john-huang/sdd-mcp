@@ -6,7 +6,7 @@
 
 A Model Context Protocol (MCP) server implementing Spec-Driven Development (SDD) workflows for AI-agent CLIs and IDEs like Claude Code, Cursor, and others.
 
-> **v3.3** - Multi-tool install support: `--codex` (AGENTS.md for OpenAI Codex CLI), `--antigravity` (.agent/ symlinks for Google Antigravity), `--all-tools`. See [CHANGELOG.md](CHANGELOG.md) for full version history.
+> **v3.4.0** - Automatic compact context handoffs, lean install defaults, and optional TDD test-case review checkpoints. See [CHANGELOG.md](CHANGELOG.md) for full version history.
 
 ## 🚀 Quick Start
 
@@ -16,7 +16,7 @@ A Model Context Protocol (MCP) server implementing Spec-Driven Development (SDD)
 npx -y sdd-mcp-server@latest
 
 # Pin exact version (optional)
-npx -y sdd-mcp-server@1.6.0
+npx -y sdd-mcp-server@3.4.0
 
 # For Claude Code MCP integration, add to your configuration:
 # "sdd-mcp-server": {
@@ -31,7 +31,7 @@ npx -y sdd-mcp-server@1.6.0
 npm install -g sdd-mcp-server@latest
 
 # Pin exact version (optional)
-npm install -g sdd-mcp-server@1.6.0
+npm install -g sdd-mcp-server@3.4.0
 
 # Start the server
 sdd-mcp-server
@@ -140,18 +140,21 @@ npm install -g sdd-mcp-server@latest
 sdd-mcp-server
 ```
 
-## 🎯 Agent Skills (NEW in v1.9.0)
+## 🎯 Agent Skills & Components (v3.4.0)
 
 SDD now uses a **hybrid architecture** for better token efficiency:
 
 - **MCP Tools**: Action-oriented operations (init, status, approve, quality-check, validate, spec-impl)
 - **Agent Skills**: Template/guidance-heavy operations (requirements, design, tasks, steering, implement, commit)
 
-### Installing Components (v3.0+)
+### Installing Components (v3.4.0)
 
 ```bash
-# Recommended: Install ALL components (skills, steering, rules, contexts, agents, hooks)
-npx sdd-mcp-server install --all
+# Recommended: lean install for lower token usage (skills, steering, hooks)
+npx sdd-mcp-server install
+
+# Full install when you explicitly want all always-on guidance components
+npx sdd-mcp-server install --profile full
 
 # Install specific component types
 npx sdd-mcp-server install --skills      # Skills to .claude/skills/
@@ -163,9 +166,6 @@ npx sdd-mcp-server install --hooks       # Hooks to .claude/hooks/
 
 # Install multiple component types
 npx sdd-mcp-server install --skills --rules --agents
-
-# Default: Install skills + steering (backward compatible)
-npx sdd-mcp-server install
 
 # List all available components
 npx sdd-mcp-server install --list
@@ -179,12 +179,12 @@ npx sdd-mcp-server install --antigravity       # + .agent/ symlinks for Google A
 npx sdd-mcp-server install --all-tools         # + all tool integrations
 ```
 
-**Component Types (v3.0):**
+**Component Types (v3.4.0):**
 | Component | Install Path | Purpose |
 |-----------|--------------|---------|
 | **Skills** | `.claude/skills/` | Workflow guidance (requirements, design, tasks, implement, etc.) |
 | **Steering** | `.spec/steering/` | Project-specific templates (product, tech, structure) |
-| **Rules** | `.claude/rules/` | Always-active guidelines (coding-style, testing, security, git-workflow) |
+| **Rules** | `.claude/rules/` | Optional always-active guidelines (coding-style, testing, security, git-workflow) |
 | **Contexts** | `.claude/contexts/` | Mode-specific prompts (dev, review, planning, security-audit, research) |
 | **Agents** | `.claude/agents/` | Specialized AI personas (planner, architect, reviewer, implementer) |
 | **Hooks** | `.claude/hooks/` | Event-driven automation (pre-tool-use, post-tool-use, session events) |
@@ -208,11 +208,12 @@ The 6 component types work together in a **layered guidance model**:
                               │
                               ▼
 ┌──────────────────────────────────────────────────────────────┐
-│  RULES (always active)                                       │
+│  RULES (optional always-active profile)                      │
 │  • coding-style.md → TypeScript/JS conventions               │
 │  • testing.md → TDD requirements                             │
 │  • security.md → OWASP guidelines                            │
-│  • Loaded at session start, apply to ALL operations          │
+│  • Install only when your client benefits from always-on     │
+│    rule files                                                │
 └──────────────────────────────────────────────────────────────┘
                               │
                               ▼
@@ -244,7 +245,7 @@ The 6 component types work together in a **layered guidance model**:
                               │
                               ▼
 ┌──────────────────────────────────────────────────────────────┐
-│  STEERING (project-specific templates - v3.1+)               │
+│  STEERING (project-specific templates - v3.4.0)              │
 │  • product.md → Product description                          │
 │  • tech.md → Technology stack                                │
 │  • structure.md → Project structure                          │
@@ -262,7 +263,7 @@ The 6 component types work together in a **layered guidance model**:
 **When Each Component Activates:**
 | Component | Activation | Example |
 |-----------|------------|---------|
-| **Rules** | Session start (always) | `coding-style.md` enforces conventions on every response |
+| **Rules** | Full profile/session start | `coding-style.md` enforces conventions when rules are installed |
 | **Contexts** | Task type detection | `review.md` activates when reviewing code |
 | **Agents** | Explicit invocation | `reviewer.md` invoked by `/sdd-review` skill |
 | **Skills** | User command (`/skill-name`) | `/sdd-requirements` loads requirements template |
@@ -329,8 +330,35 @@ After installation, use these skills in Claude Code:
 
 **Old Design** (static steering): ~3,800 tokens loaded for every operation
 **New Design** (skills): ~1,700 tokens loaded only when skill invoked
+**Lean Install** (default): avoids installing rules, contexts, and agents unless requested
+**Automatic Handoffs**: phase approvals write compact `.spec/specs/{feature}/context/handoff.md` summaries and `sdd-context-load` uses them by default
 
-**Savings**: ~55% fewer tokens in typical operations!
+**Savings**: ~55% fewer tokens in typical operations, with further savings from lean install and compact handoffs. On typical specs, compact handoff loading targets a 60-85% reduction versus loading full `requirements.md`, `design.md`, and `tasks.md`.
+
+### Automatic Context Handoffs
+
+To reduce context growth during long SDD workflows, approval tools automatically compact phase context:
+
+```text
+sdd-approve requirements  -> .spec/specs/{feature}/context/requirements-handoff.md
+sdd-approve design        -> .spec/specs/{feature}/context/design-handoff.md
+sdd-approve tasks         -> .spec/specs/{feature}/context/tasks-handoff.md
+latest approved context   -> .spec/specs/{feature}/context/handoff.md
+```
+
+`sdd-context-load` defaults to compact mode and loads `handoff.md` instead of all phase documents.
+
+Use explicit modes when needed:
+
+```json
+{ "featureName": "auth-flow", "mode": "compact" }
+{ "featureName": "auth-flow", "mode": "standard" }
+{ "featureName": "auth-flow", "mode": "full" }
+```
+
+- `compact`: handoff only, best for routine continuation.
+- `standard`: handoff plus current `spec.json`.
+- `full`: all phase documents, for audits or ambiguous decisions.
 
 ## 📋 Available MCP Tools
 
@@ -341,8 +369,9 @@ Once connected to your AI client, you can use these MCP tools:
 | `sdd-init` | Initialize new SDD project with interactive clarification | Analyzes description quality (0-100 score), blocks if < 70%, asks targeted WHY/WHO/WHAT questions |
 | `sdd-status` | Check workflow progress | Shows current phase and approvals for features |
 | `sdd-approve` | Approve workflow phases | Mark phases (requirements, design, tasks) as approved |
+| `sdd-review-test-cases` | Approve optional TDD test-case checkpoint | Use before approving tasks when test-case review is enabled |
 | `sdd-quality-check` | Code quality analysis | Linus-style 5-layer code review |
-| `sdd-context-load` | Load project context | Restore project memory and state |
+| `sdd-context-load` | Load project context | Defaults to compact handoff context; use `mode: "full"` only when needed |
 | `sdd-validate-design` | Design quality validation | Interactive GO/NO-GO design review |
 | `sdd-validate-gap` | Implementation gap analysis | Analyze requirements vs codebase |
 | `sdd-spec-impl` | Execute tasks with TDD | Kent Beck's Red-Green-Refactor methodology |
@@ -385,6 +414,8 @@ Once connected to your AI client, you can use these MCP tools:
    Use /sdd-tasks <feature-name> to create TDD-focused task breakdown
    Includes test pyramid guidance (70/20/10 ratio)
    Tasks follow RED-GREEN-REFACTOR workflow automatically
+   Optional: enable test-case review checkpoint before implementation
+   If enabled, run sdd-review-test-cases before approving tasks
    Use sdd-approve (MCP tool) to approve the tasks phase
    ```
 
@@ -404,7 +435,7 @@ Once connected to your AI client, you can use these MCP tools:
 7. **Monitor & Manage (MCP Tools)**
    ```
    Use sdd-status to check workflow progress and phase approvals
-   Use sdd-context-load to restore project memory
+   Use sdd-context-load to restore compact project memory
    ```
 
 ## ⚙️ Configuration
@@ -480,7 +511,7 @@ claude mcp add sdd "sdd-mcp-server"
 - **EARS-Formatted Requirements**: Generate acceptance criteria based on actual npm scripts and dependencies
 - **Quality Enforcement**: Linus-style 5-layer code review system with security (OWASP Top 10) checks
 
-### Plugin Architecture (v3.0)
+### Plugin Architecture (v3.4.0)
 - **6 Component Types**: Skills, Steering, Rules, Contexts, Agents, Hooks for comprehensive AI guidance
 - **Specialized Agents**: Planner, Architect, Reviewer, Implementer, Security-Auditor, TDD-Guide personas
 - **Always-Active Rules**: Coding-style, Testing, Security, Git-workflow, Error-handling enforcement
@@ -496,7 +527,7 @@ claude mcp add sdd "sdd-mcp-server"
 
 ### Guidelines & Standards
 - **Coding Principles Enforcement**: Built-in SOLID, DRY, KISS, YAGNI, Separation of Concerns, and Modularity guidance
-- **Comprehensive Steering Documents**: 8 auto-generated guidance docs (product, tech, structure, linus-review, commit, tdd-guideline, security-check, principles)
+- **Project Steering Documents**: Project-specific `product.md`, `tech.md`, and `structure.md` docs, with static guidance consolidated into installable skills/rules/agents
 - **Multi-Language Support**: 10 languages with cultural adaptation (en, es, fr, de, it, pt, ru, ja, zh, ko)
 - **Template Engine**: Handlebars-based file generation with project-specific data
 - **Plugin System**: Extensible architecture for custom workflows
@@ -512,8 +543,8 @@ Here's how to use the MCP SDD Server in your AI client:
  for a React/TypeScript application with user authentication"
 
 # 2. Generate steering documents
-"Use sdd-steering to analyze my codebase and generate all steering documents"
-# Result: 8 steering documents created including principles.md and tdd-guideline.md
+"Use /sdd-steering to analyze my codebase and update project steering documents"
+# Result: product.md, tech.md, and structure.md describe your project
 
 # 3. Generate requirements with comprehensive analysis
 "Use sdd-requirements to analyze the project and create requirements.md"
@@ -533,7 +564,7 @@ Here's how to use the MCP SDD Server in your AI client:
 
 # 7. Implement with TDD
 "Use sdd-spec-impl to execute the authentication tasks with TDD methodology"
-# Result: Test-first development following principles.md and tdd-guideline.md
+# Result: Test-first development using installed skill and agent guidance
 
 # 8. Review code quality
 "Use sdd-quality-check to perform Linus-style code review with SOLID principles check"
@@ -630,15 +661,15 @@ For detailed documentation on:
 - **Plugin Development**: See [DEPLOYMENT.md](DEPLOYMENT.md)
 - **Docker Deployment**: See [Dockerfile](Dockerfile) and [docker-compose.yml](docker-compose.yml)
 
-**Component Documentation (v3.0)**:
+**Component Documentation (v3.4.0)**:
 - **Rules**: See `rules/*.md` for always-active coding guidelines
 - **Contexts**: See `contexts/*.md` for mode-specific system prompts
 - **Agents**: See `agents/*.md` for specialized AI personas
 - **Hooks**: See `hooks/**/*.md` for event-driven automation
 
-**Steering Documents (v3.1+)**:
+**Steering Documents (v3.4.0)**:
 
-As of v3.1, static steering content has been consolidated into enhanced components:
+Static steering content has been consolidated into enhanced components:
 - **Design Principles**: `.claude/rules/coding-style.md` (includes SOLID, DRY, KISS, YAGNI, SoC)
 - **TDD Methodology**: `.claude/agents/tdd-guide.md` (Red-Green-Refactor workflow)
 - **Code Review**: `.claude/agents/reviewer.md` (Linus-style 5-layer thinking)
