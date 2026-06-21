@@ -1,6 +1,7 @@
 // Domain model for SDD workflow state transitions
 
 import { WorkflowPhase, Project, PhaseApprovals } from '../types.js';
+import { WorkflowDomainService } from '../services/DomainService.js';
 
 export interface StateTransition {
   from: WorkflowPhase;
@@ -86,8 +87,9 @@ export class WorkflowStateMachine {
         condition: {
           check: (project: Project) => 
             project.metadata.approvals.tasks.generated &&
-            project.metadata.approvals.tasks.approved,
-          errorMessage: 'Tasks must be generated and approved before implementation phase',
+            project.metadata.approvals.tasks.approved &&
+            WorkflowDomainService.isTestCaseReviewSatisfied(project),
+          errorMessage: 'Tasks must be generated and approved before implementation phase; test cases must be reviewed when that checkpoint is enabled',
           requiredApprovals: ['tasks']
         }
       },
@@ -376,6 +378,9 @@ export class WorkflowStateMachine {
     }
     if (approvals.tasks.generated && !approvals.tasks.approved) {
       recommendations.push('Tasks are ready for review and approval');
+    }
+    if (!WorkflowDomainService.isTestCaseReviewSatisfied(project)) {
+      recommendations.push('Review and approve TDD test cases before implementation');
     }
 
     return {

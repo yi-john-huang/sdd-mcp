@@ -25,6 +25,8 @@ if (isMCPMode) {
 }
 
 import "reflect-metadata";
+import { existsSync } from "fs";
+import nodePath from "path";
 import { createContainer } from "./infrastructure/di/container.js";
 import { TYPES } from "./infrastructure/di/types.js";
 import type { LoggerPort } from "./domain/ports";
@@ -133,6 +135,11 @@ async function createSimpleMCPServer() {
                 description: "Answers to clarification questions (second pass)",
                 additionalProperties: { type: "string" },
               },
+              reviewTestCases: {
+                type: "boolean",
+                description:
+                  "Enable an optional TDD test-case review checkpoint before implementation",
+              },
             },
             required: ["projectName"],
           },
@@ -170,6 +177,20 @@ async function createSimpleMCPServer() {
           },
         },
         {
+          name: "sdd-review-test-cases",
+          description: "Mark optional TDD test-case review checkpoint as reviewed",
+          inputSchema: {
+            type: "object",
+            properties: {
+              featureName: {
+                type: "string",
+                description: "Feature name from spec initialization",
+              },
+            },
+            required: ["featureName"],
+          },
+        },
+        {
           name: "sdd-quality-check",
           description: "Code quality analysis",
           inputSchema: {
@@ -196,6 +217,12 @@ async function createSimpleMCPServer() {
               featureName: {
                 type: "string",
                 description: "Feature name to load context for",
+              },
+              mode: {
+                type: "string",
+                enum: ["compact", "standard", "full"],
+                description:
+                  "Context size mode. Defaults to compact handoff context.",
               },
             },
             required: ["featureName"],
@@ -271,15 +298,10 @@ async function createSimpleMCPServer() {
         return await handleQualityCheckSimplified(args);
       case "sdd-approve":
         return await handleApproveSimplified(args);
+      case "sdd-review-test-cases":
+        return await handleReviewTestCasesSimplified(args);
       case "sdd-context-load":
-        return {
-          content: [
-            {
-              type: "text",
-              text: `Project context loaded for ${args.featureName}. (Simplified MCP mode)`,
-            },
-          ],
-        };
+        return await handleContextLoadSimplified(args);
       case "sdd-validate-design":
         return {
           content: [
@@ -489,6 +511,9 @@ async function handleStatusSimplified(args: any) {
     status += `- Requirements: ${spec.approvals.requirements.generated ? "✅ Generated" : "❌ Not Generated"}${spec.approvals.requirements.approved ? ", ✅ Approved" : ", ❌ Not Approved"}\n`;
     status += `- Design: ${spec.approvals.design.generated ? "✅ Generated" : "❌ Not Generated"}${spec.approvals.design.approved ? ", ✅ Approved" : ", ❌ Not Approved"}\n`;
     status += `- Tasks: ${spec.approvals.tasks.generated ? "✅ Generated" : "❌ Not Generated"}${spec.approvals.tasks.approved ? ", ✅ Approved" : ", ❌ Not Approved"}\n\n`;
+    if (spec.checkpoints?.test_cases?.required) {
+      status += `**TDD Test Case Review**: ${spec.checkpoints.test_cases.reviewed ? "✅ Reviewed" : "❌ Pending"}\n`;
+    }
     status += `**Ready for Implementation**: ${spec.ready_for_implementation ? "✅ Yes" : "❌ No"}\n\n`;
     if (!spec.approvals.requirements.generated)
       status += `**Next Step**: Run \`sdd-requirements ${featureName}\``;
@@ -496,6 +521,8 @@ async function handleStatusSimplified(args: any) {
       status += `**Next Step**: Run \`sdd-design ${featureName}\``;
     else if (!spec.approvals.tasks.generated)
       status += `**Next Step**: Run \`sdd-tasks ${featureName}\``;
+    else if (spec.checkpoints?.test_cases?.required && !spec.checkpoints.test_cases.reviewed)
+      status += `**Next Step**: Review test cases, then run \`sdd-review-test-cases ${featureName}\``;
     else
       status += `**Next Step**: Run \`sdd-implement ${featureName}\` to begin implementation`;
     return { content: [{ type: "text", text: status }] };
@@ -527,6 +554,9 @@ async function handleStatusSimplified(args: any) {
       status += `- Requirements: ${spec.approvals.requirements.generated ? "✅" : "❌"}\n`;
       status += `- Design: ${spec.approvals.design.generated ? "✅" : "❌"}\n`;
       status += `- Tasks: ${spec.approvals.tasks.generated ? "✅" : "❌"}\n`;
+      if (spec.checkpoints?.test_cases?.required) {
+        status += `- Test cases reviewed: ${spec.checkpoints.test_cases.reviewed ? "✅" : "❌"}\n`;
+      }
       status += `- Ready: ${spec.ready_for_implementation ? "✅" : "❌"}\n\n`;
     }
   }
@@ -560,14 +590,45 @@ async function handleApproveSimplified(args: any) {
         ],
       };
     }
+    if (
+      phase === "tasks" &&
+      spec.checkpoints?.test_cases?.required &&
+      !spec.checkpoints.test_cases.reviewed
+    ) {
+      return {
+        content: [
+          {
+            type: "text",
+            text:
+              `Error: TDD test cases must be reviewed before approving tasks. ` +
+              `After review, run sdd-review-test-cases ${featureName}.`,
+          },
+        ],
+        isError: true,
+      };
+    }
     spec.approvals[phase].approved = true;
     spec.updated_at = new Date().toISOString();
+    spec.ready_for_implementation =
+      spec.approvals.requirements?.approved === true &&
+      spec.approvals.design?.approved === true &&
+      spec.approvals.tasks?.approved === true &&
+      (spec.checkpoints?.test_cases?.required !== true ||
+        spec.checkpoints.test_cases.reviewed === true);
     fs.writeFileSync(specPath, JSON.stringify(spec, null, 2));
+    const handoff = await generateCompactHandoffSimplified(featureName, phase);
     return {
       content: [
         {
           type: "text",
-          text: `## Phase Approved\n\n**Feature**: ${featureName}\n**Phase**: ${phase}\n**Status**: ✅ Approved`,
+          text:
+            `## Phase Approved\n\n` +
+            `**Feature**: ${featureName}\n` +
+            `**Phase**: ${phase}\n` +
+            `**Status**: ✅ Approved\n` +
+            `**Context Handoff**: ${handoff.relativePath}\n` +
+            `**Estimated Context Reduction**: ${handoff.reductionPercentage}% ` +
+            `(~${handoff.sourceTokens} → ~${handoff.compactTokens} tokens)`,
         },
       ],
     };
@@ -577,6 +638,292 @@ async function handleApproveSimplified(args: any) {
         {
           type: "text",
           text: `Error approving phase: ${(error as Error).message}`,
+        },
+      ],
+      isError: true,
+    };
+  }
+}
+
+async function handleContextLoadSimplified(args: any) {
+  const fs = await import("fs");
+  const path = await import("path");
+  const { featureName, mode = "compact" } = args || {};
+
+  if (!featureName) {
+    return {
+      content: [{ type: "text", text: "featureName is required" }],
+      isError: true,
+    };
+  }
+  if (!["compact", "standard", "full"].includes(mode)) {
+    return {
+      content: [{ type: "text", text: "mode must be compact, standard, or full" }],
+      isError: true,
+    };
+  }
+
+  try {
+    const { specDir, specPath } = ensureSimplifiedFeatureExists(featureName);
+    const handoffPath = path.join(specDir, "context", "handoff.md");
+
+    if (mode === "full") {
+      const context = await loadFullContextSimplified(featureName);
+      return { content: [{ type: "text", text: context }] };
+    }
+
+    if (!fs.existsSync(handoffPath)) {
+      await generateCompactHandoffSimplified(featureName, "requirements");
+    }
+
+    let context = fs.readFileSync(handoffPath, "utf8");
+    if (mode === "standard") {
+      context += `\n\n## Current Spec Metadata\n\n\`\`\`json\n${fs.readFileSync(specPath, "utf8")}\n\`\`\``;
+    }
+
+    return { content: [{ type: "text", text: context }] };
+  } catch (error) {
+    return {
+      content: [
+        {
+          type: "text",
+          text: `Error loading context: ${(error as Error).message}`,
+        },
+      ],
+      isError: true,
+    };
+  }
+}
+
+function getSimplifiedSpecDir(featureName: string): string {
+  const sddDir = existsSync(nodePath.join(process.cwd(), ".spec")) ? ".spec" : ".kiro";
+  return nodePath.join(process.cwd(), sddDir, "specs", featureName);
+}
+
+function ensureSimplifiedFeatureExists(featureName: string): { specDir: string; specPath: string } {
+  const specDir = getSimplifiedSpecDir(featureName);
+  const specPath = nodePath.join(specDir, "spec.json");
+
+  if (!existsSync(specPath)) {
+    throw new Error(
+      `Feature "${featureName}" not found. Run sdd-init first or check the feature name.`
+    );
+  }
+
+  return { specDir, specPath };
+}
+
+async function generateCompactHandoffSimplified(featureName: string, approvedPhase: string) {
+  const fs = await import("fs");
+  const path = await import("path");
+  const { specDir } = ensureSimplifiedFeatureExists(featureName);
+  const contextDir = path.join(specDir, "context");
+
+  const documents = ["requirements.md", "design.md", "tasks.md", "spec.json"]
+    .map((name) => {
+      const filePath = path.join(specDir, name);
+      return fs.existsSync(filePath)
+        ? { name, filePath, content: fs.readFileSync(filePath, "utf8") }
+        : null;
+    })
+    .filter(Boolean) as Array<{ name: string; filePath: string; content: string }>;
+
+  if (documents.length === 0) {
+    throw new Error(
+      `Feature "${featureName}" has no source documents to compact.`
+    );
+  }
+
+  fs.mkdirSync(contextDir, { recursive: true });
+
+  const sourceCharacters = documents.reduce((sum, doc) => sum + doc.content.length, 0);
+  const spec = documents.find((doc) => doc.name === "spec.json");
+  const parsedSpec = spec ? JSON.parse(spec.content) : {};
+  const summaries = documents.map((doc) => summarizeDocumentSimplified(doc.name, doc.content));
+  const nextActions = getSimplifiedNextActions(approvedPhase, parsedSpec);
+  const draft = [
+    `# SDD Context Handoff: ${featureName}`,
+    "",
+    `Generated: ${new Date().toISOString()}`,
+    `Approved phase: ${approvedPhase}`,
+    "",
+    "## Workflow State",
+    "",
+    `- Requirements: ${formatSimplifiedApproval(parsedSpec.approvals?.requirements)}`,
+    `- Design: ${formatSimplifiedApproval(parsedSpec.approvals?.design)}`,
+    `- Tasks: ${formatSimplifiedApproval(parsedSpec.approvals?.tasks)}`,
+    parsedSpec.checkpoints?.test_cases?.required
+      ? `- TDD test-case review: ${parsedSpec.checkpoints.test_cases.reviewed ? "reviewed" : "pending"}`
+      : "- TDD test-case review: not required",
+    "",
+    "## Compact Phase Summaries",
+    "",
+    summaries.join("\n\n"),
+    "",
+    "## Next Actions",
+    "",
+    ...nextActions.map((action) => `- ${action}`),
+    "",
+    "## Source References",
+    "",
+    ...documents.map((doc) => `- ${doc.filePath}`),
+    "",
+    "## Context Budget Estimate",
+    "",
+    `- Full source context: ~${estimateTokensSimplified(sourceCharacters)} tokens`,
+    "- Handoff context: ~0 tokens",
+    "- Use `sdd-context-load` default compact mode for routine continuation.",
+    '- Use `sdd-context-load` with `mode: "full"` only for audits or ambiguous decisions.'
+  ].join("\n");
+
+  const compactTokens = estimateTokensSimplified(draft.length);
+  const sourceTokens = estimateTokensSimplified(sourceCharacters);
+  const reductionPercentage = sourceTokens === 0
+    ? 0
+    : Math.max(0, Math.round((1 - compactTokens / sourceTokens) * 100));
+  const content = draft.replace("- Handoff context: ~0 tokens", `- Handoff context: ~${compactTokens} tokens`);
+  const handoffPath = path.join(contextDir, "handoff.md");
+  fs.writeFileSync(handoffPath, content);
+  fs.writeFileSync(path.join(contextDir, `${approvedPhase}-handoff.md`), content);
+
+  return {
+    relativePath: path.relative(process.cwd(), handoffPath),
+    sourceTokens,
+    compactTokens,
+    reductionPercentage,
+  };
+}
+
+async function loadFullContextSimplified(featureName: string): Promise<string> {
+  const fs = await import("fs");
+  const path = await import("path");
+  const { specDir } = ensureSimplifiedFeatureExists(featureName);
+  const parts = [`# Full SDD Context: ${featureName}`];
+
+  for (const name of ["requirements.md", "design.md", "tasks.md", "spec.json"]) {
+    const filePath = path.join(specDir, name);
+    if (fs.existsSync(filePath)) {
+      parts.push(`## ${name}\n\n${fs.readFileSync(filePath, "utf8")}`);
+    }
+  }
+
+  return parts.join("\n\n");
+}
+
+function summarizeDocumentSimplified(name: string, content: string): string {
+  const lines = content
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .filter((line) => line.length > 0 && !line.startsWith("```"));
+  const headings = lines
+    .filter((line) => /^#{1,4}\s+/.test(line))
+    .map((line) => line.replace(/^#{1,4}\s+/, "").trim())
+    .filter(uniqueSimplifiedLine)
+    .slice(0, 8);
+  const bullets = lines
+    .filter((line) => /^[-*]\s+/.test(line) || /^\d+\.\s+/.test(line))
+    .map((line) => line.replace(/^[-*]\s+/, "").replace(/^\d+\.\s+/, "").trim())
+    .filter((line) => line.length <= 220)
+    .filter(uniqueSimplifiedLine)
+    .slice(0, 8);
+  const requirementLines = lines
+    .filter((line) => /\b(SHALL|MUST|WHEN|IF|THEN|WHERE|constraint|risk|security|performance|error|edge case)\b/i.test(line))
+    .map((line) => line.replace(/^[-*]\s+/, "").replace(/^\d+\.\s+/, "").trim())
+    .filter((line) => line.length <= 240)
+    .filter(uniqueSimplifiedLine)
+    .slice(0, 8);
+
+  return [
+    `### ${name}`,
+    headings.length > 0 ? "\n**Key sections:**" : "",
+    ...headings.map((line) => `- ${line}`),
+    bullets.length > 0 ? "\n**Important points:**" : "",
+    ...bullets.map((line) => `- ${line}`),
+    requirementLines.length > 0 ? "\n**Constraints and acceptance signals:**" : "",
+    ...requirementLines.map((line) => `- ${line}`),
+    headings.length === 0 && bullets.length === 0 && requirementLines.length === 0
+      ? "- No structured summary points found; open source document if this phase is active."
+      : "",
+  ].filter(Boolean).join("\n");
+}
+
+function uniqueSimplifiedLine(line: string, index: number, lines: string[]): boolean {
+  return lines.findIndex((candidate) => candidate.toLowerCase() === line.toLowerCase()) === index;
+}
+
+function getSimplifiedNextActions(approvedPhase: string, spec: any): string[] {
+  if (approvedPhase === "requirements") {
+    return ["Generate or review design using the approved requirements handoff."];
+  }
+  if (approvedPhase === "design") {
+    return ["Generate TDD task breakdown from the approved design handoff."];
+  }
+  if (spec.checkpoints?.test_cases?.required && !spec.checkpoints.test_cases.reviewed) {
+    return ["Review TDD test cases, then run sdd-review-test-cases before approving tasks."];
+  }
+  return ["Begin implementation with compact context loaded; open full docs only for ambiguous details."];
+}
+
+function formatSimplifiedApproval(status: any): string {
+  if (status?.generated && status?.approved) return "generated, approved";
+  if (status?.generated) return "generated, pending approval";
+  return "not generated";
+}
+
+function estimateTokensSimplified(characters: number): number {
+  return Math.max(1, Math.ceil(characters / 4));
+}
+
+async function handleReviewTestCasesSimplified(args: any) {
+  const fs = await import("fs");
+  const path = await import("path");
+  const { featureName } = args || {};
+  if (!featureName) {
+    return {
+      content: [{ type: "text", text: "featureName is required" }],
+      isError: true,
+    };
+  }
+
+  try {
+    const sddDir = fs.existsSync(path.join(process.cwd(), ".spec")) ? ".spec" : ".kiro";
+    const specPath = path.join(process.cwd(), sddDir, "specs", featureName, "spec.json");
+    const spec = JSON.parse(fs.readFileSync(specPath, "utf8"));
+
+    spec.workflow_options = {
+      ...(spec.workflow_options ?? {}),
+      review_test_cases: true,
+    };
+    spec.checkpoints = {
+      ...(spec.checkpoints ?? {}),
+      test_cases: {
+        required: true,
+        reviewed: true,
+        reviewed_at: new Date().toISOString(),
+      },
+    };
+    spec.updated_at = new Date().toISOString();
+    spec.ready_for_implementation =
+      spec.approvals?.requirements?.approved === true &&
+      spec.approvals?.design?.approved === true &&
+      spec.approvals?.tasks?.approved === true;
+
+    fs.writeFileSync(specPath, JSON.stringify(spec, null, 2));
+
+    return {
+      content: [
+        {
+          type: "text",
+          text: `## TDD Test Cases Reviewed\n\n**Feature**: ${featureName}\n**Status**: ✅ Reviewed`,
+        },
+      ],
+    };
+  } catch (error) {
+    return {
+      content: [
+        {
+          type: "text",
+          text: `Error reviewing test cases: ${(error as Error).message}`,
         },
       ],
       isError: true,
@@ -695,7 +1042,7 @@ async function handleInitSimplified(args: any) {
   const path = await import("path");
 
   try {
-    const { projectName, description } = args;
+    const { projectName, description, reviewTestCases = false } = args;
 
     if (!description || typeof description !== "string") {
       throw new Error("Description is required for project initialization");
@@ -734,6 +1081,15 @@ async function handleInitSimplified(args: any) {
         tasks: {
           generated: false,
           approved: false,
+        },
+      },
+      workflow_options: {
+        review_test_cases: reviewTestCases === true,
+      },
+      checkpoints: {
+        test_cases: {
+          required: reviewTestCases === true,
+          reviewed: reviewTestCases !== true,
         },
       },
       ready_for_implementation: false,
@@ -814,7 +1170,7 @@ Note: Optional for new features or small additions. You can proceed directly to 
 1. \`sdd-init\` - Initialize spec with detailed project description
 2. \`sdd-requirements\` - Generate requirements document
 3. \`sdd-design\` - Interactive: "Have you reviewed requirements.md? [y/N]"
-4. \`sdd-tasks\` - Interactive: Confirms both requirements and design review
+4. \`sdd-tasks\` - Interactive: Confirms requirements/design review and asks whether TDD test cases need a review checkpoint
 
 ### Phase 2: Progress Tracking
 \`sdd-status\` - Check current progress and phases
@@ -834,14 +1190,15 @@ Note: Optional for new features or small additions. You can proceed directly to 
 Managed by \`sdd-steering\` tool. Updates here reflect tool changes.
 
 ### Active Steering Files
-- \`product.md\`: Always included - Product context and business objectives
-- \`tech.md\`: Always included - Technology stack and architectural decisions
-- \`structure.md\`: Always included - File organization and code patterns
-- \`linus-review.md\`: Always included - Ensuring code quality of the projects
-- \`commit.md\`: Always included - Ensuring the commit / merge request / pull request title and message context
-- \`security-check.md\`: Always included - OWASP Top 10 security checklist (REQUIRED for code generation and review)
-- \`tdd-guideline.md\`: Always included - Test-Driven Development workflow (REQUIRED for all new features)
-- \`principles.md\`: Always included - Core coding principles (SOLID, DRY, KISS, YAGNI, Separation of Concerns, Modularity)
+Load steering documents on demand to control token usage:
+- \`product.md\`: Product context and business objectives
+- \`tech.md\`: Technology stack and architectural decisions
+- \`structure.md\`: File organization and code patterns
+- \`linus-review.md\`: Code quality review standards
+- \`commit.md\`: Commit and PR conventions
+- \`security-check.md\`: OWASP Top 10 checklist for code generation and review
+- \`tdd-guideline.md\`: TDD workflow for new features
+- \`principles.md\`: SOLID, DRY, KISS, YAGNI, Separation of Concerns, Modularity
 
 ### Custom Steering Files
 <!-- Added by sdd-steering-custom tool -->
@@ -869,6 +1226,7 @@ Managed by \`sdd-steering\` tool. Updates here reflect tool changes.
 
 **Feature Name**: \`${featureName}\`
 **Description**: ${description}
+**TDD Test Case Review Checkpoint**: ${reviewTestCases === true ? "Enabled" : "Disabled"}
 
 **Created Files**:
 - \`.spec/specs/${featureName}/spec.json\` - Project metadata and phase tracking
@@ -945,7 +1303,7 @@ async function main(): Promise<void> {
           templates: "Handlebars-based template generation with inheritance",
         },
         tools: {
-          count: 10,
+          count: 11,
           categories: [
             "sdd-init",
             "sdd-requirements",
@@ -954,6 +1312,7 @@ async function main(): Promise<void> {
             "sdd-implement",
             "sdd-status",
             "sdd-approve",
+            "sdd-review-test-cases",
             "sdd-quality-check",
             "sdd-context-load",
             "sdd-template-render",

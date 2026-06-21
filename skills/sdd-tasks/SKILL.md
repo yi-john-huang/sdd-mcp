@@ -52,7 +52,17 @@ For each task, follow the Red-Green-Refactor cycle:
 └─────────────────────────────────────────────────────────────┘
 ```
 
-### Step 4: Apply Test Pyramid
+### Step 4: Choose Test Case Review Checkpoint
+
+Ask the user whether they want to review TDD test cases before implementation:
+
+- If yes, enable the checkpoint when generating tasks by setting `reviewTestCases: true` where the MCP tool supports it, or record the choice in `spec.json` under `workflow_options.review_test_cases`.
+- Generate a concise **Test Case Review Checklist** in `tasks.md` listing the behavior, edge, and error scenarios that need approval.
+- Before approving tasks, the user or agent should run `sdd-review-test-cases` after reviewing the test cases.
+
+Keep this checkpoint optional. If the user declines, continue with normal task approval.
+
+### Step 5: Apply Test Pyramid
 
 Structure tests following the 70/20/10 ratio:
 
@@ -75,7 +85,7 @@ Structure tests following the 70/20/10 ratio:
 | **Integration** | 20% | Component interactions | Medium (s) |
 | **E2E** | 10% | Full user journeys | Slow (min) |
 
-### Step 5: Generate Task Breakdown
+### Step 6: Generate Task Breakdown
 
 Structure tasks hierarchically:
 
@@ -131,11 +141,12 @@ Structure tasks hierarchically:
 - [ ] All tests pass
 - [ ] Code coverage >= 80%
 - [ ] No lint/type errors
+- [ ] TDD test cases reviewed (if checkpoint enabled)
 - [ ] Code reviewed
 - [ ] Documentation updated
 ```
 
-### Step 6: Task Sizing Guidelines
+### Step 7: Task Sizing Guidelines
 
 | Size | Description | Test Count | Time |
 |------|-------------|------------|------|
@@ -144,7 +155,7 @@ Structure tasks hierarchically:
 | **L** | Component with integration | 5-10 | 4-8 hours |
 | **XL** | Complex component, many edge cases | 10+ | 1-2 days |
 
-### Step 7: Test-First Task Template
+### Step 8: Test-First Task Template
 
 For each implementation task:
 
@@ -196,17 +207,19 @@ describe('{Component}', () => {
 - Apply {specific pattern}
 ```
 
-### Step 8: Save and Execute
+### Step 9: Save and Execute
 
 1. Save tasks to `.spec/specs/{feature}/tasks.md`
-2. Use `sdd-approve tasks` MCP tool to mark phase complete
-3. Use `sdd-spec-impl` MCP tool to execute tasks with TDD
+2. If test-case review is enabled, review the Test Case Review Checklist and run `sdd-review-test-cases`
+3. Use `sdd-approve tasks` MCP tool to mark phase complete
+4. Use `sdd-spec-impl` MCP tool to execute tasks with TDD
 
 ## MCP Tool Integration
 
 | Tool | When to Use |
 |------|-------------|
 | `sdd-status` | Verify design phase complete |
+| `sdd-review-test-cases` | Mark optional TDD test-case review complete |
 | `sdd-approve` | Mark tasks phase as approved |
 | `sdd-spec-impl` | Execute tasks using TDD methodology |
 | `sdd-quality-check` | Validate code quality during implementation |

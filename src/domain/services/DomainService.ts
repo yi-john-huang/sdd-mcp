@@ -3,6 +3,11 @@
 import { Project, WorkflowPhase, Task } from '../types.js';
 
 export class WorkflowDomainService {
+  static isTestCaseReviewSatisfied(project: Project): boolean {
+    const testCaseCheckpoint = project.metadata.checkpoints?.testCases;
+    return !testCaseCheckpoint?.required || testCaseCheckpoint.reviewed;
+  }
+
   static canTransitionToPhase(project: Project, targetPhase: WorkflowPhase): boolean {
     const { phase, metadata } = project;
     const { approvals } = metadata;
@@ -21,7 +26,9 @@ export class WorkflowDomainService {
         return approvals.design.generated && approvals.design.approved;
 
       case WorkflowPhase.IMPLEMENTATION:
-        return approvals.tasks.generated && approvals.tasks.approved;
+        return approvals.tasks.generated &&
+               approvals.tasks.approved &&
+               this.isTestCaseReviewSatisfied(project);
 
       default:
         return false;
@@ -32,7 +39,8 @@ export class WorkflowDomainService {
     const { approvals } = project.metadata;
     return approvals.requirements.approved &&
            approvals.design.approved &&
-           approvals.tasks.approved;
+           approvals.tasks.approved &&
+           this.isTestCaseReviewSatisfied(project);
   }
 
   static getRequiredApprovals(project: Project, targetPhase: WorkflowPhase): string[] {
@@ -53,6 +61,9 @@ export class WorkflowDomainService {
     if (targetPhase === WorkflowPhase.IMPLEMENTATION) {
       if (!project.metadata.approvals.tasks.approved) {
         missing.push('tasks');
+      }
+      if (!this.isTestCaseReviewSatisfied(project)) {
+        missing.push('test-cases');
       }
     }
 

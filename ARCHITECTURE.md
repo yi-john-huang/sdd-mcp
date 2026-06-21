@@ -1,845 +1,643 @@
 # MCP SDD Server Architecture
 
-**Version**: 3.0.3
-**Last Updated**: 2026-01-24
+**Version**: 3.4.0  
+**Last Updated**: 2026-06-22  
 **Status**: Production
-
----
-
-## Table of Contents
-
-1. [Overview](#overview)
-2. [System Architecture](#system-architecture)
-3. [Layered Architecture](#layered-architecture)
-4. [Module Loading System](#module-loading-system)
-5. [MCP Protocol Integration](#mcp-protocol-integration)
-6. [Workflow Engine](#workflow-engine)
-7. [Requirements Clarification System](#requirements-clarification-system)
-8. [Plugin System](#plugin-system)
-9. [Data Flow](#data-flow)
-10. [Security Architecture](#security-architecture)
-11. [Deployment Models](#deployment-models)
 
 ---
 
 ## Overview
 
-The MCP SDD Server is a **Model Context Protocol (MCP)** server that implements **Spec-Driven Development (SDD)** workflows for AI-agent CLIs and IDEs. It provides a structured approach to software development through:
+SDD MCP Server is a Model Context Protocol server and companion CLI for spec-driven development workflows. It gives AI-agent clients a structured path from project intent to requirements, design, TDD tasks, implementation, review, and commit guidance.
 
-- **Automated Requirements Clarification**: Analyzes project descriptions and interactively gathers missing information
-- **Steering Document Generation**: Creates context-rich documentation from codebase analysis
-- **Workflow State Management**: Guides teams through Requirements → Design → Tasks → Implementation phases
-- **Cross-Context Compatibility**: Unified module loading supporting npx, npm, node, and Docker execution
+The current architecture is hybrid:
 
-### Key Design Principles
+- **MCP tools** execute stateful actions: initialize specs, approve phases, inspect status, load context, validate, and run quality checks.
+- **Agent skills** carry template-heavy guidance: requirements, design, tasks, implementation, steering, review, security, tests, and commits.
+- **Installable components** package optional rules, contexts, agents, hooks, skills, and steering templates for consuming projects.
+- **Compact handoffs** preserve workflow continuity without repeatedly loading full phase documents.
 
-- **Domain-Driven Design (DDD)**: Clear separation between domain logic, application services, and infrastructure
-- **SOLID Principles**: Single Responsibility, Open/Closed, Liskov Substitution, Interface Segregation, Dependency Inversion
-- **Dependency Injection**: Inversify container for loose coupling and testability
-- **Test-Driven Development (TDD)**: 100% test coverage for critical paths
-- **Security by Design**: OWASP Top 10 aligned, input sanitization, least privilege
+This split exists to keep workflow behavior deterministic while reducing always-on context usage.
 
 ---
 
-## System Architecture
+## System Context
 
 ```mermaid
 graph TB
     subgraph "AI Clients"
-        A1[Claude Code]
-        A2[Cursor IDE]
-        A3[Other MCP Clients]
+        Claude["Claude Code"]
+        Cursor["Cursor"]
+        Other["Other MCP Clients"]
     end
 
-    subgraph "MCP Server - Entry Points"
-        B1[mcp-server.js<br/>Legacy Entry]
-        B2[dist/index.js<br/>TypeScript Entry]
+    subgraph "Runtime Entrypoints"
+        NPX["npx sdd-mcp-server"]
+        Global["sdd-mcp-server"]
+        Local["mcp-server.js / dist/index.js"]
+        Docker["Docker image"]
     end
 
-    subgraph "Module Loader v1.6.2"
-        ML[moduleLoader.ts<br/>Unified Loader]
-        ML1[Path 1: ./utils/*.js<br/>npm start, node dist/]
-        ML2[Path 2: ../utils/*.js<br/>npm run dev]
-        ML3[Path 3: ./*.js<br/>npx context]
-        ML4[Path 4: ../*.js<br/>Alternative npx]
+    subgraph "SDD MCP Server"
+        MCP["MCP Server"]
+        Tools["MCP Tools"]
+        Adapter["SDDToolAdapter"]
+        Services["Application Services"]
+        Domain["Domain Model and Ports"]
+        Infra["Infrastructure Adapters"]
     end
 
-    subgraph "Core Modules"
-        C1[documentGenerator<br/>Codebase Analysis]
-        C2[specGenerator<br/>Spec Documents]
+    subgraph "Project Artifacts"
+        Specs[".spec/specs/{feature}"]
+        Steering[".spec/steering"]
+        Handoffs["context/handoff.md"]
+        Components[".claude / .agents / .codex installs"]
     end
 
-    subgraph "MCP Infrastructure"
-        D1[MCPServer<br/>Protocol Handler]
-        D2[ToolRegistry<br/>Tool Management]
-        D3[SessionManager<br/>State Management]
-    end
-
-    subgraph "Application Layer"
-        E1[WorkflowEngine<br/>Phase Management]
-        E2[RequirementsClarification<br/>Interactive Q&A]
-        E3[SteeringDocuments<br/>Context Generation]
-    end
-
-    subgraph "Domain Layer"
-        F1[ProjectContext<br/>Business Logic]
-        F2[WorkflowStateMachine<br/>FSM]
-        F3[QualityGate<br/>Validation]
-    end
-
-    subgraph "Infrastructure"
-        G1[FileSystemPort<br/>I/O Abstraction]
-        G2[LoggerPort<br/>Logging]
-        G3[PluginManager<br/>Extensibility]
-    end
-
-    A1 & A2 & A3 --> B1 & B2
-    B2 --> ML
-    ML --> ML1 & ML2 & ML3 & ML4
-    ML1 & ML2 & ML3 & ML4 --> C1 & C2
-    B1 & B2 --> D1
-    D1 --> D2 & D3
-    D2 --> E1 & E2 & E3
-    E1 & E2 & E3 --> F1 & F2 & F3
-    F1 & F2 & F3 --> G1 & G2 & G3
+    Claude --> NPX
+    Cursor --> NPX
+    Other --> Global
+    NPX --> MCP
+    Global --> MCP
+    Local --> MCP
+    Docker --> MCP
+    MCP --> Tools
+    Tools --> Adapter
+    Adapter --> Services
+    Services --> Domain
+    Services --> Infra
+    Infra --> Specs
+    Infra --> Steering
+    Services --> Handoffs
+    NPX --> Components
 ```
 
 ---
 
 ## Layered Architecture
 
-The system follows a **4-layer hexagonal architecture** pattern:
+The codebase follows a clean architecture / hexagonal style.
 
 ```mermaid
 graph LR
-    subgraph "Presentation Layer"
-        P1[MCP Tools API]
-        P2[CLI Interface]
-    end
+    Presentation["Presentation<br/>src/index.ts<br/>src/cli<br/>src/adapters"]
+    Application["Application<br/>src/application/services"]
+    Domain["Domain<br/>src/domain"]
+    Infrastructure["Infrastructure<br/>src/infrastructure"]
+    Assets["Packaged Components<br/>skills, steering, rules,<br/>contexts, agents, hooks"]
 
-    subgraph "Application Layer"
-        A1[Services]
-        A2[Use Cases]
-        A3[DTOs]
-    end
-
-    subgraph "Domain Layer"
-        D1[Entities]
-        D2[Value Objects]
-        D3[Domain Services]
-        D4[Business Rules]
-    end
-
-    subgraph "Infrastructure Layer"
-        I1[File System]
-        I2[Database]
-        I3[External APIs]
-        I4[Logging]
-    end
-
-    P1 & P2 --> A1 & A2
-    A1 & A2 --> D1 & D2 & D3 & D4
-    A1 & A2 --> I1 & I2 & I3 & I4
-    D3 --> I1
-
-    style D1 fill:#e1f5fe
-    style D2 fill:#e1f5fe
-    style D3 fill:#e1f5fe
-    style D4 fill:#e1f5fe
+    Presentation --> Application
+    Application --> Domain
+    Application --> Infrastructure
+    Infrastructure --> Domain
+    Presentation --> Assets
 ```
 
-### Layer Responsibilities
+### Presentation
 
-#### 1. Presentation Layer (`/src/infrastructure/mcp`, `/src/adapters`)
-- **MCP Protocol Handling**: Translates MCP requests to application commands
-- **Tool Registration**: Exposes SDD tools (sdd-init, sdd-steering, etc.)
-- **Session Management**: Maintains client connection state
-- **Error Formatting**: Converts internal errors to MCP error responses
+Primary locations:
 
-#### 2. Application Layer (`/src/application/services`)
-- **Orchestration**: Coordinates domain services and infrastructure
-- **Use Case Implementation**: Implements business workflows
-- **Data Transformation**: Converts between DTOs and domain objects
-- **Transaction Management**: Ensures consistency across operations
+- `src/index.ts`
+- `src/cli/`
+- `src/adapters/cli/SDDToolAdapter.ts`
+- `src/infrastructure/mcp/`
 
-Key Services:
-- `RequirementsClarificationService`: Orchestrates the 5 specialized services
-- `WorkflowEngineService`: Manages SDD phase transitions
-- `SteeringDocumentService`: Generates steering documents
-- `ProjectInitializationService`: Initializes new SDD projects
+Responsibilities:
 
-#### 3. Domain Layer (`/src/domain`)
-- **Business Logic**: Core business rules and validation
-- **Domain Models**: Entities, value objects, aggregates
-- **Domain Services**: Business operations that don't belong to entities
-- **Workflow State Machine**: Finite state machine for SDD phases
+- Start the MCP server and simplified stdio mode.
+- Register and execute MCP tools.
+- Expose CLI commands such as `install`, `install-skills`, `migrate-kiro`, and `migrate-steering`.
+- Convert tool arguments and service results into MCP-compatible responses.
 
-Domain Components:
-- `ProjectContext`: Root aggregate for project state
-- `WorkflowStateMachine`: FSM (requirements → design → tasks → implementation)
-- `QualityGate`: Validation rules for phase transitions
+### Application
 
-#### 4. Infrastructure Layer (`/src/infrastructure`)
-- **Ports & Adapters**: Implements domain interfaces
-- **External Services**: File I/O, logging, databases
-- **Framework Integration**: MCP SDK, Inversify DI container
-- **Plugin System**: Dynamic tool and steering document loading
+Primary location: `src/application/services/`
+
+Responsibilities:
+
+- Orchestrate SDD use cases.
+- Coordinate domain state, filesystem writes, templates, validation, and quality checks.
+- Generate compact context handoffs after approvals.
+- Manage project initialization, workflow progression, status, and checkpoints.
+
+Important services:
+
+- `ProjectService`
+- `WorkflowService`
+- `WorkflowEngineService`
+- `TemplateService`
+- `ContextCompactionService`
+- `ProjectInitializationService`
+- `RequirementsClarificationService`
+- `SteeringDocumentService`
+- `QualityService`
+
+### Domain
+
+Primary location: `src/domain/`
+
+Responsibilities:
+
+- Define workflow types, project metadata, approvals, checkpoints, tasks, quality reports, and ports.
+- Enforce workflow transition rules through `WorkflowStateMachine`.
+- Keep business contracts independent from MCP, filesystem, and package runtime details.
+
+Key files:
+
+- `src/domain/types.ts`
+- `src/domain/ports.ts`
+- `src/domain/workflow/WorkflowStateMachine.ts`
+- `src/domain/quality/`
+- `src/domain/plugins/`
+- `src/domain/templates/`
+
+### Infrastructure
+
+Primary location: `src/infrastructure/`
+
+Responsibilities:
+
+- Implement domain ports for filesystem, logging, validation, templates, repositories, quality analysis, and configuration.
+- Own the Inversify container and runtime bindings.
+- Implement MCP server components such as tool registry, prompt manager, resource manager, sessions, and capability negotiation.
+- Provide plugin and hook infrastructure.
+
+Key files:
+
+- `src/infrastructure/di/container.ts`
+- `src/infrastructure/di/types.ts`
+- `src/infrastructure/mcp/ToolRegistry.ts`
+- `src/infrastructure/mcp/MCPServer.ts`
+- `src/infrastructure/adapters/NodeFileSystemAdapter.ts`
+- `src/infrastructure/schemas/project.schema.ts`
 
 ---
 
-## Module Loading System
+## Hybrid Tool and Skill Model
 
-**Introduced in v1.6.2** to fix cross-context module loading issues.
-
-### Problem Statement
-
-Prior to v1.6.2, hardcoded import paths in `src/index.ts` failed when run via npx:
-
-```typescript
-// ❌ OLD: Breaks in npx context
-const { analyzeProject } = await import("./utils/documentGenerator.js");
-```
-
-**Root Cause**: Different execution contexts have different working directories:
-- `npm start`: CWD = `/dist/`
-- `npm run dev`: CWD = `/dist/tools/`
-- `node dist/index.js`: CWD = `/dist/`
-- `npx sdd-mcp-server`: CWD = `/node_modules/.bin/`
-
-### Solution Architecture
+The project intentionally separates action execution from guidance loading.
 
 ```mermaid
-graph TD
-    A[Handler Function Needs Module] --> B[loadDocumentGenerator OR loadSpecGenerator]
-    
-    B --> C{Try Path 1<br/>./utils/*.js}
-    C -->|Success| Z[Return Module]
-    C -->|Fail| D{Try Path 2<br/>../utils/*.js}
-    
-    D -->|Success| Z
-    D -->|Fail| E{Try Path 3<br/>./*.js}
-    
-    E -->|Success| Z
-    E -->|Fail| F{Try Path 4<br/>../*.js}
-    
-    F -->|Success| Z
-    F -->|Fail| G[Throw Error<br/>with all attempted paths]
-    
-    Z --> H[Log Success Path<br/>console.error SDD-DEBUG]
-    
-    style Z fill:#c8e6c9
-    style G fill:#ffcdd2
-    style H fill:#fff9c4
+graph TB
+    Request["User request"]
+    Skill["Agent Skill<br/>template and process guidance"]
+    Tool["MCP Tool<br/>stateful action"]
+    Spec[".spec/specs/{feature}"]
+    Handoff["Compact handoff"]
+
+    Request --> Skill
+    Request --> Tool
+    Skill --> Tool
+    Tool --> Spec
+    Tool --> Handoff
 ```
 
-### Implementation Details
+### MCP Tools
 
-**File**: `src/utils/moduleLoader.ts`
+MCP tools are for operations that mutate state, inspect state, validate, or load context.
 
-```typescript
-export async function loadDocumentGenerator(): Promise<DocumentGeneratorModule> {
-  const paths = [
-    './utils/documentGenerator.js',    // Priority 1: npm start, node dist/index.js
-    '../utils/documentGenerator.js',   // Priority 2: npm run dev (CWD=dist/tools/)
-    './documentGenerator.js',          // Priority 3: npx (CWD=node_modules/.bin/)
-    '../documentGenerator.js'          // Priority 4: Alternative npx context
-  ];
+| Tool | Role |
+|------|------|
+| `sdd-init` | Create a feature spec and metadata |
+| `sdd-status` | Report workflow progress |
+| `sdd-approve` | Approve requirements, design, or tasks |
+| `sdd-review-test-cases` | Mark optional TDD test-case review as complete |
+| `sdd-quality-check` | Run code quality analysis |
+| `sdd-context-load` | Load compact, standard, or full project context |
+| `sdd-validate-design` | Validate design quality |
+| `sdd-validate-gap` | Compare requirements/design against implementation |
+| `sdd-spec-impl` | Execute implementation tasks with TDD methodology |
+| `sdd-list-skills` | List installable skills |
 
-  const errors: string[] = [];
+Compatibility handlers may still exist for template-oriented operations in adapter code, but the user-facing architecture treats guidance-heavy workflows as skills.
 
-  for (const path of paths) {
-    try {
-      const module = await import(path);
-      console.error(`[SDD-DEBUG] ✅ Loaded documentGenerator from: ${path}`);
-      return module as DocumentGeneratorModule;
-    } catch (error) {
-      const errorMessage = error instanceof Error ? error.message : String(error);
-      errors.push(`${path}: ${errorMessage}`);
-    }
-  }
+### Agent Skills
 
-  throw new Error(
-    `Failed to load documentGenerator. Attempted paths:\n${errors.map(e => `  - ${e}`).join('\n')}`
-  );
-}
-```
+Skills are loaded only when invoked by the user or agent client.
 
-**Key Features**:
-- ✅ **Sequential Fallback**: Tries 4 paths in priority order
-- ✅ **Comprehensive Error Messages**: Lists all attempted paths on failure
-- ✅ **Debug Logging**: Logs successful path with `console.error` for troubleshooting
-- ✅ **Type Safety**: Strong TypeScript interfaces for loaded modules
-- ✅ **Zero Dependencies**: Pure ES module imports, no external libraries
-
-### Integration Points
-
-Updated 4 handler functions in `src/index.ts`:
-
-1. **handleSteeringSimplified** (line ~436): Uses `loadDocumentGenerator()`
-2. **handleRequirementsSimplified** (line ~1189): Uses `loadSpecGenerator()`
-3. **handleDesignSimplified** (line ~1350): Uses `loadSpecGenerator()`
-4. **handleTasksSimplified** (line ~1476): Uses `loadSpecGenerator()`
+| Skill | Role |
+|-------|------|
+| `/simple-task` | Small changes with best-practice guidance |
+| `/sdd-requirements` | EARS requirements generation |
+| `/sdd-design` | Architecture design guidance |
+| `/sdd-tasks` | TDD task breakdown |
+| `/sdd-implement` | Implementation guidance |
+| `/sdd-steering` | Project-specific steering updates |
+| `/sdd-steering-custom` | Specialized steering |
+| `/sdd-review` | Linus-style review |
+| `/sdd-security-check` | OWASP-oriented review |
+| `/sdd-test-gen` | TDD test generation |
+| `/sdd-commit` | Commit and PR guidance |
 
 ---
 
-## MCP Protocol Integration
+## Component Installation Architecture
 
-```mermaid
-sequenceDiagram
-    participant AI as AI Client<br/>(Claude Code)
-    participant MCP as MCPServer
-    participant TR as ToolRegistry
-    participant AS as Application Service
-    participant DL as Domain Layer
-    participant FS as FileSystem Port
+The package ships source assets for installable agent components:
 
-    AI->>MCP: MCP Request<br/>tool: sdd-init
-    MCP->>TR: lookupTool("sdd-init")
-    TR->>MCP: ToolDefinition
-    MCP->>AS: ProjectInitializationService.init()
-    
-    AS->>DL: Validate project description
-    DL->>AS: QualityScore: 45%
-    
-    alt Score < 70%
-        AS->>AI: Interactive Clarification Questions
-        AI->>AS: User Answers
-        AS->>DL: Enrich Description with 5W1H
-    end
-    
-    AS->>FS: Create .spec/specs/{feature}/
-    AS->>FS: Write spec.json
-    FS->>AS: Success
-    
-    AS->>MCP: ToolResult (success)
-    MCP->>AI: MCP Response<br/>with spec details
+```text
+skills/      -> .claude/skills/ or .agents/skills/
+steering/    -> .spec/steering/
+rules/       -> .claude/rules/
+contexts/    -> .claude/contexts/
+agents/      -> .claude/agents/
+hooks/       -> .claude/hooks/
 ```
 
-### MCP Server Components
+The installer is implemented in `src/cli/install-skills.ts`.
 
-#### MCPServer (`/src/infrastructure/mcp/MCPServer.ts`)
-- **Responsibilities**: Protocol translation, error handling, capability negotiation
-- **Dependencies**: ToolRegistry, SessionManager, LoggerPort
-- **Lifecycle**: Singleton, initialized via DI container
+### Install Profiles
 
-#### ToolRegistry (`/src/infrastructure/mcp/ToolRegistry.ts`)
-- **Responsibilities**: Tool registration, lookup, parameter validation
-- **Tool Definition**: JSON Schema validation for tool parameters
-- **Extensibility**: Supports plugin-provided tools
+| Profile | Components | Purpose |
+|---------|------------|---------|
+| `lean` | skills, steering, hooks | Default lower-context setup |
+| `full` | skills, steering, rules, contexts, agents, hooks | Complete component installation |
 
-#### SessionManager (`/src/infrastructure/mcp/SessionManager.ts`)
-- **Responsibilities**: Client session tracking, state persistence
-- **State Storage**: In-memory with optional Redis backend
-- **Session Lifecycle**: Create → Active → Closed
+Examples:
+
+```bash
+npx sdd-mcp-server install
+npx sdd-mcp-server install --profile full
+npx sdd-mcp-server install --skills --rules --agents
+npx sdd-mcp-server install --list
+```
+
+Generated local installs under `.claude/`, `.agents/`, and `.codex/` are project outputs. Source assets live in the root component directories and are included in the npm package.
 
 ---
 
 ## Workflow Engine
 
-The SDD workflow follows a finite state machine with 5 phases:
+The core workflow is requirements -> design -> tasks -> implementation.
 
 ```mermaid
 stateDiagram-v2
     [*] --> Init: sdd-init
-    
-    Init --> Requirements: Auto-generate requirements.md
-    Requirements --> RequirementsApproval: User reviews
-    
-    RequirementsApproval --> Design: sdd-design<br/>(if approved)
-    RequirementsApproval --> Requirements: Reject (revise)
-    
-    Design --> DesignApproval: User reviews
-    DesignApproval --> Tasks: sdd-tasks<br/>(if approved)
-    DesignApproval --> Design: Reject (revise)
-    
-    Tasks --> TasksApproval: User reviews
-    TasksApproval --> Implementation: sdd-implement<br/>(if approved)
-    TasksApproval --> Tasks: Reject (revise)
-    
-    Implementation --> Testing: Run tests
-    Testing --> Done: All tests pass
-    Testing --> Implementation: Failures (fix)
-    
-    Done --> [*]
-    
-    note right of Requirements
-        requirements.md
-        - User stories
-        - Acceptance criteria
-        - Non-functional requirements
-    end note
-    
-    note right of Design
-        design.md
-        - Architecture
-        - Component design
-        - Data models
-    end note
-    
-    note right of Tasks
-        tasks.md
-        - Task breakdown
-        - Dependencies
-        - Estimates
-    end note
+    Init --> Requirements: requirements generated
+    Requirements --> RequirementsApproved: sdd-approve requirements
+    RequirementsApproved --> Design: design generated
+    Design --> DesignApproved: sdd-approve design
+    DesignApproved --> Tasks: tasks generated
+    Tasks --> TestCaseReview: reviewTestCases required
+    TestCaseReview --> TasksApproved: sdd-review-test-cases + sdd-approve tasks
+    Tasks --> TasksApproved: no checkpoint
+    TasksApproved --> Implementation: implementation ready
+    Implementation --> [*]
 ```
 
-### Workflow State Persistence
+### Project Metadata
 
-**File**: `.spec/specs/{feature-name}/spec.json`
+Workflow state is stored in `.spec/specs/{feature}/spec.json`.
+
+Important fields:
 
 ```json
 {
-  "feature_name": "user-authentication",
-  "phase": "design-approved",
   "approvals": {
-    "requirements": {
-      "generated": true,
-      "approved": true,
-      "approved_at": "2025-11-05T10:30:00Z"
-    },
-    "design": {
-      "generated": true,
-      "approved": true,
-      "approved_at": "2025-11-05T14:20:00Z"
-    },
-    "tasks": {
-      "generated": false,
-      "approved": false
+    "requirements": { "generated": true, "approved": true },
+    "design": { "generated": true, "approved": true },
+    "tasks": { "generated": true, "approved": false }
+  },
+  "workflow_options": {
+    "review_test_cases": true
+  },
+  "checkpoints": {
+    "test_cases": {
+      "required": true,
+      "reviewed": false
     }
   },
-  "metadata": {
-    "created_at": "2025-11-05T09:00:00Z",
-    "updated_at": "2025-11-05T14:20:00Z",
-    "project_path": "/path/to/project"
-  }
+  "ready_for_implementation": false
 }
 ```
 
+### TDD Test-Case Review Checkpoint
+
+The optional checkpoint can be enabled at initialization or task generation time. When enabled:
+
+- Tasks can be generated normally.
+- `sdd-approve tasks` is blocked until test cases are reviewed.
+- `sdd-review-test-cases` marks the checkpoint as reviewed.
+- Implementation readiness requires approved requirements, approved design, approved tasks, and a reviewed checkpoint.
+
+This keeps the default workflow lightweight while allowing teams to require human review before implementation begins.
+
 ---
 
-## Requirements Clarification System
+## Context Management
 
-**Introduced in v1.5.0, refactored in v1.6.0** following Single Responsibility Principle.
+Long SDD workflows can become context intensive if every phase reloads all steering and spec documents. The current architecture reduces this with automatic handoffs.
 
-### Architecture (v1.6.0+)
+### Automatic Handoff Generation
 
-```mermaid
-graph TD
-    A[User provides project description] --> B[SteeringContextLoader]
-    B --> C[Load existing steering docs]
-    C --> D[DescriptionAnalyzer]
-    
-    D --> E[Semantic Analysis:<br/>WHY WHO WHAT SUCCESS]
-    E --> F{Quality Score<br/>>= 70%?}
-    
-    F -->|Yes| G[Generate requirements.md]
-    F -->|No| H[QuestionGenerator]
-    
-    H --> I[Generate targeted questions]
-    I --> J[Present questions to user]
-    J --> K[User provides answers]
-    K --> L[AnswerValidator]
-    
-    L --> M{Valid<br/>answers?}
-    M -->|No| N[Request clarification]
-    N --> K
-    M -->|Yes| O[DescriptionEnricher]
-    
-    O --> P[Synthesize 5W1H enriched description]
-    P --> G
-    
-    style F fill:#fff9c4
-    style M fill:#fff9c4
-    style G fill:#c8e6c9
+When a phase is approved, `WorkflowEngineService` calls `ContextCompactionService.generatePhaseHandoff`.
+
+```text
+sdd-approve requirements -> .spec/specs/{feature}/context/requirements-handoff.md
+sdd-approve design       -> .spec/specs/{feature}/context/design-handoff.md
+sdd-approve tasks        -> .spec/specs/{feature}/context/tasks-handoff.md
+latest handoff           -> .spec/specs/{feature}/context/handoff.md
 ```
 
-### 5 Specialized Services
+The handoff contains:
 
-#### 1. SteeringContextLoader
-- **Purpose**: Load existing steering documents (product.md, tech.md)
-- **Input**: Project path
-- **Output**: SteeringContext (flags for existing docs)
-- **Location**: `src/application/services/SteeringContextLoader.ts`
+- Current workflow state.
+- Approval status.
+- TDD test-case checkpoint status.
+- Compact summaries of available phase documents.
+- Next actions.
+- Source references.
+- Estimated context reduction.
 
-#### 2. DescriptionAnalyzer
-- **Purpose**: Analyze project description quality (0-100 score)
-- **Scoring Factors**:
-  - WHY present (+30 points): Business justification
-  - WHO present (+20 points): Target users
-  - WHAT present (+20 points): Core features
-  - SUCCESS present (+15 points): Metrics
-  - Ambiguity penalty (-5 per term, max -15)
-  - Length bonus (+5 per threshold: 100, 300, 500 chars)
-- **Location**: `src/application/services/DescriptionAnalyzer.ts`
+### Context Load Modes
 
-#### 3. QuestionGenerator
-- **Purpose**: Generate targeted clarification questions
-- **Question Selection**: Based on analysis gaps and steering context
-- **Configuration**: Externalized to `clarification-questions.ts`
-- **Location**: `src/application/services/QuestionGenerator.ts`
+`sdd-context-load` supports three modes:
 
-#### 4. AnswerValidator
-- **Purpose**: Validate and sanitize user answers
-- **Validations**:
-  - Required fields present
-  - Minimum length (10 chars)
-  - XSS/injection detection
-  - Path traversal prevention
-- **Location**: `src/application/services/AnswerValidator.ts`
+| Mode | Contents | Use case |
+|------|----------|----------|
+| `compact` | `context/handoff.md` | Routine continuation |
+| `standard` | handoff plus `spec.json` | Status-sensitive continuation |
+| `full` | requirements, design, tasks, and spec metadata | Audits or ambiguous decisions |
 
-#### 5. DescriptionEnricher
-- **Purpose**: Synthesize enriched description with 5W1H structure
-- **Output Format**:
-  ```
-  WHY: {business justification}
-  WHO: {target users}
-  WHAT: {core features}
-  HOW: {technical approach}
-  SUCCESS: {metrics and KPIs}
-  ```
-- **Location**: `src/application/services/DescriptionEnricher.ts`
+Compact mode is the default. Full mode is explicit so agents do not accidentally reload every phase document for routine work.
+
+### Quantitative Target
+
+Token estimates use a deterministic `characters / 4` approximation. Typical compact handoffs target a 60-85% reduction compared with loading `requirements.md`, `design.md`, `tasks.md`, and `spec.json` in full. Actual savings depend on spec length and document structure.
 
 ---
 
-## Plugin System
+## Requirements Clarification
+
+`RequirementsClarificationService` is composed from smaller services:
+
+```mermaid
+graph TB
+    Input["Project description"]
+    Steering["SteeringContextLoader"]
+    Analyze["DescriptionAnalyzer"]
+    Questions["QuestionGenerator"]
+    Validate["AnswerValidator"]
+    Enrich["DescriptionEnricher"]
+    Init["ProjectInitializationService"]
+
+    Input --> Steering
+    Steering --> Analyze
+    Analyze --> Questions
+    Questions --> Validate
+    Validate --> Enrich
+    Enrich --> Init
+```
+
+Responsibilities:
+
+- Load existing product and technical steering.
+- Score descriptions for why, who, what, and success criteria.
+- Ask targeted clarification questions when needed.
+- Validate answer quality and reject unsafe content.
+- Synthesize an enriched 5W1H description for downstream requirements generation.
+
+---
+
+## Module Loading
+
+The runtime includes a small compatibility loader in `src/utils/moduleLoader.ts` for document and spec generator modules. It exists because local development, compiled execution, and npx execution can resolve files from different package-relative paths.
+
+The loader:
+
+- Attempts known relative paths in order.
+- Logs the successful path to stderr for MCP-safe debugging.
+- Reports all attempted paths on failure.
+- Keeps the public handler code independent from one execution layout.
+
+This remains a compatibility layer, not the central architecture boundary.
+
+---
+
+## Dependency Injection
+
+Inversify wires application services to domain ports and infrastructure adapters.
+
+```mermaid
+graph TB
+    Container["createContainer()"]
+    Ports["Domain Ports"]
+    Adapters["Infrastructure Adapters"]
+    Services["Application Services"]
+    MCP["MCP Components"]
+
+    Container --> Ports
+    Container --> Adapters
+    Container --> Services
+    Container --> MCP
+    Services --> Ports
+    Adapters --> Ports
+    MCP --> Services
+```
+
+Typical bindings:
+
+- `ProjectRepository` -> `InMemoryProjectRepository`
+- `FileSystemPort` -> `NodeFileSystemAdapter`
+- `TemplateEngine` -> `HandlebarsTemplateEngine`
+- `ValidationPort` -> `AjvValidationAdapter`
+- `LoggerPort` -> `ConsoleLoggerAdapter`
+- `QualityAnalyzer` -> `LinusQualityAnalyzer`
+- `ContextCompactionService` -> application service binding
+
+When adding a new cross-cutting dependency, prefer adding a domain port and infrastructure adapter instead of importing concrete infrastructure directly into domain or application code.
+
+---
+
+## Plugin and Hook System
+
+The plugin architecture is split across:
+
+- `PluginManager`
+- `HookSystem`
+- `PluginToolRegistry`
+- `PluginSteeringRegistry`
 
 ```mermaid
 graph LR
-    subgraph "Core System"
-        A[PluginManager]
-        B[HookSystem]
-        C[PluginToolRegistry]
-        D[PluginSteeringRegistry]
-    end
+    Manager["PluginManager"]
+    Hooks["HookSystem"]
+    Tools["PluginToolRegistry"]
+    Steering["PluginSteeringRegistry"]
+    Runtime["MCP Runtime"]
 
-    subgraph "Plugin Types"
-        E[Tool Plugins]
-        F[Steering Plugins]
-        G[Hook Plugins]
-    end
-
-    subgraph "Hooks"
-        H[pre-init]
-        I[post-requirements]
-        J[pre-design]
-        K[post-tasks]
-    end
-
-    A --> E & F & G
-    B --> H & I & J & K
-    E --> C
-    F --> D
-    G --> B
+    Manager --> Hooks
+    Manager --> Tools
+    Manager --> Steering
+    Tools --> Runtime
+    Hooks --> Runtime
+    Steering --> Runtime
 ```
 
-### Plugin Development
-
-**Location**: `.spec/plugins/`
-
-**Example Tool Plugin**:
-```typescript
-// .spec/plugins/custom-validator/index.ts
-export default {
-  name: 'custom-validator',
-  type: 'tool',
-  version: '1.0.0',
-  
-  tool: {
-    name: 'validate-requirements',
-    description: 'Custom requirements validator',
-    inputSchema: {
-      type: 'object',
-      properties: {
-        featureName: { type: 'string' }
-      },
-      required: ['featureName']
-    },
-    
-    async execute(args: any) {
-      // Custom validation logic
-      return { valid: true, issues: [] };
-    }
-  }
-};
-```
+Hooks can support event-driven behavior such as pre-tool validation, post-tool status updates, and session lifecycle reminders. Installable hook definitions are packaged under root `hooks/`.
 
 ---
 
 ## Data Flow
 
-### Document Generation Flow
+### Phase Approval and Handoff
 
 ```mermaid
 sequenceDiagram
-    participant U as User
-    participant AI as AI Agent
-    participant Tool as sdd-steering
-    participant ML as ModuleLoader
-    participant DG as DocumentGenerator
-    participant FS as FileSystem
-    participant CB as Codebase
+    participant Client as AI Client
+    participant MCP as MCP Server
+    participant Adapter as SDDToolAdapter
+    participant Workflow as WorkflowEngineService
+    participant Project as ProjectService
+    participant Context as ContextCompactionService
+    participant FS as FileSystemPort
 
-    U->>AI: "Generate steering docs"
-    AI->>Tool: tool: sdd-steering<br/>args: {projectPath}
-    Tool->>ML: loadDocumentGenerator()
-    
-    ML->>ML: Try ./utils/documentGenerator.js
-    alt Path 1 Success
-        ML->>Tool: Module loaded
-    else Path 1 Fail
-        ML->>ML: Try ../utils/documentGenerator.js
-        ML->>Tool: Module loaded (or try next path)
+    Client->>MCP: sdd-approve phase
+    MCP->>Adapter: execute tool
+    Adapter->>Workflow: update approval status
+    Workflow->>Project: load and update project
+    Project->>FS: write spec.json
+    Workflow->>Context: generatePhaseHandoff
+    Context->>FS: read phase documents
+    Context->>FS: write context/handoff.md
+    Context->>FS: write context/{phase}-handoff.md
+    Workflow-->>Adapter: approval result + estimate
+    Adapter-->>Client: approved + handoff path
+```
+
+### Context Restore
+
+```mermaid
+sequenceDiagram
+    participant Client as AI Client
+    participant Tool as sdd-context-load
+    participant Context as ContextCompactionService
+    participant FS as FileSystemPort
+
+    Client->>Tool: feature, mode
+    Tool->>Context: loadContext(project, mode)
+    alt compact
+        Context->>FS: read context/handoff.md
+    else standard
+        Context->>FS: read handoff.md and spec.json
+    else full
+        Context->>FS: read requirements/design/tasks/spec
     end
-    
-    Tool->>DG: analyzeProject(projectPath)
-    DG->>CB: Read package.json
-    DG->>CB: Detect languages
-    DG->>CB: Find frameworks
-    DG->>CB: Analyze structure
-    CB->>DG: Project metadata
-    
-    DG->>Tool: ProjectAnalysis
-    Tool->>DG: generateProductDocument(analysis)
-    Tool->>DG: generateTechDocument(analysis)
-    Tool->>DG: generateStructureDocument(analysis)
-    
-    Tool->>FS: Write .spec/steering/product.md
-    Tool->>FS: Write .spec/steering/tech.md
-    Tool->>FS: Write .spec/steering/structure.md
-    
-    FS->>Tool: Success
-    Tool->>AI: Documents generated
-    AI->>U: "Steering docs created successfully"
+    Context-->>Tool: context text
+    Tool-->>Client: context payload
 ```
 
 ---
 
 ## Security Architecture
 
-### Defense in Depth Layers
+Security is mostly local-tool hardening rather than network perimeter security.
 
-```mermaid
-graph TB
-    subgraph "Layer 1: Input Validation"
-        A1[JSON Schema Validation]
-        A2[Type Safety TypeScript]
-        A3[Parameter Sanitization]
-    end
+| Area | Approach |
+|------|----------|
+| Input validation | JSON schema and service-level validation |
+| Description answers | XSS, JavaScript URL, path traversal, and minimum-quality checks |
+| Filesystem writes | Scoped project artifact paths and explicit directory creation |
+| MCP output | Structured tool responses and error handling |
+| Dependencies | npm lockfile and audit-friendly package structure |
+| Container runtime | Multi-stage build with distroless Node.js runtime |
+| Secrets | No credential storage by design |
 
-    subgraph "Layer 2: Application Security"
-        B1[Path Traversal Prevention]
-        B2[XSS/Injection Detection]
-        B3[Rate Limiting]
-        B4[Input Length Limits]
-    end
-
-    subgraph "Layer 3: Runtime Security"
-        C1[Least Privilege Principle]
-        C2[File Permission Checks]
-        C3[Error Message Sanitization]
-        C4[Logging without Secrets]
-    end
-
-    subgraph "Layer 4: Container Security"
-        D1[Distroless Base Image]
-        D2[Non-root User UID 1001]
-        D3[Read-only Filesystem]
-        D4[Dropped Capabilities]
-    end
-
-    A1 & A2 & A3 --> B1 & B2 & B3 & B4
-    B1 & B2 & B3 & B4 --> C1 & C2 & C3 & C4
-    C1 & C2 & C3 & C4 --> D1 & D2 & D3 & D4
-```
-
-### OWASP Top 10 Alignment
-
-| OWASP Risk | Mitigation | Implementation |
-|------------|-----------|----------------|
-| A01: Broken Access Control | Path traversal prevention | `src/application/services/AnswerValidator.ts` |
-| A02: Cryptographic Failures | No sensitive data storage | Stateless design, no credentials |
-| A03: Injection | Input sanitization | Regex-based XSS/SQL detection |
-| A04: Insecure Design | Security by design | `.spec/steering/security-check.md` |
-| A05: Security Misconfiguration | Secure defaults | Docker distroless, non-root user |
-| A06: Vulnerable Components | Dependency scanning | `npm audit` in CI/CD |
-| A07: Authentication Failures | N/A | No authentication (local tool) |
-| A08: Software & Data Integrity | Immutable builds | Distroless read-only filesystem |
-| A09: Logging Failures | Structured logging | LoggerPort with correlation IDs |
-| A10: SSRF | No external requests | Offline-first design |
+The Dockerfile builds with Node 18 Alpine and runs the production artifact in `gcr.io/distroless/nodejs18-debian11`.
 
 ---
 
 ## Deployment Models
 
-### 1. NPX (Recommended)
+### NPX
 
 ```bash
 npx -y sdd-mcp-server@latest
 ```
 
-**Advantages**:
-- ✅ No installation required
-- ✅ Always uses latest version
-- ✅ No version conflicts
-- ✅ Secure: npm registry verification
+Recommended for most MCP client configuration because it avoids manual global installs.
 
-**Module Loading**: Path 3 (`./documentGenerator.js`) or Path 4 (`../documentGenerator.js`)
-
-### 2. Global Installation
+### Global Install
 
 ```bash
 npm install -g sdd-mcp-server@latest
 sdd-mcp-server
 ```
 
-**Advantages**:
-- ✅ Persistent installation
-- ✅ Faster startup (no download)
-- ✅ Offline usage after install
+Useful for persistent local environments.
 
-**Module Loading**: Path 1 (`./utils/documentGenerator.js`)
-
-### 3. Docker
+### Local Development
 
 ```bash
-docker run -p 3000:3000 ghcr.io/yi-john-huang/sdd-mcp:latest
+npm install
+npm run build
+npm start
 ```
 
-**Advantages**:
-- ✅ Isolated environment
-- ✅ Reproducible builds
-- ✅ Security hardened (distroless)
-
-**Module Loading**: Path 1 (`./utils/documentGenerator.js`)
-
-### 4. Local Development
+For Claude Code local development:
 
 ```bash
-git clone https://github.com/yi-john-huang/sdd-mcp.git
-npm run dev
+claude mcp add sdd "$(pwd)/mcp-server.js" -s local
 ```
 
-**Advantages**:
-- ✅ Fastest development cycle
-- ✅ Hot reload with tsx
-- ✅ Full debugging support
+### Docker
 
-**Module Loading**: Path 2 (`../utils/documentGenerator.js`)
-
----
-
-## Performance Characteristics
-
-### Module Loading Performance
-
-| Execution Context | First Import (ms) | Cached Import (ms) | Fallback Attempts |
-|------------------|-------------------|--------------------|--------------------|
-| npm start | 10-20 | <5 | 1 (Path 1) |
-| npm run dev | 15-25 | <5 | 2 (Path 2) |
-| node dist/index.js | 10-20 | <5 | 1 (Path 1) |
-| npx | 50-100* | <5 | 3-4 (Path 3-4) |
-
-*Includes npm package download on first run
-
-### Document Generation Performance
-
-| Operation | Time (ms) | Notes |
-|-----------|-----------|-------|
-| Analyze project | 200-500 | Depends on project size |
-| Generate product.md | 50-100 | Template rendering |
-| Generate tech.md | 100-200 | Framework detection |
-| Generate structure.md | 150-300 | Directory traversal |
-| **Total** | **500-1100** | ~1 second end-to-end |
-
-### Memory Usage
-
-| Component | Heap (MB) | Notes |
-|-----------|-----------|-------|
-| Base server | 20-30 | MCP SDK + Inversify |
-| Document generation | +10-20 | File I/O buffers |
-| Requirements clarification | +5-10 | Analysis state |
-| **Peak** | **40-60** | Typical usage |
+```bash
+docker build --target production -t sdd-mcp-server .
+docker run -p 3000:3000 sdd-mcp-server
+```
 
 ---
 
 ## Testing Strategy
 
-```mermaid
-graph TD
-    subgraph "Test Pyramid"
-        A[Unit Tests<br/>71 tests<br/>100% coverage]
-        B[Integration Tests<br/>Manual validation]
-        C[E2E Tests<br/>Cross-context validation]
-    end
+Test and validation commands:
 
-    subgraph "Test Frameworks"
-        D[Jest<br/>Unit + Integration]
-        E[TypeScript<br/>Type checking]
-        F[ESLint<br/>Code quality]
-    end
+| Command | Purpose |
+|---------|---------|
+| `npm run typecheck` | TypeScript compile validation |
+| `npm run lint` | ESLint over source |
+| `npm run test` | Jest test suite |
+| `npm run test:unit` | Unit tests |
+| `npm run test:coverage` | Coverage reports |
+| `npm run validate` | Typecheck, lint, and CI coverage run |
 
-    A --> D
-    B --> D
-    C --> D
-    D --> E --> F
+In zsh, quote the unit test patterns when invoking Jest directly:
+
+```bash
+npx jest '--testPathPattern=__tests__.*\.test\.ts$' '--testPathIgnorePattern=integration|e2e'
 ```
 
-### Test Coverage (v1.6.2)
-
-- **Unit Tests**: 71 tests passing
-  - moduleLoader: 6 tests (100% coverage)
-  - RequirementsClarification: 62 tests (95% coverage)
-  - Existing: 3 tests
-- **Integration Tests**: Manual cross-context validation
-  - npm start ✅
-  - npm run dev ✅
-  - node dist/index.js ✅
-  - npx ✅
-- **E2E Tests**: Production npx validation ✅
+Coverage thresholds are configured in `jest.config.js` at 80% for branches, functions, lines, and statements.
 
 ---
 
-## Future Architecture Considerations
+## Evolution Notes
 
-### Planned Improvements (v1.7.0+)
+Important architecture shifts:
 
-1. **Distributed Workflow State**
-   - Redis backend for SessionManager
-   - Multi-instance coordination
-   - Shared workflow state
-
-2. **Enhanced Plugin System**
-   - TypeScript plugin development
-   - Plugin dependency resolution
-   - Sandboxed plugin execution
-
-3. **GraphQL API**
-   - Alternative to MCP for web clients
-   - Real-time subscriptions
-   - Schema introspection
-
-4. **AI Model Integration**
-   - Local LLM support (Ollama, LM Studio)
-   - Semantic analysis improvements
-   - Automated code review
-
-5. **Telemetry & Observability**
-   - OpenTelemetry integration
-   - Distributed tracing
-   - Performance metrics
+- `.kiro` compatibility remains, but `.spec` is the current project artifact standard.
+- Static steering guidance was consolidated into installable skills, rules, agents, and hooks.
+- The default install profile is lean to reduce always-on context.
+- Phase approvals now write compact context handoffs automatically.
+- Optional TDD test-case review is represented as workflow metadata and enforced before tasks approval when enabled.
+- Generated local agent installs are ignored; root component directories are the package source assets.
 
 ---
 
 ## References
 
-- **MCP Specification**: https://modelcontextprotocol.io
-- **Source Code**: https://github.com/yi-john-huang/sdd-mcp
-- **npm Package**: https://www.npmjs.com/package/sdd-mcp-server
-- **Issue Tracker**: https://github.com/yi-john-huang/sdd-mcp/issues
+- [README.md](README.md)
+- [AGENTS.md](AGENTS.md)
+- [.spec/steering/product.md](.spec/steering/product.md)
+- [.spec/steering/tech.md](.spec/steering/tech.md)
+- [.spec/steering/structure.md](.spec/steering/structure.md)
+- [Model Context Protocol](https://modelcontextprotocol.io)
+- [npm package](https://www.npmjs.com/package/sdd-mcp-server)
+- [GitHub repository](https://github.com/yi-john-huang/sdd-mcp)
 
 ---
 
 **Maintained by**: SDD MCP Server Team  
 **License**: MIT  
-**Last Review**: 2026-01-12
+**Last Review**: 2026-06-22

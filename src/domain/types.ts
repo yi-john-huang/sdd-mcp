@@ -13,6 +13,8 @@ export interface ProjectMetadata {
   readonly updatedAt: Date;
   readonly language: string;
   readonly approvals: PhaseApprovals;
+  readonly workflowOptions?: WorkflowOptions;
+  readonly checkpoints?: WorkflowCheckpoints;
 }
 
 export interface PhaseApprovals {
@@ -24,6 +26,20 @@ export interface PhaseApprovals {
 export interface ApprovalStatus {
   readonly generated: boolean;
   readonly approved: boolean;
+}
+
+export interface WorkflowOptions {
+  readonly reviewTestCases: boolean;
+}
+
+export interface WorkflowCheckpoints {
+  readonly testCases: ReviewCheckpoint;
+}
+
+export interface ReviewCheckpoint {
+  readonly required: boolean;
+  readonly reviewed: boolean;
+  readonly reviewedAt?: Date;
 }
 
 export enum WorkflowPhase {

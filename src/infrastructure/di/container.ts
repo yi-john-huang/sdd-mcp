@@ -91,6 +91,7 @@ import { WorkflowValidationService } from "../../application/services/WorkflowVa
 import { CodebaseAnalysisService } from "../../application/services/CodebaseAnalysisService.js";
 import { SteeringDocumentService } from "../../application/services/SteeringDocumentService.js";
 import { ProjectContextService } from "../../application/services/ProjectContextService.js";
+import { ContextCompactionService } from "../../application/services/ContextCompactionService.js";
 import { RequirementsClarificationService } from "../../application/services/RequirementsClarificationService.js";
 import { SteeringContextLoader } from "../../application/services/SteeringContextLoader.js";
 import { DescriptionAnalyzer } from "../../application/services/DescriptionAnalyzer.js";
@@ -212,6 +213,9 @@ export function createContainer(): Container {
   container
     .bind<ProjectContextService>(TYPES.ProjectContextService)
     .to(ProjectContextService);
+  container
+    .bind<ContextCompactionService>(TYPES.ContextCompactionService)
+    .to(ContextCompactionService);
   container
     .bind<RequirementsClarificationService>(
       TYPES.RequirementsClarificationService,
