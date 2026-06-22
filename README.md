@@ -8,6 +8,25 @@ A Model Context Protocol (MCP) server implementing Spec-Driven Development (SDD)
 
 > **v3.4.0** - Automatic compact context handoffs, lean install defaults, and optional TDD test-case review checkpoints. See [CHANGELOG.md](CHANGELOG.md) for full version history.
 
+## Why sdd-mcp?
+
+Most AI coding workflows start as prompts and Markdown conventions. `sdd-mcp` adds a stateful MCP workflow layer so assistants can validate progress, enforce approvals, load the right amount of context, and keep long-running SDD work repeatable.
+
+```text
+sdd-init -> requirements -> approve -> design -> approve -> tasks -> review tests -> approve -> implement
+                         \-> compact handoff generated automatically ->/
+```
+
+### Compared With Superpowers and OpenSpec
+
+| Project | Best For | Main Strength | sdd-mcp Difference |
+|---------|----------|---------------|--------------------|
+| [Superpowers](https://github.com/obra/superpowers) | Agentic skill-driven development | Automatic skill activation, strong TDD culture, subagent workflows | `sdd-mcp` is MCP-native and keeps workflow state in tools, approvals, validation, and generated handoffs |
+| [OpenSpec](https://github.com/Fission-AI/OpenSpec) | Lightweight spec artifacts | Simple propose/apply/archive flow with broad tool support | `sdd-mcp` uses stricter phase gates, explicit review checkpoints, and compact context loading for governed workflows |
+| `sdd-mcp` | Repeatable SDD across MCP-compatible clients | Stateful tools, compact context handoffs, TDD checkpoints, quality gates | Optimized for teams that need enforceable workflow control rather than only guidance files |
+
+Use `sdd-mcp` when you want the AI assistant to follow a governed lifecycle, not just remember a convention from chat history.
+
 ## 🚀 Quick Start
 
 ### Option 1: Direct NPX Usage (Recommended)
