@@ -2,6 +2,7 @@
 
 import * as fs from 'fs';
 import * as path from 'path';
+import { createInterface } from 'readline/promises';
 import { SkillManager } from '../skills/SkillManager.js';
 import { RulesManager } from '../rules/RulesManager.js';
 import { ContextManager } from '../contexts/ContextManager.js';
@@ -9,18 +10,37 @@ import { AgentManager } from '../agents/AgentManager.js';
 import { HookLoader } from '../hooks/HookLoader.js';
 import { generateCodexAgentsMd } from './tool-support/codex.js';
 import { createAntigravitySymlinks } from './tool-support/antigravity.js';
-import { getDistCliDir, findTemplate } from './utils/find-package-root.js';
+import { getDistCliDir } from './utils/find-package-root.js';
+import {
+  CliUsageError,
+  InstallCancelledError,
+  getTargetPolicy,
+  isInstallTarget,
+  resolveInstallPaths,
+  resolveInstallTarget,
+  type ComponentType,
+  type InstallProfile,
+  type InstallTarget,
+  type PathOverrides,
+  type TargetPromptIO,
+} from './install-target.js';
+import { installClaudeCodeTarget } from './tool-support/claude-code.js';
+import { installCodexTarget } from './tool-support/codex.js';
+import { updateGeneratedIgnores } from './utils/gitignore-manager.js';
 
 /**
  * Component types that can be installed
  */
-export type ComponentType = 'skills' | 'steering' | 'rules' | 'contexts' | 'agents' | 'hooks';
-export type InstallProfile = 'lean' | 'full';
+export type { ComponentType, InstallProfile } from './install-target.js';
 
 /**
  * CLI options for install-skills command
  */
 export interface CLIOptions {
+  /** Primary native agent target. Undefined invokes compatibility resolution. */
+  target?: InstallTarget;
+  /** Path flags explicitly supplied by the user. */
+  pathOverrides?: PathOverrides;
   /** Target path for skill installation */
   targetPath: string;
   /** Target path for steering installation */
@@ -71,13 +91,14 @@ export class InstallSkillsCLI {
   private agentManager: AgentManager;
   private hookLoader: HookLoader;
   private steeringPath: string;
+  private promptIO: TargetPromptIO;
 
   /**
    * Create CLI instance
    * @param skillsPath - Optional path to skills directory (for testing)
    * @param steeringPath - Optional path to steering directory (for testing)
    */
-  constructor(skillsPath?: string, steeringPath?: string) {
+  constructor(skillsPath?: string, steeringPath?: string, promptIO?: TargetPromptIO) {
     // If no path provided, determine from package location
     const resolvedSkillsPath = skillsPath || this.getDefaultPath('skills');
     const resolvedSteeringPath = steeringPath || this.getDefaultPath('steering');
@@ -92,6 +113,7 @@ export class InstallSkillsCLI {
     this.agentManager = new AgentManager(resolvedAgentsPath);
     this.hookLoader = new HookLoader(resolvedHooksPath);
     this.steeringPath = resolvedSteeringPath;
+    this.promptIO = promptIO ?? createProcessTargetPromptIO();
   }
 
   /**
@@ -159,6 +181,7 @@ export class InstallSkillsCLI {
       antigravity: false,
       allTools: false,
       installProfile: 'lean',
+      pathOverrides: {},
     };
 
     for (let i = 0; i < args.length; i++) {
@@ -166,35 +189,37 @@ export class InstallSkillsCLI {
 
       switch (arg) {
         case '--path':
-          if (i + 1 < args.length) {
-            options.targetPath = args[++i];
-          }
+          options.targetPath = requireOptionValue(args, ++i, '--path');
+          options.pathOverrides!.skills = options.targetPath;
           break;
         case '--steering-path':
-          if (i + 1 < args.length) {
-            options.steeringPath = args[++i];
-          }
+          options.steeringPath = requireOptionValue(args, ++i, '--steering-path');
+          options.pathOverrides!.steering = options.steeringPath;
           break;
         case '--rules-path':
-          if (i + 1 < args.length) {
-            options.rulesPath = args[++i];
-          }
+          options.rulesPath = requireOptionValue(args, ++i, '--rules-path');
+          options.pathOverrides!.rules = options.rulesPath;
           break;
         case '--contexts-path':
-          if (i + 1 < args.length) {
-            options.contextsPath = args[++i];
-          }
+          options.contextsPath = requireOptionValue(args, ++i, '--contexts-path');
+          options.pathOverrides!.contexts = options.contextsPath;
           break;
         case '--agents-path':
-          if (i + 1 < args.length) {
-            options.agentsPath = args[++i];
-          }
+          options.agentsPath = requireOptionValue(args, ++i, '--agents-path');
+          options.pathOverrides!.agents = options.agentsPath;
           break;
         case '--hooks-path':
-          if (i + 1 < args.length) {
-            options.hooksPath = args[++i];
-          }
+          options.hooksPath = requireOptionValue(args, ++i, '--hooks-path');
+          options.pathOverrides!.hooks = options.hooksPath;
           break;
+        case '--target': {
+          const target = requireOptionValue(args, ++i, '--target');
+          if (!isInstallTarget(target)) {
+            throw new CliUsageError(`Unsupported target "${target}". Choose codex or claude-code.`);
+          }
+          options.target = target;
+          break;
+        }
         case '--list':
         case '-l':
           options.listOnly = true;
@@ -228,11 +253,12 @@ export class InstallSkillsCLI {
           options.components.push('hooks');
           break;
         case '--profile':
-          if (i + 1 < args.length) {
-            const profile = args[++i];
-            if (profile === 'lean' || profile === 'full') {
-              options.installProfile = profile;
+          {
+            const profile = requireOptionValue(args, ++i, '--profile');
+            if (profile !== 'lean' && profile !== 'full') {
+              throw new CliUsageError(`Unsupported profile "${profile}". Choose lean or full.`);
             }
+            options.installProfile = profile;
           }
           break;
         case '--all':
@@ -288,43 +314,54 @@ export class InstallSkillsCLI {
       return;
     }
 
+    const resolvedTarget = await resolveInstallTarget({
+      target: options.target,
+      legacyCodex: options.codex,
+      profile: options.installProfile,
+    }, this.promptIO);
+    const policy = getTargetPolicy(resolvedTarget.target);
+    const paths = resolveInstallPaths(policy, options.pathOverrides ?? legacyPathOverrides(options));
+
     // If specific components requested, install only those
     const hasSpecificComponents = options.components.length > 0;
     const componentsToInstall = hasSpecificComponents
       ? options.components
       : this.getDefaultComponents(options.installProfile);
 
-    console.log(`\n🚀 SDD Component Installer (${options.installProfile} profile)\n`);
+    console.log(`\n🚀 SDD Component Installer (${options.installProfile} profile, ${resolvedTarget.target})\n`);
 
-    for (const component of componentsToInstall) {
-      switch (component) {
-        case 'skills':
-          await this.installSkills(options.targetPath);
-          break;
-        case 'steering':
-          await this.installSteering(options.steeringPath);
-          break;
-        case 'rules':
-          await this.installRules(options.rulesPath);
-          break;
-        case 'contexts':
-          await this.installContexts(options.contextsPath);
-          break;
-        case 'agents':
-          await this.installAgents(options.agentsPath);
-          break;
-        case 'hooks':
-          await this.installHooks(options.hooksPath);
-          break;
-      }
+    const projectRoot = process.cwd();
+    const request = {
+      projectRoot,
+      paths,
+      components: componentsToInstall,
+      sources: {
+        skillManager: this.skillManager,
+        rulesManager: this.rulesManager,
+        contextManager: this.contextManager,
+        agentManager: this.agentManager,
+        hookLoader: this.hookLoader,
+        steeringSource: this.steeringPath,
+      },
+    };
+    const report = resolvedTarget.target === 'codex'
+      ? await installCodexTarget(request)
+      : await installClaudeCodeTarget(request);
+
+    try {
+      const ignore = await updateGeneratedIgnores(projectRoot, policy.ignoreEntries);
+      console.log(`  .gitignore: ${ignore.status}`);
+    } catch (error) {
+      report.failed.push({
+        component: 'root',
+        name: '.gitignore',
+        path: path.join(projectRoot, '.gitignore'),
+        error: error instanceof Error ? error.message : String(error),
+      });
     }
 
-    // Generate CLAUDE.md in project root
-    this.generateClaudeMd();
-
     // Multi-tool support: Codex CLI
-    if (options.codex || options.allTools) {
-      const projectRoot = process.cwd();
+    if (options.allTools && resolvedTarget.target !== 'codex') {
       await generateCodexAgentsMd(
         projectRoot,
         {
@@ -334,10 +371,10 @@ export class InstallSkillsCLI {
           listSteering: () => this.listSteering(),
         },
         {
-          skillsPath: options.targetPath,
-          rulesPath: options.rulesPath,
-          agentsPath: options.agentsPath,
-          steeringPath: options.steeringPath,
+          skillsPath: paths.skills,
+          rulesPath: paths.rules,
+          agentsPath: paths.agents,
+          steeringPath: paths.steering,
         },
         {
           skills: componentsToInstall.includes('skills'),
@@ -350,13 +387,24 @@ export class InstallSkillsCLI {
 
     // Multi-tool support: Google Antigravity
     if (options.antigravity || options.allTools) {
-      const projectRoot = process.cwd();
       await createAntigravitySymlinks(projectRoot, {
-        skillsPath: options.targetPath,
-        rulesPath: options.rulesPath,
+        skillsPath: paths.skills,
+        rulesPath: paths.rules,
       });
     }
 
+    console.log(`\nTarget: ${resolvedTarget.target} (${resolvedTarget.source})`);
+    console.log(`Installed: ${report.installed.length}`);
+    console.log(`Skipped: ${report.skipped.length}`);
+    console.log(`Failed: ${report.failed.length}`);
+    if (report.failed.length > 0) {
+      for (const failure of report.failed) {
+        console.error(`  ${failure.component}/${failure.name} (${failure.path}): ${failure.error}`);
+      }
+      process.exitCode = 1;
+      console.error('\nInstallation incomplete.\n');
+      return;
+    }
     console.log('\n✨ Installation complete!\n');
   }
 
@@ -366,34 +414,6 @@ export class InstallSkillsCLI {
     }
 
     return ['skills', 'steering', 'hooks'];
-  }
-
-  /**
-   * Generate CLAUDE.md in the user's project root from the template
-   */
-  private generateClaudeMd(): void {
-    const targetPath = path.resolve(process.cwd(), 'CLAUDE.md');
-
-    // Don't overwrite if user already has one
-    if (fs.existsSync(targetPath)) {
-      console.log('  ⏭️  CLAUDE.md already exists, skipping');
-      return;
-    }
-
-    // Find the template
-    const templatePath = findTemplate('CLAUDE.md');
-
-    if (!templatePath) {
-      console.log('  ⚠️  CLAUDE.md template not found, skipping');
-      return;
-    }
-
-    try {
-      fs.copyFileSync(templatePath, targetPath);
-      console.log('  ✅ Created CLAUDE.md in project root');
-    } catch (error) {
-      console.error('  ❌ Failed to create CLAUDE.md:', (error as Error).message);
-    }
   }
 
   /**
@@ -555,54 +575,6 @@ export class InstallSkillsCLI {
   }
 
   /**
-   * Install steering documents to target directory
-   */
-  private async installSteering(targetPath: string): Promise<void> {
-    console.log(`\nInstalling steering documents to: ${targetPath}\n`);
-
-    const result = await this.installSteeringFiles(targetPath);
-    this.logInstallResult(result, 'steering documents');
-
-    if (result.installed.length > 0) {
-      console.log('Steering documents installed successfully!');
-      console.log('   These provide project-wide guidance for AI interactions.\n');
-    }
-  }
-
-  /**
-   * Copy steering files to target directory
-   */
-  private async installSteeringFiles(targetPath: string): Promise<{ installed: string[]; failed: Array<{ name: string; error: string }> }> {
-    const installed: string[] = [];
-    const failed: Array<{ name: string; error: string }> = [];
-
-    try {
-      await fs.promises.mkdir(targetPath, { recursive: true });
-      const entries = await fs.promises.readdir(this.steeringPath);
-
-      for (const entry of entries) {
-        if (!entry.endsWith('.md')) continue;
-
-        try {
-          const sourceFile = path.join(this.steeringPath, entry);
-          const destFile = path.join(targetPath, entry);
-          await fs.promises.copyFile(sourceFile, destFile);
-          installed.push(entry);
-        } catch (error) {
-          failed.push({
-            name: entry,
-            error: error instanceof Error ? error.message : String(error),
-          });
-        }
-      }
-    } catch (error) {
-      console.error(`Failed to read steering directory: ${error instanceof Error ? error.message : String(error)}`);
-    }
-
-    return { installed, failed };
-  }
-
-  /**
    * Log installation results with consistent formatting
    */
   private logInstallResult(result: { installed: string[]; failed: Array<{ name: string; error: string }> }, typeName: string): void {
@@ -621,42 +593,6 @@ export class InstallSkillsCLI {
       }
       console.log('');
     }
-  }
-
-  /**
-   * Install rules to target directory
-   */
-  private async installRules(targetPath: string): Promise<void> {
-    console.log(`Installing rules to: ${targetPath}\n`);
-    const result = await this.rulesManager.installComponents(targetPath);
-    this.logInstallResult(result, 'rules');
-  }
-
-  /**
-   * Install contexts to target directory
-   */
-  private async installContexts(targetPath: string): Promise<void> {
-    console.log(`Installing contexts to: ${targetPath}\n`);
-    const result = await this.contextManager.installComponents(targetPath);
-    this.logInstallResult(result, 'contexts');
-  }
-
-  /**
-   * Install agents to target directory
-   */
-  private async installAgents(targetPath: string): Promise<void> {
-    console.log(`Installing agents to: ${targetPath}\n`);
-    const result = await this.agentManager.installComponents(targetPath);
-    this.logInstallResult(result, 'agents');
-  }
-
-  /**
-   * Install hooks to target directory
-   */
-  private async installHooks(targetPath: string): Promise<void> {
-    console.log(`Installing hooks to: ${targetPath}\n`);
-    const result = await this.hookLoader.installComponents(targetPath);
-    this.logInstallResult(result, 'hooks');
   }
 
   /**
@@ -704,26 +640,27 @@ Installs SDD components to your project. The default lean profile installs skill
 steering, and hooks only to reduce always-on context and token usage.
 
 Component Options (install specific types):
-  --skills              Install skills only (to .claude/skills)
+  --target <target>     Primary agent target: codex or claude-code
+  --skills              Install skills only (to the selected target)
   --steering            Install steering documents only (to .spec/steering)
-  --rules               Install rules only (to .claude/rules)
-  --contexts            Install contexts only (to .claude/contexts)
-  --agents              Install agents only (to .claude/agents)
-  --hooks               Install hooks only (to .claude/hooks)
+  --rules               Install rules only (to the selected target)
+  --contexts            Install contexts only (to the selected target)
+  --agents              Install agents only (to the selected target)
+  --hooks               Install hooks only (to the selected target)
   --all                 Install all component types
   --profile <profile>   Install profile when no component flags are provided:
                         lean (default) or full
 
 Path Options (customize installation targets):
-  --path <dir>          Target for skills (default: .claude/skills)
+  --path <dir>          Override the selected target's skills path
   --steering-path <dir> Target for steering (default: .spec/steering)
-  --rules-path <dir>    Target for rules (default: .claude/rules)
-  --contexts-path <dir> Target for contexts (default: .claude/contexts)
-  --agents-path <dir>   Target for agents (default: .claude/agents)
-  --hooks-path <dir>    Target for hooks (default: .claude/hooks)
+  --rules-path <dir>    Override the selected target's rules path
+  --contexts-path <dir> Override the selected target's contexts path
+  --agents-path <dir>   Override the selected target's agents path
+  --hooks-path <dir>    Override the selected target's hooks path
 
 Multi-Tool Support:
-  --codex               Also generate AGENTS.md for OpenAI Codex CLI
+  --codex               Deprecated alias for --target codex
   --antigravity         Also create .agent/ symlinks for Google Antigravity
   --all-tools           Enable all tool integrations (codex + antigravity)
 
@@ -733,12 +670,13 @@ Other Options:
 
 Examples:
   npx sdd-mcp-server install                     # Lean install for lower token usage
-  npx sdd-mcp-server install --profile full      # Install all components
   npx sdd-mcp-server install --skills --rules    # Install skills and rules only
   npx sdd-mcp-server install --list              # List available components
-  npx sdd-mcp-server install --codex             # Claude + Codex CLI support
-  npx sdd-mcp-server install --antigravity       # Claude + Antigravity support
-  npx sdd-mcp-server install --all-tools         # Claude + all tool integrations
+  npx sdd-mcp-server install --profile full       # Prompt for Codex or Claude Code
+  npx sdd-mcp-server install --target codex       # Native Codex files
+  npx sdd-mcp-server install --target claude-code # Native Claude Code files
+  npx sdd-mcp-server install --antigravity       # Add Antigravity support
+  npx sdd-mcp-server install --all-tools         # Add all tool integrations
 
 Component Types:
   Skills    - Workflow guidance for SDD phases (/sdd-requirements, /sdd-design, etc.)
@@ -748,7 +686,7 @@ Component Types:
   Agents    - Specialized AI personas (planner, architect, reviewer)
   Hooks     - Event-driven automation (pre-tool-use, post-tool-use, etc.)
 
-After installation, use skills in Claude Code:
+After installation, use skills in the selected agent:
   /sdd-requirements <feature-name>
   /sdd-design <feature-name>
   /sdd-tasks <feature-name>
@@ -756,6 +694,10 @@ After installation, use skills in Claude Code:
   /sdd-review [file-path]
   /sdd-security-check [scope]
   /sdd-test-gen [file-path]
+
+Model Routing:
+  Codex high-level roles: gpt-5.6-sol; implementation/TDD: gpt-5.6-terra
+  Claude Code high-level roles: opus; implementation/TDD: sonnet
 `;
   }
 }
@@ -774,6 +716,11 @@ export async function mainInstall() {
   await cli.runUnified(options);
 }
 
+export function cliExitCode(error: unknown): number {
+  if (error instanceof InstallCancelledError) return 130;
+  return 1;
+}
+
 // ESM main module detection: check if this file is the entry point
 // Use path matching instead of import.meta.url for Jest compatibility
 const isMainModule = process.argv[1] && (
@@ -786,6 +733,56 @@ const isMainModule = process.argv[1] && (
 if (isMainModule) {
   main().catch((error) => {
     console.error('Error:', error.message);
-    process.exit(1);
+    process.exit(cliExitCode(error));
   });
+}
+
+function requireOptionValue(args: string[], index: number, option: string): string {
+  const value = args[index];
+  if (!value || value.startsWith('--')) {
+    throw new CliUsageError(`${option} requires a value`);
+  }
+  return value;
+}
+
+function legacyPathOverrides(options: CLIOptions): PathOverrides {
+  const defaults = getTargetPolicy('claude-code').defaultPaths;
+  return {
+    ...(options.targetPath !== defaults.skills ? { skills: options.targetPath } : {}),
+    ...(options.steeringPath !== defaults.steering ? { steering: options.steeringPath } : {}),
+    ...(options.rulesPath !== defaults.rules ? { rules: options.rulesPath } : {}),
+    ...(options.contextsPath !== defaults.contexts ? { contexts: options.contextsPath } : {}),
+    ...(options.agentsPath !== defaults.agents ? { agents: options.agentsPath } : {}),
+    ...(options.hooksPath !== defaults.hooks ? { hooks: options.hooksPath } : {}),
+  };
+}
+
+function createProcessTargetPromptIO(): TargetPromptIO {
+  return {
+    isInteractive: () => Boolean(process.stdin.isTTY && process.stdout.isTTY),
+    writeNotice: message => console.warn(message),
+    async chooseTarget() {
+      const prompt = createInterface({ input: process.stdin, output: process.stdout });
+      let cancelled = false;
+      prompt.once('SIGINT', () => {
+        cancelled = true;
+        prompt.close();
+      });
+      try {
+        while (!cancelled) {
+          const answer = (await prompt.question(
+            'Choose the primary LLM agent target:\n  1) Codex\n  2) Claude Code\nSelection: ',
+          )).trim().toLowerCase();
+          if (answer === '1' || answer === 'codex') return 'codex';
+          if (answer === '2' || answer === 'claude' || answer === 'claude-code') return 'claude-code';
+          console.warn('Choose 1 (Codex) or 2 (Claude Code).');
+        }
+      } catch {
+        return null;
+      } finally {
+        prompt.close();
+      }
+      return null;
+    },
+  };
 }

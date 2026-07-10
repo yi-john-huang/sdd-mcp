@@ -146,3 +146,7 @@ Claude:
 5. Implement: Button component + logout handler
 6. Test: Verify all tests pass
 ```
+
+## Specialist Delegation
+
+When the host supports subagents, delegate the implementation to the `implementer` role with a compact handoff containing only the requested change, affected files, constraints, and focused verification. Wait for the specialist and then integrate its result into the current workflow. If specialist delegation is unavailable, state the fallback and continue in the current agent.

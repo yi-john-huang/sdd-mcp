@@ -5,6 +5,18 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added
+- Interactive `codex` or `claude-code` target selection for full-profile installs, plus explicit `--target` support for automation.
+- Native Codex skills, guidance, TOML agents, root instructions, and safe lifecycle hooks.
+- Central role routing: Sol/Opus for high-level work and Terra/Sonnet for implementation and TDD; Luna remains supported without a default role.
+- Specialist delegation guidance in phase skills with compact handoffs and explicit fallback behavior.
+
+### Changed
+- Installer writes are preserve-first and `.gitignore` receives an idempotent target-specific managed block.
+- `--codex` is now a deprecated alias for `--target codex`.
+
 ## [3.4.0] - 2026-06-22
 
 ### Added

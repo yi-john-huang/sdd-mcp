@@ -69,7 +69,7 @@ Project-specific context documents. Edit these to describe your project:
 
 ## Workflow
 
-1. **Setup**: `npx sdd-mcp-server install --all` (already done)
+1. **Setup**: `npx sdd-mcp-server install --profile full --target claude-code` (already done)
 2. **Steering** (optional): `/sdd-steering` to generate project-specific docs
 3. **Specify**: `sdd-init` → `/sdd-requirements` → `/sdd-design` → `/sdd-tasks` (approve each phase)
 4. **Implement**: `/sdd-implement` or `sdd-spec-impl`

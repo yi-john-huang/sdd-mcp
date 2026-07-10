@@ -130,6 +130,7 @@ export class HookLoader extends BaseManager<HookDescriptor> {
   async installComponents(targetPath: string): Promise<InstallResult> {
     const result: InstallResult = {
       installed: [],
+      skipped: [],
       failed: [],
     };
 
@@ -157,9 +158,13 @@ export class HookLoader extends BaseManager<HookDescriptor> {
           const targetFile = path.join(eventTargetPath, fileName);
 
           try {
-            await fs.promises.copyFile(hook.path, targetFile);
+            await fs.promises.copyFile(hook.path, targetFile, fs.constants.COPYFILE_EXCL);
             result.installed.push(hook.name);
           } catch (error) {
+            if (isAlreadyExists(error)) {
+              result.skipped?.push(hook.name);
+              continue;
+            }
             result.failed.push({
               name: hook.name,
               error: error instanceof Error ? error.message : String(error),
@@ -212,4 +217,8 @@ export class HookLoader extends BaseManager<HookDescriptor> {
       .filter(hook => hook.enabled)
       .sort((a, b) => b.priority - a.priority);
   }
+}
+
+function isAlreadyExists(error: unknown): boolean {
+  return typeof error === 'object' && error !== null && 'code' in error && error.code === 'EEXIST';
 }

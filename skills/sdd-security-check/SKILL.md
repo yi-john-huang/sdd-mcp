@@ -191,3 +191,7 @@ When checking implementation against spec:
 1. Verify security NFRs from requirements.md are met
 2. Check security considerations from design.md are implemented
 3. Ensure security-related tasks in tasks.md are complete
+
+## Specialist Delegation
+
+When the host supports subagents, delegate the audit to the `security-auditor` role with a compact handoff containing only the review scope, threat context, security requirements, and relevant diff. Wait for the specialist and then integrate its result into the current workflow. If specialist delegation is unavailable, state the fallback and continue in the current agent.

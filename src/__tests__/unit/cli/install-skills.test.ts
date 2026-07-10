@@ -1,9 +1,10 @@
-import { InstallSkillsCLI, CLIOptions } from '../../../cli/install-skills';
+import { InstallSkillsCLI, CLIOptions, cliExitCode } from '../../../cli/install-skills';
 import { SkillManager } from '../../../skills/SkillManager';
 import { RulesManager } from '../../../rules/RulesManager';
 import { ContextManager } from '../../../contexts/ContextManager';
 import { AgentManager } from '../../../agents/AgentManager';
 import { HookLoader } from '../../../hooks/HookLoader';
+import { CliUsageError, InstallCancelledError } from '../../../cli/install-target';
 
 // Mock all managers
 jest.mock('../../../skills/SkillManager');
@@ -230,6 +231,27 @@ describe('InstallSkillsCLI', () => {
       expect(options.allTools).toBe(false);
     });
 
+    it('should parse an explicit primary target', () => {
+      const options = cli.parseArgs(['--target', 'codex']);
+
+      expect(options.target).toBe('codex');
+      expect(options.codex).toBe(false);
+    });
+
+    it('should preserve path override intent for target-specific defaults', () => {
+      const options = cli.parseArgs(['--target', 'codex', '--agents-path', 'custom/agents']);
+
+      expect(options.pathOverrides).toEqual({ agents: 'custom/agents' });
+    });
+
+    it.each([
+      ['missing', ['--target']],
+      ['unsupported', ['--target', 'other-agent']],
+      ['profile', ['--profile', 'huge']],
+    ])('should reject %s option values before installation', (_name, args) => {
+      expect(() => cli.parseArgs(args)).toThrow(CliUsageError);
+    });
+
     it('should parse --antigravity flag', () => {
       const args = ['--antigravity'];
       const options = cli.parseArgs(args);
@@ -344,6 +366,9 @@ describe('InstallSkillsCLI', () => {
       expect(help).toContain('--agents');
       expect(help).toContain('--hooks');
       expect(help).toContain('--all');
+      expect(help).toContain('--target <target>');
+      expect(help).toContain('codex');
+      expect(help).toContain('claude-code');
     });
 
     it('should include multi-tool support flags', () => {
@@ -352,6 +377,17 @@ describe('InstallSkillsCLI', () => {
       expect(help).toContain('--codex');
       expect(help).toContain('--antigravity');
       expect(help).toContain('--all-tools');
+      expect(help).toContain('gpt-5.6-sol');
+      expect(help).toContain('gpt-5.6-terra');
+      expect(help).toContain('opus');
+      expect(help).toContain('sonnet');
     });
+  });
+});
+
+describe('CLI error mapping', () => {
+  it('maps cancellation to 130 and usage errors to 1', () => {
+    expect(cliExitCode(new InstallCancelledError())).toBe(130);
+    expect(cliExitCode(new CliUsageError('bad option'))).toBe(1);
   });
 });

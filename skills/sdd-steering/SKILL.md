@@ -223,3 +223,7 @@ This skill generates documents manually. For automated analysis, the `sdd-init` 
 - Keep them updated as the project evolves
 - Use custom steering for domain-specific rules
 - Reference from AGENTS.md or CLAUDE.md in project root
+
+## Specialist Delegation
+
+When the host supports subagents, delegate this phase to the `planner` role with a compact handoff containing only the project facts, conventions, constraints, and requested steering scope. Wait for the specialist and then integrate its result into the current workflow. If specialist delegation is unavailable, state the fallback and continue in the current agent.

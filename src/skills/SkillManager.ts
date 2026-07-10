@@ -19,6 +19,8 @@ export interface SkillDescriptor {
 export interface InstallResult {
   /** Successfully installed skills */
   installed: string[];
+  /** Existing skills preserved without modification */
+  skipped?: string[];
   /** Failed installations with error details */
   failed: Array<{ name: string; error: string }>;
 }
@@ -111,6 +113,7 @@ export class SkillManager {
   async installSkills(targetPath: string): Promise<InstallResult> {
     const result: InstallResult = {
       installed: [],
+      skipped: [],
       failed: [],
     };
 
@@ -134,15 +137,21 @@ export class SkillManager {
           // Copy all files in the skill directory
           const files = await fs.promises.readdir(sourceDir, { withFileTypes: true });
 
+          let copiedFile = false;
           for (const file of files) {
             if (!file.isDirectory()) {
               const sourceFile = path.join(sourceDir, file.name);
               const destFile = path.join(destDir, file.name);
-              await fs.promises.copyFile(sourceFile, destFile);
+              try {
+                await fs.promises.copyFile(sourceFile, destFile, fs.constants.COPYFILE_EXCL);
+                copiedFile = true;
+              } catch (error) {
+                if (!isAlreadyExists(error)) throw error;
+              }
             }
           }
 
-          result.installed.push(skillName);
+          (copiedFile ? result.installed : result.skipped ??= []).push(skillName);
         } catch (error) {
           result.failed.push({
             name: skillName,
@@ -187,4 +196,8 @@ export class SkillManager {
 
     return metadata;
   }
+}
+
+function isAlreadyExists(error: unknown): boolean {
+  return typeof error === 'object' && error !== null && 'code' in error && error.code === 'EEXIST';
 }

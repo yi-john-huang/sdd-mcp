@@ -55,6 +55,10 @@ Before reviewing:
 - [ ] Type mismatches or unsafe casts
 ```
 
+## Specialist Delegation
+
+When the host supports subagents, delegate the focused review to the `reviewer` role with a compact handoff containing only the diff or scope, approved requirements, project conventions, and verification evidence. Wait for the specialist and then integrate its result into the current workflow. If specialist delegation is unavailable, state the fallback and continue in the current agent.
+
 #### Simplicity Assessment
 
 Ask these questions:

@@ -275,3 +275,7 @@ Apply these steering documents during design:
 - [ ] Security considerations are addressed
 - [ ] Testing approach is specified
 - [ ] Linus-style review passed
+
+## Specialist Delegation
+
+When the host supports subagents, delegate this phase to the `architect` role with a compact handoff containing only the approved requirements, relevant project context, constraints, and required design decisions. Wait for the specialist and then integrate its result into the current workflow. If specialist delegation is unavailable, state the fallback and continue in the current agent.

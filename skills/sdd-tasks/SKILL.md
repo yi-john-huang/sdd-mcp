@@ -258,3 +258,7 @@ Apply these steering documents during task breakdown:
 | **Big Tasks** | Hard to track progress | Break into S/M sizes |
 | **No Dependencies** | Blocked work | Map dependencies explicitly |
 | **Vague Criteria** | Unclear completion | Specific, measurable criteria |
+
+## Specialist Delegation
+
+When the host supports subagents, delegate this phase to the `planner` role with a compact handoff containing only the approved design, constraints, dependencies, and required task format. Wait for the specialist and then integrate its result into the current workflow. If specialist delegation is unavailable, state the fallback and continue in the current agent.

@@ -19,8 +19,10 @@ export interface ComponentDescriptor {
 export interface InstallResult {
   /** Successfully installed components */
   installed: string[];
+  /** Existing components preserved without modification */
+  skipped?: string[];
   /** Failed installations with error details */
-  failed: Array<{ name: string; error: string }>;
+  failed: Array<{ name: string; error: string; path?: string }>;
 }
 
 /**
@@ -217,6 +219,7 @@ export abstract class BaseManager<T extends ComponentDescriptor> {
   async installComponents(targetPath: string): Promise<InstallResult> {
     const result: InstallResult = {
       installed: [],
+      skipped: [],
       failed: [],
     };
 
@@ -257,9 +260,13 @@ export abstract class BaseManager<T extends ComponentDescriptor> {
           const destFile = path.join(targetPath, entry.name);
 
           try {
-            await fs.promises.copyFile(sourceFile, destFile);
+            await fs.promises.copyFile(sourceFile, destFile, fs.constants.COPYFILE_EXCL);
             result.installed.push(componentName);
           } catch (error) {
+            if (isAlreadyExists(error)) {
+              result.skipped?.push(componentName);
+              continue;
+            }
             result.failed.push({
               name: componentName,
               error: error instanceof Error ? error.message : String(error),
@@ -349,7 +356,11 @@ export abstract class BaseManager<T extends ComponentDescriptor> {
       if (entry.isDirectory()) {
         await this.copyDirectory(sourcePath, destPath);
       } else {
-        await fs.promises.copyFile(sourcePath, destPath);
+        try {
+          await fs.promises.copyFile(sourcePath, destPath, fs.constants.COPYFILE_EXCL);
+        } catch (error) {
+          if (!isAlreadyExists(error)) throw error;
+        }
       }
     }
   }
@@ -367,4 +378,8 @@ export abstract class BaseManager<T extends ComponentDescriptor> {
       return false;
     }
   }
+}
+
+function isAlreadyExists(error: unknown): boolean {
+  return typeof error === 'object' && error !== null && 'code' in error && error.code === 'EEXIST';
 }

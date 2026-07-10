@@ -10,7 +10,11 @@
  *   npx sdd-mcp --help
  */
 
-import { main as installSkillsMain, mainInstall as installMain } from './install-skills.js';
+import {
+  cliExitCode,
+  main as installSkillsMain,
+  mainInstall as installMain,
+} from './install-skills.js';
 import { main as migrateKiroMain } from './migrate-kiro.js';
 import { main as migrateSteeringMain } from './migrate-steering.js';
 
@@ -28,8 +32,11 @@ Commands:
 Options:
   --help, -h        Show this help message
 
-Multi-Tool Support:
-  --codex           Also generate AGENTS.md for OpenAI Codex CLI
+Agent Target:
+  --target <target> Choose codex or claude-code
+  --codex           Deprecated alias for --target codex
+
+Additional Integrations:
   --antigravity     Also create .agent/ symlinks for Google Antigravity
   --all-tools       Enable all tool integrations (codex + antigravity)
 
@@ -38,7 +45,8 @@ Examples:
   npx sdd-mcp-server install --skills            # Install skills only
   npx sdd-mcp-server install --steering          # Install steering only
   npx sdd-mcp-server install --list              # List available content
-  npx sdd-mcp-server install --codex             # Claude + Codex CLI
+  npx sdd-mcp-server install --profile full      # Prompt for the target agent
+  npx sdd-mcp-server install --target codex      # Native Codex install
   npx sdd-mcp-server install --all-tools         # Claude + all tools
   npx sdd-mcp-server install-skills              # Legacy: Install skills
   npx sdd-mcp-server install-skills --list       # List available skills
@@ -93,5 +101,5 @@ async function main() {
 
 main().catch((error) => {
   console.error('Error:', error.message);
-  process.exit(1);
+  process.exit(cliExitCode(error));
 });
