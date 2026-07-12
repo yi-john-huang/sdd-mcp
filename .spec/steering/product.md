@@ -16,7 +16,7 @@ Make disciplined spec-driven development practical inside AI-assisted engineerin
 ## Core Features
 1. MCP workflow tools - Initialize specs, inspect status, approve phases, validate design/gaps, run quality checks, and execute spec implementation.
 2. Agent skills - On-demand guidance for requirements, design, tasks, implementation, steering, simple tasks, review, security checks, tests, and commits.
-3. Component installer - Installs skills, steering, rules, contexts, agents, and hooks into consuming projects with lean and full profiles.
+3. Target-aware component installer - Selects Codex or Claude Code, renders native skills, guidance, agents, and hooks, and supports lean/full profiles with preserve-first writes.
 4. Approval workflow - Enforces requirements, design, and tasks approval before implementation, with an optional TDD test-case review checkpoint.
 5. Context management - Generates compact handoff summaries after phase approvals and supports compact, standard, and full context loading modes.
 6. Quality and security guidance - Includes Linus-style review, OWASP-oriented checks, TDD guidance, and project-specific steering.
@@ -32,6 +32,7 @@ Make disciplined spec-driven development practical inside AI-assisted engineerin
 ## Success Metrics
 - Users can complete SDD phases with fewer full-context reloads and fewer repeated steering reads.
 - Default install profile keeps always-on guidance small while preserving full install options for teams that need them.
+- Codex and Claude Code installs contain only their selected native artifacts and apply the documented role/model policy.
 - New workflow tools and skills are covered by focused unit tests and type checks.
 - README, package version examples, and install behavior stay aligned for published releases.
 - Context handoff summaries produce meaningful reductions compared with loading all source spec documents.

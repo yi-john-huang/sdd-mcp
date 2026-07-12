@@ -4,7 +4,7 @@
  * Main CLI entry point for sdd-mcp commands
  *
  * Usage:
- *   npx sdd-mcp install [options]           # Install skills AND steering (unified)
+ *   npx sdd-mcp install [options]           # Install target-native SDD components
  *   npx sdd-mcp install-skills [options]    # Install skills only (legacy)
  *   npx sdd-mcp migrate-kiro [options]
  *   npx sdd-mcp --help
@@ -24,7 +24,7 @@ SDD MCP CLI
 Usage: npx sdd-mcp-server <command> [options]
 
 Commands:
-  install           Install SDD skills AND steering documents (recommended)
+  install           Install target-native SDD components (recommended)
   install-skills    Install SDD skills only (legacy)
   migrate-kiro      Migrate .kiro directory to .spec (v2.1.0+)
   migrate-steering  Migrate steering docs to consolidated components (v3.1.0+)
@@ -41,13 +41,13 @@ Additional Integrations:
   --all-tools       Enable all tool integrations (codex + antigravity)
 
 Examples:
-  npx sdd-mcp-server install                     # Install skills + steering
+  npx sdd-mcp-server install                     # Lean target-native install
   npx sdd-mcp-server install --skills            # Install skills only
   npx sdd-mcp-server install --steering          # Install steering only
   npx sdd-mcp-server install --list              # List available content
   npx sdd-mcp-server install --profile full      # Prompt for the target agent
   npx sdd-mcp-server install --target codex      # Native Codex install
-  npx sdd-mcp-server install --all-tools         # Claude + all tools
+  npx sdd-mcp-server install --all-tools         # Add optional integrations
   npx sdd-mcp-server install-skills              # Legacy: Install skills
   npx sdd-mcp-server install-skills --list       # List available skills
   npx sdd-mcp-server migrate-kiro                # Migrate .kiro to .spec
@@ -69,7 +69,7 @@ async function main() {
 
   switch (command) {
     case 'install':
-      // Unified install command - both skills and steering
+      // Unified target-aware component installer
       process.argv = [process.argv[0], process.argv[1], ...args.slice(1)];
       await installMain();
       break;

@@ -1,5 +1,6 @@
 import {
   CliUsageError,
+  DEFAULT_CODEX_MODEL,
   InstallCancelledError,
   ROLE_MODEL_ROUTES,
   SKILL_AGENT_ROUTES,
@@ -24,19 +25,40 @@ describe('install target policy', () => {
     });
   });
 
-  it('defines the approved model routes and leaves luna unassigned', () => {
+  it('uses luna as the default and sol xhigh for high-level roles', () => {
+    expect(DEFAULT_CODEX_MODEL).toBe('gpt-5.6-luna');
     expect(ROLE_MODEL_ROUTES.planner.codex).toEqual({
       model: 'gpt-5.6-sol',
-      reasoningEffort: 'high',
+      reasoningEffort: 'xhigh',
+    });
+    expect(ROLE_MODEL_ROUTES.architect.codex).toEqual({
+      model: 'gpt-5.6-sol',
+      reasoningEffort: 'xhigh',
+    });
+    expect(ROLE_MODEL_ROUTES.reviewer.codex).toEqual({
+      model: 'gpt-5.6-sol',
+      reasoningEffort: 'xhigh',
+    });
+    expect(ROLE_MODEL_ROUTES['security-auditor'].codex).toEqual({
+      model: 'gpt-5.6-sol',
+      reasoningEffort: 'xhigh',
     });
     expect(ROLE_MODEL_ROUTES.implementer.codex).toEqual({
-      model: 'gpt-5.6-terra',
-      reasoningEffort: 'medium',
+      model: 'gpt-5.6-luna',
+      reasoningEffort: 'max',
+    });
+    expect(ROLE_MODEL_ROUTES['tdd-guide'].codex).toEqual({
+      model: 'gpt-5.6-luna',
+      reasoningEffort: 'max',
     });
     expect(ROLE_MODEL_ROUTES.reviewer.claudeCode.model).toBe('opus');
     expect(ROLE_MODEL_ROUTES['tdd-guide'].claudeCode.model).toBe('sonnet');
-    expect(SUPPORTED_CODEX_MODELS).toContain('gpt-5.6-luna');
-    expect(JSON.stringify(ROLE_MODEL_ROUTES)).not.toContain('gpt-5.6-luna');
+    expect(SUPPORTED_CODEX_MODELS).toEqual([
+      'gpt-5.6-sol',
+      'gpt-5.6-terra',
+      'gpt-5.6-luna',
+    ]);
+    expect(JSON.stringify(ROLE_MODEL_ROUTES)).not.toContain('gpt-5.6-terra');
   });
 
   it('defines phase skill delegation routes', () => {

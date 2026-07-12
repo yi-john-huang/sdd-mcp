@@ -51,12 +51,12 @@ What This Tool Does:
      - structure.md
 
 Migration Path:
-  The static guidance content now lives in enhanced components:
-  - Design principles: .claude/rules/coding-style.md
-  - TDD methodology: .claude/agents/tdd-guide.md
-  - Review criteria: .claude/agents/reviewer.md
-  - Security checklist: .claude/agents/security-auditor.md
-  - Commit format: .claude/skills/sdd-commit/SKILL.md
+  The static guidance content now lives in packaged component sources:
+  - Design principles: rules/coding-style.md
+  - TDD methodology: agents/tdd-guide.md
+  - Review criteria: agents/reviewer.md
+  - Security checklist: agents/security-auditor.md
+  - Commit format: skills/sdd-commit/SKILL.md
 
 Examples:
   npx sdd-mcp-server migrate-steering              # Migrate current directory
@@ -311,14 +311,14 @@ export async function main(): Promise<void> {
     console.log('✅ Preview complete. Run without --dry-run to apply changes.\n');
   } else {
     console.log('✅ Migration complete!\n');
-    console.log('   The static steering content now lives in:');
-    console.log('     • .claude/rules/coding-style.md (SOLID, DRY, KISS, YAGNI)');
-    console.log('     • .claude/agents/reviewer.md (Linus-style review)');
-    console.log('     • .claude/agents/tdd-guide.md (TDD methodology)');
-    console.log('     • .claude/agents/security-auditor.md (OWASP Top 10)');
-    console.log('     • .claude/skills/sdd-commit/SKILL.md (Commit format)\n');
+    console.log('   The static steering content now lives in packaged sources:');
+    console.log('     • rules/coding-style.md (SOLID, DRY, KISS, YAGNI)');
+    console.log('     • agents/reviewer.md (Linus-style review)');
+    console.log('     • agents/tdd-guide.md (TDD methodology)');
+    console.log('     • agents/security-auditor.md (OWASP Top 10)');
+    console.log('     • skills/sdd-commit/SKILL.md (Commit format)\n');
 
-    console.log('   To update .claude/ components, run: npx sdd-mcp-server install\n');
+    console.log('   Install native components with: npx sdd-mcp-server install --profile full\n');
   }
 }
 

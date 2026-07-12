@@ -10,7 +10,7 @@ sdd-mcp/
 │   ├── application/services/     # Use cases and workflow orchestration
 │   ├── domain/                   # Types, ports, workflow state, quality/plugin contracts
 │   ├── infrastructure/           # MCP server, DI, adapters, schemas, templates, plugins
-│   ├── cli/                      # Install and migration CLIs
+│   ├── cli/                      # Target policy, native installers, install/migration CLIs
 │   ├── agents/                   # Source managers for installable agents
 │   ├── contexts/                 # Source managers for installable contexts
 │   ├── hooks/                    # Source managers for installable hooks
@@ -56,6 +56,7 @@ sdd-mcp/
 ### CLI and Entry Points
 - Use `src/index.ts` for MCP server startup and simplified mode compatibility.
 - Use `src/cli/` for install and migration commands.
+- Keep primary-target policy in `install-target.ts`, provider adapters in `tool-support/`, and safe filesystem operations in `cli/utils/`.
 - Keep tool schemas and tool response behavior aligned between full adapter paths and simplified MCP paths when both are supported.
 
 ### Packaged Components

@@ -216,10 +216,11 @@ The installer creates only the selected primary target's native artifacts, prese
 
 | Work | Codex | Claude Code |
 |------|-------|-------------|
-| Planning, architecture, review, security | `gpt-5.6-sol` (`high`) | `opus` |
-| Implementation and TDD | `gpt-5.6-terra` (`medium`) | `sonnet` |
+| Planning, architecture, review, security | `gpt-5.6-sol` (`xhigh`) | `opus` |
+| Implementation and TDD (default) | `gpt-5.6-luna` (`max`) | `sonnet` |
 
-`gpt-5.6-luna` is recognized as part of the Codex model family but is not assigned to a default SDD role.
+Codex uses `gpt-5.6-luna` as the default model for routed work. High-level advisor roles override that default with `gpt-5.6-sol` at xhigh effort. `gpt-5.6-terra` remains supported but is not selected by a default SDD role.
+For a detailed explanation of role selection, native agent metadata, delegation, and rerun behavior, see [Model Routing](docs/MODEL-ROUTING.md).
 
 ### Component Architecture & Relationships
 
@@ -338,11 +339,11 @@ npx sdd-mcp-server migrate-steering --path ./my-project
 - Backs up existing `.spec/steering/` to `.spec/steering.backup/`
 - Removes static steering docs (principles.md, tdd-guideline.md, linus-review.md, etc.)
 - Preserves project-specific templates (product.md, tech.md, structure.md)
-- The static content now lives in enhanced `.claude/` components
+- The static content now lives in packaged `rules/`, `agents/`, and `skills/` sources and is rendered for the selected target
 
 ### Available Skills
 
-After installation, use these skills in Claude Code:
+After installation, use these skills in the selected target agent:
 
 | Skill | Description |
 |-------|-------------|
@@ -407,16 +408,16 @@ Once connected to your AI client, you can use these MCP tools:
 | `sdd-validate-design` | Design quality validation | Interactive GO/NO-GO design review |
 | `sdd-validate-gap` | Implementation gap analysis | Analyze requirements vs codebase |
 | `sdd-spec-impl` | Execute tasks with TDD | Kent Beck's Red-Green-Refactor methodology |
-| `sdd-list-skills` | List available Agent Skills | Shows skills that can be installed for Claude Code |
+| `sdd-list-skills` | List available Agent Skills | Shows skills that can be installed for the selected target agent |
 
-> **Note**: Template/guidance tools (`sdd-requirements`, `sdd-design`, `sdd-tasks`, `sdd-steering`, `sdd-implement`) are now **Agent Skills**. Install them with `npx sdd-mcp-server install-skills` and use as `/sdd-requirements`, `/sdd-design`, etc.
+> **Note**: Template/guidance tools (`sdd-requirements`, `sdd-design`, `sdd-tasks`, `sdd-steering`, `sdd-implement`) are now **Agent Skills**. Install them with the target-aware `install` command and use them as `/sdd-requirements`, `/sdd-design`, etc.
 
 ## 💡 Basic Workflow
 
-1. **Setup: Install Skills & Steering, Initialize Project**
+1. **Setup: Install Target Components, Initialize Project**
    ```bash
-   # Install skills and steering documents (recommended)
-   npx sdd-mcp-server install
+   # Interactive full install, or pass --target explicitly in automation
+   npx sdd-mcp-server install --profile full
 
    # Initialize project with MCP tool
    Use sdd-init to create a new SDD project
@@ -702,10 +703,12 @@ For detailed documentation on:
 **Steering Documents (v3.4.0)**:
 
 Static steering content has been consolidated into enhanced components:
-- **Design Principles**: `.claude/rules/coding-style.md` (includes SOLID, DRY, KISS, YAGNI, SoC)
-- **TDD Methodology**: `.claude/agents/tdd-guide.md` (Red-Green-Refactor workflow)
-- **Code Review**: `.claude/agents/reviewer.md` (Linus-style 5-layer thinking)
-- **Security Checklist**: `.claude/agents/security-auditor.md` (OWASP Top 10)
+- **Design Principles**: `rules/coding-style.md` (includes SOLID, DRY, KISS, YAGNI, SoC)
+- **TDD Methodology**: `agents/tdd-guide.md` (Red-Green-Refactor workflow)
+- **Code Review**: `agents/reviewer.md` (Linus-style 5-layer thinking)
+- **Security Checklist**: `agents/security-auditor.md` (OWASP Top 10)
+
+The installer renders these sources into the Claude Code or Codex paths shown in the target table above.
 
 The `.spec/steering/` directory now contains only project-specific templates:
 - `product.md` - Product description template

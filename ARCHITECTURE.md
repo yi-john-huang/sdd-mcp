@@ -1,7 +1,7 @@
 # MCP SDD Server Architecture
 
 **Version**: 3.4.0  
-**Last Updated**: 2026-06-22  
+**Last Updated**: 2026-07-11
 **Status**: Production
 
 ---
@@ -26,6 +26,7 @@ This split exists to keep workflow behavior deterministic while reducing always-
 ```mermaid
 graph TB
     subgraph "AI Clients"
+        Codex["Codex"]
         Claude["Claude Code"]
         Cursor["Cursor"]
         Other["Other MCP Clients"]
@@ -54,6 +55,7 @@ graph TB
         Components[".claude / .agents / .codex installs"]
     end
 
+    Codex --> NPX
     Claude --> NPX
     Cursor --> NPX
     Other --> Global
@@ -233,18 +235,19 @@ Skills are loaded only when invoked by the user or agent client.
 
 ## Component Installation Architecture
 
-The package ships source assets for installable agent components:
+The package keeps one canonical source tree and resolves a primary target before any filesystem write. `src/cli/install-target.ts` owns target defaults and model routes; the adapters in `src/cli/tool-support/` render native output through preserve-first writers.
 
-```text
-skills/      -> .claude/skills/ or .agents/skills/
-steering/    -> .spec/steering/
-rules/       -> .claude/rules/
-contexts/    -> .claude/contexts/
-agents/      -> .claude/agents/
-hooks/       -> .claude/hooks/
-```
+| Source | Claude Code target | Codex target |
+|--------|--------------------|--------------|
+| `skills/` | `.claude/skills/` | `.agents/skills/` |
+| `steering/` | `.spec/steering/` | `.spec/steering/` |
+| `rules/` | `.claude/rules/` | `.codex/guidance/rules/` |
+| `contexts/` | `.claude/contexts/` | `.codex/guidance/contexts/` |
+| `agents/*.md` | `.claude/agents/*.md` | `.codex/agents/*.toml` |
+| `hooks/` | `.claude/hooks/` | `.codex/hooks.json` and `.codex/hooks/` |
+| `templates/` | `CLAUDE.md` | `AGENTS.md` |
 
-The installer is implemented in `src/cli/install-skills.ts`.
+Resolution order is explicit `--target`, deprecated `--codex`, an interactive full-profile prompt, then the non-interactive Claude Code compatibility default. Existing destination files are skipped, and a managed `.gitignore` block records generated target directories.
 
 ### Install Profiles
 
@@ -257,10 +260,21 @@ Examples:
 
 ```bash
 npx sdd-mcp-server install
-npx sdd-mcp-server install --profile full
-npx sdd-mcp-server install --skills --rules --agents
+npx sdd-mcp-server install --profile full                # Interactive target choice
+npx sdd-mcp-server install --profile full --target codex
+npx sdd-mcp-server install --target claude-code --skills --rules --agents
 npx sdd-mcp-server install --list
 ```
+
+### Specialist Model Routing
+
+| Roles | Task class | Codex | Claude Code |
+|-------|------------|-------|-------------|
+| planner, architect, reviewer, security-auditor | High-level advisor | `gpt-5.6-sol`, xhigh effort | `opus` |
+| implementer, tdd-guide | Implementation (default) | `gpt-5.6-luna`, max effort | `sonnet` |
+
+Codex uses `gpt-5.6-luna` as the default model for routed work. High-level advisor roles override that default with `gpt-5.6-sol` at xhigh effort. `gpt-5.6-terra` remains supported but is not selected by a default role.
+See [docs/MODEL-ROUTING.md](docs/MODEL-ROUTING.md) for the execution flow and native output details.
 
 Generated local installs under `.claude/`, `.agents/`, and `.codex/` are project outputs. Source assets live in the root component directories and are included in the npm package.
 

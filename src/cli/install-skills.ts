@@ -300,7 +300,7 @@ export class InstallSkillsCLI {
   }
 
   /**
-   * Run unified install (all components)
+   * Run a target-aware component install
    * @param options - CLI options
    */
   async runUnified(options: CLIOptions): Promise<void> {
@@ -557,7 +557,7 @@ export class InstallSkillsCLI {
       console.log(`\n  Total: ${hooks.length} hooks\n`);
     }
 
-    console.log('Run "npx sdd-mcp-server install" to install all components.\n');
+    console.log('Run "npx sdd-mcp-server install --profile full" to install all components.\n');
   }
 
   /**
@@ -696,7 +696,8 @@ After installation, use skills in the selected agent:
   /sdd-test-gen [file-path]
 
 Model Routing:
-  Codex high-level roles: gpt-5.6-sol; implementation/TDD: gpt-5.6-terra
+  Codex high-level roles: gpt-5.6-sol (xhigh); default implementation/TDD: gpt-5.6-luna (max)
+  Codex supported models: gpt-5.6-sol, gpt-5.6-luna, gpt-5.6-terra
   Claude Code high-level roles: opus; implementation/TDD: sonnet
 `;
   }

@@ -68,14 +68,15 @@ Installed agents include model metadata selected by role:
 
 | SDD role | Task class | Codex | Claude Code |
 |----------|------------|-------|-------------|
-| Planner | High-level | `gpt-5.6-sol`, high effort | `opus` |
-| Architect | High-level | `gpt-5.6-sol`, high effort | `opus` |
-| Reviewer | High-level | `gpt-5.6-sol`, high effort | `opus` |
-| Security auditor | High-level | `gpt-5.6-sol`, high effort | `opus` |
-| Implementer | Implementation | `gpt-5.6-terra`, medium effort | `sonnet` |
-| TDD guide | Implementation | `gpt-5.6-terra`, medium effort | `sonnet` |
+| Planner | High-level advisor | `gpt-5.6-sol`, xhigh effort | `opus` |
+| Architect | High-level advisor | `gpt-5.6-sol`, xhigh effort | `opus` |
+| Reviewer | High-level advisor | `gpt-5.6-sol`, xhigh effort | `opus` |
+| Security auditor | High-level advisor | `gpt-5.6-sol`, xhigh effort | `opus` |
+| Implementer | Implementation (default) | `gpt-5.6-luna`, max effort | `sonnet` |
+| TDD guide | Implementation (default) | `gpt-5.6-luna`, max effort | `sonnet` |
 
-`gpt-5.6-luna` is supported by the model family but has no default SDD role. Phase skills use compact handoffs when asking the matching specialist to work, then wait for and integrate the result. When the host cannot delegate, the skill states the fallback and continues in the current agent.
+Codex uses `gpt-5.6-luna` as the default model for routed work. High-level advisor roles override that default with `gpt-5.6-sol` at xhigh effort. `gpt-5.6-terra` remains supported but is not selected by a default SDD role. Phase skills use compact handoffs when asking the matching specialist to work, then wait for and integrate the result. When the host cannot delegate, the skill states the fallback and continues in the current agent.
+See [Model Routing](MODEL-ROUTING.md) for the complete role map, generated Codex/Claude Code examples, delegation flow, and rerun behavior.
 
 ## `.gitignore` and reruns
 

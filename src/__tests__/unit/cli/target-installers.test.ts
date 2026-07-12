@@ -109,7 +109,9 @@ describe('target-specific installers', () => {
     expect(fs.existsSync(path.join(root, '.codex/guidance/rules/security.md'))).toBe(true);
     expect(fs.existsSync(path.join(root, '.codex/guidance/contexts/review.md'))).toBe(true);
     expect(fs.readFileSync(path.join(root, '.codex/agents/planner.toml'), 'utf8')).toContain('model = "gpt-5.6-sol"');
-    expect(fs.readFileSync(path.join(root, '.codex/agents/implementer.toml'), 'utf8')).toContain('model = "gpt-5.6-terra"');
+    expect(fs.readFileSync(path.join(root, '.codex/agents/planner.toml'), 'utf8')).toContain('model_reasoning_effort = "xhigh"');
+    expect(fs.readFileSync(path.join(root, '.codex/agents/implementer.toml'), 'utf8')).toContain('model = "gpt-5.6-luna"');
+    expect(fs.readFileSync(path.join(root, '.codex/agents/implementer.toml'), 'utf8')).toContain('model_reasoning_effort = "max"');
     expect(JSON.parse(fs.readFileSync(path.join(root, '.codex/hooks.json'), 'utf8'))).toHaveProperty('hooks.SessionStart');
     expect(fs.existsSync(path.join(root, '.codex/hooks/sdd-hook-runner.js'))).toBe(true);
     expect(fs.readFileSync(path.join(root, 'AGENTS.md'), 'utf8')).toContain('.codex/agents/planner.toml');

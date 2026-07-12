@@ -691,10 +691,10 @@ export class SDDToolAdapter {
 - Project type: ${packageJson.type || "Unknown"}
 - Existing steering: Updated preserving customizations
 
-**Tip**: For a unified installation of skills and steering documents, run:
-\`npx sdd-mcp-server install\`
+**Tip**: For a complete target-native component installation, run:
+\`npx sdd-mcp-server install --profile full\`
 
-This installs both \`.claude/skills/\` (workflow guides) and \`.spec/steering/\` (project rules).`;
+Choose Codex or Claude Code interactively, or pass \`--target\` explicitly in automation.`;
     } catch (error) {
       this.logger.error(
         "Failed to generate steering documents",

@@ -1,12 +1,12 @@
 # SDD-MCP Workflow
 
-This document explains how the SDD-MCP plugin system works with Claude Code.
+This document explains how the SDD-MCP workflow works with Codex and Claude Code. Shared source components are rendered into the selected agent's native layout.
 
 ## Architecture Overview
 
 ```
 ┌─────────────────────────────────────────────────────────────────┐
-│                        Claude Code                               │
+│                 Target Agent (Codex / Claude Code)               │
 ├─────────────────────────────────────────────────────────────────┤
 │                                                                  │
 │  ┌──────────┐  ┌──────────┐  ┌──────────┐  ┌──────────┐        │
@@ -45,18 +45,18 @@ This document explains how the SDD-MCP plugin system works with Claude Code.
 ```mermaid
 sequenceDiagram
     participant User
-    participant Claude as Claude Code
+    participant Agent as Target Agent
     participant Hook as session-start Hook
     participant Steering as Steering Docs
     participant Rules as Active Rules
 
-    User->>Claude: Start session
-    Claude->>Hook: Trigger session-start
+    User->>Agent: Start session
+    Agent->>Hook: Trigger session-start
     Hook->>Steering: Load project context
-    Steering-->>Claude: product.md, tech.md, structure.md
+    Steering-->>Agent: product.md, tech.md, structure.md
     Hook->>Rules: Activate always-on rules
-    Rules-->>Claude: coding-style, security, testing rules
-    Claude-->>User: Ready with project context
+    Rules-->>Agent: coding-style, security, testing guidance
+    Agent-->>User: Ready with project context
 ```
 
 ### 2. SDD Workflow (Feature Development)
@@ -64,39 +64,39 @@ sequenceDiagram
 ```mermaid
 sequenceDiagram
     participant User
-    participant Claude as Claude Code
+    participant Agent as Target Agent
     participant Skill as SDD Skills
     participant MCP as MCP Server
     participant Spec as .spec/specs/
 
-    User->>Claude: /sdd-requirements my-feature
-    Claude->>Skill: Load sdd-requirements skill
+    User->>Agent: /sdd-requirements my-feature
+    Agent->>Skill: Load sdd-requirements skill
     Skill->>MCP: sdd-init (if needed)
     MCP->>Spec: Create spec.json
-    Skill-->>Claude: EARS requirements template
-    Claude-->>User: Generated requirements.md
+    Skill-->>Agent: EARS requirements guidance
+    Agent-->>User: Generated requirements.md
 
-    User->>Claude: /sdd-design my-feature
-    Claude->>Skill: Load sdd-design skill
+    User->>Agent: /sdd-design my-feature
+    Agent->>Skill: Load sdd-design skill
     Skill->>MCP: sdd-validate-gap
     MCP-->>Skill: Gap analysis
-    Skill-->>Claude: Design template
-    Claude-->>User: Generated design.md
+    Skill-->>Agent: Design guidance
+    Agent-->>User: Generated design.md
 
-    User->>Claude: Approve design
-    Claude->>MCP: sdd-approve design
+    User->>Agent: Approve design
+    Agent->>MCP: sdd-approve design
     MCP->>Spec: Update spec.json
 
-    User->>Claude: /sdd-tasks my-feature
-    Claude->>Skill: Load sdd-tasks skill
-    Skill-->>Claude: TDD task breakdown
-    Claude-->>User: Generated tasks.md
+    User->>Agent: /sdd-tasks my-feature
+    Agent->>Skill: Load sdd-tasks skill
+    Skill-->>Agent: TDD task breakdown
+    Agent-->>User: Generated tasks.md
 
-    User->>Claude: /sdd-implement my-feature
-    Claude->>Skill: Load sdd-implement skill
-    Claude->>MCP: sdd-spec-impl
-    MCP-->>Claude: TDD execution guidance
-    Claude-->>User: Implementation with tests
+    User->>Agent: /sdd-implement my-feature
+    Agent->>Skill: Load sdd-implement skill
+    Agent->>MCP: sdd-spec-impl
+    MCP-->>Agent: TDD execution guidance
+    Agent-->>User: Implementation with tests
 ```
 
 ### 3. Code Review Flow
@@ -104,23 +104,25 @@ sequenceDiagram
 ```mermaid
 sequenceDiagram
     participant User
-    participant Claude as Claude Code
+    participant Target as Target Agent
     participant Skill as sdd-review Skill
     participant Agent as Reviewer Agent
     participant Rules as Security Rules
 
-    User->>Claude: /sdd-review src/api/
-    Claude->>Skill: Load sdd-review skill
+    User->>Target: /sdd-review src/api/
+    Target->>Skill: Load sdd-review skill
     Skill->>Agent: Activate reviewer persona
-    Agent-->>Claude: Linus-style review mindset
-    Claude->>Rules: Check security rules
-    Rules-->>Claude: OWASP guidelines
-    Claude->>Claude: Analyze code
-    Claude-->>User: Review with severity levels
-    Note over User,Claude: Must Fix / Should Fix / Suggestions
+    Agent-->>Target: Linus-style review mindset
+    Target->>Rules: Check security guidance
+    Rules-->>Target: OWASP guidelines
+    Target->>Target: Analyze code
+    Target-->>User: Review with severity levels
+    Note over User,Target: Must Fix / Should Fix / Suggestions
 ```
 
-### 4. Pre-Tool Hook Flow
+### 4. Claude Code Pre-Tool Hook Flow
+
+Claude Code can execute the packaged pre-tool hook guidance. Codex installation maps only supported lifecycle behavior (`SessionStart` and `Stop`) to a read-only Node runner; workflow validation remains in `AGENTS.md` and phase skills.
 
 ```mermaid
 sequenceDiagram
@@ -151,32 +153,27 @@ sequenceDiagram
 sequenceDiagram
     participant User
     participant CLI as sdd-mcp-server CLI
-    participant SM as SkillManager
-    participant RM as RulesManager
-    participant CM as ContextManager
-    participant AM as AgentManager
-    participant HL as HookLoader
+    participant Resolver as Target Resolver
+    participant Strategy as Target Installer
+    participant Writer as Preserve-First Writer
+    participant Ignore as Gitignore Manager
 
-    User->>CLI: npx sdd-mcp-server install --all
-
-    par Install all components
-        CLI->>SM: installComponents(.claude/skills)
-        SM-->>CLI: 11 skills installed
-    and
-        CLI->>RM: installComponents(.claude/rules)
-        RM-->>CLI: 6 rules installed
-    and
-        CLI->>CM: installComponents(.claude/contexts)
-        CM-->>CLI: 5 contexts installed
-    and
-        CLI->>AM: installComponents(.claude/agents)
-        AM-->>CLI: 6 agents installed
-    and
-        CLI->>HL: installComponents(.claude/hooks)
-        HL-->>CLI: 7 hooks installed
+    User->>CLI: install --profile full
+    CLI->>Resolver: Resolve primary target
+    alt Interactive terminal without --target
+        Resolver-->>User: Choose Codex or Claude Code
+        User-->>Resolver: Selected target
+    else Explicit or automated run
+        CLI->>Resolver: --target codex or claude-code
     end
-
-    CLI-->>User: 41 components installed
+    Resolver-->>CLI: Target policy and native paths
+    CLI->>Strategy: Install selected component plan
+    Strategy->>Writer: Create native files if absent
+    Note over Strategy,Writer: Claude: .claude/skills<br/>Codex: .agents/skills and .codex/guidance/rules
+    Writer-->>Strategy: Installed, skipped, failed
+    Strategy->>Ignore: Merge target-specific generated directories
+    Ignore-->>CLI: Created, updated, or unchanged
+    CLI-->>User: Target and aggregate result summary
 ```
 
 ## Component Responsibilities

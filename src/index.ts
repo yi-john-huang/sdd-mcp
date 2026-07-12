@@ -276,7 +276,7 @@ async function createSimpleMCPServer() {
         },
         {
           name: "sdd-list-skills",
-          description: "List available SDD Agent Skills that can be installed for Claude Code",
+          description: "List available SDD Agent Skills for Codex or Claude Code",
           inputSchema: {
             type: "object",
             properties: {},
@@ -382,7 +382,7 @@ No skills found in the package. Skills may not be installed correctly.
 
 **Expected location**: \`${skillsPath}\`
 
-**Installation**: Run \`npx sdd-mcp-server install-skills\` to install skills to your project.`,
+**Installation**: Run \`npx sdd-mcp-server install --target codex --skills\` or \`npx sdd-mcp-server install --target claude-code --skills\`.`,
           },
         ],
       };
@@ -398,15 +398,15 @@ No skills found in the package. Skills may not be installed correctly.
           type: "text",
           text: `## SDD Agent Skills
 
-Available skills that can be installed for Claude Code:
+Available skills for Codex or Claude Code:
 
 ${skillsList}
 
 **Total**: ${skills.length} skills
 
-**Installation**: Run \`npx sdd-mcp-server install-skills\` to install all skills to \`.claude/skills/\`
+**Installation**: Run \`npx sdd-mcp-server install --target codex --skills\` or \`npx sdd-mcp-server install --target claude-code --skills\`.
 
-After installation, you can use these skills in Claude Code with:
+After installation, use these skills in the selected target agent:
 - \`/sdd-requirements <feature-name>\`
 - \`/sdd-design <feature-name>\`
 - \`/sdd-tasks <feature-name>\`
@@ -1141,7 +1141,7 @@ Spec Driven Development implementation using MCP tools.
 ### Paths
 - Steering: \`.spec/steering/\`
 - Specs: \`.spec/specs/\`
-- Commands: \`.claude/commands/\`
+- Skills: install with \`npx sdd-mcp-server install --target codex --skills\` or \`--target claude-code\`
 
 ### Steering vs Specification
 

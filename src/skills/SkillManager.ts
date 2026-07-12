@@ -38,7 +38,7 @@ export interface SkillMetadata {
  * Manages SDD skills - discovery, listing, and installation
  *
  * Skills are markdown files in the skills directory that provide
- * guidance for Claude Code agent interactions.
+ * guidance for supported AI-agent interactions.
  */
 export class SkillManager {
   private readonly skillsPath: string;

@@ -16,6 +16,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Changed
 - Installer writes are preserve-first and `.gitignore` receives an idempotent target-specific managed block.
 - `--codex` is now a deprecated alias for `--target codex`.
+- Architecture, workflow, migration, and agent guidance now describe both native target layouts.
+
+### Fixed
+- Track `sdd-entry.js` as executable so local `npx` binary preparation does not dirty the worktree.
 
 ## [3.4.0] - 2026-06-22
 
