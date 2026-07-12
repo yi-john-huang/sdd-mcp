@@ -24,6 +24,10 @@ export interface InstallResult {
   /** Failed installations with error details */
   failed: Array<{ name: string; error: string; path?: string }>;
 }
+interface DirectoryCopyResult {
+  copied: boolean;
+  skipped: boolean;
+}
 
 /**
  * Parsed component metadata from YAML frontmatter
@@ -239,8 +243,8 @@ export abstract class BaseManager<T extends ComponentDescriptor> {
           const destDir = path.join(targetPath, componentName);
 
           try {
-            await this.copyDirectory(sourceDir, destDir);
-            result.installed.push(componentName);
+            const copyResult = await this.copyDirectory(sourceDir, destDir);
+            this.recordDirectoryCopy(result, componentName, copyResult);
           } catch (error) {
             result.failed.push({
               name: componentName,
@@ -344,24 +348,44 @@ export abstract class BaseManager<T extends ComponentDescriptor> {
    * @param source - Source directory
    * @param destination - Destination directory
    */
-  protected async copyDirectory(source: string, destination: string): Promise<void> {
+  protected async copyDirectory(source: string, destination: string): Promise<DirectoryCopyResult> {
     await fs.promises.mkdir(destination, { recursive: true });
 
     const entries = await fs.promises.readdir(source, { withFileTypes: true });
+    let copied = false;
+    let skipped = false;
 
     for (const entry of entries) {
       const sourcePath = path.join(source, entry.name);
       const destPath = path.join(destination, entry.name);
 
       if (entry.isDirectory()) {
-        await this.copyDirectory(sourcePath, destPath);
+        const childResult = await this.copyDirectory(sourcePath, destPath);
+        copied ||= childResult.copied;
+        skipped ||= childResult.skipped;
       } else {
         try {
           await fs.promises.copyFile(sourcePath, destPath, fs.constants.COPYFILE_EXCL);
+          copied = true;
         } catch (error) {
           if (!isAlreadyExists(error)) throw error;
+          skipped = true;
         }
       }
+    }
+
+    return { copied, skipped };
+  }
+
+  private recordDirectoryCopy(
+    result: InstallResult,
+    componentName: string,
+    copyResult: DirectoryCopyResult,
+  ): void {
+    if (copyResult.copied || !copyResult.skipped) {
+      result.installed.push(componentName);
+    } else {
+      result.skipped?.push(componentName);
     }
   }
 

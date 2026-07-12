@@ -82,8 +82,13 @@ describe('install target policy', () => {
     expect(() => resolveInstallPaths(getTargetPolicy('codex'), {
       rules: '/tmp/project/.codex/rules/nested',
     })).toThrow(CliUsageError);
+    expect(() => resolveInstallPaths(getTargetPolicy('codex'), {
+      rules: '.codex/guidance/../rules',
+    })).toThrow(CliUsageError);
+    expect(() => resolveInstallPaths(getTargetPolicy('codex'), {
+      rules: 'nested/../.codex/rules',
+    })).toThrow(CliUsageError);
   });
-
   it.each(['', 'custom\npath', 'custom\0path'])('rejects unsafe path values before installation', value => {
     expect(() => resolveInstallPaths(getTargetPolicy('codex'), {
       hooks: value,

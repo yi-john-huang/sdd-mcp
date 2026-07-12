@@ -125,4 +125,24 @@ describe('createAntigravitySymlinks', () => {
     const files = fs.readdirSync(path.join(tmpDir, '.agent', 'workflows'));
     expect(files).toContain('test.md');
   });
+
+  it('resolves absolute custom paths relative to the project symlink directory', async () => {
+    const absoluteRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'sdd-antigravity-absolute-'));
+    try {
+      const skillsPath = path.join(absoluteRoot, 'skills');
+      const rulesPath = path.join(absoluteRoot, 'rules');
+      fs.mkdirSync(skillsPath, { recursive: true });
+      fs.mkdirSync(rulesPath, { recursive: true });
+      fs.writeFileSync(path.join(skillsPath, 'test.md'), 'absolute skill');
+
+      await createAntigravitySymlinks(tmpDir, { skillsPath, rulesPath });
+
+      const agentDir = path.join(tmpDir, '.agent');
+      expect(fs.readlinkSync(path.join(agentDir, 'workflows'))).toBe(path.relative(agentDir, skillsPath));
+      expect(fs.readlinkSync(path.join(agentDir, 'rules'))).toBe(path.relative(agentDir, rulesPath));
+      expect(fs.readdirSync(path.join(agentDir, 'workflows'))).toContain('test.md');
+    } finally {
+      fs.rmSync(absoluteRoot, { recursive: true, force: true });
+    }
+  });
 });

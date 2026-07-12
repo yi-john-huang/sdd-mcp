@@ -7,6 +7,12 @@ import { findTemplate } from '../utils/find-package-root.js';
 import { PreservingWriter, validateChildName } from '../utils/preserving-writer.js';
 import { parseSourceAgent, renderCodexAgent } from './target-agent-renderer.js';
 import {
+  buildGuidanceSection,
+  buildSteeringSection,
+  buildTableSection,
+  listMarkdownFiles,
+} from './root-guidance.js';
+import {
   copyFlatComponents,
   TargetInstallSession,
   type BaseTargetInstallRequest,
@@ -49,56 +55,6 @@ export interface InstalledComponents {
   hooks?: boolean;
 }
 
-/** Item with a name, description, and a path to derive a filename from */
-interface TableItem {
-  name: string;
-  description: string;
-  path: string;
-}
-
-/**
- * Build a markdown table section for a component type.
- * Returns the section string, or empty string if items is empty.
- */
-function buildTableSection(
-  title: string,
-  subtitle: string,
-  basePath: string,
-  items: TableItem[],
-  pathFormatter: (item: TableItem) => string,
-): string {
-  if (items.length === 0) return '';
-
-  let section = `### ${title} (\`${basePath}/\`)\n\n`;
-  section += `${subtitle}\n\n`;
-  section += `| ${title.slice(0, -1)} | Description | Path |\n`;
-  section += '|-------|-------------|------|\n';
-  for (const item of items) {
-    section += `| ${item.name} | ${item.description || '—'} | \`${pathFormatter(item)}\` |\n`;
-  }
-  section += '\n';
-  return section;
-}
-
-/**
- * Build a markdown bullet list section for steering docs.
- */
-function buildSteeringSection(basePath: string, docs: string[]): string {
-  if (docs.length === 0) return '';
-
-  let section = `### Steering (\`${basePath}/\`)\n\n`;
-  section += 'Project-specific context documents:\n\n';
-  for (const doc of docs) {
-    section += `- \`${basePath}/${doc}\`\n`;
-  }
-  section += '\n';
-  return section;
-}
-
-function buildGuidanceSection(title: string, basePath: string | undefined): string {
-  if (!basePath) return '';
-  return `### ${title} (\`${basePath}/\`)\n\nRead the relevant guidance files from this directory on demand.\n\n`;
-}
 
 /**
  * Load the template preamble for AGENTS.md
@@ -326,13 +282,6 @@ function loadHookRunnerTemplate(): string | null {
   return template ? fs.readFileSync(template, 'utf8') : null;
 }
 
-async function listMarkdownFiles(directory: string): Promise<string[]> {
-  try {
-    return (await fs.promises.readdir(directory)).filter(file => file.endsWith('.md'));
-  } catch {
-    return [];
-  }
-}
 
 function isAlreadyExists(error: unknown): boolean {
   return typeof error === 'object' && error !== null && 'code' in error && error.code === 'EEXIST';

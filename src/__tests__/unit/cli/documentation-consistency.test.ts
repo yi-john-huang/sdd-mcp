@@ -31,6 +31,23 @@ describe('target-aware documentation consistency', () => {
     expect(modelGuide).toContain('The repository cannot force a model switch');
   });
 
+  it('keeps the approved model policy and release guidance aligned', () => {
+    const requirements = read('.spec/specs/optimizing-for-different-llm/requirements.md');
+    const design = read('.spec/specs/optimizing-for-different-llm/design.md');
+    const tasks = read('.spec/specs/optimizing-for-different-llm/tasks.md');
+    const changelog = read('CHANGELOG.md');
+    const entrypoint = read('sdd-entry.js');
+
+    for (const content of [requirements, design, tasks]) {
+      expect(content).toContain('gpt-5.6-luna');
+      expect(content).toContain('max');
+      expect(content).toContain('gpt-5.6-terra');
+    }
+    expect(changelog).toContain('Luna/max');
+    expect(changelog).not.toContain('Terra/Sonnet for implementation');
+    expect(entrypoint).toContain('Install target-native components');
+  });
+
   it('documents both native output trees in architecture and workflow docs', () => {
     const architecture = read('ARCHITECTURE.md');
     const workflow = read('docs/WORKFLOW.md');

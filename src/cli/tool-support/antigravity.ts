@@ -46,8 +46,9 @@ export async function createAntigravitySymlinks(
   }
 
   for (const { link, pathKey } of LINK_DEFS) {
-    // Compute relative symlink target: from .agent/ back to project root, then to effective path
-    const target = path.join('..', paths[pathKey]);
+    // Compute a relative symlink target from .agent to the effective path.
+    const resolvedTarget = path.resolve(projectRoot, paths[pathKey]);
+    const target = path.relative(agentDir, resolvedTarget) || '.';
     const linkPath = path.join(agentDir, link);
 
     // Check if something already exists at the link path
@@ -67,8 +68,7 @@ export async function createAntigravitySymlinks(
       }
     }
 
-    // Verify the target directory exists before creating the symlink
-    const resolvedTarget = path.resolve(agentDir, target);
+    // Verify the target directory exists before creating the symlink.
     if (!fs.existsSync(resolvedTarget)) {
       console.log(`  ⚠️  Target ${target} does not exist yet, creating symlink anyway`);
     }

@@ -45,7 +45,7 @@ Scenario counts can increase when defects reveal missing boundaries, but the sui
 1. Claude Code policy exposes the existing `.claude/` paths and `.claude/` ignore entry.
 2. Codex policy exposes `.agents/skills/`, `.codex/agents/`, guidance, hooks, and root paths.
 3. Every supported role has the exact approved model and Codex effort.
-4. `gpt-5.6-luna` is supported but selected by no default role.
+4. `gpt-5.6-luna` is the default implementation/TDD route with `max` effort; `gpt-5.6-terra` remains supported but has no default role.
 5. Every routed skill maps to the approved specialist.
 6. Explicit path overrides replace only their corresponding defaults.
 7. A Codex guidance path below `.codex/rules/` is rejected.
@@ -59,7 +59,7 @@ Scenario counts can increase when defects reveal missing boundaries, but the sui
 **Acceptance Criteria:**
 
 - [ ] All approved default paths and model routes are asserted exactly.
-- [ ] Luna has no default role assignment.
+- [ ] Luna/max is assigned to implementation and TDD roles; Terra has no default role.
 - [ ] Invalid target and semantic path collisions are type-safe or rejected.
 - [ ] The module has no filesystem or network dependency.
 
@@ -335,10 +335,10 @@ Scenario counts can increase when defects reveal missing boundaries, but the sui
 **Test Scenarios:**
 
 1. Every output contains `name`, `description`, and `developer_instructions`.
-2. High-level roles render `gpt-5.6-sol` and high effort.
-3. Implementation roles render `gpt-5.6-terra` and medium effort.
+2. High-level roles render `gpt-5.6-sol` and xhigh effort.
+3. Implementation roles render `gpt-5.6-luna` and max effort.
 4. Quotes, backslashes, Unicode, and multiline instructions are escaped as TOML data.
-5. Luna never appears in a default agent file.
+5. Terra never appears in a default agent file.
 6. Unknown roles fail without writing partial TOML.
 
 **TDD Cycle:**
@@ -631,8 +631,8 @@ Scenario counts can increase when defects reveal missing boundaries, but the sui
 **Test Scenarios:**
 
 1. Full output contains native skills, guidance, agent TOML, hooks, runner, steering, and `AGENTS.md`.
-2. Four agents use Sol/high and two use Terra/medium.
-3. Luna is absent from default agent output.
+2. Four agents use Sol/xhigh and two use Luna/max.
+3. Terra is absent from default agent output.
 4. `.gitignore` contains `.agents/` and `.codex/` and no implicit Claude entry.
 5. No `.codex/rules/`, `.claude/`, or `CLAUDE.md` primary artifact exists.
 6. Hook configuration references the installed runner.
@@ -740,7 +740,7 @@ Scenario counts can increase when defects reveal missing boundaries, but the sui
 1. Help lists `--target codex|claude-code` and target-aware path behavior.
 2. README contains explicit and interactive full-profile examples.
 3. Installation guide contains a target-to-output table.
-4. Model tables list Sol/Terra and Opus/Sonnet defaults and Luna's optional status.
+4. Model tables list Sol/Luna and Opus/Sonnet defaults, with Terra's supported-but-unassigned status.
 5. Preview access, compact handoffs, delegation token cost, and legacy `--codex` behavior are documented.
 
 **TDD Cycle:**
@@ -752,7 +752,7 @@ Scenario counts can increase when defects reveal missing boundaries, but the sui
 **Acceptance Criteria:**
 
 - [ ] Documentation matches implemented paths and CLI behavior.
-- [ ] No example implies Luna is a default role model.
+- [ ] No example implies Terra is a default role model.
 - [ ] Compatibility and access limitations are explicit.
 
 #### 8.2 Run packaging, security, and quality gates
@@ -854,7 +854,7 @@ Tasks 1.1 and 2.1 can begin independently. Tasks 1.2–1.3, 2.2–2.4, and 3.1�
 - [ ] Unit, integration, and E2E coverage remains close to the 70/20/10 pyramid.
 - [ ] Both full-profile output trees contain native files and no implicit primary artifacts for the other target.
 - [ ] All six agent roles use the approved model mapping.
-- [ ] Luna is supported but has no default role.
+- [ ] Luna/max is the default implementation route and Terra has no default role.
 - [ ] Repeated installs preserve user files and make no redundant `.gitignore` edits.
 - [ ] Interactive, non-interactive, legacy, cancellation, and invalid-option journeys behave as specified.
 - [ ] Compact handoff delegation and fallback instructions are present in routed skills.

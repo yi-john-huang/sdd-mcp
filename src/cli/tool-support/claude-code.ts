@@ -4,6 +4,12 @@ import { findTemplate } from '../utils/find-package-root.js';
 import { PreservingWriter, validateChildName } from '../utils/preserving-writer.js';
 import { parseSourceAgent, renderClaudeCodeAgent } from './target-agent-renderer.js';
 import {
+  buildGuidanceSection,
+  buildSteeringSection,
+  buildTableSection,
+  listMarkdownFiles,
+} from './root-guidance.js';
+import {
   copyFlatComponents,
   TargetInstallSession,
   type BaseTargetInstallRequest,
@@ -72,7 +78,11 @@ export async function installClaudeCodeTarget(request: ClaudeCodeInstallRequest)
     }
   }
 
-  const rootContent = request.rootGuidanceContent ?? loadClaudeTemplate();
+  const rootContent = await buildClaudeRootGuidance(
+    request,
+    selected,
+    request.rootGuidanceContent ?? loadClaudeTemplate(),
+  );
   await session.write(
     'root',
     request.paths.rootGuidance,
@@ -80,6 +90,58 @@ export async function installClaudeCodeTarget(request: ClaudeCodeInstallRequest)
     rootContent,
   );
   return session.report;
+}
+
+async function buildClaudeRootGuidance(
+  request: ClaudeCodeInstallRequest,
+  selected: ReadonlySet<string>,
+  preamble: string,
+): Promise<string> {
+  const [skills, rules, contexts, agents, steeringDocs] = await Promise.all([
+    selected.has('skills') ? request.sources.skillManager.listSkills() : Promise.resolve([]),
+    selected.has('rules') ? request.sources.rulesManager.listComponents() : Promise.resolve([]),
+    selected.has('contexts') ? request.sources.contextManager.listComponents() : Promise.resolve([]),
+    selected.has('agents') ? request.sources.agentManager.listComponents() : Promise.resolve([]),
+    selected.has('steering') ? listMarkdownFiles(request.sources.steeringSource) : Promise.resolve([]),
+  ]);
+
+  const sections = [
+    buildTableSection(
+      'Skills',
+      'On-demand guidance invoked via slash commands:',
+      request.paths.skills,
+      skills,
+      skill => `${request.paths.skills}/${skill.name}/`,
+    ),
+    buildTableSection(
+      'Rules',
+      'Always-active coding standards:',
+      request.paths.rules,
+      rules,
+      rule => `${request.paths.rules}/${path.basename(rule.path)}`,
+    ),
+    buildTableSection(
+      'Contexts',
+      'Switchable modes:',
+      request.paths.contexts,
+      contexts,
+      context => `${request.paths.contexts}/${path.basename(context.path)}`,
+    ),
+    buildTableSection(
+      'Agents',
+      'Specialized roles with model routing:',
+      request.paths.agents,
+      agents,
+      agent => `${request.paths.agents}/${path.basename(agent.path, path.extname(agent.path))}.md`,
+    ),
+    buildSteeringSection(request.paths.steering, steeringDocs),
+    selected.has('hooks') ? buildGuidanceSection('Hooks', request.paths.hooks) : '',
+  ].join('');
+
+  const marker = '\n## MCP Tools';
+  const markerIndex = preamble.indexOf(marker);
+  if (markerIndex < 0) return `${preamble}${sections}`;
+  return `${preamble.slice(0, markerIndex)}\n${sections}${preamble.slice(markerIndex)}`;
 }
 
 function loadClaudeTemplate(): string {

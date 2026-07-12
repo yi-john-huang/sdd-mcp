@@ -2,7 +2,7 @@
 
 ## Outcome
 
-Implementation completed on 2026-07-10. The unified installer now resolves one primary `codex` or `claude-code` target, writes native preserve-first artifacts, updates `.gitignore`, and applies the approved role/model policy through native agent metadata and phase-skill delegation.
+Implementation completed on 2026-07-10. The unified installer now resolves one primary `codex` or `claude-code` target, writes native preserve-first artifacts, updates `.gitignore`, and applies the current role/model policy through native agent metadata and phase-skill delegation: Sol/xhigh for high-level Codex roles and Luna/max for implementation and TDD.
 
 ## Verification
 

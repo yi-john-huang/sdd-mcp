@@ -94,6 +94,31 @@ describe('target-specific installers', () => {
     expect(fs.existsSync(path.join(root, 'AGENTS.md'))).toBe(false);
   });
 
+  it('renders Claude root guidance for selected components and custom paths', async () => {
+    await installClaudeCodeTarget({
+      projectRoot: root,
+      paths: {
+        ...getTargetPolicy('claude-code').defaultPaths,
+        skills: 'custom/skills',
+        agents: 'custom/agents',
+      },
+      components: ['skills', 'agents'],
+      sources: makeSources(sourceRoot),
+      rootGuidanceContent: '# Claude guidance\n\n## Installed Components\n\n## MCP Tools\n',
+    });
+
+    const guidance = fs.readFileSync(path.join(root, 'CLAUDE.md'), 'utf8');
+    expect(guidance).toContain('### Skills (`custom/skills/`)');
+    expect(guidance).toContain('`custom/skills/sdd-design/`');
+    expect(guidance).toContain('### Agents (`custom/agents/`)');
+    expect(guidance).toContain('`custom/agents/planner.md`');
+    expect(guidance.indexOf('### Skills')).toBeLessThan(guidance.indexOf('## MCP Tools'));
+    expect(guidance).not.toContain('### Rules');
+    expect(guidance).not.toContain('.claude/skills');
+    expect(fs.existsSync(path.join(root, 'custom/skills/sdd-design/SKILL.md'))).toBe(true);
+    expect(fs.existsSync(path.join(root, 'custom/agents/planner.md'))).toBe(true);
+  });
+
   it('installs only native Codex artifacts and renders exact role models', async () => {
     const report = await installCodexTarget({
       projectRoot: root,

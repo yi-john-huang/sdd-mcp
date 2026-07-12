@@ -1,3 +1,5 @@
+import * as path from 'path';
+
 export type InstallTarget = 'codex' | 'claude-code';
 export type InstallProfile = 'lean' | 'full';
 export type ComponentType = 'skills' | 'steering' | 'rules' | 'contexts' | 'agents' | 'hooks';
@@ -185,7 +187,9 @@ function containsControlCharacter(value: string): boolean {
 }
 
 function isCodexCommandPolicyPath(value: string): boolean {
-  const normalized = value.replaceAll('\\', '/').replace(/^\.\//, '').replace(/\/+$/, '');
+  const normalized = path.posix.normalize(value.replaceAll('\\', '/'))
+    .replace(/^\.\//, '')
+    .replace(/\/+$/, '');
   return /(?:^|\/)\.codex\/rules(?:\/|$)/.test(normalized);
 }
 

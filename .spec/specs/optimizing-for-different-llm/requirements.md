@@ -2,7 +2,7 @@
 
 ## Overview
 
-The SDD component installer currently installs a Claude Code-oriented full profile and adds Codex support as an optional secondary integration. This feature makes the target AI agent explicit so that a developer can install native files for either Codex or Claude Code without loading irrelevant guidance. It also assigns high-capability models to planning and review work and lower-cost models to implementation work while preserving the existing compact handoff workflow.
+The SDD component installer currently installs a Claude Code-oriented full profile and adds Codex support as an optional secondary integration. This feature makes the target AI agent explicit so that a developer can install native files for either Codex or Claude Code without loading irrelevant guidance. It assigns high-capability models to planning, review, and security work while making `gpt-5.6-luna` with maximum reasoning the default for implementation and TDD work.
 
 ## Primary User Goal
 
@@ -120,7 +120,7 @@ THE installer SHALL write only the artifacts required by that target and the tar
 
 ### FR-7: Codex Model Routing
 
-**Objective:** As a Codex user, I want demanding work assigned to Sol and implementation work assigned to Terra so that model cost follows task complexity.
+**Objective:** As a Codex user, I want demanding work assigned to Sol and default implementation work assigned to Luna so that model capability and reasoning effort follow task complexity.
 
 **EARS Specification:**
 
@@ -130,10 +130,10 @@ THEN the installer SHALL assign Codex models and reasoning effort according to e
 **Acceptance Criteria:**
 
 1. Planner, architect, reviewer, and security-auditor agents use `gpt-5.6-sol`.
-2. Sol-backed agents use `model_reasoning_effort = "high"` by default.
-3. Implementer and TDD-guide agents use `gpt-5.6-terra`.
-4. Terra-backed agents use `model_reasoning_effort = "medium"` by default.
-5. Generated Codex configuration recognizes `gpt-5.6-luna` as an optional fastest tier but assigns it to no default SDD role.
+2. Sol-backed agents use `model_reasoning_effort = "xhigh"` by default.
+3. Implementer and TDD-guide agents use `gpt-5.6-luna`.
+4. Luna-backed agents use `model_reasoning_effort = "max"` by default.
+5. `gpt-5.6-terra` remains a supported model identifier but is assigned to no default SDD role.
 6. Model identifiers and role mappings are defined in one maintainable source of truth rather than repeated independently across generators.
 
 ### FR-8: Claude Code Model Routing
@@ -310,7 +310,7 @@ The implementation SHALL provide automated verification for every target-depende
 
 1. In an interactive terminal, omitting `--target` from a full-profile install means the user wants to be prompted.
 2. In a non-interactive environment, preserving the prior Claude Code-oriented default is less disruptive than failing the command.
-3. `gpt-5.6-sol` is the default for high-level reasoning roles; `gpt-5.6-terra` is the default for implementation roles; `gpt-5.6-luna` has no default SDD role in this feature.
+3. `gpt-5.6-sol` is the default for high-level reasoning roles; `gpt-5.6-luna` is the default for implementation and TDD roles; `gpt-5.6-terra` remains supported without a default SDD role.
 4. Planner, architect, reviewer, and security-auditor are high-level roles.
 5. Implementer and TDD-guide are implementation roles.
 6. Generated local agent directories are ignored, while root guidance and project steering documents are intended to be reviewable and trackable.
@@ -323,7 +323,6 @@ The implementation SHALL provide automated verification for every target-depende
 2. Dynamically selecting models based on live pricing, rate limits, or benchmark results.
 3. Verifying or provisioning GPT-5.6 preview access.
 4. Automatically deleting artifacts created for a previously selected target.
-5. Assigning `gpt-5.6-luna` to a default SDD role without a separate approved requirement.
 
 ## External Compatibility References
 

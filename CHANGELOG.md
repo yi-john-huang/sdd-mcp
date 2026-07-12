@@ -10,7 +10,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 - Interactive `codex` or `claude-code` target selection for full-profile installs, plus explicit `--target` support for automation.
 - Native Codex skills, guidance, TOML agents, root instructions, and safe lifecycle hooks.
-- Central role routing: Sol/Opus for high-level work and Terra/Sonnet for implementation and TDD; Luna remains supported without a default role.
+- Central role routing: Sol/xhigh for high-level Codex work and Luna/max for implementation and TDD; Terra remains supported without a default role.
 - Specialist delegation guidance in phase skills with compact handoffs and explicit fallback behavior.
 
 ### Changed
