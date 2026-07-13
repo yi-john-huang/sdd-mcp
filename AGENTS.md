@@ -1,4 +1,4 @@
-# CLAUDE.md - Spec-Driven Development (SDD)
+# AGENTS.md - Spec-Driven Development (SDD)
 
 This project uses the SDD workflow powered by `sdd-mcp-server`.
 
@@ -16,10 +16,23 @@ sdd-init -> /sdd-requirements -> /sdd-design -> /sdd-tasks -> /sdd-implement
 
 Each phase requires human approval before proceeding.
 
-## Installed Components
+## Component Sources and Native Targets
 
-### Skills (`.claude/skills/`)
-On-demand guidance invoked via slash commands:
+The repository ships canonical component sources and renders only the selected agent's native project files:
+
+| Component | Package source | Claude Code target | Codex target |
+|-----------|----------------|--------------------|--------------|
+| Skills | `skills/` | `.claude/skills/` | `.agents/skills/` |
+| Steering | `steering/` | `.spec/steering/` | `.spec/steering/` |
+| Rules | `rules/` | `.claude/rules/` | `.codex/guidance/rules/` |
+| Contexts | `contexts/` | `.claude/contexts/` | `.codex/guidance/contexts/` |
+| Agents | `agents/*.md` | `.claude/agents/*.md` | `.codex/agents/*.toml` |
+| Hooks | `hooks/` | `.claude/hooks/` | `.codex/hooks.json` and `.codex/hooks/` |
+| Root guidance | `templates/` | `CLAUDE.md` | `AGENTS.md` |
+
+### Skills
+
+On-demand guidance invoked through the target agent:
 
 | Skill | Purpose |
 |-------|---------|
@@ -35,24 +48,22 @@ On-demand guidance invoked via slash commands:
 | `/sdd-security-check` | Security audit skill |
 | `/sdd-test-gen` | Test generation skill |
 
-### Rules (`.claude/rules/`)
-Always-active coding standards: coding style, error handling, git workflow, SDD workflow, security, testing.
-
-### Contexts (`.claude/contexts/`)
-Switchable modes: dev, planning, research, review, security audit.
-
-### Agents (`.claude/agents/`)
-Specialized roles: architect, implementer, planner, reviewer, security auditor, TDD guide.
-
-### Hooks (`.claude/hooks/`)
-Lifecycle events: session start/end, pre/post tool use.
-
 ### Steering (`.spec/steering/`)
 Project-specific context documents. Edit these to describe your project:
 
 - `product.md` - Product context and business objectives
 - `tech.md` - Technology stack and decisions
 - `structure.md` - File organization and patterns
+
+## Model Routing
+
+| Work class | Codex | Claude Code |
+|------------|-------|-------------|
+| Planning, architecture, review, security | `gpt-5.6-sol` with xhigh effort | `opus` |
+| Implementation and TDD (default) | `gpt-5.6-luna` with max effort | `sonnet` |
+
+Codex uses `gpt-5.6-luna` as the default model for routed work. High-level advisor roles override that default with `gpt-5.6-sol` at xhigh effort. `gpt-5.6-terra` remains a supported model but is not assigned to a default SDD role. Routed skills use compact specialist handoffs and continue in the current agent when delegation is unavailable.
+For the complete role map, generated-file examples, and delegation flow, see [docs/MODEL-ROUTING.md](docs/MODEL-ROUTING.md).
 
 ## MCP Tools
 
@@ -70,7 +81,7 @@ Project-specific context documents. Edit these to describe your project:
 
 ## Workflow
 
-1. **Setup**: `npx sdd-mcp-server install` for lean install, or `npx sdd-mcp-server install --profile full` for all components.
+1. **Setup**: use `npx sdd-mcp-server install --profile full` for an interactive target choice, or pass `--target codex` / `--target claude-code` explicitly for automation.
 2. **Steering**: `/sdd-steering` to update project-specific docs when needed.
 3. **Specify**: `sdd-init` -> `/sdd-requirements` -> `/sdd-design` -> `/sdd-tasks`, approving each phase.
 4. **Context**: use `sdd-context-load` compact mode for routine continuation; use `mode: "full"` only when needed.

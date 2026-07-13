@@ -107,6 +107,10 @@ describe('UserService', () => {
 });
 ```
 
+## Specialist Delegation
+
+When the host supports subagents, delegate test design and generation to the `tdd-guide` role with a compact handoff containing only the behavior contract, affected code, existing test conventions, and edge cases. Wait for the specialist and then integrate its result into the current workflow. If specialist delegation is unavailable, state the fallback and continue in the current agent.
+
 ### Step 4: Test Categories to Generate
 
 #### Unit Tests

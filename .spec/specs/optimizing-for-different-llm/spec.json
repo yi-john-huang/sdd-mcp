@@ -1,0 +1,34 @@
+{
+  "feature_name": "optimizing-for-different-llm",
+  "created_at": "Fri Jul 10 2026 22:59:40 GMT+0800 (Taiwan Standard Time)",
+  "updated_at": "2026-07-10T15:53:31.000Z",
+  "language": "en",
+  "phase": "implementation-completed",
+  "approvals": {
+    "requirements": {
+      "generated": true,
+      "approved": true
+    },
+    "design": {
+      "generated": true,
+      "approved": true
+    },
+    "tasks": {
+      "generated": true,
+      "approved": true
+    },
+    "implementation": {
+      "completed": true
+    }
+  },
+  "workflow_options": {
+    "review_test_cases": true
+  },
+  "checkpoints": {
+    "test_cases": {
+      "required": true,
+      "reviewed": true
+    }
+  },
+  "ready_for_implementation": true
+}

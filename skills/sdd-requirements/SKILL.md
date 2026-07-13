@@ -145,3 +145,7 @@ Apply these steering documents during requirements generation:
 - **KISS**: Keep requirements simple and unambiguous
 - **YAGNI**: Only specify what's actually needed now
 - **Single Responsibility**: Each requirement addresses one concern
+
+## Specialist Delegation
+
+When the host supports subagents, delegate this phase to the `planner` role with a compact handoff containing only the feature goal, approved context, constraints, and required deliverable. Wait for the specialist and then integrate its result into the current workflow. If specialist delegation is unavailable, state the fallback and continue in the current agent.

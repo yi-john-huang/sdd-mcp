@@ -7,8 +7,8 @@
  * - MCP server mode (default)
  *
  * Usage:
- *   npx sdd-mcp-server install --list      # CLI: List available skills
- *   npx sdd-mcp-server install             # CLI: Install skills and steering
+ *   npx sdd-mcp-server install --list      # CLI: List target-native components
+ *   npx sdd-mcp-server install             # CLI: Install target-native components
  *   npx sdd-mcp-server                     # MCP: Start MCP server
  */
 

@@ -18,5 +18,4 @@ Each phase builds on the previous and requires review before proceeding.
 
 ## Installed Components
 
-The SDD components are stored in `.claude/` directories. Read the referenced files for full details.
-
+Native Codex installs use `.agents/` and `.codex/`; compatibility integrations may reference other effective paths below. Read the referenced files for full details.

@@ -54,7 +54,9 @@ Domain ports live in `src/domain/ports.ts` and are implemented in infrastructure
 - `src/index.ts` starts the MCP server and includes the simplified MCP mode used by `npx`/stdio clients.
 - `src/infrastructure/mcp/` implements MCP server concerns: tool registry, prompts, resources, sessions, capability negotiation, and errors.
 - `src/adapters/cli/SDDToolAdapter.ts` maps tool calls into application services.
-- `src/cli/` contains install and migration commands.
+- `src/cli/install-target.ts` owns target selection, native default paths, role/model routes, and validation.
+- `src/cli/tool-support/` contains Claude Code and Codex render/install strategies; `src/cli/utils/` contains preserve-first and managed-ignore filesystem boundaries.
+- Other `src/cli/` modules contain install orchestration and migration commands.
 - `src/application/services/ContextCompactionService.ts` handles compact handoff generation and context loading.
 
 ## Development Environment
@@ -85,7 +87,7 @@ npm start
 - Binaries:
   - `sdd-mcp-server` -> `sdd-entry.js`
   - `sdd-install-skills` -> `dist/cli/install-skills.js`
-- Published component directories include `skills`, `steering`, `rules`, `contexts`, `agents`, and `hooks`.
+- Published component directories include `skills`, `steering`, `rules`, `contexts`, `agents`, and `hooks`; templates include native root guidance and the Codex hook runner.
 
 ### Docker
 The Docker build is multi-stage:

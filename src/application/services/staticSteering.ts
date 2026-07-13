@@ -495,9 +495,7 @@ Refer to full principles.md for detailed examples and language-specific guidance
       agentsContent = claude
         .replace(/# Claude Code Spec-Driven Development/g, '# AI Agent Spec-Driven Development')
         .replace(/Claude Code/g, 'AI Agent')
-        .replace(/claude code/g, 'ai agent')
-        .replace(/\.claude\//g, '.ai agent/')
-        .replace(/\/claude/g, '/agent');
+        .replace(/claude code/g, 'ai agent');
     } else {
       agentsContent = `# AI Agent Spec-Driven Development
 
@@ -508,7 +506,7 @@ Kiro-style Spec Driven Development implementation using MCP tools.
 ### Paths
 - Steering: \`.spec/steering/\`
 - Specs: \`.spec/specs/\`
-- Commands: \`.ai agent/commands/\`
+- Skills: install with \`npx sdd-mcp-server install --target codex --skills\` or \`--target claude-code\`
 
 ### Steering vs Specification
 

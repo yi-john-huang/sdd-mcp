@@ -209,3 +209,7 @@ Custom steering documents are managed manually. After creating:
 - [ ] Guidelines are actionable
 - [ ] Examples show good and bad practices
 - [ ] Checklist for verification included
+
+## Specialist Delegation
+
+When the host supports subagents, delegate this phase to the `planner` role with a compact handoff containing only the specialized domain, file scope, project constraints, and requested steering outcome. Wait for the specialist and then integrate its result into the current workflow. If specialist delegation is unavailable, state the fallback and continue in the current agent.

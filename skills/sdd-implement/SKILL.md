@@ -296,3 +296,7 @@ Apply these steering documents during implementation:
 | **Magic Numbers** | Unexplained numeric literals | Use named constants |
 | **Deep Nesting** | Multiple levels of if/loops | Extract methods, early returns |
 | **Long Methods** | Methods doing too much | Split into smaller methods |
+
+## Specialist Delegation
+
+When the host supports subagents, delegate implementation slices to the `implementer` role with a compact handoff containing only the approved task, acceptance criteria, relevant interfaces, and focused test command. Wait for the specialist and then integrate its result before advancing task status. If specialist delegation is unavailable, state the fallback and continue in the current agent.
