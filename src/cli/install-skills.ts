@@ -362,7 +362,7 @@ export class InstallSkillsCLI {
 
     // Multi-tool support: Codex CLI
     if (options.allTools && resolvedTarget.target !== 'codex') {
-      await generateCodexAgentsMd(
+      const failures = await generateCodexAgentsMd(
         projectRoot,
         {
           skillManager: this.skillManager,
@@ -383,14 +383,30 @@ export class InstallSkillsCLI {
           steering: componentsToInstall.includes('steering'),
         },
       );
+      for (const failure of failures) {
+        report.failed.push({
+          component: 'root',
+          name: `codex/${failure.name}`,
+          path: failure.path,
+          error: failure.error,
+        });
+      }
     }
 
     // Multi-tool support: Google Antigravity
     if (options.antigravity || options.allTools) {
-      await createAntigravitySymlinks(projectRoot, {
+      const failures = await createAntigravitySymlinks(projectRoot, {
         skillsPath: paths.skills,
         rulesPath: paths.rules,
       });
+      for (const failure of failures) {
+        report.failed.push({
+          component: 'root',
+          name: `.agent/${failure.name}`,
+          path: failure.path,
+          error: failure.error,
+        });
+      }
     }
 
     console.log(`\nTarget: ${resolvedTarget.target} (${resolvedTarget.source})`);
@@ -765,25 +781,52 @@ function createProcessTargetPromptIO(): TargetPromptIO {
     async chooseTarget() {
       const prompt = createInterface({ input: process.stdin, output: process.stdout });
       let cancelled = false;
-      prompt.once('SIGINT', () => {
-        cancelled = true;
-        prompt.close();
-      });
       try {
         while (!cancelled) {
-          const answer = (await prompt.question(
-            'Choose the primary LLM agent target:\n  1) Codex\n  2) Claude Code\nSelection: ',
-          )).trim().toLowerCase();
-          if (answer === '1' || answer === 'codex') return 'codex';
-          if (answer === '2' || answer === 'claude' || answer === 'claude-code') return 'claude-code';
+          const answer = await new Promise<string | null>(resolve => {
+            let settled = false;
+            const cleanup = () => {
+              prompt.off('line', onLine);
+              prompt.off('close', onClose);
+              prompt.off('SIGINT', onSigint);
+            };
+            const settle = (value: string | null) => {
+              if (settled) return;
+              settled = true;
+              cleanup();
+              resolve(value);
+            };
+            const onLine = (line: string) => settle(line);
+            const onClose = () => settle(null);
+            const onSigint = () => {
+              settle(null);
+              prompt.close();
+            };
+
+            prompt.once('line', onLine);
+            prompt.once('close', onClose);
+            prompt.once('SIGINT', onSigint);
+            prompt.question(
+              'Choose the primary LLM agent target:\n  1) Codex\n  2) Claude Code\nSelection: ',
+            ).then(settle).catch(() => settle(null));
+          });
+          if (answer === null) {
+            cancelled = true;
+            continue;
+          }
+          const normalized = answer.trim().toLowerCase();
+          if (normalized === '1' || normalized === 'codex') return 'codex';
+          if (normalized === '2' || normalized === 'claude' || normalized === 'claude-code') {
+            return 'claude-code';
+          }
           console.warn('Choose 1 (Codex) or 2 (Claude Code).');
         }
+        return null;
       } catch {
         return null;
       } finally {
         prompt.close();
       }
-      return null;
     },
   };
 }

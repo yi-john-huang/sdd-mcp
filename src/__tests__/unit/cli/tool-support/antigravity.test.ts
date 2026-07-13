@@ -145,4 +145,17 @@ describe('createAntigravitySymlinks', () => {
       fs.rmSync(absoluteRoot, { recursive: true, force: true });
     }
   });
+
+  it('returns failures when symlink creation cannot proceed', async () => {
+    fs.writeFileSync(path.join(tmpDir, '.agent'), 'not a directory');
+
+    const failures = await createAntigravitySymlinks(tmpDir);
+
+    expect(failures).toHaveLength(2);
+    expect(failures[0]).toMatchObject({
+      name: 'workflows',
+      path: path.join(tmpDir, '.agent', 'workflows'),
+    });
+    expect(failures[0].error).toContain('ENOTDIR');
+  });
 });

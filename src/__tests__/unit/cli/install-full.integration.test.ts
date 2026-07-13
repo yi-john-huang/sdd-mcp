@@ -10,12 +10,14 @@ describe('full-profile target journeys', () => {
   let outputRoot: string;
   let originalCwd: string;
   let log: jest.SpyInstance;
+  let error: jest.SpyInstance;
   let warn: jest.SpyInstance;
 
   beforeEach(() => {
     outputRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'sdd-full-install-'));
     originalCwd = process.cwd();
     log = jest.spyOn(console, 'log').mockImplementation();
+    error = jest.spyOn(console, 'error').mockImplementation();
     warn = jest.spyOn(console, 'warn').mockImplementation();
   });
 
@@ -24,6 +26,7 @@ describe('full-profile target journeys', () => {
     fs.rmSync(outputRoot, { recursive: true, force: true });
     log.mockRestore();
     warn.mockRestore();
+    error.mockRestore();
     process.exitCode = undefined;
   });
 
@@ -99,6 +102,23 @@ describe('full-profile target journeys', () => {
     expect(ignore).toContain('.agents/');
     expect(ignore).toContain('.codex/');
     expect(ignore).toContain('.claude/');
+  });
+
+  it('propagates optional integration failures into the CLI result', async () => {
+    fs.writeFileSync(path.join(outputRoot, '.agent'), 'not a directory');
+    const cli = new InstallSkillsCLI(
+      path.join(repositoryRoot, 'skills'),
+      path.join(repositoryRoot, 'steering'),
+      promptDouble(),
+    );
+    process.chdir(outputRoot);
+
+    await cli.runUnified(cli.parseArgs([
+      '--target', 'claude-code', '--skills', '--antigravity',
+    ]));
+
+    expect(process.exitCode).toBe(1);
+    expect(error).toHaveBeenCalledWith(expect.stringContaining('.agent/workflows'));
   });
 });
 

@@ -171,10 +171,13 @@ export function resolveInstallPaths(
       throw new CliUsageError(`Invalid ${component} path: paths must be non-empty and contain no control characters.`);
     }
   }
-  if (policy.target === 'codex' && isCodexCommandPolicyPath(paths.rules)) {
-    throw new CliUsageError(
-      'Codex prompt guidance cannot be installed under .codex/rules; choose a guidance path instead.',
-    );
+  if (policy.target === 'codex') {
+    const unsafePath = Object.entries(paths).find(([, value]) => isCodexCommandPolicyPath(value));
+    if (unsafePath) {
+      throw new CliUsageError(
+        `Codex ${unsafePath[0]} path cannot be installed under .codex/rules; choose a guidance path instead.`,
+      );
+    }
   }
   return paths;
 }

@@ -55,6 +55,11 @@ export interface InstalledComponents {
   hooks?: boolean;
 }
 
+export interface CodexGuidanceFailure {
+  name: string;
+  path: string;
+  error: string;
+}
 
 /**
  * Load the template preamble for AGENTS.md
@@ -87,12 +92,13 @@ export async function generateCodexAgentsMd(
   managers: ManagerRefs,
   paths: InstallPaths,
   installed: InstalledComponents,
-): Promise<void> {
+): Promise<CodexGuidanceFailure[]> {
   const targetPath = path.join(projectRoot, 'AGENTS.md');
+  const failures: CodexGuidanceFailure[] = [];
 
   if (fs.existsSync(targetPath)) {
     console.log('  ⏭️  AGENTS.md already exists, skipping');
-    return;
+    return failures;
   }
 
   let content = loadPreamble();
@@ -118,7 +124,9 @@ export async function generateCodexAgentsMd(
     if (installed.contexts) content += buildGuidanceSection('Contexts', paths.contextsPath);
     if (installed.hooks) content += buildGuidanceSection('Hooks', paths.hooksPath);
   } catch (error) {
-    console.error('  ⚠️  Failed to gather component metadata:', (error as Error).message);
+    const message = error instanceof Error ? error.message : String(error);
+    console.error('  ⚠️  Failed to gather component metadata:', message);
+    failures.push({ name: 'metadata', path: targetPath, error: message });
   }
 
   try {
@@ -127,10 +135,13 @@ export async function generateCodexAgentsMd(
   } catch (error) {
     if (isAlreadyExists(error)) {
       console.log('  ⏭️  AGENTS.md already exists, skipping');
-      return;
+      return failures;
     }
-    console.error('  ❌ Failed to create AGENTS.md:', (error as Error).message);
+    const message = error instanceof Error ? error.message : String(error);
+    failures.push({ name: 'AGENTS.md', path: targetPath, error: message });
+    console.error('  ❌ Failed to create AGENTS.md:', message);
   }
+  return failures;
 }
 
 export interface CodexInstallRequest extends BaseTargetInstallRequest {

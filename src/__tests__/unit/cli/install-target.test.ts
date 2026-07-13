@@ -75,19 +75,23 @@ describe('install target policy', () => {
     expect(paths.agents).toBe('.codex/agents');
   });
 
-  it('rejects codex prompt guidance in the command-policy directory', () => {
-    expect(() => resolveInstallPaths(getTargetPolicy('codex'), {
-      rules: '.codex/rules',
-    })).toThrow(CliUsageError);
-    expect(() => resolveInstallPaths(getTargetPolicy('codex'), {
-      rules: '/tmp/project/.codex/rules/nested',
-    })).toThrow(CliUsageError);
-    expect(() => resolveInstallPaths(getTargetPolicy('codex'), {
-      rules: '.codex/guidance/../rules',
-    })).toThrow(CliUsageError);
-    expect(() => resolveInstallPaths(getTargetPolicy('codex'), {
-      rules: 'nested/../.codex/rules',
-    })).toThrow(CliUsageError);
+  it.each(['skills', 'steering', 'rules', 'contexts', 'agents', 'hooks'] as const)(
+    'rejects %s guidance destinations in the Codex command-policy directory',
+    component => {
+      expect(() => resolveInstallPaths(getTargetPolicy('codex'), {
+        [component]: '.codex/rules',
+      })).toThrow(CliUsageError);
+      expect(() => resolveInstallPaths(getTargetPolicy('codex'), {
+        [component]: `nested/../.codex/rules/${component}`,
+      })).toThrow(CliUsageError);
+    },
+  );
+
+  it('allows Codex prompt guidance under the dedicated guidance tree', () => {
+    const paths = resolveInstallPaths(getTargetPolicy('codex'), {
+      contexts: '.codex/guidance/contexts',
+    });
+    expect(paths.contexts).toBe('.codex/guidance/contexts');
   });
   it.each(['', 'custom\npath', 'custom\0path'])('rejects unsafe path values before installation', value => {
     expect(() => resolveInstallPaths(getTargetPolicy('codex'), {

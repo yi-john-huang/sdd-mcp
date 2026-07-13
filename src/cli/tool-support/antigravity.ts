@@ -19,6 +19,12 @@ export interface AntigravityPaths {
   rulesPath: string;
 }
 
+export interface AntigravityFailure {
+  name: string;
+  path: string;
+  error: string;
+}
+
 /**
  * Create `.agent/` symlinks pointing to component directories
  * for Google Antigravity compatibility.
@@ -32,8 +38,9 @@ export interface AntigravityPaths {
 export async function createAntigravitySymlinks(
   projectRoot: string,
   paths: AntigravityPaths = { skillsPath: '.claude/skills', rulesPath: '.claude/rules' },
-): Promise<void> {
+): Promise<AntigravityFailure[]> {
   const agentDir = path.join(projectRoot, '.agent');
+  const failures: AntigravityFailure[] = [];
 
   // Warn on Windows where symlinks may require elevated privileges
   if (process.platform === 'win32') {
@@ -77,9 +84,13 @@ export async function createAntigravitySymlinks(
       fs.symlinkSync(target, linkPath, 'dir');
       console.log(`  ✅ Created .agent/${link} → ${target}`);
     } catch (error) {
-      console.error(`  ❌ Failed to create .agent/${link} symlink:`, (error as Error).message);
+      const message = error instanceof Error ? error.message : String(error);
+      console.error(`  ❌ Failed to create .agent/${link} symlink:`, message);
+      failures.push({ name: link, path: linkPath, error: message });
     }
   }
+
+  return failures;
 }
 
 /**

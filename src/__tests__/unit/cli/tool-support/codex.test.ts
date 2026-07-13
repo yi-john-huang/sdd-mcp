@@ -95,11 +95,11 @@ describe('generateCodexAgentsMd', () => {
 
     const consoleSpy = jest.spyOn(console, 'log').mockImplementation();
 
-    await generateCodexAgentsMd(tmpDir, managers, DEFAULT_PATHS, ALL_INSTALLED);
+    const failures = await generateCodexAgentsMd(tmpDir, managers, DEFAULT_PATHS, ALL_INSTALLED);
 
     const content = fs.readFileSync(agentsPath, 'utf-8');
     expect(content).toBe('existing content');
-    expect(consoleSpy).toHaveBeenCalledWith(expect.stringContaining('already exists'));
+    expect(failures).toEqual([]);
 
     consoleSpy.mockRestore();
   });
@@ -171,10 +171,14 @@ describe('generateCodexAgentsMd', () => {
 
     const consoleErrorSpy = jest.spyOn(console, 'error').mockImplementation();
 
-    await generateCodexAgentsMd(tmpDir, errorManagers, DEFAULT_PATHS, ALL_INSTALLED);
+    const failures = await generateCodexAgentsMd(tmpDir, errorManagers, DEFAULT_PATHS, ALL_INSTALLED);
 
-    // Should not crash — file should still be created (with whatever content was built)
     expect(fs.existsSync(path.join(tmpDir, 'AGENTS.md'))).toBe(true);
+    expect(failures).toEqual([{
+      name: 'metadata',
+      path: path.join(tmpDir, 'AGENTS.md'),
+      error: 'skill error',
+    }]);
     expect(consoleErrorSpy).toHaveBeenCalledWith(expect.stringContaining('Failed to gather'), expect.any(String));
 
     consoleErrorSpy.mockRestore();
