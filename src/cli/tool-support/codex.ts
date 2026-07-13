@@ -18,6 +18,8 @@ import {
   type BaseTargetInstallRequest,
 } from './target-installer.js';
 
+const CODEX_HOOK_RUNNER_FILE = 'sdd-hook-runner.mjs';
+const GIT_ROOT_EXPRESSION = '$(git rev-parse --show-toplevel)';
 /**
  * References to manager instances needed for generating AGENTS.md
  */
@@ -95,8 +97,20 @@ export async function generateCodexAgentsMd(
 ): Promise<CodexGuidanceFailure[]> {
   const targetPath = path.join(projectRoot, 'AGENTS.md');
   const failures: CodexGuidanceFailure[] = [];
-
   if (fs.existsSync(targetPath)) {
+    try {
+      if (fs.statSync(targetPath).isDirectory()) {
+        const error = 'AGENTS.md destination is a directory';
+        failures.push({ name: 'AGENTS.md', path: targetPath, error });
+        console.error('  ❌ Failed to create AGENTS.md:', error);
+        return failures;
+      }
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      failures.push({ name: 'AGENTS.md', path: targetPath, error: message });
+      console.error('  ❌ Failed to inspect AGENTS.md:', message);
+      return failures;
+    }
     console.log('  ⏭️  AGENTS.md already exists, skipping');
     return failures;
   }
@@ -153,7 +167,7 @@ export async function installCodexTarget(request: CodexInstallRequest) {
   const session = new TargetInstallSession(
     'codex',
     request.projectRoot,
-    request.writer ?? new PreservingWriter(),
+    request.writer ?? new PreservingWriter(request.projectRoot),
   );
   const selected = new Set(request.components);
 
@@ -194,20 +208,29 @@ export async function installCodexTarget(request: CodexInstallRequest) {
     }
   }
   if (selected.has('hooks')) {
-    const runnerDestination = session.resolve(path.join(request.paths.hooks, 'sdd-hook-runner.js'));
+    const runnerDestination = session.resolve(path.join(request.paths.hooks, CODEX_HOOK_RUNNER_FILE));
     const configDestination = session.resolve(
       path.join(path.dirname(request.paths.hooks), 'hooks.json'),
     );
-    const runnerContent = request.hookRunnerContent ?? loadHookRunnerTemplate();
-    if (runnerContent === null) {
-      session.fail('hooks', 'sdd-hook-runner.js', runnerDestination, new Error('Codex hook runner template not found'));
-    } else {
-      await session.write('hooks', 'sdd-hook-runner.js', runnerDestination, runnerContent);
+    let runnerContent: string | null = request.hookRunnerContent ?? null;
+    let templateLoadFailed = false;
+    if (request.hookRunnerContent === undefined) {
+      try {
+        runnerContent = await loadHookRunnerTemplate();
+      } catch (error) {
+        templateLoadFailed = true;
+        session.fail('hooks', CODEX_HOOK_RUNNER_FILE, runnerDestination, error);
+      }
+    }
+    if (runnerContent === null && !templateLoadFailed) {
+      session.fail('hooks', CODEX_HOOK_RUNNER_FILE, runnerDestination, new Error('Codex hook runner template not found'));
+    } else if (runnerContent !== null) {
+      await session.write('hooks', CODEX_HOOK_RUNNER_FILE, runnerDestination, runnerContent);
       await session.write(
         'hooks',
         'hooks.json',
         configDestination,
-        renderCodexHooksConfig(request.paths.hooks),
+        renderCodexHooksConfig(request.paths.hooks, request.projectRoot),
       );
     }
   }
@@ -265,9 +288,9 @@ async function buildCodexRootGuidance(
   return content;
 }
 
-export function renderCodexHooksConfig(hooksPath: string): string {
-  const runner = `${hooksPath.replaceAll('\\', '/')}/sdd-hook-runner.js`;
-  const command = (event: 'session-start' | 'stop') => `node ${shellQuote(runner)} ${event}`;
+export function renderCodexHooksConfig(hooksPath: string, projectRoot = process.cwd()): string {
+  const runner = resolveHookRunnerCommandPath(hooksPath, projectRoot);
+  const command = (event: 'session-start' | 'stop') => `node ${runner} ${event}`;
   return `${JSON.stringify({
     hooks: {
       SessionStart: [{
@@ -281,18 +304,39 @@ export function renderCodexHooksConfig(hooksPath: string): string {
   }, null, 2)}\n`;
 }
 
+function resolveHookRunnerCommandPath(hooksPath: string, projectRoot: string): string {
+  const absoluteProjectRoot = path.resolve(projectRoot);
+  const absoluteRunner = path.resolve(absoluteProjectRoot, hooksPath, CODEX_HOOK_RUNNER_FILE);
+  const relativeRunner = path.relative(absoluteProjectRoot, absoluteRunner).split(path.sep).join('/');
+  if (
+    path.isAbsolute(hooksPath)
+    || relativeRunner === ''
+    || relativeRunner === '..'
+    || relativeRunner.startsWith('../')
+  ) {
+    return shellQuote(absoluteRunner);
+  }
+  return `"${GIT_ROOT_EXPRESSION}/${shellDoubleQuote(relativeRunner)}"`;
+}
+
+function shellDoubleQuote(value: string): string {
+  if (value.includes('\n') || value.includes('\r') || value.includes('\0')) {
+    throw new Error('Hook path contains an unsupported control character');
+  }
+  return value.replace(/(["\\$`])/g, '\\$1');
+}
+
 function shellQuote(value: string): string {
   if (value.includes('\n') || value.includes('\r') || value.includes('\0')) {
     throw new Error('Hook path contains an unsupported control character');
   }
   return `'${value.replaceAll("'", "'\\''")}'`;
 }
-
-function loadHookRunnerTemplate(): string | null {
+async function loadHookRunnerTemplate(): Promise<string | null> {
   const template = findTemplate('codex-hook-runner.js');
-  return template ? fs.readFileSync(template, 'utf8') : null;
+  if (!template) return null;
+  return fs.promises.readFile(template, 'utf8');
 }
-
 
 function isAlreadyExists(error: unknown): boolean {
   return typeof error === 'object' && error !== null && 'code' in error && error.code === 'EEXIST';

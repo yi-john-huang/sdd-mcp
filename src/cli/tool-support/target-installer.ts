@@ -12,7 +12,7 @@ import type {
   ResolvedInstallPaths,
   TargetInstallReport,
 } from '../install-target.js';
-import { PreservingWriter, validateChildName } from '../utils/preserving-writer.js';
+import { PreservingWriter, validateChildName, validateDestinationPath } from '../utils/preserving-writer.js';
 
 export interface TargetSources {
   skillManager: SkillManager;
@@ -58,6 +58,7 @@ export class TargetInstallSession {
     content: string,
   ): Promise<void> {
     try {
+      validateDestinationPath(this.projectRoot, destination);
       const outcome = await this.writer.writeIfAbsent(destination, content);
       this.report[outcome].push(this.label(destination));
     } catch (error) {
@@ -72,6 +73,7 @@ export class TargetInstallSession {
     destination: string,
   ): Promise<void> {
     try {
+      validateDestinationPath(this.projectRoot, destination);
       const outcome = await this.writer.copyIfAbsent(source, destination);
       this.report[outcome].push(this.label(destination));
     } catch (error) {
@@ -86,6 +88,7 @@ export class TargetInstallSession {
       try {
         validateChildName(skill.name);
         const destination = path.join(destinationRoot, skill.name);
+        validateDestinationPath(this.projectRoot, destination);
         const result = await this.writer.copyTreePreserving(skill.path, destination);
         for (const item of result.installed) {
           this.report.installed.push(this.label(path.join(destination, item)));

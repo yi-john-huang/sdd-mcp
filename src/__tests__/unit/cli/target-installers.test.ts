@@ -138,10 +138,90 @@ describe('target-specific installers', () => {
     expect(fs.readFileSync(path.join(root, '.codex/agents/implementer.toml'), 'utf8')).toContain('model = "gpt-5.6-luna"');
     expect(fs.readFileSync(path.join(root, '.codex/agents/implementer.toml'), 'utf8')).toContain('model_reasoning_effort = "max"');
     expect(JSON.parse(fs.readFileSync(path.join(root, '.codex/hooks.json'), 'utf8'))).toHaveProperty('hooks.SessionStart');
-    expect(fs.existsSync(path.join(root, '.codex/hooks/sdd-hook-runner.js'))).toBe(true);
+    expect(fs.existsSync(path.join(root, '.codex/hooks/sdd-hook-runner.mjs'))).toBe(true);
     expect(fs.readFileSync(path.join(root, 'AGENTS.md'), 'utf8')).toContain('.codex/agents/planner.toml');
     expect(fs.existsSync(path.join(root, '.claude'))).toBe(false);
     expect(fs.existsSync(path.join(root, 'CLAUDE.md'))).toBe(false);
+  });
+  it.each([
+    ['codex', '.agents', 'skills'],
+    ['codex', '.codex', 'rules'],
+    ['claude-code', '.claude', 'skills'],
+  ] as const)('rejects symlinked %s component roots', async (target, componentRoot, component) => {
+    const outside = fs.mkdtempSync(path.join(os.tmpdir(), 'sdd-target-outside-'));
+    fs.symlinkSync(outside, path.join(root, componentRoot), 'dir');
+
+    try {
+      const report = target === 'codex'
+        ? await installCodexTarget({
+          projectRoot: root,
+          paths: getTargetPolicy(target).defaultPaths,
+          components: [component],
+          sources: makeSources(sourceRoot),
+          rootGuidancePreamble: '# Codex guidance\n',
+          hookRunnerContent: '',
+        })
+        : await installClaudeCodeTarget({
+          projectRoot: root,
+          paths: getTargetPolicy(target).defaultPaths,
+          components: [component],
+          sources: makeSources(sourceRoot),
+          rootGuidanceContent: '# Claude guidance\n',
+        });
+      expect(report.failed.some(failure => failure.component === component)).toBe(true);
+      expect(fs.readdirSync(outside)).toEqual([]);
+    } finally {
+      fs.rmSync(outside, { recursive: true, force: true });
+    }
+  });
+
+  it('reports Codex hook template read failures', async () => {
+    const originalReadFile = fs.promises.readFile.bind(fs.promises);
+    const readSpy = jest.spyOn(fs.promises, 'readFile').mockImplementation(async (filePath, options) => {
+      if (String(filePath).endsWith('templates/codex-hook-runner.js')) {
+        throw new Error('EACCES');
+      }
+      return originalReadFile(filePath, options);
+    });
+
+    try {
+      const report = await installCodexTarget({
+        projectRoot: root,
+        paths: getTargetPolicy('codex').defaultPaths,
+        components: ['hooks'],
+        sources: makeSources(sourceRoot),
+        rootGuidancePreamble: '# Codex guidance\n',
+      });
+      expect(report.failed).toEqual(expect.arrayContaining([
+        expect.objectContaining({ component: 'hooks', error: 'EACCES' }),
+      ]));
+    } finally {
+      readSpy.mockRestore();
+    }
+  });
+
+  it('reports Claude root template read failures', async () => {
+    const originalReadFile = fs.promises.readFile.bind(fs.promises);
+    const readSpy = jest.spyOn(fs.promises, 'readFile').mockImplementation(async (filePath, options) => {
+      if (String(filePath).endsWith('templates/CLAUDE.md')) {
+        throw new Error('EACCES');
+      }
+      return originalReadFile(filePath, options);
+    });
+
+    try {
+      const report = await installClaudeCodeTarget({
+        projectRoot: root,
+        paths: getTargetPolicy('claude-code').defaultPaths,
+        components: [],
+        sources: makeSources(sourceRoot),
+      });
+      expect(report.failed).toEqual(expect.arrayContaining([
+        expect.objectContaining({ component: 'root', error: 'EACCES' }),
+      ]));
+    } finally {
+      readSpy.mockRestore();
+    }
   });
 
   it('preserves existing root and agent files on repeated installs', async () => {

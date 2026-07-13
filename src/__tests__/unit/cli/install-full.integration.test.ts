@@ -120,6 +120,23 @@ describe('full-profile target journeys', () => {
     expect(process.exitCode).toBe(1);
     expect(error).toHaveBeenCalledWith(expect.stringContaining('.agent/workflows'));
   });
+
+  it('reports optional integration setup failures without throwing', async () => {
+    fs.symlinkSync('/nonexistent/sdd-agent-target', path.join(outputRoot, '.agent'), 'dir');
+    const cli = new InstallSkillsCLI(
+      path.join(repositoryRoot, 'skills'),
+      path.join(repositoryRoot, 'steering'),
+      promptDouble(),
+    );
+    process.chdir(outputRoot);
+
+    await cli.runUnified(cli.parseArgs([
+      '--target', 'claude-code', '--skills', '--antigravity',
+    ]));
+
+    expect(process.exitCode).toBe(1);
+    expect(error).toHaveBeenCalledWith(expect.stringContaining('root/.agent'));
+  });
 });
 
 function promptDouble(choice?: InstallTarget): jest.Mocked<TargetPromptIO> {

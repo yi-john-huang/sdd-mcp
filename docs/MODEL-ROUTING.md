@@ -53,6 +53,8 @@ model_reasoning_effort = "max"
 
 The `model` field selects the model identifier. `model_reasoning_effort` controls the reasoning setting requested for that model. The installer does not call a model API or check entitlement; the Codex host applies the generated configuration and handles availability.
 
+GPT-5.6 preview access depends on the user's eligible Codex workspace or API organization. Generated agent metadata does not grant access or bypass host entitlement checks.
+
 ### Claude Code output
 
 Claude Code agents are written as Markdown under `.claude/agents/` with a frontmatter model alias:
@@ -79,6 +81,8 @@ Claude Code uses its own aliases, so Codex effort values such as `xhigh` and `ma
 6. If subagent delegation is unavailable, the skill reports the fallback and continues in the current agent. The repository cannot force a model switch in that fallback path.
 
 This means model routing affects delegated specialist work. It does not automatically change the model of the parent conversation.
+
+Specialist delegation can consume more total tokens than an equivalent single-agent run because the host pays for handoffs, specialist work, and result integration. Compact handoffs reduce unnecessary context but do not eliminate that additional cost.
 
 ```mermaid
 flowchart LR

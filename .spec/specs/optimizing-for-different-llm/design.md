@@ -144,7 +144,7 @@ Existing tests stay grouped below `src/__tests__/unit/cli/`, with focused suites
 | Rules | `.claude/rules/*.md` | `.codex/guidance/rules/*.md` | Codex root references guidance paths |
 | Contexts | `.claude/contexts/*.md` | `.codex/guidance/contexts/*.md` | Codex root references on-demand guidance |
 | Agents | `.claude/agents/*.md` | `.codex/agents/*.toml` | Render native model metadata and instructions |
-| Hooks | `.claude/hooks/<event>/*.md` | `.codex/hooks.json` plus `.codex/hooks/sdd-hook-runner.js` | Native lifecycle mapping |
+| Hooks | `.claude/hooks/<event>/*.md` | `.codex/hooks.json` plus `.codex/hooks/sdd-hook-runner.mjs` | Native lifecycle mapping |
 
 Custom path flags override the corresponding default after target resolution. An explicit Codex rules destination below `.codex/rules/` is rejected with guidance to use a prompt-guidance path, preventing a semantic collision with Codex command policy.
 

@@ -47,9 +47,17 @@ export async function createAntigravitySymlinks(
     console.log('  ⚠️  Symlinks on Windows may require administrator privileges');
   }
 
-  // Create .agent/ directory if needed
-  if (!fs.existsSync(agentDir)) {
-    fs.mkdirSync(agentDir, { recursive: true });
+  // Create .agent/ directory if needed.
+  try {
+    if (isSymlink(agentDir)) {
+      throw new Error(`Unsafe .agent destination is a symlink: ${agentDir}`);
+    }
+    if (!fs.existsSync(agentDir)) fs.mkdirSync(agentDir, { recursive: true });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    console.error('  ❌ Failed to create .agent/:', message);
+    failures.push({ name: '.agent', path: agentDir, error: message });
+    return failures;
   }
 
   for (const { link, pathKey } of LINK_DEFS) {
@@ -59,16 +67,15 @@ export async function createAntigravitySymlinks(
     const linkPath = path.join(agentDir, link);
 
     // Check if something already exists at the link path
+    let existingTarget: string | undefined;
     if (fs.existsSync(linkPath) || isSymlink(linkPath)) {
       if (isSymlink(linkPath)) {
-        const existingTarget = fs.readlinkSync(linkPath);
+        existingTarget = fs.readlinkSync(linkPath);
         if (existingTarget === target) {
           console.log(`  ⏭️  .agent/${link} symlink already exists, skipping`);
           continue;
         }
-        // Symlink points somewhere else — warn, remove, and recreate
         console.log(`  ⚠️  .agent/${link} symlink points to ${existingTarget}, replacing with ${target}`);
-        fs.unlinkSync(linkPath);
       } else {
         console.log(`  ⚠️  .agent/${link} exists as a regular directory, skipping`);
         continue;
@@ -81,7 +88,7 @@ export async function createAntigravitySymlinks(
     }
 
     try {
-      fs.symlinkSync(target, linkPath, 'dir');
+      createSymlinkSafely(target, linkPath, existingTarget);
       console.log(`  ✅ Created .agent/${link} → ${target}`);
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
@@ -91,6 +98,31 @@ export async function createAntigravitySymlinks(
   }
 
   return failures;
+}
+
+function createSymlinkSafely(target: string, linkPath: string, existingTarget?: string): void {
+  const temporaryPath = `${linkPath}.sdd-${process.pid}-${Date.now()}`;
+  try {
+    fs.symlinkSync(target, temporaryPath, 'dir');
+    try {
+      fs.renameSync(temporaryPath, linkPath);
+    } catch (error) {
+      if (existingTarget === undefined) throw error;
+      fs.unlinkSync(linkPath);
+      try {
+        fs.renameSync(temporaryPath, linkPath);
+      } catch (replacementError) {
+        try {
+          fs.symlinkSync(existingTarget, linkPath, 'dir');
+        } catch {
+          // Preserve the original replacement error for the structured report.
+        }
+        throw replacementError;
+      }
+    }
+  } finally {
+    if (isSymlink(temporaryPath)) fs.unlinkSync(temporaryPath);
+  }
 }
 
 /**

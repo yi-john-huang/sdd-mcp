@@ -29,6 +29,8 @@ describe('target-aware documentation consistency', () => {
     expect(architecture).toContain('docs/MODEL-ROUTING.md');
     expect(modelGuide).toContain('## What happens when a skill runs');
     expect(modelGuide).toContain('The repository cannot force a model switch');
+    expect(installGuide).toContain('eligible Codex workspace or API organization');
+    expect(modelGuide).toContain('total tokens');
   });
 
   it('keeps the approved model policy and release guidance aligned', () => {

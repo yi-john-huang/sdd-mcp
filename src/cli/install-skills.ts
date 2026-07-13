@@ -402,7 +402,7 @@ export class InstallSkillsCLI {
       for (const failure of failures) {
         report.failed.push({
           component: 'root',
-          name: `.agent/${failure.name}`,
+          name: failure.name === '.agent' ? failure.name : `.agent/${failure.name}`,
           path: failure.path,
           error: failure.error,
         });

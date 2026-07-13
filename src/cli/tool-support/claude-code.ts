@@ -23,7 +23,7 @@ export async function installClaudeCodeTarget(request: ClaudeCodeInstallRequest)
   const session = new TargetInstallSession(
     'claude-code',
     request.projectRoot,
-    request.writer ?? new PreservingWriter(),
+    request.writer ?? new PreservingWriter(request.projectRoot),
   );
   const selected = new Set(request.components);
 
@@ -78,11 +78,19 @@ export async function installClaudeCodeTarget(request: ClaudeCodeInstallRequest)
     }
   }
 
-  const rootContent = await buildClaudeRootGuidance(
-    request,
-    selected,
-    request.rootGuidanceContent ?? loadClaudeTemplate(),
-  );
+  let rootPreamble: string;
+  try {
+    rootPreamble = request.rootGuidanceContent ?? await loadClaudeTemplate();
+  } catch (error) {
+    session.fail(
+      'root',
+      request.paths.rootGuidance,
+      session.resolve(request.paths.rootGuidance),
+      error,
+    );
+    return session.report;
+  }
+  const rootContent = await buildClaudeRootGuidance(request, selected, rootPreamble);
   await session.write(
     'root',
     request.paths.rootGuidance,
@@ -144,8 +152,8 @@ async function buildClaudeRootGuidance(
   return `${preamble.slice(0, markerIndex)}\n${sections}${preamble.slice(markerIndex)}`;
 }
 
-function loadClaudeTemplate(): string {
+async function loadClaudeTemplate(): Promise<string> {
   const template = findTemplate('CLAUDE.md');
   if (!template) return '# CLAUDE.md — Spec-Driven Development (SDD)\n';
-  return fs.readFileSync(template, 'utf8');
+  return fs.promises.readFile(template, 'utf8');
 }

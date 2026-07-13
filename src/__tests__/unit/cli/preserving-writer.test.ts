@@ -9,7 +9,7 @@ describe('PreservingWriter', () => {
 
   beforeEach(() => {
     root = fs.mkdtempSync(path.join(os.tmpdir(), 'sdd-writer-'));
-    writer = new PreservingWriter();
+    writer = new PreservingWriter(root);
   });
 
   afterEach(() => fs.rmSync(root, { recursive: true, force: true }));
@@ -35,6 +35,27 @@ describe('PreservingWriter', () => {
     expect(fs.readFileSync(path.join(destination, 'b.txt'), 'utf8')).toBe('new-b');
     expect(result.skipped).toContain('a.txt');
     expect(result.installed).toContain('b.txt');
+  });
+  it('rejects symlinked destination roots', async () => {
+    const source = path.join(root, 'source');
+    const outside = fs.mkdtempSync(path.join(os.tmpdir(), 'sdd-writer-outside-'));
+    const destination = path.join(root, 'linked');
+    fs.mkdirSync(source);
+    fs.writeFileSync(path.join(source, 'new.txt'), 'new content');
+    fs.symlinkSync(outside, destination, 'dir');
+
+    try {
+      await expect(writer.copyTreePreserving(source, destination)).rejects.toThrow('symlink');
+      expect(fs.readdirSync(outside)).toEqual([]);
+    } finally {
+      fs.rmSync(outside, { recursive: true, force: true });
+    }
+  });
+  it('rejects destinations outside the project root', async () => {
+    const outside = path.join(root, '..', 'outside.txt');
+
+    await expect(writer.writeIfAbsent(outside, 'blocked')).rejects.toThrow('outside project root');
+    expect(fs.existsSync(outside)).toBe(false);
   });
 
   it('rejects unsafe generated child names', () => {

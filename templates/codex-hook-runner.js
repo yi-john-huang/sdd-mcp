@@ -6,8 +6,24 @@ import { execFileSync } from 'node:child_process';
 
 const event = process.argv[2];
 
+function findProjectRoot() {
+  try {
+    const root = execFileSync('git', ['rev-parse', '--show-toplevel'], {
+      cwd: process.cwd(),
+      encoding: 'utf8',
+      stdio: ['ignore', 'pipe', 'ignore'],
+    }).trim();
+    if (root) return root;
+  } catch {
+    // Fall back for projects that are not Git repositories.
+  }
+  return process.cwd();
+}
+
+const projectRoot = findProjectRoot();
+
 function sessionStart() {
-  const specsRoot = path.resolve(process.cwd(), '.spec/specs');
+  const specsRoot = path.resolve(projectRoot, '.spec/specs');
   let entries;
   try {
     entries = fs.readdirSync(specsRoot, { withFileTypes: true });
@@ -43,7 +59,7 @@ function sessionStart() {
 function stop() {
   try {
     const status = execFileSync('git', ['status', '--short'], {
-      cwd: process.cwd(),
+      cwd: projectRoot,
       encoding: 'utf8',
       stdio: ['ignore', 'pipe', 'ignore'],
     }).trim();

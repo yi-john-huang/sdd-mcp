@@ -20,6 +20,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 - Track `sdd-entry.js` as executable so local `npx` binary preparation does not dirty the worktree.
+- Codex hook installs now emit a CommonJS-safe `.mjs` runner and resolve commands from the repository root when invoked in a subdirectory.
+- Target installers reject symlinked or out-of-root destinations and report optional integration, template, and invalid guidance-path failures structurally.
 
 ## [3.4.0] - 2026-06-22
 

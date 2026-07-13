@@ -24,11 +24,18 @@ describe('Codex hook support', () => {
 
     expect(first).toBe(second);
     expect(parsed.hooks.SessionStart[0].hooks[0].command).toBe(
-      "node '.codex/hooks/sdd-hook-runner.js' session-start",
+      "node \"$(git rev-parse --show-toplevel)/.codex/hooks/sdd-hook-runner.mjs\" session-start",
     );
     expect(parsed.hooks.Stop[0].hooks[0].command).toBe(
-      "node '.codex/hooks/sdd-hook-runner.js' stop",
+      "node \"$(git rev-parse --show-toplevel)/.codex/hooks/sdd-hook-runner.mjs\" stop",
     );
+  });
+  it('escapes custom hook path segments in generated commands', () => {
+    const parsed = JSON.parse(renderCodexHooksConfig('custom/$hooks/"quoted"', root));
+    const command = parsed.hooks.SessionStart[0].hooks[0].command as string;
+
+    expect(command).toContain('custom/\\$hooks/\\"quoted\\"/sdd-hook-runner.mjs');
+    expect(command).not.toContain('custom/$hooks/"quoted"');
   });
 
   it('emits concise workflow context at session start', () => {
@@ -47,6 +54,33 @@ describe('Codex hook support', () => {
     expect(output.hookSpecificOutput.additionalContext).toContain('example: design-approved');
     expect(output.hookSpecificOutput.additionalContext.length).toBeLessThan(1000);
   });
+  it('runs a generated ESM hook from a CommonJS project subdirectory', () => {
+    fs.writeFileSync(path.join(root, 'package.json'), '{"type":"commonjs"}\n');
+    const generatedRunner = path.join(root, '.codex', 'hooks', 'sdd-hook-runner.mjs');
+    fs.mkdirSync(path.dirname(generatedRunner), { recursive: true });
+    fs.copyFileSync(runner, generatedRunner);
+
+    const specDir = path.join(root, '.spec', 'specs', 'example');
+    fs.mkdirSync(specDir, { recursive: true });
+    fs.writeFileSync(path.join(specDir, 'spec.json'), JSON.stringify({
+      feature_name: 'example',
+      phase: 'design-approved',
+    }));
+    spawnSync('git', ['init', '-q'], { cwd: root });
+    const nestedRoot = path.join(root, 'subdir');
+    fs.mkdirSync(nestedRoot);
+
+    const result = spawnSync(process.execPath, [generatedRunner, 'session-start'], {
+      cwd: nestedRoot,
+      input: '{}',
+      encoding: 'utf8',
+    });
+    const output = JSON.parse(result.stdout);
+
+    expect(result.status).toBe(0);
+    expect(output.hookSpecificOutput.additionalContext).toContain('example: design-approved');
+  });
+
 
   it('returns safe output when session state is absent', () => {
     const result = run('session-start');

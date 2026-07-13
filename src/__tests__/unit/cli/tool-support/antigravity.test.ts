@@ -158,4 +158,16 @@ describe('createAntigravitySymlinks', () => {
     });
     expect(failures[0].error).toContain('ENOTDIR');
   });
+  it('returns a failure when the .agent directory cannot be created', async () => {
+    const agentDir = path.join(tmpDir, '.agent');
+    fs.symlinkSync('/nonexistent/sdd-agent-target', agentDir, 'dir');
+
+    const failures = await createAntigravitySymlinks(tmpDir);
+
+    expect(failures).toEqual([expect.objectContaining({
+      name: '.agent',
+      path: agentDir,
+      error: expect.stringContaining('symlink'),
+    })]);
+  });
 });

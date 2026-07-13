@@ -103,6 +103,18 @@ describe('generateCodexAgentsMd', () => {
 
     consoleSpy.mockRestore();
   });
+  it('reports a directory at AGENTS.md as a failure', async () => {
+    const agentsPath = path.join(tmpDir, 'AGENTS.md');
+    fs.mkdirSync(agentsPath);
+
+    const failures = await generateCodexAgentsMd(tmpDir, managers, DEFAULT_PATHS, ALL_INSTALLED);
+
+    expect(failures).toEqual([expect.objectContaining({
+      name: 'AGENTS.md',
+      path: agentsPath,
+      error: expect.stringContaining('directory'),
+    })]);
+  });
 
   it('should handle empty component lists gracefully', async () => {
     const emptyManagers: ManagerRefs = {

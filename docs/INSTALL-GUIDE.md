@@ -58,7 +58,7 @@ npx sdd-mcp-server install --list
 | Rules | `.claude/rules/*.md` | `.codex/guidance/rules/*.md` |
 | Contexts | `.claude/contexts/*.md` | `.codex/guidance/contexts/*.md` |
 | Agents | `.claude/agents/*.md` | `.codex/agents/*.toml` |
-| Hooks | `.claude/hooks/<event>/*.md` | `.codex/hooks.json` and `.codex/hooks/sdd-hook-runner.js` |
+| Hooks | `.claude/hooks/<event>/*.md` | `.codex/hooks.json` and `.codex/hooks/sdd-hook-runner.mjs` |
 
 Codex prompt guidance is deliberately kept out of `.codex/rules/`, which is reserved for Codex command policy. Passing a Codex rules override below that directory is rejected before files are written.
 
@@ -76,6 +76,8 @@ Installed agents include model metadata selected by role:
 | TDD guide | Implementation (default) | `gpt-5.6-luna`, max effort | `sonnet` |
 
 Codex uses `gpt-5.6-luna` as the default model for routed work. High-level advisor roles override that default with `gpt-5.6-sol` at xhigh effort. `gpt-5.6-terra` remains supported but is not selected by a default SDD role. Phase skills use compact handoffs when asking the matching specialist to work, then wait for and integrate the result. When the host cannot delegate, the skill states the fallback and continues in the current agent.
+
+GPT-5.6 preview access depends on the user's eligible Codex workspace or API organization; generated files do not grant access or bypass host entitlement checks. Specialist delegation can consume more total tokens than a single-agent run because handoffs, specialist work, and result integration add work; compact handoffs reduce but do not eliminate that cost.
 See [Model Routing](MODEL-ROUTING.md) for the complete role map, generated Codex/Claude Code examples, delegation flow, and rerun behavior.
 
 ## `.gitignore` and reruns
