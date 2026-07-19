@@ -15,24 +15,30 @@ A Model Context Protocol server and target-native installer for governed Spec-Dr
 sdd-init -> requirements -> approve -> design -> approve -> tasks -> review tests -> approve -> implement
 ```
 
-## Quick start
+## New project installation
 
-Run the MCP server without a global install:
+Use this path when the repository has never had sdd-mcp-generated guidance.
+
+1. Open a terminal at the project root.
+2. Choose the host that will execute the workflow.
+3. Install the lean profile for the smallest default guidance surface, or choose `full` when the project needs target-native rules, contexts, and agents.
+
+```bash
+# Recommended explicit lean installation
+npx sdd-mcp-server@4.0.0 install --profile lean --target claude-code
+npx sdd-mcp-server@4.0.0 install --profile lean --target codex
+npx sdd-mcp-server@4.0.0 install --profile lean --target omp
+
+# Interactive full installation: choose Claude Code, Codex, or OMP
+npx sdd-mcp-server@4.0.0 install --profile full
+```
+
+Do not use `--refresh-generated` for a new project. There is no legacy generated set to replace, and a normal installation already records package ownership in `.sdd-mcp/install-manifest.json`.
+
+After installation, restart or reload the host if it does not discover new project guidance immediately. Then initialize the first feature with the installed SDD workflow. To run only the MCP server without installing project guidance:
 
 ```bash
 npx -y sdd-mcp-server@4.0.0
-```
-
-Install target-native project guidance:
-
-```bash
-# Interactive full install: choose Claude Code, Codex, or Oh My Pi
-npx sdd-mcp-server install --profile full
-
-# Explicit automation
-npx sdd-mcp-server install --target claude-code
-npx sdd-mcp-server install --target codex
-npx sdd-mcp-server install --target omp
 ```
 
 A non-interactive install without `--target` retains the compatibility default, `claude-code`, and prints a notice. `--codex` remains a deprecated Codex-only alias. `--all-tools` installs all three native targets plus Antigravity; it does not make Codex artifacts executable by OMP.
@@ -63,15 +69,27 @@ Claude Code and Codex lean profiles install skills, steering, and their supporte
 
 See [Installation Guide](docs/INSTALL-GUIDE.md) and [Model Routing](docs/MODEL-ROUTING.md).
 
-## Safe generated-file upgrades
+## Upgrade from sdd-mcp 3.x
 
-The installer records package-owned outputs in `.sdd-mcp/install-manifest.json`. An unchanged managed file upgrades automatically; a user-modified file is preserved and reported as a conflict. To migrate a legacy install:
+Use this path when the project already contains generated sdd-mcp files from an earlier release.
+
+1. Commit or otherwise preserve the current repository state.
+2. Select the v4 target that the host actually uses. Existing Claude Code and Codex projects keep their native target; an OMP project previously using Codex files must select `omp`.
+3. Run one reversible refresh:
 
 ```bash
-npx sdd-mcp-server install --target omp --refresh-generated
+# Replace <target> with claude-code, codex, or omp
+npx sdd-mcp-server@4.0.0 install \
+  --profile full \
+  --target <target> \
+  --refresh-generated
 ```
 
-The refresh command backs up selected generated files under `.sdd-mcp/backups/<timestamp>/<target>/` before rebuilding the package-owned set. It does not overwrite project source, user steering content, or unknown custom files.
+The refresh backs up selected generated files under `.sdd-mcp/backups/<timestamp>/<target>/`, removes recognized obsolete package output, and establishes `.sdd-mcp/install-manifest.json`. Project source, `.spec/specs/`, user steering, unknown files, and modified generated files remain untouched; modified files are reported as conflicts for manual review.
+
+For an OMP migration, Codex TOML agents remain preserved but are not executable OMP agents. The new native files are written under `.omp/`.
+
+After this one-time migration, use a normal install without `--refresh-generated` for subsequent v4 updates. Review any reported conflicts before deleting old target directories.
 
 ## Canonical v4 MCP runtime
 

@@ -128,13 +128,12 @@ sequenceDiagram
     end
 ```
 
-Interactive full installation offers Claude Code, Codex, and OMP. OMP lean installs skills, steering, and agents; OMP full adds rules and contexts. Use this migration for an old OMP-via-Codex layout:
+The two operator journeys are deliberately different:
 
-```bash
-npx sdd-mcp-server install --target omp --refresh-generated
-```
+- **New project:** install the chosen target with the lean or full profile and do not pass `--refresh-generated`.
+- **Upgrade from sdd-mcp 3.x:** preserve the current repository state, select the host that will execute v4, and run one `--refresh-generated` migration. Review `.sdd-mcp/backups/` and conflicts before removing old files; omit the flag on subsequent v4 updates.
 
-Codex TOML agents are never treated as executable OMP agents.
+An old OMP-via-Codex project must select `--target omp`. Codex TOML agents remain preserved but are never treated as executable OMP agents. See [INSTALL-GUIDE.md](INSTALL-GUIDE.md) for target mapping and commands.
 
 ## Runtime inventory
 

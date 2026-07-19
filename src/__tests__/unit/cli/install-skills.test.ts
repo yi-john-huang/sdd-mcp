@@ -420,7 +420,12 @@ describe('InstallSkillsCLI', () => {
       expect(help).toContain('claude-code');
       expect(help).toContain('omp');
       expect(help).toContain('--refresh-generated');
+      expect(help).toContain('New project:');
+      expect(help).toContain('Upgrade from sdd-mcp 3.x:');
+      expect(help).toContain('Do not use --refresh-generated for a new project');
+      expect(help).toContain('Subsequent v4 updates omit --refresh-generated');
     });
+
 
     it('should include multi-tool support flags', () => {
       const help = cli.getUnifiedHelp();
