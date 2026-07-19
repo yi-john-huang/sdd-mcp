@@ -118,4 +118,18 @@ describe('ContextCompactionService v4', () => {
     await symlink(outsideFile, path.join(featureRoot, 'requirements.md'));
     await expect(service.loadContext({ projectRoot, featureName })).rejects.toBeInstanceOf(SpecPathEscapeError);
   });
+  it('rejects workflow metadata belonging to a different feature directory', async () => {
+    await writeFile(path.join(featureRoot, 'spec.json'), JSON.stringify({
+      feature_name: 'different-feature',
+      approvals: {
+        requirements: { generated: false, approved: false },
+        design: { generated: false, approved: false },
+        tasks: { generated: false, approved: false },
+      },
+    }), 'utf8');
+
+    await expect(service.loadContext({ projectRoot, featureName })).rejects.toThrow(
+      'Feature metadata name does not match directory',
+    );
+  });
 });

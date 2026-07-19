@@ -25,14 +25,18 @@ export interface ResolvedSpecPaths {
   readonly featureRoot: string;
 }
 
+export function validateFeatureName(featureName: string): void {
+  if (!/^[A-Za-z0-9][A-Za-z0-9._-]*$/.test(featureName) || featureName === '.' || featureName === '..') {
+    throw new InvalidFeatureNameError(featureName);
+  }
+}
+
 /** Resolves feature paths and rejects lexical and symlink escapes before I/O. */
 export class SpecPathResolver {
   constructor(private readonly fileSystem: FileSystemPort) {}
 
   async resolve(projectRoot: string, featureName: string): Promise<ResolvedSpecPaths> {
-    if (!/^[A-Za-z0-9][A-Za-z0-9._-]*$/.test(featureName) || featureName === '.' || featureName === '..') {
-      throw new InvalidFeatureNameError(featureName);
-    }
+    validateFeatureName(featureName);
 
     const absoluteProject = path.resolve(projectRoot);
     const specsRoot = path.join(absoluteProject, '.spec', 'specs');

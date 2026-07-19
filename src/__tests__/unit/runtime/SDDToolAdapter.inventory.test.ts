@@ -32,8 +32,6 @@ describe('v4 MCP tool inventory', () => {
     dependency,
     dependency,
     dependency,
-    dependency,
-    dependency,
   );
   const tools = adapter.getSDDTools();
 
@@ -88,22 +86,24 @@ describe('v4 MCP tool inventory', () => {
 });
 
 describe('v4 disk-authoritative handler routing', () => {
-  const projectService = { listProjects: jest.fn() };
-  const workflowService = {};
-  const templateService = {};
+  const templateService = { generateDesignTemplate: jest.fn() };
   const qualityService = {};
   const steeringService = {};
   const codebaseAnalysisService = {};
-  const clarificationService = {};
+  const clarificationService = { analyzeDescription: jest.fn() };
   const contextCompactionService = { loadContext: jest.fn() };
   const workflowEngineService = {
     approve: jest.fn(),
     reviewTestCases: jest.fn(),
+    initializeFeature: jest.fn(),
+    listFeatureStatuses: jest.fn(),
+    getFeatureStatus: jest.fn(),
+    generatePhase: jest.fn(),
+    beginImplementation: jest.fn(),
+    loadProject: jest.fn(),
   };
   const logger = {};
   const adapter = new SDDToolAdapter(
-    projectService as never,
-    workflowService as never,
     templateService as never,
     qualityService as never,
     steeringService as never,
@@ -161,6 +161,61 @@ describe('v4 disk-authoritative handler routing', () => {
       phase: 'requirements',
     });
     expect(workflowEngineService.reviewTestCases).toHaveBeenCalledWith({
+      projectRoot: process.cwd(),
+      featureName: 'payments',
+    });
+  });
+
+  it('routes initialization through the guarded disk-authoritative workflow service', async () => {
+    clarificationService.analyzeDescription.mockResolvedValue({ needsClarification: false });
+    workflowEngineService.initializeFeature.mockResolvedValue({ name: 'payments' });
+
+    await expect(byName['sdd-init']({
+      projectName: 'Payments',
+      description: 'Create a bounded payment flow',
+      reviewTestCases: true,
+    })).resolves.toMatchObject({ featureName: 'payments', initialized: true });
+    expect(workflowEngineService.initializeFeature).toHaveBeenCalledWith({
+      projectRoot: process.cwd(),
+      featureName: 'payments',
+      language: 'en',
+      reviewTestCases: true,
+    });
+  });
+
+  it('routes every workflow and project lookup through disk-authoritative services', async () => {
+    workflowEngineService.listFeatureStatuses.mockResolvedValue([{ featureName: 'payments' }]);
+    workflowEngineService.getFeatureStatus.mockResolvedValue({ featureName: 'payments', currentPhase: 'init' });
+    workflowEngineService.generatePhase.mockResolvedValue('generated');
+    workflowEngineService.beginImplementation.mockResolvedValue({ featureName: 'payments', ready: true });
+    workflowEngineService.loadProject.mockResolvedValue({ name: 'payments' });
+    templateService.generateDesignTemplate.mockResolvedValue('# Design');
+
+    await expect(byName['sdd-status']({})).resolves.toEqual({ features: [{ featureName: 'payments' }] });
+    await expect(byName['sdd-status']({ featureName: 'payments' })).resolves.toMatchObject({ featureName: 'payments' });
+    await expect(byName['sdd-requirements']({ featureName: 'payments' })).resolves.toBe('generated');
+    await expect(byName['sdd-design']({ featureName: 'payments' })).resolves.toBe('generated');
+    await expect(byName['sdd-tasks']({ featureName: 'payments', reviewTestCases: true })).resolves.toBe('generated');
+    await expect(byName['sdd-implement']({ featureName: 'payments' })).resolves.toMatchObject({ ready: true });
+    await expect(byName['sdd-template-render']({ featureName: 'payments', templateType: 'design' })).resolves.toMatchObject({
+      featureName: 'payments',
+      content: '# Design',
+    });
+
+    expect(workflowEngineService.listFeatureStatuses).toHaveBeenCalledWith({ projectRoot: process.cwd() });
+    expect(workflowEngineService.getFeatureStatus).toHaveBeenCalledWith({ projectRoot: process.cwd(), featureName: 'payments' });
+    expect(workflowEngineService.generatePhase).toHaveBeenNthCalledWith(1, {
+      projectRoot: process.cwd(),
+      featureName: 'payments',
+      phase: 'requirements',
+    });
+    expect(workflowEngineService.generatePhase).toHaveBeenNthCalledWith(3, {
+      projectRoot: process.cwd(),
+      featureName: 'payments',
+      phase: 'tasks',
+      reviewTestCases: true,
+    });
+    expect(workflowEngineService.loadProject).toHaveBeenCalledWith({
       projectRoot: process.cwd(),
       featureName: 'payments',
     });

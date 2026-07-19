@@ -1,7 +1,7 @@
 # Product Overview
 
 ## Description
-SDD MCP Server is a Model Context Protocol server and companion CLI for running spec-driven development workflows across AI-agent CLIs and IDEs such as Claude Code and Cursor.
+SDD MCP Server is a Model Context Protocol server and companion CLI for running spec-driven development workflows across AI-agent hosts including Claude Code, Codex, Oh My Pi (OMP), and compatible MCP clients.
 
 The project packages workflow tools, agent skills, steering documents, rules, contexts, agents, and hooks so teams can move from project intent to requirements, design, tasks, implementation, review, and commit guidance with consistent governance.
 
@@ -16,9 +16,9 @@ Make disciplined spec-driven development practical inside AI-assisted engineerin
 ## Core Features
 1. MCP workflow tools - Initialize specs, inspect status, approve phases, validate design/gaps, run quality checks, and execute spec implementation.
 2. Agent skills - On-demand guidance for requirements, design, tasks, implementation, steering, simple tasks, review, security checks, tests, and commits.
-3. Target-aware component installer - Selects Codex or Claude Code, renders native skills, guidance, agents, and hooks, and supports lean/full profiles with preserve-first writes.
-4. Approval workflow - Enforces requirements, design, and tasks approval before implementation, with an optional TDD test-case review checkpoint.
-5. Context management - Generates compact handoff summaries after phase approvals and supports compact, standard, and full context loading modes.
+3. Target-aware component installer - Selects Claude Code, Codex, or OMP; renders only native skills, scoped guidance, agents, and supported hooks; and supports lean/full profiles with managed preserve-first upgrades.
+4. Approval workflow - Uses disk-authoritative, atomic requirements, design, and tasks approvals with an optional durable TDD test-case review checkpoint.
+5. Context management - Returns bounded phase-aware compact, standard, or full context with deterministic fingerprints, canonical ETag reuse, and restart-safe cache repair.
 6. Quality and security guidance - Includes Linus-style review, OWASP-oriented checks, TDD guidance, and project-specific steering.
 7. Migration utilities - Supports migration from legacy `.kiro` and static steering layouts into the current `.spec` and component architecture.
 
@@ -32,7 +32,7 @@ Make disciplined spec-driven development practical inside AI-assisted engineerin
 ## Success Metrics
 - Users can complete SDD phases with fewer full-context reloads and fewer repeated steering reads.
 - Default install profile keeps always-on guidance small while preserving full install options for teams that need them.
-- Codex and Claude Code installs contain only their selected native artifacts and apply the documented role/model policy.
+- Claude Code, Codex, and OMP installs contain only their selected native artifacts and apply the documented role/model policy.
 - New workflow tools and skills are covered by focused unit tests and type checks.
 - README, package version examples, and install behavior stay aligned for published releases.
 - Context handoff summaries produce meaningful reductions compared with loading all source spec documents.

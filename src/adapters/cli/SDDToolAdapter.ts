@@ -3,8 +3,6 @@
 import { injectable, inject } from "inversify";
 import { Tool } from "@modelcontextprotocol/sdk/types.js";
 import { TYPES } from "../../infrastructure/di/types.js";
-import { ProjectService } from "../../application/services/ProjectService.js";
-import { WorkflowService } from "../../application/services/WorkflowService.js";
 import { TemplateService } from "../../application/services/TemplateService.js";
 import { QualityService } from "../../application/services/QualityService.js";
 import { SteeringDocumentService } from "../../application/services/SteeringDocumentService.js";
@@ -13,7 +11,7 @@ import { RequirementsClarificationService } from "../../application/services/Req
 import { ContextCompactionService, ContextLoadMode } from "../../application/services/ContextCompactionService.js";
 import { WorkflowEngineService } from "../../application/services/WorkflowEngineService.js";
 import { LoggerPort } from "../../domain/ports.js";
-import { Project, WorkflowPhase, ClarificationAnswers } from "../../domain/types.js";
+import { Project, ClarificationAnswers } from "../../domain/types.js";
 import { ensureStaticSteeringDocuments } from "../../application/services/staticSteering.js";
 import {
   SDD_TOOL_DEFINITIONS,
@@ -32,10 +30,6 @@ export interface SDDToolHandler {
 @injectable()
 export class SDDToolAdapter {
   constructor(
-    @inject(TYPES.ProjectService)
-    private readonly projectService: ProjectService,
-    @inject(TYPES.WorkflowService)
-    private readonly workflowService: WorkflowService,
     @inject(TYPES.TemplateService)
     private readonly templateService: TemplateService,
     @inject(TYPES.QualityService)
@@ -156,21 +150,12 @@ export class SDDToolAdapter {
       }
     }
 
-    // Create project with enriched description
-    const project = await this.projectService.createProject(
+    await this.workflowEngineService.initializeFeature({
+      projectRoot: currentPath,
       featureName,
-      currentPath,
-      "en",
-      { reviewTestCases: reviewTestCases === true },
-    );
-
-    // Generate initial spec.json
-    const specContent = await this.templateService.generateSpecJson(project);
-    await this.templateService.writeProjectFile(
-      project,
-      "spec.json",
-      specContent,
-    );
+      language: "en",
+      reviewTestCases: reviewTestCases === true,
+    });
 
     const clarificationNote = clarificationAnswers
       ? "\n\n✅ Requirements Clarification: Your answers have been incorporated into an enriched project description."
@@ -216,15 +201,10 @@ export class SDDToolAdapter {
   }
 
   private async requireFeatureProject(featureName: unknown): Promise<Project> {
-    if (typeof featureName !== "string" || featureName.length === 0) {
-      throw new Error("Invalid argument: featureName must be a non-empty string");
-    }
-    const projects = await this.projectService.listProjects();
-    const project = projects.find((candidate) => candidate.name === featureName);
-    if (!project) {
-      throw new Error(`Feature not found: ${featureName}`);
-    }
-    return project;
+    return this.workflowEngineService.loadProject({
+      projectRoot: process.cwd(),
+      featureName: this.requireFeatureName(featureName),
+    });
   }
   private requireFeatureName(featureName: unknown): string {
     if (typeof featureName !== "string" || featureName.length === 0) {
@@ -239,162 +219,53 @@ export class SDDToolAdapter {
   ): Promise<unknown> {
     const { featureName } = args;
     if (featureName === undefined) {
-      const projects = await this.projectService.listProjects();
-      return {
-        features: projects.map((project) => ({
-          featureName: project.name,
-          phase: project.phase,
-        })),
-      };
+      const features = await this.workflowEngineService.listFeatureStatuses({
+        projectRoot: process.cwd(),
+      });
+      return { features };
     }
-
-    const project = await this.requireFeatureProject(featureName);
-    const status = await this.workflowService.getWorkflowStatus(project.id);
-    if (!status) {
-      throw new Error(`Unable to get workflow status for ${project.name}`);
-    }
-    return {
-      featureName: project.name,
-      currentPhase: status.currentPhase,
-      nextPhase: status.nextPhase ?? null,
-      canProgress: status.canProgress,
-      blockers: status.blockers ?? [],
-      testCases: project.metadata.checkpoints?.testCases,
-    };
+    return this.workflowEngineService.getFeatureStatus({
+      projectRoot: process.cwd(),
+      featureName: this.requireFeatureName(featureName),
+    });
   }
 
   private async handleRequirements(
     args: Record<string, unknown>,
   ): Promise<string> {
-    const project = await this.requireFeatureProject(args.featureName);
-    const projectId = project.id;
-
-    // Check if can transition to requirements phase
-    const validation = await this.workflowService.validatePhaseTransition(
-      projectId,
-      WorkflowPhase.REQUIREMENTS,
-    );
-
-    if (!validation.canProgress) {
-      throw new Error(`Cannot generate requirements: ${validation.reason}`);
-    }
-
-    // Generate requirements template
-    const content =
-      await this.templateService.generateRequirementsTemplate(project);
-    await this.templateService.writeProjectFile(
-      project,
-      "requirements.md",
-      content,
-    );
-
-    // Update project phase and approval status
-    await this.projectService.updateProjectPhase(
-      projectId,
-      WorkflowPhase.REQUIREMENTS,
-    );
-    const updatedProject = await this.projectService.updateApprovalStatus(projectId, "requirements", {
-      generated: true,
-      approved: false,
+    return this.workflowEngineService.generatePhase({
+      projectRoot: process.cwd(),
+      featureName: this.requireFeatureName(args.featureName),
+      phase: "requirements",
     });
-    const specContent = await this.templateService.generateSpecJson(updatedProject);
-    await this.templateService.writeProjectFile(updatedProject, "spec.json", specContent);
-
-    return `Requirements document generated for project "${project.name}"`;
   }
 
   private async handleDesign(args: Record<string, unknown>): Promise<string> {
-    const project = await this.requireFeatureProject(args.featureName);
-    const projectId = project.id;
-
-    // Check if can transition to design phase
-    const validation = await this.workflowService.validatePhaseTransition(
-      projectId,
-      WorkflowPhase.DESIGN,
-    );
-
-    if (!validation.canProgress) {
-      throw new Error(`Cannot generate design: ${validation.reason}`);
-    }
-
-    // Generate design template
-    const content = await this.templateService.generateDesignTemplate(project);
-    await this.templateService.writeProjectFile(project, "design.md", content);
-
-    // Update project phase and approval status
-    await this.projectService.updateProjectPhase(
-      projectId,
-      WorkflowPhase.DESIGN,
-    );
-    const updatedProject = await this.projectService.updateApprovalStatus(projectId, "design", {
-      generated: true,
-      approved: false,
+    return this.workflowEngineService.generatePhase({
+      projectRoot: process.cwd(),
+      featureName: this.requireFeatureName(args.featureName),
+      phase: "design",
     });
-    const specContent = await this.templateService.generateSpecJson(updatedProject);
-    await this.templateService.writeProjectFile(updatedProject, "spec.json", specContent);
-
-    return `Design document generated for project "${project.name}"`;
   }
 
   private async handleTasks(args: Record<string, unknown>): Promise<string> {
-    const { reviewTestCases } = args;
-    const project = await this.requireFeatureProject(args.featureName);
-    const projectId = project.id;
-
-    // Check if can transition to tasks phase
-    const validation = await this.workflowService.validatePhaseTransition(
-      projectId,
-      WorkflowPhase.TASKS,
-    );
-
-    if (!validation.canProgress) {
-      throw new Error(`Cannot generate tasks: ${validation.reason}`);
+    const reviewTestCases = args.reviewTestCases;
+    if (reviewTestCases !== undefined && typeof reviewTestCases !== "boolean") {
+      throw new Error("Invalid argument: reviewTestCases must be a boolean");
     }
-
-    // Generate tasks template
-    const content = await this.templateService.generateTasksTemplate(project);
-    await this.templateService.writeProjectFile(project, "tasks.md", content);
-
-    if (typeof reviewTestCases === "boolean") {
-      await this.projectService.updateTestCaseReviewCheckpoint(projectId, {
-        required: reviewTestCases,
-        reviewed: !reviewTestCases,
-      });
-    }
-
-    // Update project phase and approval status
-    await this.projectService.updateProjectPhase(
-      projectId,
-      WorkflowPhase.TASKS,
-    );
-    const updatedProject = await this.projectService.updateApprovalStatus(projectId, "tasks", {
-      generated: true,
-      approved: false,
+    return this.workflowEngineService.generatePhase({
+      projectRoot: process.cwd(),
+      featureName: this.requireFeatureName(args.featureName),
+      phase: "tasks",
+      reviewTestCases: reviewTestCases as boolean | undefined,
     });
-    const specContent = await this.templateService.generateSpecJson(updatedProject);
-    await this.templateService.writeProjectFile(updatedProject, "spec.json", specContent);
-
-    return `Tasks document generated for project "${project.name}"`;
   }
 
   private async handleImplement(args: Record<string, unknown>): Promise<unknown> {
-    const project = await this.requireFeatureProject(args.featureName);
-    const validation = await this.workflowService.validatePhaseTransition(
-      project.id,
-      WorkflowPhase.IMPLEMENTATION,
-    );
-    if (!validation.canProgress) {
-      throw new Error(`Cannot begin implementation: ${validation.reason}`);
-    }
-    const updated = await this.projectService.updateProjectPhase(
-      project.id,
-      WorkflowPhase.IMPLEMENTATION,
-    );
-    return {
-      featureName: updated.name,
-      phase: updated.phase,
-      ready: true,
-    };
+    return this.workflowEngineService.beginImplementation({
+      projectRoot: process.cwd(),
+      featureName: this.requireFeatureName(args.featureName),
+    });
   }
 
   private async handleApprove(args: Record<string, unknown>): Promise<unknown> {

@@ -1,26 +1,19 @@
 import path from 'node:path';
 import { injectable, inject } from 'inversify';
-import { v4 as uuidv4 } from 'uuid';
 import { TYPES } from '../../infrastructure/di/types.js';
-import { 
-  Project, 
-  WorkflowPhase, 
-  PhaseApprovals 
+import {
+  Project,
+  WorkflowPhase,
 } from '../../domain/types.js';
 import {
   ProjectRepository,
   LoggerPort,
-  ValidationPort,
   FileSystemPort,
 } from '../../domain/ports.js';
-import { 
-  WorkflowStateMachine, 
-  WorkflowAuditEntry 
-} from '../../domain/workflow/WorkflowStateMachine.js';
 import { ProjectService } from './ProjectService.js';
 import { TemplateService } from './TemplateService.js';
-import { ContextCompactionService, HandoffResult, ApprovablePhase } from './ContextCompactionService.js';
-import { SpecPathResolver } from './SpecPathResolver.js';
+import { ContextCompactionService, ApprovablePhase } from './ContextCompactionService.js';
+import { SpecPathResolver, validateFeatureName } from './SpecPathResolver.js';
 
 export interface ApprovalRequest {
   readonly projectRoot: string;
@@ -62,24 +55,34 @@ export interface ReviewTestCasesResult {
   readonly handoff: HandoffPublication;
 }
 
-export interface WorkflowProgressionResult {
-  success: boolean;
-  updatedProject?: Project;
-  message: string;
-  auditEntry?: WorkflowAuditEntry;
-  nextSteps?: string[];
+
+export interface FeatureRequest {
+  readonly projectRoot: string;
+  readonly featureName: string;
 }
 
-export interface WorkflowRollbackResult {
-  success: boolean;
-  updatedProject?: Project;
-  message: string;
-  auditEntry?: WorkflowAuditEntry;
+export interface InitializeFeatureRequest extends FeatureRequest {
+  readonly language: string;
+  readonly reviewTestCases: boolean;
+}
+
+export interface GeneratePhaseRequest extends FeatureRequest {
+  readonly phase: ApprovablePhase;
+  readonly reviewTestCases?: boolean;
+}
+
+export interface DurableFeatureStatus {
+  readonly featureName: string;
+  readonly phase: WorkflowPhase;
+  readonly currentPhase?: WorkflowPhase;
+  readonly nextPhase?: WorkflowPhase;
+  readonly canProgress?: boolean;
+  readonly blockers?: string[];
+  readonly testCases?: { required: boolean; reviewed: boolean };
 }
 
 @injectable()
 export class WorkflowEngineService {
-  private readonly stateMachine: WorkflowStateMachine;
   private static readonly featureLocks = new Map<string, Promise<void>>();
 
   constructor(
@@ -88,11 +91,8 @@ export class WorkflowEngineService {
     @inject(TYPES.TemplateService) private readonly templateService: TemplateService,
     @inject(TYPES.ContextCompactionService) private readonly contextCompactionService: ContextCompactionService,
     @inject(TYPES.LoggerPort) private readonly logger: LoggerPort,
-    @inject(TYPES.ValidationPort) private readonly validation: ValidationPort,
     @inject(TYPES.FileSystemPort) private readonly fileSystem?: FileSystemPort,
-  ) {
-    this.stateMachine = new WorkflowStateMachine();
-  }
+  ) {}
 
   async approve(request: ApprovalRequest): Promise<ApprovalResult> {
     return this.withFeatureLock(request.projectRoot, request.featureName, async () => {
@@ -205,434 +205,317 @@ export class WorkflowEngineService {
     });
   }
 
-  async progressToNextPhase(
-    projectId: string, 
-    triggeredBy: string
-  ): Promise<WorkflowProgressionResult> {
-    const correlationId = uuidv4();
-    
-    this.logger.info('Progressing project to next phase', {
-      correlationId,
-      projectId,
-      triggeredBy
-    });
-
-    const project = await this.projectRepository.findById(projectId);
-    if (!project) {
-      return {
-        success: false,
-        message: `Project not found: ${projectId}`
-      };
-    }
-
-    const nextPhase = this.stateMachine.getNextPhase(project.phase);
-    if (!nextPhase) {
-      return {
-        success: false,
-        message: `Project is already at final phase: ${project.phase}`
-      };
-    }
-
-    return await this.transitionToPhase(projectId, nextPhase, triggeredBy);
-  }
-
-  async transitionToPhase(
-    projectId: string, 
-    targetPhase: WorkflowPhase, 
-    triggeredBy: string
-  ): Promise<WorkflowProgressionResult> {
-    const correlationId = uuidv4();
-    
-    this.logger.info('Transitioning project to phase', {
-      correlationId,
-      projectId,
-      targetPhase,
-      triggeredBy
-    });
-
-    const project = await this.projectRepository.findById(projectId);
-    if (!project) {
-      return {
-        success: false,
-        message: `Project not found: ${projectId}`
-      };
-    }
-
-    if (project.phase === targetPhase) {
-      return {
-        success: true,
-        updatedProject: project,
-        message: `Project is already in ${targetPhase} phase`
-      };
-    }
-
-    const result = await this.stateMachine.executeTransition(
-      project, 
-      targetPhase, 
-      triggeredBy
-    );
-
-    if (!result.success) {
-      this.logger.warn('Phase transition failed', {
-        correlationId,
-        projectId,
-        fromPhase: project.phase,
-        targetPhase,
-        error: result.error
-      });
-
-      return {
-        success: false,
-        message: result.error || 'Phase transition failed',
-        auditEntry: result.auditEntry
-      };
-    }
-
-    // Save updated project
-    if (result.updatedProject) {
-      await this.projectRepository.save(result.updatedProject);
-      
-      // Generate phase-specific deliverables if needed
-      await this.generatePhaseDeliverables(result.updatedProject, targetPhase);
-    }
-
-    this.logger.info('Phase transition completed successfully', {
-      correlationId,
-      projectId,
-      fromPhase: project.phase,
-      targetPhase
-    });
-
-    const nextSteps = this.getNextSteps(result.updatedProject || project, targetPhase);
-
-    return {
-      success: true,
-      updatedProject: result.updatedProject,
-      message: `Project successfully transitioned to ${targetPhase} phase`,
-      auditEntry: result.auditEntry,
-      nextSteps
-    };
-  }
-
-  async rollbackToPreviousPhase(
-    projectId: string, 
-    triggeredBy: string
-  ): Promise<WorkflowRollbackResult> {
-    const correlationId = uuidv4();
-    
-    this.logger.info('Rolling back project to previous phase', {
-      correlationId,
-      projectId,
-      triggeredBy
-    });
-
-    const project = await this.projectRepository.findById(projectId);
-    if (!project) {
-      return {
-        success: false,
-        message: `Project not found: ${projectId}`
-      };
-    }
-
-    const previousPhase = this.stateMachine.getPreviousPhase(project.phase);
-    if (!previousPhase) {
-      return {
-        success: false,
-        message: `Project is already at initial phase: ${project.phase}`
-      };
-    }
-
-    const result = await this.stateMachine.executeTransition(
-      project, 
-      previousPhase, 
-      triggeredBy
-    );
-
-    if (!result.success) {
-      this.logger.warn('Phase rollback failed', {
-        correlationId,
-        projectId,
-        fromPhase: project.phase,
-        targetPhase: previousPhase,
-        error: result.error
-      });
-
-      return {
-        success: false,
-        message: result.error || 'Phase rollback failed',
-        auditEntry: result.auditEntry
-      };
-    }
-
-    // Save updated project
-    if (result.updatedProject) {
-      await this.projectRepository.save(result.updatedProject);
-      
-      // Reset approvals for rolled back phase
-      await this.resetPhaseApprovals(result.updatedProject, project.phase);
-    }
-
-    this.logger.info('Phase rollback completed successfully', {
-      correlationId,
-      projectId,
-      fromPhase: project.phase,
-      targetPhase: previousPhase
-    });
-
-    return {
-      success: true,
-      updatedProject: result.updatedProject,
-      message: `Project rolled back to ${previousPhase} phase`,
-      auditEntry: result.auditEntry
-    };
-  }
-
-  async updateApprovalStatus(
-    projectId: string, 
-    phase: keyof PhaseApprovals, 
-    approval: Partial<{ generated: boolean; approved: boolean }>,
-    triggeredBy: string
-  ): Promise<{
-    success: boolean;
-    updatedProject?: Project;
-    message: string;
-    canProgressToNext?: boolean;
-  }> {
-    const correlationId = uuidv4();
-    
-    this.logger.info('Updating approval status', {
-      correlationId,
-      projectId,
-      phase,
-      approval,
-      triggeredBy
-    });
-
-    const updatedProject = await this.projectService.updateApprovalStatus(
-      projectId, 
-      phase, 
-      approval
-    );
-
-    // Update spec.json file
-    const specContent = await this.templateService.generateSpecJson(updatedProject);
-    await this.templateService.writeProjectFile(updatedProject, 'spec.json', specContent);
-
-    let handoffResult: HandoffResult | undefined;
-    if (approval.approved) {
-      handoffResult = await this.contextCompactionService.generatePhaseHandoff(updatedProject, phase);
-    }
-
-    // Check if project can progress to next phase
-    const nextPhase = this.stateMachine.getNextPhase(updatedProject.phase);
-    let canProgressToNext = false;
-
-    if (nextPhase) {
-      const validation = this.stateMachine.canTransition(updatedProject, nextPhase);
-      canProgressToNext = validation.allowed;
-    }
-
-    const message = approval.approved 
-      ? `${phase} phase approved and ready for progression`
-      : `${phase} phase approval status updated`;
-    const messageWithHandoff = handoffResult
-      ? `${message}. Compact handoff: ${handoffResult.path} (${handoffResult.estimate.reductionPercentage}% estimated context reduction, ~${handoffResult.estimate.sourceTokens} -> ~${handoffResult.estimate.compactTokens} tokens)`
-      : message;
-
-    this.logger.info('Approval status updated successfully', {
-      correlationId,
-      projectId,
-      phase,
-      canProgressToNext
-    });
-
-    return {
-      success: true,
-      updatedProject,
-      message: messageWithHandoff,
-      canProgressToNext
-    };
-  }
-
-  async getWorkflowStatus(projectId: string): Promise<{
-    project: Project;
-    progress: ReturnType<WorkflowStateMachine['getPhaseProgress']>;
-    auditTrail: WorkflowAuditEntry[];
-    integrity: ReturnType<WorkflowStateMachine['validateWorkflowIntegrity']>;
-    validTransitions: WorkflowPhase[];
-  } | null> {
-    const project = await this.projectRepository.findById(projectId);
-    if (!project) {
-      return null;
-    }
-
-    return {
-      project,
-      progress: this.stateMachine.getPhaseProgress(project),
-      auditTrail: this.stateMachine.getAuditTrail(projectId),
-      integrity: this.stateMachine.validateWorkflowIntegrity(project),
-      validTransitions: this.stateMachine.getValidTransitions(project.phase)
-    };
-  }
-
-  async validateWorkflowState(projectId: string): Promise<{
-    isValid: boolean;
-    violations: string[];
-    recommendations: string[];
-    canProgress: boolean;
-    nextPhase?: WorkflowPhase;
-  }> {
-    const status = await this.getWorkflowStatus(projectId);
-    if (!status) {
-      return {
-        isValid: false,
-        violations: ['Project not found'],
-        recommendations: [],
-        canProgress: false
-      };
-    }
-
-    const integrity = status.integrity;
-    const progress = status.progress;
-
-    return {
-      isValid: integrity.isValid,
-      violations: integrity.violations,
-      recommendations: integrity.recommendations,
-      canProgress: progress.canProgress,
-      nextPhase: progress.nextPhase
-    };
-  }
-
-  private async generatePhaseDeliverables(
-    project: Project, 
-    phase: WorkflowPhase
-  ): Promise<void> {
-    try {
-      switch (phase) {
-        case WorkflowPhase.REQUIREMENTS:
-          if (!project.metadata.approvals.requirements.generated) {
-            const content = await this.templateService.generateRequirementsTemplate(project);
-            await this.templateService.writeProjectFile(project, 'requirements.md', content);
-            await this.projectService.updateApprovalStatus(
-              project.id, 
-              'requirements', 
-              { generated: true }
-            );
-          }
-          break;
-
-        case WorkflowPhase.DESIGN:
-          if (!project.metadata.approvals.design.generated) {
-            const content = await this.templateService.generateDesignTemplate(project);
-            await this.templateService.writeProjectFile(project, 'design.md', content);
-            await this.projectService.updateApprovalStatus(
-              project.id, 
-              'design', 
-              { generated: true }
-            );
-          }
-          break;
-
-        case WorkflowPhase.TASKS:
-          if (!project.metadata.approvals.tasks.generated) {
-            const content = await this.templateService.generateTasksTemplate(project);
-            await this.templateService.writeProjectFile(project, 'tasks.md', content);
-            await this.projectService.updateApprovalStatus(
-              project.id, 
-              'tasks', 
-              { generated: true }
-            );
-          }
-          break;
+  async initializeFeature(request: InitializeFeatureRequest): Promise<Project> {
+    return this.withFeatureLock(request.projectRoot, request.featureName, async () => {
+      if (!this.fileSystem) throw new Error('FileSystemPort is required for disk-addressed workflow operations');
+      validateFeatureName(request.featureName);
+      const absoluteProject = path.resolve(request.projectRoot);
+      const resolver = new SpecPathResolver(this.fileSystem);
+      const canonicalProject = this.fileSystem.realpath
+        ? await this.fileSystem.realpath(absoluteProject)
+        : absoluteProject;
+      await resolver.assertContained(canonicalProject, path.join(canonicalProject, '.spec'));
+      await this.fileSystem.mkdir(path.join(canonicalProject, '.spec', 'specs'));
+      const resolved = await resolver.resolve(canonicalProject, request.featureName);
+      if (await this.fileSystem.exists(resolved.featureRoot)) {
+        throw new Error(`Feature already exists: ${request.featureName}`);
       }
-    } catch (error) {
-      this.logger.error('Failed to generate phase deliverables', error as Error, {
-        projectId: project.id,
-        phase
-      });
-    }
-  }
 
-  private async resetPhaseApprovals(
-    project: Project, 
-    rolledBackFromPhase: WorkflowPhase
-  ): Promise<void> {
-    // Reset approvals for the phase we're rolling back from
-    const resetApprovals: Partial<Record<keyof PhaseApprovals, Partial<{ generated: boolean; approved: boolean }>>> = {};
-
-    switch (rolledBackFromPhase) {
-      case WorkflowPhase.REQUIREMENTS:
-        resetApprovals.requirements = { approved: false };
-        break;
-      case WorkflowPhase.DESIGN:
-        resetApprovals.design = { approved: false };
-        break;
-      case WorkflowPhase.TASKS:
-        resetApprovals.tasks = { approved: false };
-        break;
-      case WorkflowPhase.IMPLEMENTATION:
-        // No approvals to reset for implementation phase
-        break;
-    }
-
-    for (const [phase, approval] of Object.entries(resetApprovals)) {
-      await this.projectService.updateApprovalStatus(
-        project.id, 
-        phase as keyof PhaseApprovals, 
-        approval as Partial<{ generated: boolean; approved: boolean }>
+      const project = await this.projectService.createProject(
+        request.featureName,
+        resolved.projectRoot,
+        request.language,
+        { reviewTestCases: request.reviewTestCases },
       );
+      try {
+        const rendered = await this.templateService.generateSpecJson(project);
+        const parsed = JSON.parse(rendered) as Record<string, unknown>;
+        await this.writeSpecAtomic(path.join(resolved.featureRoot, 'spec.json'), parsed);
+        return project;
+      } catch (error) {
+        await this.projectRepository.delete(project.id);
+        throw error;
+      }
+    });
+  }
+
+  async listFeatureStatuses(request: { readonly projectRoot: string }): Promise<DurableFeatureStatus[]> {
+    if (!this.fileSystem) throw new Error('FileSystemPort is required for disk-addressed workflow operations');
+    const absoluteProject = path.resolve(request.projectRoot);
+    const specsRoot = path.join(absoluteProject, '.spec', 'specs');
+    if (!(await this.fileSystem.exists(specsRoot))) return [];
+    const resolver = new SpecPathResolver(this.fileSystem);
+    await resolver.assertContained(absoluteProject, specsRoot);
+    const names = (await this.fileSystem.readdir(specsRoot)).sort();
+    const results: DurableFeatureStatus[] = [];
+    for (const featureName of names) {
+      const candidate = path.join(specsRoot, featureName);
+      const stat = await this.fileSystem.stat(candidate);
+      if (!stat.isDirectory()) continue;
+      const project = await this.loadProject({ projectRoot: absoluteProject, featureName });
+      results.push({ featureName: project.name, phase: project.phase });
+    }
+    return results;
+  }
+
+  async getFeatureStatus(request: FeatureRequest): Promise<DurableFeatureStatus> {
+    const { projectRoot, spec } = await this.readDiskSpec(request.projectRoot, request.featureName);
+    const project = await this.hydrateProject(projectRoot, request.featureName, spec);
+    const approvals = this.readApprovals(spec);
+    const review = this.readReviewState(spec);
+    const progression = this.resolveProgression(approvals, review, project.phase);
+    return {
+      featureName: project.name,
+      phase: project.phase,
+      currentPhase: project.phase,
+      nextPhase: progression.nextPhase,
+      canProgress: progression.nextPhase !== undefined && progression.blockers.length === 0,
+      blockers: progression.blockers,
+      testCases: review,
+    };
+  }
+
+  async loadProject(request: FeatureRequest): Promise<Project> {
+    const { projectRoot, spec } = await this.readDiskSpec(request.projectRoot, request.featureName);
+    return this.hydrateProject(projectRoot, request.featureName, spec);
+  }
+
+  async generatePhase(request: GeneratePhaseRequest): Promise<string> {
+    return this.withFeatureLock(request.projectRoot, request.featureName, async () => {
+      const fileSystem = this.requireAtomicFileSystem();
+      const { projectRoot, featureRoot, specPath, spec } = await this.readDiskSpec(
+        request.projectRoot,
+        request.featureName,
+      );
+      const approvals = this.readApprovals(spec);
+      this.assertPhaseCanBeGenerated(request.phase, approvals);
+      const project = await this.hydrateProject(projectRoot, request.featureName, spec);
+      const content = await this.renderPhase(project, request.phase);
+      await this.persistPhaseDocument(
+        fileSystem,
+        featureRoot,
+        request.phase,
+        content,
+        approvals[request.phase].generated,
+      );
+      const prospective = this.buildGeneratedSpec(spec, request);
+      await this.writeSpecAtomic(specPath, prospective);
+      await this.synchronizeRepository(featureRoot, this.readApprovals(prospective));
+      return `${this.phaseTitle(request.phase)} document generated for project "${request.featureName}"`;
+    });
+  }
+
+  async beginImplementation(request: FeatureRequest): Promise<{
+    readonly featureName: string;
+    readonly phase: WorkflowPhase;
+    readonly ready: true;
+  }> {
+    return this.withFeatureLock(request.projectRoot, request.featureName, async () => {
+      const { featureRoot, specPath, spec } = await this.readDiskSpec(request.projectRoot, request.featureName);
+      const approvals = this.readApprovals(spec);
+      const review = this.readReviewState(spec);
+      if (!approvals.tasks.approved) throw new Error('Cannot begin implementation: tasks are not approved');
+      if (review.required && !review.reviewed) {
+        throw new Error('Cannot begin implementation: test-case review is required');
+      }
+      if (spec.phase === WorkflowPhase.IMPLEMENTATION && spec.ready_for_implementation === true) {
+        return { featureName: request.featureName, phase: WorkflowPhase.IMPLEMENTATION, ready: true };
+      }
+      const prospective = {
+        ...spec,
+        updated_at: new Date().toISOString(),
+        phase: WorkflowPhase.IMPLEMENTATION,
+        ready_for_implementation: true,
+      };
+      await this.writeSpecAtomic(specPath, prospective);
+      await this.synchronizeRepository(featureRoot, approvals);
+      return { featureName: request.featureName, phase: WorkflowPhase.IMPLEMENTATION, ready: true };
+    });
+  }
+
+  private requireAtomicFileSystem(): FileSystemPort & {
+    writeFileAtomic(filePath: string, content: string): Promise<void>;
+  } {
+    if (!this.fileSystem?.writeFileAtomic) {
+      throw new Error('FileSystemPort.writeFileAtomic is required for workflow persistence');
+    }
+    return this.fileSystem as FileSystemPort & {
+      writeFileAtomic(filePath: string, content: string): Promise<void>;
+    };
+  }
+
+  private assertPhaseCanBeGenerated(
+    phase: ApprovablePhase,
+    approvals: Record<ApprovablePhase, { generated: boolean; approved: boolean }>,
+  ): void {
+    const phases = ['requirements', 'design', 'tasks'] as ApprovablePhase[];
+    for (const prior of phases.slice(0, phases.indexOf(phase))) {
+      if (!approvals[prior].approved) {
+        throw new Error(`Cannot generate ${phase}: ${prior} is not approved`);
+      }
+    }
+    if (approvals[phase].approved) {
+      throw new Error(`Cannot generate ${phase}: phase is already approved`);
     }
   }
 
-  private getNextSteps(project: Project, currentPhase: WorkflowPhase): string[] {
-    const steps: string[] = [];
-
-    switch (currentPhase) {
-      case WorkflowPhase.INIT:
-        steps.push('Run sdd-requirements to generate requirements document');
-        break;
-
-      case WorkflowPhase.REQUIREMENTS:
-        if (!project.metadata.approvals.requirements.approved) {
-          steps.push('Review and approve requirements document');
-          steps.push('Run sdd-design after requirements approval');
-        } else {
-          steps.push('Run sdd-design to generate technical design');
-        }
-        break;
-
-      case WorkflowPhase.DESIGN:
-        if (!project.metadata.approvals.design.approved) {
-          steps.push('Review and approve design document');
-          steps.push('Run sdd-tasks after design approval');
-        } else {
-          steps.push('Run sdd-tasks to generate implementation tasks');
-        }
-        break;
-
-      case WorkflowPhase.TASKS:
-        if (!project.metadata.approvals.tasks.approved) {
-          steps.push('Review and approve task breakdown');
-          if (project.metadata.checkpoints?.testCases.required && !project.metadata.checkpoints.testCases.reviewed) {
-            steps.push('Review TDD test cases and run sdd-review-test-cases');
-          }
-          steps.push('Begin implementation after tasks approval');
-        } else {
-          steps.push('Begin implementation following the task breakdown');
-          steps.push('Use sdd-quality-check for code reviews');
-        }
-        break;
-
-      case WorkflowPhase.IMPLEMENTATION:
-        steps.push('Continue implementation following approved tasks');
-        steps.push('Use sdd-quality-check for ongoing code quality');
-        steps.push('Update task completion status as you progress');
-        break;
+  private async persistPhaseDocument(
+    fileSystem: FileSystemPort & {
+      writeFileAtomic(filePath: string, content: string): Promise<void>;
+    },
+    featureRoot: string,
+    phase: ApprovablePhase,
+    content: string,
+    alreadyGenerated: boolean,
+  ): Promise<void> {
+    const resolver = new SpecPathResolver(fileSystem);
+    const documentPath = path.join(featureRoot, `${phase}.md`);
+    await resolver.assertContained(featureRoot, documentPath);
+    if (!(await fileSystem.exists(documentPath))) {
+      await fileSystem.writeFileAtomic(documentPath, content);
+      return;
     }
-
-    return steps;
+    const existing = await fileSystem.readFile(documentPath);
+    if (alreadyGenerated || existing !== content) {
+      throw new Error(`Cannot generate ${phase}: phase document already exists`);
+    }
   }
+
+  private buildGeneratedSpec(
+    spec: Record<string, unknown>,
+    request: GeneratePhaseRequest,
+  ): Record<string, unknown> {
+    const approvalRecord = spec.approvals && typeof spec.approvals === 'object'
+      ? spec.approvals as Record<string, unknown>
+      : {};
+    const prospective: Record<string, unknown> = {
+      ...spec,
+      updated_at: new Date().toISOString(),
+      phase: `${request.phase}-generated`,
+      approvals: {
+        ...approvalRecord,
+        [request.phase]: { generated: true, approved: false },
+      },
+      ready_for_implementation: false,
+    };
+    if (request.phase !== 'tasks' || typeof request.reviewTestCases !== 'boolean') {
+      return prospective;
+    }
+    const options = spec.workflow_options && typeof spec.workflow_options === 'object'
+      ? spec.workflow_options as Record<string, unknown>
+      : {};
+    const checkpoints = spec.checkpoints && typeof spec.checkpoints === 'object'
+      ? spec.checkpoints as Record<string, unknown>
+      : {};
+    const checkpointKey = 'test_cases' in checkpoints ? 'test_cases' : 'testCases';
+    const existingTest = checkpoints[checkpointKey] && typeof checkpoints[checkpointKey] === 'object'
+      ? checkpoints[checkpointKey] as Record<string, unknown>
+      : {};
+    prospective.workflow_options = {
+      ...options,
+      review_test_cases: request.reviewTestCases,
+    };
+    prospective.checkpoints = {
+      ...checkpoints,
+      [checkpointKey]: {
+        ...existingTest,
+        required: request.reviewTestCases,
+        reviewed: !request.reviewTestCases,
+      },
+    };
+    return prospective;
+  }
+
+  private async renderPhase(project: Project, phase: ApprovablePhase): Promise<string> {
+    if (phase === 'requirements') return this.templateService.generateRequirementsTemplate(project);
+    if (phase === 'design') return this.templateService.generateDesignTemplate(project);
+    return this.templateService.generateTasksTemplate(project);
+  }
+
+  private phaseTitle(phase: ApprovablePhase): string {
+    if (phase === 'requirements') return 'Requirements';
+    if (phase === 'design') return 'Design';
+    return 'Tasks';
+  }
+
+  private async hydrateProject(
+    projectRoot: string,
+    featureName: string,
+    spec: Record<string, unknown>,
+  ): Promise<Project> {
+    const persistedName = typeof spec.feature_name === 'string'
+      ? spec.feature_name
+      : typeof spec.name === 'string'
+        ? spec.name
+        : undefined;
+    if (persistedName !== undefined && persistedName !== featureName) {
+      throw new Error(`Feature metadata name does not match directory: ${featureName}`);
+    }
+    const approvals = this.readApprovals(spec);
+    const review = this.readReviewState(spec);
+    const existing = (await this.projectRepository.list()).find((candidate) => candidate.name === featureName);
+    const project: Project = {
+      id: existing?.id ?? `disk:${featureName}`,
+      name: featureName,
+      path: projectRoot,
+      phase: this.readWorkflowPhase(spec, approvals),
+      metadata: {
+        createdAt: this.readDate(spec.created_at ?? spec.createdAt),
+        updatedAt: this.readDate(spec.updated_at ?? spec.updatedAt),
+        language: typeof spec.language === 'string' ? spec.language : 'en',
+        approvals,
+        workflowOptions: { reviewTestCases: review.required },
+        checkpoints: { testCases: review },
+      },
+    };
+    await this.projectRepository.save(project);
+    return project;
+  }
+
+  private readDate(value: unknown): Date {
+    if (typeof value === 'string' || value instanceof Date) {
+      const parsed = new Date(value);
+      if (!Number.isNaN(parsed.getTime())) return parsed;
+    }
+    return new Date(0);
+  }
+
+  private readWorkflowPhase(
+    spec: Record<string, unknown>,
+    approvals: Record<ApprovablePhase, { generated: boolean; approved: boolean }>,
+  ): WorkflowPhase {
+    const phase = typeof spec.phase === 'string' ? spec.phase : '';
+    if (phase.startsWith('implementation')) return WorkflowPhase.IMPLEMENTATION;
+    if (phase.startsWith('tasks') || approvals.tasks.generated) return WorkflowPhase.TASKS;
+    if (phase.startsWith('design') || approvals.design.generated) return WorkflowPhase.DESIGN;
+    if (phase.startsWith('requirements') || approvals.requirements.generated) return WorkflowPhase.REQUIREMENTS;
+    return WorkflowPhase.INIT;
+  }
+
+  private resolveProgression(
+    approvals: Record<ApprovablePhase, { generated: boolean; approved: boolean }>,
+    review: { required: boolean; reviewed: boolean },
+    currentPhase: WorkflowPhase,
+  ): { nextPhase?: WorkflowPhase; blockers: string[] } {
+    if (currentPhase === WorkflowPhase.IMPLEMENTATION) return { blockers: [] };
+    if (!approvals.requirements.generated) return { nextPhase: WorkflowPhase.REQUIREMENTS, blockers: [] };
+    if (!approvals.requirements.approved) {
+      return { nextPhase: WorkflowPhase.DESIGN, blockers: ['Requirements must be approved'] };
+    }
+    if (!approvals.design.generated) return { nextPhase: WorkflowPhase.DESIGN, blockers: [] };
+    if (!approvals.design.approved) {
+      return { nextPhase: WorkflowPhase.TASKS, blockers: ['Design must be approved'] };
+    }
+    if (!approvals.tasks.generated) return { nextPhase: WorkflowPhase.TASKS, blockers: [] };
+    if (!approvals.tasks.approved) {
+      return { nextPhase: WorkflowPhase.IMPLEMENTATION, blockers: ['Tasks must be approved'] };
+    }
+    if (review.required && !review.reviewed) {
+      return { nextPhase: WorkflowPhase.IMPLEMENTATION, blockers: ['Test cases must be reviewed'] };
+    }
+    return { nextPhase: WorkflowPhase.IMPLEMENTATION, blockers: [] };
+  }
+
   private async withFeatureLock<T>(
     projectRoot: string,
     featureName: string,
@@ -656,15 +539,16 @@ export class WorkflowEngineService {
   }
 
   private async readDiskSpec(projectRoot: string, featureName: string): Promise<{
+    projectRoot: string;
     featureRoot: string;
     specPath: string;
     spec: Record<string, unknown>;
   }> {
     if (!this.fileSystem) throw new Error('FileSystemPort is required for disk-addressed workflow operations');
     const resolver = new SpecPathResolver(this.fileSystem);
-    const { featureRoot } = await resolver.resolve(projectRoot, featureName);
-    const specPath = path.join(featureRoot, 'spec.json');
-    await resolver.assertContained(featureRoot, specPath);
+    const resolved = await resolver.resolve(projectRoot, featureName);
+    const specPath = path.join(resolved.featureRoot, 'spec.json');
+    await resolver.assertContained(resolved.featureRoot, specPath);
     if (!(await this.fileSystem.exists(specPath))) throw new Error(`Feature metadata not found: ${featureName}`);
     let parsed: unknown;
     try {
@@ -673,7 +557,16 @@ export class WorkflowEngineService {
       throw new Error(`Feature metadata is malformed: ${featureName}`);
     }
     if (!parsed || typeof parsed !== 'object') throw new Error(`Feature metadata is invalid: ${featureName}`);
-    return { featureRoot, specPath, spec: parsed as Record<string, unknown> };
+    const record = parsed as Record<string, unknown>;
+    const persistedName = typeof record.feature_name === 'string'
+      ? record.feature_name
+      : typeof record.name === 'string'
+        ? record.name
+        : undefined;
+    if (persistedName !== undefined && persistedName !== featureName) {
+      throw new Error(`Feature metadata name does not match directory: ${featureName}`);
+    }
+    return { projectRoot: resolved.projectRoot, featureRoot: resolved.featureRoot, specPath, spec: record };
   }
 
   private readApprovals(spec: Record<string, unknown>): Record<ApprovablePhase, { generated: boolean; approved: boolean }> {

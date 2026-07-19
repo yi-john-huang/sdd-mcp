@@ -282,7 +282,7 @@ export class ContextCompactionService {
     const checkpoints = this.optionalRecord(record.checkpoints);
     const test = this.optionalRecord(checkpoints.test_cases ?? checkpoints.testCases);
     return {
-      featureName: this.specFeatureName(record, expectedFeature),
+      featureName: this.specFeatureName(record, expectedFeature, specPath),
       approvals: this.parseApprovals(approvalsRecord),
       reviewRequired: test.required === true
         || options.review_test_cases === true
@@ -324,9 +324,20 @@ export class ContextCompactionService {
     })) as Record<ApprovablePhase, ApprovalState>;
   }
 
-  private specFeatureName(record: Record<string, unknown>, expectedFeature: string): string {
-    if (typeof record.feature_name === 'string') return record.feature_name;
-    return typeof record.name === 'string' ? record.name : expectedFeature;
+  private specFeatureName(
+    record: Record<string, unknown>,
+    expectedFeature: string,
+    specPath: string,
+  ): string {
+    const persisted = typeof record.feature_name === 'string'
+      ? record.feature_name
+      : typeof record.name === 'string'
+        ? record.name
+        : undefined;
+    if (persisted !== undefined && persisted !== expectedFeature) {
+      throw new ContextSourceError(specPath, 'Feature metadata name does not match directory');
+    }
+    return expectedFeature;
   }
 
   private async selectState(

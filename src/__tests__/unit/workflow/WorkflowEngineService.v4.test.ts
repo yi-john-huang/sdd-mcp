@@ -4,7 +4,7 @@ import path from 'node:path';
 import { ContextCompactionService } from '../../../application/services/ContextCompactionService';
 import { WorkflowEngineService } from '../../../application/services/WorkflowEngineService';
 import { ProjectRepository, LoggerPort } from '../../../domain/ports';
-import { Project } from '../../../domain/types';
+import { Project, WorkflowPhase } from '../../../domain/types';
 import { NodeFileSystemAdapter } from '../../../infrastructure/adapters/NodeFileSystemAdapter';
 
 class FailureInjectingFileSystem extends NodeFileSystemAdapter {
@@ -64,7 +64,7 @@ describe('WorkflowEngineService disk authority', () => {
 
   function createWorkflow(currentFileSystem = fileSystem): WorkflowEngineService {
     const compact = currentFileSystem === fileSystem ? context : new ContextCompactionService(currentFileSystem, logger);
-    return new WorkflowEngineService(repository(), undefined!, undefined!, compact, logger, undefined!, currentFileSystem);
+    return new WorkflowEngineService(repository(), undefined!, undefined!, compact, logger, currentFileSystem);
   }
 
   beforeEach(async () => {
@@ -145,12 +145,130 @@ describe('WorkflowEngineService disk authority', () => {
     expect(contextResult.effectivePhase).toBe('requirements');
   });
 
+  it('discovers durable features after restart and advances the next phase from disk', async () => {
+    await writeSpec({
+      phase: 'requirements-approved',
+      created_at: '2026-07-19T00:00:00.000Z',
+      updated_at: '2026-07-19T01:00:00.000Z',
+      language: 'en',
+      approvals: {
+        requirements: { generated: true, approved: true },
+        design: { generated: false, approved: false },
+        tasks: { generated: false, approved: false },
+      },
+    });
+    const templateService = {
+      generateDesignTemplate: jest.fn().mockResolvedValue('# Durable design\n'),
+    };
+    const restarted = new WorkflowEngineService(
+      repository(),
+      undefined!,
+      templateService as never,
+      new ContextCompactionService(fileSystem, logger),
+      logger,
+      fileSystem,
+    );
+
+    await expect(restarted.listFeatureStatuses({ projectRoot })).resolves.toEqual([
+      expect.objectContaining({ featureName: 'payments', phase: WorkflowPhase.REQUIREMENTS }),
+    ]);
+    await expect(restarted.getFeatureStatus({ projectRoot, featureName: 'payments' })).resolves.toMatchObject({
+      featureName: 'payments',
+      currentPhase: WorkflowPhase.REQUIREMENTS,
+      nextPhase: WorkflowPhase.DESIGN,
+      canProgress: true,
+    });
+    await expect(restarted.loadProject({ projectRoot, featureName: 'payments' })).resolves.toMatchObject({
+      name: 'payments',
+      path: await fileSystem.realpath(projectRoot),
+      phase: WorkflowPhase.REQUIREMENTS,
+    });
+    await unlink(path.join(featureRoot, 'design.md'));
+
+    await expect(restarted.generatePhase({
+      projectRoot,
+      featureName: 'payments',
+      phase: 'design',
+    })).resolves.toContain('Design document generated');
+    await expect(readFile(path.join(featureRoot, 'design.md'), 'utf8')).resolves.toBe('# Durable design\n');
+    const persisted = JSON.parse(await readFile(path.join(featureRoot, 'spec.json'), 'utf8')) as {
+      phase: string;
+      approvals: { design: { generated: boolean; approved: boolean } };
+    };
+    expect(persisted).toMatchObject({
+      phase: 'design-generated',
+      approvals: { design: { generated: true, approved: false } },
+    });
+
+    const secondRestart = new WorkflowEngineService(
+      repository(),
+      undefined!,
+      templateService as never,
+      new ContextCompactionService(fileSystem, logger),
+      logger,
+      fileSystem,
+    );
+    await expect(secondRestart.getFeatureStatus({ projectRoot, featureName: 'payments' })).resolves.toMatchObject({
+      currentPhase: WorkflowPhase.DESIGN,
+    });
+  });
+
+  it('refuses to initialize a feature that already exists on disk after restart', async () => {
+    const projectService = { createProject: jest.fn() };
+    const restarted = new WorkflowEngineService(
+      repository(),
+      projectService as never,
+      {} as never,
+      new ContextCompactionService(fileSystem, logger),
+      logger,
+      fileSystem,
+    );
+
+    await expect(restarted.initializeFeature({
+      projectRoot,
+      featureName: 'payments',
+      language: 'en',
+      reviewTestCases: false,
+    })).rejects.toThrow('already exists');
+    expect(projectService.createProject).not.toHaveBeenCalled();
+  });
+
+  it('rejects an escaping specification root before initialization writes', async () => {
+    const unsafeRoot = await mkdtemp(path.join(os.tmpdir(), 'sdd-init-root-'));
+    const outside = await mkdtemp(path.join(os.tmpdir(), 'sdd-init-outside-'));
+    await symlink(outside, path.join(unsafeRoot, '.spec'));
+    const projectService = { createProject: jest.fn() };
+    const restarted = new WorkflowEngineService(
+      repository(),
+      projectService as never,
+      {} as never,
+      new ContextCompactionService(fileSystem, logger),
+      logger,
+      fileSystem,
+    );
+
+    try {
+      await expect(restarted.initializeFeature({
+        projectRoot: unsafeRoot,
+        featureName: 'payments',
+        language: 'en',
+        reviewTestCases: false,
+      })).rejects.toThrow('escapes');
+      expect(await fileSystem.exists(path.join(outside, 'specs'))).toBe(false);
+      expect(projectService.createProject).not.toHaveBeenCalled();
+    } finally {
+      await rm(unsafeRoot, { recursive: true, force: true });
+      await rm(outside, { recursive: true, force: true });
+    }
+  });
+
   it('rejects traversal and symlink escapes before approval writes', async () => {
     await expect(workflow.approve({ projectRoot, featureName: '../payments', phase: 'requirements' })).rejects.toThrow('Invalid feature name');
     const outside = await mkdtemp(path.join(os.tmpdir(), 'sdd-approval-outside-'));
     await writeFile(path.join(outside, 'spec.json'), '{}', 'utf8');
     await symlink(outside, path.join(projectRoot, '.spec', 'specs', 'escaped'));
     await expect(workflow.approve({ projectRoot, featureName: 'escaped', phase: 'requirements' })).rejects.toThrow('escapes');
+    await expect(workflow.listFeatureStatuses({ projectRoot })).rejects.toThrow('escapes');
     const outsideDocument = path.join(outside, 'requirements.md');
     await writeFile(outsideDocument, 'outside', 'utf8');
     await unlink(path.join(featureRoot, 'requirements.md'));

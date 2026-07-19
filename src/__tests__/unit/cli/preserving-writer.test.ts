@@ -147,4 +147,17 @@ describe('PreservingWriter', () => {
     const manifest = JSON.parse(fs.readFileSync(path.join(root, '.sdd-mcp/install-manifest.json'), 'utf8'));
     expect(Object.keys(manifest.targets).sort()).toEqual(['codex', 'omp']);
   });
+  it('recovers an abandoned manifest lock before installing again', async () => {
+    const stateRoot = path.join(root, '.sdd-mcp');
+    const lockPath = path.join(stateRoot, 'install-manifest.lock');
+    fs.mkdirSync(stateRoot, { recursive: true });
+    fs.writeFileSync(lockPath, 'abandoned');
+    const old = new Date(Date.now() - 60_000);
+    fs.utimesSync(lockPath, old, old);
+    writer.beginTarget('omp', 'lean', ['skills']);
+
+    await expect(writer.finalizeTarget('omp')).resolves.toEqual([]);
+    expect(fs.existsSync(lockPath)).toBe(false);
+    expect(fs.existsSync(path.join(stateRoot, 'install-manifest.json'))).toBe(true);
+  });
 });
