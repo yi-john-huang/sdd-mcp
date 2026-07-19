@@ -10,7 +10,7 @@ The implementation preserves the existing CLI entry point and manager discovery 
 
 - Resolve `codex` or `claude-code` before the first filesystem write.
 - Generate only native artifacts for the selected primary target.
-- Route high-level roles to Sol or Opus and default implementation/TDD roles to Luna or Sonnet.
+- Route high-level roles to Sol or Opus and default implementation/TDD roles to Sol with medium effort or Sonnet.
 - Make phase skills request the specialist role so model metadata affects real work.
 - Update `.gitignore` safely and idempotently.
 - Preserve existing automation, custom paths, user-authored files, and unrelated integrations.
@@ -59,7 +59,7 @@ Claude Code keeps the current `.claude/` structure. Codex uses `.agents/skills/`
 
 ### AD-4: Centralize Role Routing
 
-One immutable role policy maps each supported role to a task class and provider-specific model settings. Renderers consume this policy. `gpt-5.6-luna` is the default Codex model for implementation and TDD roles, while `gpt-5.6-terra` remains supported without a default role.
+One immutable role policy maps each supported role to a task class and provider-specific model settings. Renderers consume this policy. `gpt-5.6-sol` is the default Codex model for implementation and TDD roles with medium effort, while `gpt-5.6-luna` and `gpt-5.6-terra` remain supported without a default role.
 
 ### AD-5: Preserve Existing Files by Default
 
@@ -221,7 +221,7 @@ export interface RoleModelRoute {
   taskClass: TaskClass;
   codex: {
     model: 'gpt-5.6-sol' | 'gpt-5.6-terra' | 'gpt-5.6-luna';
-    reasoningEffort: 'xhigh' | 'max';
+    reasoningEffort: 'xhigh' | 'medium';
   };
   claudeCode: {
     model: 'opus' | 'sonnet';
@@ -232,8 +232,8 @@ export interface RoleModelRoute {
 **Invariants:**
 
 - Planner, architect, reviewer, and security-auditor are `high-level`.
-- Implementer and TDD-guide are `implementation` and use the default Luna/max route.
-- The supported Codex model constants also contain `gpt-5.6-terra`, but no default role selects it.
+- Implementer and TDD-guide are `implementation` and use the default Sol/medium route.
+- The supported Codex model constants also contain `gpt-5.6-terra` and `gpt-5.6-luna`, but neither is selected by a default role.
 
 ### Installation Results
 
@@ -515,10 +515,10 @@ export function updateGeneratedIgnores(
 | architect | high-level | `gpt-5.6-sol` | xhigh | `opus` |
 | reviewer | high-level | `gpt-5.6-sol` | xhigh | `opus` |
 | security-auditor | high-level | `gpt-5.6-sol` | xhigh | `opus` |
-| implementer | implementation | `gpt-5.6-luna` | max | `sonnet` |
-| tdd-guide | implementation | `gpt-5.6-luna` | max | `sonnet` |
+| implementer | implementation | `gpt-5.6-sol` | medium | `sonnet` |
+| tdd-guide | implementation | `gpt-5.6-sol` | medium | `sonnet` |
 
-`gpt-5.6-luna` is the default Codex model for implementation and TDD roles. `gpt-5.6-terra` remains supported but is not selected by a default role.
+`gpt-5.6-sol` is the default Codex model for implementation and TDD roles. `gpt-5.6-luna` and `gpt-5.6-terra` remain supported but are not selected by a default role.
 
 ## Phase Skill Delegation
 
@@ -605,7 +605,7 @@ No catch block converts a failed target install into an unconditional success me
 - Codex rules and contexts remain reference files below `.codex/guidance/`.
 - Skills retain progressive disclosure and load their full instructions only when invoked.
 - Phase delegation passes compact handoffs by default.
-- Sol and Opus are limited to approved high-level roles; Luna and Sonnet handle implementation and TDD roles.
+- Sol with xhigh effort handles high-level roles, while Sol with medium effort and Sonnet handle implementation and TDD roles.
 - Terra remains supported but is not activated by default.
 
 ## Testing Strategy
@@ -627,7 +627,7 @@ No catch block converts a failed target install into an unconditional success me
 - One override at a time and combined overrides.
 - Rejection of Codex prompt guidance below `.codex/rules/`, including normalized `..` traversal forms.
 - Exact role-to-model and skill-to-role mappings.
-- Luna/max is the default implementation route; Terra has no default role.
+- Sol/medium is the default implementation route; Luna and Terra remain supported without a default role.
 
 **Rendering:**
 

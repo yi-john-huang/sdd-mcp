@@ -37,11 +37,11 @@ describe('target agent rendering', () => {
     expect(rendered).toContain('\\"carefully\\"');
   });
 
-  it('renders Codex Luna max for implementation roles', () => {
+  it('renders Codex Sol medium for implementation roles', () => {
     const source = PLANNER.replaceAll('planner', 'implementer');
     const rendered = renderCodexAgent(parseSourceAgent(source));
-    expect(rendered).toContain('model = "gpt-5.6-luna"');
-    expect(rendered).toContain('model_reasoning_effort = "max"');
+    expect(rendered).toContain('model = "gpt-5.6-sol"');
+    expect(rendered).toContain('model_reasoning_effort = "medium"');
   });
 
   it('rejects an unknown role', () => {

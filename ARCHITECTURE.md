@@ -271,9 +271,9 @@ npx sdd-mcp-server install --list
 | Roles | Task class | Codex | Claude Code |
 |-------|------------|-------|-------------|
 | planner, architect, reviewer, security-auditor | High-level advisor | `gpt-5.6-sol`, xhigh effort | `opus` |
-| implementer, tdd-guide | Implementation (default) | `gpt-5.6-luna`, max effort | `sonnet` |
+| implementer, tdd-guide | Implementation (default) | `gpt-5.6-sol`, medium effort | `sonnet` |
 
-Codex uses `gpt-5.6-luna` as the default model for routed work. High-level advisor roles override that default with `gpt-5.6-sol` at xhigh effort. `gpt-5.6-terra` remains supported but is not selected by a default role.
+Codex uses `gpt-5.6-sol` as the default model for routed work. High-level advisor roles use xhigh effort, while implementation and TDD roles use medium effort. `gpt-5.6-luna` and `gpt-5.6-terra` remain supported but are not selected by a default role.
 See [docs/MODEL-ROUTING.md](docs/MODEL-ROUTING.md) for the execution flow and native output details.
 
 Generated local installs under `.claude/`, `.agents/`, and `.codex/` are project outputs. Source assets live in the root component directories and are included in the npm package.

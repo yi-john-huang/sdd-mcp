@@ -13,9 +13,8 @@ describe('target-aware documentation consistency', () => {
     expect(guidance).toContain('--target codex');
     expect(guidance).toContain('--target claude-code');
     expect(guidance).toContain('gpt-5.6-sol');
-    expect(guidance).toContain('gpt-5.6-luna');
     expect(guidance).toContain('xhigh effort');
-    expect(guidance).toContain('max effort');
+    expect(guidance).toContain('medium effort');
   });
 
   it('links the model routing guide from operator documentation', () => {
@@ -41,11 +40,12 @@ describe('target-aware documentation consistency', () => {
     const entrypoint = read('sdd-entry.js');
 
     for (const content of [requirements, design, tasks]) {
-      expect(content).toContain('gpt-5.6-luna');
-      expect(content).toContain('max');
+      expect(content).toContain('gpt-5.6-sol');
+      expect(content).toContain('medium');
       expect(content).toContain('gpt-5.6-terra');
     }
-    expect(changelog).toContain('Luna/max');
+    expect(changelog).toContain('gpt-5.6-sol');
+    expect(changelog).toContain('medium');
     expect(changelog).not.toContain('Terra/Sonnet for implementation');
     expect(entrypoint).toContain('Install target-native components');
   });
