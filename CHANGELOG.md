@@ -7,6 +7,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [4.0.0] - 2026-07-19
+
+### Added
+- First-class Oh My Pi target with native `.omp/AGENTS.md`, `.omp/skills`, `.omp/agents`, `.omp/rules`, and `.omp/contexts` output; interactive installation now selects Claude Code, Codex, or OMP.
+- Managed generated-file ownership in `.sdd-mcp/install-manifest.json`, automatic upgrades for unchanged assets, conflict preservation for modified assets, and reversible `--refresh-generated` backups under `.sdd-mcp/backups/`.
+- Packaged offline `npx sdd-mcp-server context-report` command for static target-tree measurements and privacy-preserving OMP session usage aggregation.
+
+### Changed
+- Unified all packaged MCP entrypoints on the exact 16-tool TypeScript runtime. Feature-scoped tools now use `featureName`; exact-response `ifNoneMatch` fingerprints avoid returning unchanged context.
+- Made all SDD skills manual-only with Claude `/<name>`, Codex `$<name>`, and OMP `/skill:<name>` invocation, compact entrypoints, on-demand references, and target-native rule scoping.
+- Changed OMP high-level work to run inline on Sol/medium by default. Native `.omp/agents` Sol/xhigh advisors are explicit opt-in, limited to one child, and cannot nest or retry; Claude uses current-turn Opus/Sonnet overrides and Codex may request one Sol/xhigh custom advisor.
+- Clarified that OMP Markdown hook assets are not executable native hooks; explicit OMP hook installation is rejected.
+
+### Performance
+- Fresh full-install repository static payload fell **74.37% for Codex**, **83.21% for OMP**, and **95.64% for Claude Code** relative to the v3.5.1 baseline.
+- Comparable provider-reported three-run median cost improved **6.83%** for simple tasks, **11.79%** for medium implementation, **14.09%** for requirements, **9.12%** for design, **1.74%** for security, and **1.87%** for repeated context; all task-quality checks passed.
+- Static byte-derived `estimatedTokens` and provider-reported usage/cost are reported as separate metrics; installed bytes are not presented as actual tokenizer counts.
+
 ## [3.5.1] - 2026-07-19
 
 ### Changed

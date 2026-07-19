@@ -1,0 +1,2 @@
+{"type":"session","version":3,"id":"architect-before","timestamp":"2026-07-01T00:00:03.000Z","cwd":"/private/project","parentSession":"parent-before"}
+{"type":"message","id":"a2","parentId":null,"timestamp":"2026-07-01T00:00:04.000Z","message":{"role":"assistant","provider":"anthropic","model":"claude-fable-5","content":[{"type":"text","text":"CHILD PRIVATE RESPONSE"}],"usage":{"input":60,"output":12,"cacheRead":20,"cacheWrite":10,"cost":{"input":0.002,"output":0.003,"cacheRead":0.0002,"cacheWrite":0.0003,"total":0.0055}},"timestamp":4}}

@@ -1,0 +1,7 @@
+{
+  "featureName": "tiny",
+  "currentPhase": "tasks",
+  "requirements": { "generated": true, "approved": true },
+  "design": { "generated": true, "approved": true },
+  "tasks": { "generated": true, "approved": true }
+}

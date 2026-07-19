@@ -1,126 +1,128 @@
 # SDD-MCP Installation Guide
 
-The unified installer creates native project files for either Codex or Claude Code. It does not require a global package installation.
+The unified installer creates native project files for Claude Code, Codex, or Oh My Pi (OMP). Installation is filesystem-only: it does not invoke a model, inspect authentication, or verify model entitlement.
 
 ## Choose a target
 
-Run a full install from an interactive terminal:
+In an interactive terminal, a full install presents three choices:
 
 ```bash
 npx sdd-mcp-server install --profile full
 ```
 
-The installer asks once:
-
 ```text
 Choose the primary LLM agent target:
-  1) Codex
-  2) Claude Code
+  1) Claude Code
+  2) Codex
+  3) Oh My Pi
 Selection:
 ```
 
-For scripts, CI, or any non-interactive run, pass the target explicitly:
+For automation, select exactly one target:
 
 ```bash
-npx sdd-mcp-server install --profile full --target codex
-npx sdd-mcp-server install --profile full --target claude-code
+npx sdd-mcp-server install --target claude-code
+npx sdd-mcp-server install --target codex
+npx sdd-mcp-server install --target omp
 ```
 
-If no target is supplied in a non-interactive or lean install, the installer keeps backward compatibility by selecting `claude-code` and printing a notice. The old `--codex` flag is supported as a deprecated alias for `--target codex`.
+Without a target in non-interactive mode, the compatibility default remains `claude-code` and the installer prints a notice. Deprecated `--codex` means Codex only. `--all-tools` installs native Claude Code, Codex, and OMP trees plus the existing Antigravity integration; generic path overrides are rejected with `--all-tools` because one override cannot safely identify three roots.
 
 ## Profiles and components
 
-The default `lean` profile installs skills, steering, and hooks. The `full` profile installs skills, steering, rules, contexts, agents, and hooks.
+Profiles are target-aware:
+
+| Target | Lean (default) | Full |
+|---|---|---|
+| Claude Code | skills, steering, supported hook guidance | lean + rules, contexts, agents |
+| Codex | skills, steering, supported lifecycle hooks | lean + rules, contexts, agents |
+| OMP | skills, steering, agents | lean + rules, contexts |
+
+OMP has no executable Markdown hook integration. `--target omp --hooks` fails fast instead of installing guidance and calling it a native hook.
+
+Examples:
 
 ```bash
-# Lean profile
-npx sdd-mcp-server install --target codex
-
-# Full profile
-npx sdd-mcp-server install --profile full --target codex
-
-# Selected components
+npx sdd-mcp-server install --target omp
+npx sdd-mcp-server install --profile full --target omp
 npx sdd-mcp-server install --target codex --skills --rules --agents
-
-# List packaged components without installing
 npx sdd-mcp-server install --list
 ```
 
-`--all` remains an alias for selecting every component. The legacy `install-skills` command still installs skills to its configured path.
+`--all` selects every component supported by the chosen target. `install-skills` is an alias for the unified target-aware installer with `--skills`; it uses the same target resolution and recursive renderer.
 
 ## Generated files
 
-| Component | Claude Code | Codex |
-|-----------|-------------|-------|
-| Root guidance | `CLAUDE.md` | `AGENTS.md` |
-| Skills | `.claude/skills/<name>/` | `.agents/skills/<name>/` |
-| Steering | `.spec/steering/` | `.spec/steering/` |
-| Rules | `.claude/rules/*.md` | `.codex/guidance/rules/*.md` |
-| Contexts | `.claude/contexts/*.md` | `.codex/guidance/contexts/*.md` |
-| Agents | `.claude/agents/*.md` | `.codex/agents/*.toml` |
-| Hooks | `.claude/hooks/<event>/*.md` | `.codex/hooks.json` and `.codex/hooks/sdd-hook-runner.mjs` |
+| Component | Claude Code | Codex | OMP |
+|---|---|---|---|
+| Root guidance | `CLAUDE.md` | `AGENTS.md` | `.omp/AGENTS.md` |
+| Skills | `.claude/skills/<name>/` | `.agents/skills/<name>/` | `.omp/skills/<name>/` |
+| Agents | `.claude/agents/<role>.md` | `.codex/agents/<role>.toml` | `.omp/agents/<role>.md` |
+| Rules | `.claude/rules/` with native `paths` | `.codex/guidance/rules/` | `.omp/rules/` with `globs` and `alwaysApply: false` |
+| Context references | `.claude/contexts/` | `.codex/guidance/contexts/` | `.omp/contexts/` |
+| Steering | `.spec/steering/` | `.spec/steering/` | `.spec/steering/` |
 
-Codex prompt guidance is deliberately kept out of `.codex/rules/`, which is reserved for Codex command policy. Passing a Codex rules override below that directory is rejected before files are written.
+Manual skill syntax is `/skill:<name>` in OMP, `/<name>` in Claude Code, and `$<name>` in Codex. All SDD skills are manual-only; prose does not activate them implicitly.
 
-## Model routing
+## Managed ownership and reruns
 
-Installed agents include model metadata selected by role:
+The installer stores a merge-safe ownership manifest at `.sdd-mcp/install-manifest.json` and updates only the chosen target record:
 
-| SDD role | Task class | Codex | Claude Code |
-|----------|------------|-------|-------------|
-| Planner | High-level advisor | `gpt-5.6-sol`, xhigh effort | `opus` |
-| Architect | High-level advisor | `gpt-5.6-sol`, xhigh effort | `opus` |
-| Reviewer | High-level advisor | `gpt-5.6-sol`, xhigh effort | `opus` |
-| Security auditor | High-level advisor | `gpt-5.6-sol`, xhigh effort | `opus` |
-| Implementer | Implementation (default) | `gpt-5.6-sol`, medium effort | `sonnet` |
-| TDD guide | Implementation (default) | `gpt-5.6-sol`, medium effort | `sonnet` |
+- missing output: install it and record its SHA-256;
+- unchanged managed output: upgrade it automatically;
+- user-modified managed output: preserve it and report a conflict;
+- unknown legacy output: preserve it unless it exactly matches a recognized generated asset;
+- obsolete unchanged managed output: back it up, then remove it;
+- mutable `.spec/steering/` content: record provenance but never auto-replace or tombstone it.
 
-Codex uses `gpt-5.6-sol` as the default model for routed work. High-level advisor roles use xhigh effort, while implementation and TDD roles use medium effort. `gpt-5.6-luna` and `gpt-5.6-terra` remain supported but are not selected by a default SDD role. Phase skills use compact handoffs when asking the matching specialist to work, then wait for and integrate the result. When the host cannot delegate, the skill states the fallback and continues in the current agent.
+`.sdd-mcp/` and target-generated trees are added to the installer-managed `.gitignore` block without rewriting unrelated entries.
 
-GPT-5.6 preview access depends on the user's eligible Codex workspace or API organization; generated files do not grant access or bypass host entitlement checks. Specialist delegation can consume more total tokens than a single-agent run because handoffs, specialist work, and result integration add work; compact handoffs reduce but do not eliminate that cost.
-See [Model Routing](MODEL-ROUTING.md) for the complete role map, generated Codex/Claude Code examples, delegation flow, and rerun behavior.
+## Migrating an existing installation
 
-## `.gitignore` and reruns
-
-After target artifacts are installed, the installer updates the project's existing `.gitignore` in a managed block:
-
-```gitignore
-# BEGIN sdd-mcp generated agent files
-.agents/
-.codex/
-# END sdd-mcp generated agent files
-```
-
-Claude Code installs add only `.claude/`. Existing comments, unrelated patterns, newline style, and file mode are preserved. Root guidance and `.spec/steering/` are not ignored.
-
-Installer writes are preserve-first. Existing root guidance, agents, skills, rules, contexts, hooks, and steering documents are reported as skipped and are never overwritten during a normal rerun.
-
-## Custom paths
-
-Each component path can be overridden independently after the target is selected:
+Use one explicit reversible refresh when moving a legacy target or adopting native OMP paths:
 
 ```bash
-npx sdd-mcp-server install --profile full --target codex \
-  --path custom/skills \
-  --steering-path custom/steering \
-  --rules-path custom/guidance/rules \
-  --contexts-path custom/guidance/contexts \
-  --agents-path custom/agents \
-  --hooks-path custom/hooks
+npx sdd-mcp-server install --target omp --refresh-generated
 ```
 
-## Additional integrations
+Before replacement, selected generated files are copied to:
 
-Antigravity remains opt-in and does not select the primary target:
+```text
+.sdd-mcp/backups/<timestamp>/<target>/...
+```
+
+Refresh rebuilds only the current package-owned set, removes recognized legacy tombstones after backup, and preserves unknown/custom files, project source, and user steering content. Existing OMP users should use `--target omp --refresh-generated`; old `.codex/agents/*.toml` files are not executable OMP agents and are not treated as a fallback.
+
+## Model routing and availability
+
+- Claude Code uses current-turn native model overrides: Opus for high-level skills and Sonnet for implementation/TDD.
+- Codex can request one generated `gpt-5.6-sol`/`xhigh` custom advisor for high-level work; implementation/TDD uses Sol/medium.
+- OMP uses Sol/medium inline by default, including high-level work. Native `.omp/agents` Sol/xhigh advisors are explicit opt-in, limited to one non-nesting, non-retrying child.
+
+The installer emits canonical selectors but does not grant access. GPT-5.6 availability depends on an **eligible Codex workspace or API organization**. OMP prints model availability as “not verified”; optionally run `omp models find gpt-5.6-sol` after installation. See [MODEL-ROUTING.md](MODEL-ROUTING.md).
+
+## Package context reporter
+
+The reporter is an offline package command, not an MCP tool:
 
 ```bash
-npx sdd-mcp-server install --target claude-code --antigravity
-npx sdd-mcp-server install --target claude-code --all-tools
+npx sdd-mcp-server context-report
+npx sdd-mcp-server context-report --before ./before --after ./after
+npx sdd-mcp-server context-report --json
 ```
+
+It counts exact UTF-8 bytes for generated target trees and aggregates only usage fields from explicitly supplied OMP session roots. `estimatedTokens` means deterministic `ceil(characters / 4)`, not an actual provider tokenizer result. Provider-reported input, output, cache, reasoning-normalization, and cost remain separate from static installed bytes.
+
+Measured fresh-install static reductions from the v3.5.1 baseline are Codex **74.37%**, OMP **83.21%**, and Claude Code **95.64%**.
+
+## Custom paths and safety
+
+Single-target installs may override component paths. Destinations are validated beneath the chosen project roots; escaping symlinks and out-of-root paths are rejected. Run separate explicit target installs when each target needs a custom root.
 
 ## Troubleshooting
 
-- Use `--target codex` or `--target claude-code` when input is not a terminal.
-- If a file is reported as skipped, edit or remove that user-owned destination explicitly before rerunning; the installer will not replace it.
-- If Codex guidance is rejected below `.codex/rules/`, choose `.codex/guidance/rules/` or another prompt-guidance path.
-- Restart the target agent after installation so it rediscovers skills, agents, and lifecycle configuration.
+- In automation, pass `--target claude-code`, `--target codex`, or `--target omp` explicitly.
+- If a managed file is reported as modified, inspect the conflict; normal reruns intentionally preserve it.
+- Use `--refresh-generated` only for selected generated assets; recover the prior bytes from `.sdd-mcp/backups/` if needed.
+- OMP does not discover Codex TOML agents. Install native `.omp/agents/*.md` instead.
+- OMP hook requests fail by design until a native executable hook integration exists.

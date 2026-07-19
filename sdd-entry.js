@@ -16,16 +16,27 @@ const CLI_COMMANDS = ['install', 'install-skills', 'migrate-kiro', 'migrate-stee
 const args = process.argv.slice(2);
 const command = args[0];
 
-if (command && (CLI_COMMANDS.includes(command) || command === '--help' || command === '-h')) {
+if (command === 'context-report') {
+  import('./scripts/context-usage-report.mjs')
+    .then(({ runCli }) => runCli(args.slice(1)))
+    .then(exitCode => {
+      process.exitCode = exitCode;
+    })
+    .catch(err => {
+      console.error('Failed to run context report:', err.message);
+      process.exitCode = 1;
+    });
+} else if (command && (CLI_COMMANDS.includes(command) || command === '--help' || command === '-h')) {
   // CLI mode - import and run CLI module
   import('./dist/cli/sdd-mcp-cli.js').catch(err => {
     console.error('Failed to load CLI:', err.message);
     process.exit(1);
   });
 } else {
-  // MCP server mode - import and run the MCP server
-  import('./mcp-server.js').catch(err => {
-    console.error('Failed to start MCP server:', err.message);
-    process.exit(1);
-  });
+  import('./dist/index.js')
+    .then(({ startMCPServer }) => startMCPServer())
+    .catch(err => {
+      console.error('Failed to start MCP server:', err.message);
+      process.exitCode = 1;
+    });
 }

@@ -63,4 +63,88 @@ describe('PreservingWriter', () => {
     expect(() => validateChildName('nested/file')).toThrow();
     expect(() => validateChildName('safe-name')).not.toThrow();
   });
+
+  it('adopts identical legacy output but reports modified unmanaged output', async () => {
+    const adopted = path.join(root, '.agents/skills/a/SKILL.md');
+    const custom = path.join(root, '.agents/skills/b/SKILL.md');
+    fs.mkdirSync(path.dirname(adopted), { recursive: true });
+    fs.mkdirSync(path.dirname(custom), { recursive: true });
+    fs.writeFileSync(adopted, 'same');
+    fs.writeFileSync(custom, 'user');
+    writer.beginTarget('codex', 'lean', ['skills']);
+
+    await expect(writer.writeManaged('codex', 'skills', 'a', adopted, 'same'))
+      .resolves.toEqual({ outcome: 'skipped' });
+    await expect(writer.writeManaged('codex', 'skills', 'b', custom, 'generated'))
+      .resolves.toMatchObject({ outcome: 'skipped', conflict: { reason: 'legacy-unmanaged' } });
+    await writer.finalizeTarget('codex');
+    expect(fs.readFileSync(custom, 'utf8')).toBe('user');
+  });
+
+  it('updates unchanged managed output and preserves modified managed output', async () => {
+    const file = path.join(root, '.omp/AGENTS.md');
+    writer.beginTarget('omp', 'lean', ['skills']);
+    await writer.writeManaged('omp', 'root', 'AGENTS.md', file, 'v1');
+    await writer.finalizeTarget('omp');
+
+    const upgrade = new PreservingWriter(root);
+    upgrade.beginTarget('omp', 'full', ['skills']);
+    await expect(upgrade.writeManaged('omp', 'root', 'AGENTS.md', file, 'v2'))
+      .resolves.toEqual({ outcome: 'installed' });
+    await upgrade.finalizeTarget('omp');
+    fs.writeFileSync(file, 'user');
+
+    const conflict = new PreservingWriter(root);
+    conflict.beginTarget('omp', 'full', ['skills']);
+    await expect(conflict.writeManaged('omp', 'root', 'AGENTS.md', file, 'v3'))
+      .resolves.toMatchObject({ conflict: { reason: 'modified' } });
+    expect(fs.readFileSync(file, 'utf8')).toBe('user');
+  });
+
+  it('removes unchanged obsolete output and preserves modified obsolete output', async () => {
+    const old = path.join(root, '.claude/rules/old.md');
+    const changed = path.join(root, '.claude/rules/changed.md');
+    writer.beginTarget('claude-code', 'full', ['rules']);
+    await writer.writeManaged('claude-code', 'rules', 'old', old, 'old');
+    await writer.writeManaged('claude-code', 'rules', 'changed', changed, 'old');
+    await writer.finalizeTarget('claude-code');
+    fs.writeFileSync(changed, 'user');
+
+    const upgrade = new PreservingWriter(root);
+    upgrade.beginTarget('claude-code', 'full', ['rules']);
+    const conflicts = await upgrade.finalizeTarget('claude-code');
+    expect(fs.existsSync(old)).toBe(false);
+    expect(fs.readFileSync(changed, 'utf8')).toBe('user');
+    expect(conflicts).toEqual([expect.objectContaining({ reason: 'obsolete-modified' })]);
+  });
+
+  it('refreshes selected output with backups and removes legacy tombstones', async () => {
+    const file = path.join(root, '.claude/skills/a/SKILL.md');
+    const tombstone = path.join(root, '.claude/rules/sdd-workflow.md');
+    fs.mkdirSync(path.dirname(file), { recursive: true });
+    fs.mkdirSync(path.dirname(tombstone), { recursive: true });
+    fs.writeFileSync(file, 'user');
+    fs.writeFileSync(tombstone, 'legacy');
+    writer.beginTarget('claude-code', 'full', ['skills', 'rules'], true);
+    await writer.writeManaged('claude-code', 'skills', 'a', file, 'generated');
+    await writer.finalizeTarget('claude-code');
+
+    expect(fs.readFileSync(file, 'utf8')).toBe('generated');
+    expect(fs.existsSync(tombstone)).toBe(false);
+    const backupRoot = path.join(root, '.sdd-mcp/backups');
+    expect(fs.readdirSync(backupRoot)).toHaveLength(1);
+  });
+
+  it('merges concurrent target ownership records without replacement', async () => {
+    const codex = new PreservingWriter(root);
+    const omp = new PreservingWriter(root);
+    codex.beginTarget('codex', 'lean', ['skills']);
+    omp.beginTarget('omp', 'lean', ['skills']);
+    await codex.writeManaged('codex', 'skills', 'a', path.join(root, '.agents/a'), 'a');
+    await omp.writeManaged('omp', 'skills', 'b', path.join(root, '.omp/b'), 'b');
+    await Promise.all([codex.finalizeTarget('codex'), omp.finalizeTarget('omp')]);
+
+    const manifest = JSON.parse(fs.readFileSync(path.join(root, '.sdd-mcp/install-manifest.json'), 'utf8'));
+    expect(Object.keys(manifest.targets).sort()).toEqual(['codex', 'omp']);
+  });
 });

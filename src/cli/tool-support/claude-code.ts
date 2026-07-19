@@ -3,12 +3,7 @@ import * as path from 'path';
 import { findTemplate } from '../utils/find-package-root.js';
 import { PreservingWriter, validateChildName } from '../utils/preserving-writer.js';
 import { parseSourceAgent, renderClaudeCodeAgent } from './target-agent-renderer.js';
-import {
-  buildGuidanceSection,
-  buildSteeringSection,
-  buildTableSection,
-  listMarkdownFiles,
-} from './root-guidance.js';
+import { buildCompactRootGuidance } from './root-guidance.js';
 import {
   copyFlatComponents,
   TargetInstallSession,
@@ -24,6 +19,9 @@ export async function installClaudeCodeTarget(request: ClaudeCodeInstallRequest)
     'claude-code',
     request.projectRoot,
     request.writer ?? new PreservingWriter(request.projectRoot),
+    request.profile ?? 'lean',
+    request.components,
+    request.refreshGenerated,
   );
   const selected = new Set(request.components);
 
@@ -78,79 +76,29 @@ export async function installClaudeCodeTarget(request: ClaudeCodeInstallRequest)
     }
   }
 
-  let rootPreamble: string;
-  try {
-    rootPreamble = request.rootGuidanceContent ?? await loadClaudeTemplate();
-  } catch (error) {
-    session.fail(
+  if (selected.size > 0 || request.rootGuidanceContent !== undefined) {
+    let rootPreamble: string;
+    try {
+      rootPreamble = request.rootGuidanceContent ?? await loadClaudeTemplate();
+    } catch (error) {
+      session.fail(
+        'root',
+        request.paths.rootGuidance,
+        session.resolve(request.paths.rootGuidance),
+        error,
+      );
+      return session.complete();
+    }
+    await session.write(
       'root',
       request.paths.rootGuidance,
       session.resolve(request.paths.rootGuidance),
-      error,
+      buildCompactRootGuidance('claude-code', request.paths, selected, rootPreamble),
     );
-    return session.report;
   }
-  const rootContent = await buildClaudeRootGuidance(request, selected, rootPreamble);
-  await session.write(
-    'root',
-    request.paths.rootGuidance,
-    session.resolve(request.paths.rootGuidance),
-    rootContent,
-  );
-  return session.report;
+  return session.complete();
 }
 
-async function buildClaudeRootGuidance(
-  request: ClaudeCodeInstallRequest,
-  selected: ReadonlySet<string>,
-  preamble: string,
-): Promise<string> {
-  const [skills, rules, contexts, agents, steeringDocs] = await Promise.all([
-    selected.has('skills') ? request.sources.skillManager.listSkills() : Promise.resolve([]),
-    selected.has('rules') ? request.sources.rulesManager.listComponents() : Promise.resolve([]),
-    selected.has('contexts') ? request.sources.contextManager.listComponents() : Promise.resolve([]),
-    selected.has('agents') ? request.sources.agentManager.listComponents() : Promise.resolve([]),
-    selected.has('steering') ? listMarkdownFiles(request.sources.steeringSource) : Promise.resolve([]),
-  ]);
-
-  const sections = [
-    buildTableSection(
-      'Skills',
-      'On-demand guidance invoked via slash commands:',
-      request.paths.skills,
-      skills,
-      skill => `${request.paths.skills}/${skill.name}/`,
-    ),
-    buildTableSection(
-      'Rules',
-      'Always-active coding standards:',
-      request.paths.rules,
-      rules,
-      rule => `${request.paths.rules}/${path.basename(rule.path)}`,
-    ),
-    buildTableSection(
-      'Contexts',
-      'Switchable modes:',
-      request.paths.contexts,
-      contexts,
-      context => `${request.paths.contexts}/${path.basename(context.path)}`,
-    ),
-    buildTableSection(
-      'Agents',
-      'Specialized roles with model routing:',
-      request.paths.agents,
-      agents,
-      agent => `${request.paths.agents}/${path.basename(agent.path, path.extname(agent.path))}.md`,
-    ),
-    buildSteeringSection(request.paths.steering, steeringDocs),
-    selected.has('hooks') ? buildGuidanceSection('Hooks', request.paths.hooks) : '',
-  ].join('');
-
-  const marker = '\n## MCP Tools';
-  const markerIndex = preamble.indexOf(marker);
-  if (markerIndex < 0) return `${preamble}${sections}`;
-  return `${preamble.slice(0, markerIndex)}\n${sections}${preamble.slice(markerIndex)}`;
-}
 
 async function loadClaudeTemplate(): Promise<string> {
   const template = findTemplate('CLAUDE.md');

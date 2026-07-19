@@ -1,0 +1,2 @@
+{"type":"session","version":3,"id":"parent-after","timestamp":"2026-07-02T00:00:00.000Z","cwd":"/private/project"}
+{"type":"message","id":"a1","parentId":null,"timestamp":"2026-07-02T00:00:02.000Z","message":{"role":"assistant","provider":"openai-codex","model":"gpt-5.6-sol","content":[{"type":"text","text":"AFTER SECRET"}],"usage":{"input":80,"output":20,"cacheRead":30,"cacheWrite":0,"cost":{"input":0.0008,"output":0.0015,"cacheRead":0.00008,"cacheWrite":0,"total":0.00238}},"timestamp":2}}

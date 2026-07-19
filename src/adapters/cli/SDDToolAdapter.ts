@@ -11,9 +11,17 @@ import { SteeringDocumentService } from "../../application/services/SteeringDocu
 import { CodebaseAnalysisService } from "../../application/services/CodebaseAnalysisService.js";
 import { RequirementsClarificationService } from "../../application/services/RequirementsClarificationService.js";
 import { ContextCompactionService, ContextLoadMode } from "../../application/services/ContextCompactionService.js";
+import { WorkflowEngineService } from "../../application/services/WorkflowEngineService.js";
 import { LoggerPort } from "../../domain/ports.js";
-import { WorkflowPhase, ClarificationAnswers } from "../../domain/types.js";
+import { Project, WorkflowPhase, ClarificationAnswers } from "../../domain/types.js";
 import { ensureStaticSteeringDocuments } from "../../application/services/staticSteering.js";
+import {
+  SDD_TOOL_DEFINITIONS,
+  SDD_TOOL_NAMES,
+  SDDToolName,
+} from "../../infrastructure/mcp/sddToolDefinitions.js";
+export { SDD_TOOL_NAMES };
+
 
 export interface SDDToolHandler {
   name: string;
@@ -40,225 +48,54 @@ export class SDDToolAdapter {
     private readonly clarificationService: RequirementsClarificationService,
     @inject(TYPES.ContextCompactionService)
     private readonly contextCompactionService: ContextCompactionService,
+    @inject(TYPES.WorkflowEngineService)
+    private readonly workflowEngineService: WorkflowEngineService,
     @inject(TYPES.LoggerPort) private readonly logger: LoggerPort,
   ) { }
 
   getSDDTools(): SDDToolHandler[] {
-    return [
-      {
-        name: "sdd-init",
-        tool: {
-          name: "sdd-init",
-          description:
-            "Initialize a new SDD project with interactive requirements clarification",
-          inputSchema: {
-            type: "object",
-            properties: {
-              projectName: {
-                type: "string",
-                description: "The name of the project to initialize",
-              },
-              description: {
-                type: "string",
-                description: "Project description",
-              },
-              clarificationAnswers: {
-                type: "object",
-                description: "Answers to clarification questions (second pass)",
-                additionalProperties: { type: "string" },
-              },
-              reviewTestCases: {
-                type: "boolean",
-                description:
-                  "Enable an optional checkpoint requiring TDD test-case review before implementation",
-              },
-            },
-            required: ["projectName"],
-          },
-        },
-        handler: this.handleProjectInit.bind(this),
-      },
-      {
-        name: "sdd-status",
-        tool: {
-          name: "sdd-status",
-          description:
-            "Get current project status and workflow phase information",
-          inputSchema: {
-            type: "object",
-            properties: {
-              projectId: { type: "string", description: "Project ID" },
-              projectPath: {
-                type: "string",
-                description: "Project path (alternative to ID)",
-              },
-            },
-          },
-        },
-        handler: this.handleProjectStatus.bind(this),
-      },
-      {
-        name: "sdd-requirements",
-        tool: {
-          name: "sdd-requirements",
-          description: "Generate requirements doc",
-          inputSchema: {
-            type: "object",
-            properties: {
-              projectId: { type: "string", description: "Project ID" },
-            },
-            required: ["projectId"],
-          },
-        },
-        handler: this.handleRequirements.bind(this),
-      },
-      {
-        name: "sdd-design",
-        tool: {
-          name: "sdd-design",
-          description: "Create design specifications",
-          inputSchema: {
-            type: "object",
-            properties: {
-              projectId: { type: "string", description: "Project ID" },
-            },
-            required: ["projectId"],
-          },
-        },
-        handler: this.handleDesign.bind(this),
-      },
-      {
-        name: "sdd-tasks",
-        tool: {
-          name: "sdd-tasks",
-          description: "Generate task breakdown",
-          inputSchema: {
-            type: "object",
-            properties: {
-              projectId: { type: "string", description: "Project ID" },
-              reviewTestCases: {
-                type: "boolean",
-                description:
-                  "When true, require an explicit TDD test-case review checkpoint before implementation",
-              },
-            },
-            required: ["projectId"],
-          },
-        },
-        handler: this.handleTasks.bind(this),
-      },
-      {
-        name: "sdd-review-test-cases",
-        tool: {
-          name: "sdd-review-test-cases",
-          description:
-            "Mark the optional TDD test-case review checkpoint as reviewed",
-          inputSchema: {
-            type: "object",
-            properties: {
-              projectId: { type: "string", description: "Project ID" },
-            },
-            required: ["projectId"],
-          },
-        },
-        handler: this.handleReviewTestCases.bind(this),
-      },
-      {
-        name: "sdd-quality-check",
-        tool: {
-          name: "sdd-quality-check",
-          description: "Perform Linus-style code quality analysis",
-          inputSchema: {
-            type: "object",
-            properties: {
-              code: { type: "string", description: "Code to analyze" },
-              language: { type: "string", description: "Programming language" },
-            },
-            required: ["code"],
-          },
-        },
-        handler: this.handleQualityCheck.bind(this),
-      },
-      {
-        name: "sdd-context-load",
-        tool: {
-          name: "sdd-context-load",
-          description:
-            "Load compact workflow handoff context by default; use mode=full only when necessary",
-          inputSchema: {
-            type: "object",
-            properties: {
-              projectId: { type: "string", description: "Project ID" },
-              mode: {
-                type: "string",
-                enum: ["compact", "standard", "full"],
-                description:
-                  "Context size mode. compact is default and uses handoff.md.",
-              },
-            },
-            required: ["projectId"],
-          },
-        },
-        handler: this.handleContextLoad.bind(this),
-      },
-      {
-        name: "sdd-steering",
-        tool: {
-          name: "sdd-steering",
-          description:
-            "Create/update steering documents with project-specific analysis",
-          inputSchema: {
-            type: "object",
-            properties: {
-              updateMode: {
-                type: "string",
-                enum: ["create", "update"],
-                description:
-                  "Whether to create new or update existing documents",
-              },
-            },
-          },
-        },
-        handler: this.handleSteering.bind(this),
-      },
-      {
-        name: "sdd-steering-custom",
-        tool: {
-          name: "sdd-steering-custom",
-          description:
-            "Create custom steering documents for specialized contexts",
-          inputSchema: {
-            type: "object",
-            properties: {
-              fileName: {
-                type: "string",
-                description: "Filename for the custom steering document",
-              },
-              topic: {
-                type: "string",
-                description: "Topic/purpose of the custom steering document",
-              },
-              inclusionMode: {
-                type: "string",
-                enum: ["always", "conditional", "manual"],
-                description: "How this steering document should be included",
-              },
-              filePattern: {
-                type: "string",
-                description: "File pattern for conditional inclusion",
-              },
-            },
-            required: ["fileName", "topic", "inclusionMode"],
-          },
-        },
-        handler: this.handleSteeringCustom.bind(this),
-      },
-    ];
+    const handlers: Record<SDDToolName, (args: Record<string, unknown>) => Promise<unknown>> = {
+      "sdd-init": this.handleProjectInit.bind(this),
+      "sdd-requirements": this.handleRequirements.bind(this),
+      "sdd-design": this.handleDesign.bind(this),
+      "sdd-tasks": this.handleTasks.bind(this),
+      "sdd-implement": this.handleImplement.bind(this),
+      "sdd-status": this.handleProjectStatus.bind(this),
+      "sdd-approve": this.handleApprove.bind(this),
+      "sdd-review-test-cases": this.handleReviewTestCases.bind(this),
+      "sdd-quality-check": this.handleQualityCheck.bind(this),
+      "sdd-context-load": this.handleContextLoad.bind(this),
+      "sdd-template-render": this.handleTemplateRender.bind(this),
+      "sdd-steering": this.handleSteering.bind(this),
+      "sdd-steering-custom": this.handleSteeringCustom.bind(this),
+      "sdd-validate-design": this.handleValidateDesign.bind(this),
+      "sdd-validate-gap": this.handleValidateGap.bind(this),
+      "sdd-spec-impl": this.handleSpecImplementation.bind(this),
+    };
+
+    return SDD_TOOL_DEFINITIONS.map((tool) => ({
+      name: tool.name,
+      tool,
+      handler: handlers[tool.name],
+    }));
+  }
+
+  private canonicalFeatureName(projectName: string): string {
+    const featureName = projectName
+      .trim()
+      .toLowerCase()
+      .replace(/[^a-z0-9._-]+/g, "-")
+      .replace(/^-+|-+$/g, "")
+      .slice(0, 80);
+    if (!featureName) {
+      throw new Error("Invalid argument: projectName must contain a letter or number");
+    }
+    return featureName;
   }
 
   private async handleProjectInit(
     args: Record<string, unknown>,
-  ): Promise<string> {
+  ): Promise<unknown> {
     const {
       projectName,
       description = "",
@@ -269,6 +106,7 @@ export class SDDToolAdapter {
     if (typeof projectName !== "string") {
       throw new Error("Invalid arguments: projectName must be a string");
     }
+    const featureName = this.canonicalFeatureName(projectName);
 
     const currentPath = process.cwd();
 
@@ -320,7 +158,7 @@ export class SDDToolAdapter {
 
     // Create project with enriched description
     const project = await this.projectService.createProject(
-      projectName,
+      featureName,
       currentPath,
       "en",
       { reviewTestCases: reviewTestCases === true },
@@ -338,7 +176,13 @@ export class SDDToolAdapter {
       ? "\n\n✅ Requirements Clarification: Your answers have been incorporated into an enriched project description."
       : "";
 
-    return `Project "${projectName}" initialized successfully\nProject ID: ${project.id}\n\nDescription:\n${enrichedDescription}${clarificationNote}`;
+    return {
+      featureName,
+      initialized: true,
+      description: enrichedDescription,
+      clarificationApplied: Boolean(clarificationAnswers),
+      message: `Project "${projectName}" initialized successfully${clarificationNote}`,
+    };
   }
 
   private formatClarificationQuestions(
@@ -371,61 +215,59 @@ export class SDDToolAdapter {
     return output;
   }
 
+  private async requireFeatureProject(featureName: unknown): Promise<Project> {
+    if (typeof featureName !== "string" || featureName.length === 0) {
+      throw new Error("Invalid argument: featureName must be a non-empty string");
+    }
+    const projects = await this.projectService.listProjects();
+    const project = projects.find((candidate) => candidate.name === featureName);
+    if (!project) {
+      throw new Error(`Feature not found: ${featureName}`);
+    }
+    return project;
+  }
+  private requireFeatureName(featureName: unknown): string {
+    if (typeof featureName !== "string" || featureName.length === 0) {
+      throw new Error("Invalid argument: featureName must be a non-empty string");
+    }
+    return featureName;
+  }
+
+
   private async handleProjectStatus(
     args: Record<string, unknown>,
-  ): Promise<string> {
-    const { projectId, projectPath } = args;
-
-    let project;
-    if (projectId && typeof projectId === "string") {
-      project = await this.projectService.getProject(projectId);
-    } else if (projectPath && typeof projectPath === "string") {
-      project = await this.projectService.getProjectByPath(projectPath);
-    } else {
-      throw new Error("Either projectId or projectPath must be provided");
+  ): Promise<unknown> {
+    const { featureName } = args;
+    if (featureName === undefined) {
+      const projects = await this.projectService.listProjects();
+      return {
+        features: projects.map((project) => ({
+          featureName: project.name,
+          phase: project.phase,
+        })),
+      };
     }
 
-    if (!project) {
-      return "Project not found";
-    }
-
+    const project = await this.requireFeatureProject(featureName);
     const status = await this.workflowService.getWorkflowStatus(project.id);
     if (!status) {
-      return "Unable to get workflow status";
+      throw new Error(`Unable to get workflow status for ${project.name}`);
     }
-
-    let output = `Project: ${project.name}\n`;
-    output += `Current Phase: ${status.currentPhase}\n`;
-    output += `Next Phase: ${status.nextPhase ?? "Complete"}\n`;
-    output += `Can Progress: ${status.canProgress ? "Yes" : "No"}\n`;
-    const testCaseCheckpoint = project.metadata.checkpoints?.testCases;
-    if (testCaseCheckpoint?.required) {
-      output += `TDD Test Cases Reviewed: ${testCaseCheckpoint.reviewed ? "Yes" : "No"}\n`;
-    }
-
-    if (status.blockers && status.blockers.length > 0) {
-      output += `Blockers:\n`;
-      for (const blocker of status.blockers) {
-        output += `- ${blocker}\n`;
-      }
-    }
-
-    return output;
+    return {
+      featureName: project.name,
+      currentPhase: status.currentPhase,
+      nextPhase: status.nextPhase ?? null,
+      canProgress: status.canProgress,
+      blockers: status.blockers ?? [],
+      testCases: project.metadata.checkpoints?.testCases,
+    };
   }
 
   private async handleRequirements(
     args: Record<string, unknown>,
   ): Promise<string> {
-    const { projectId } = args;
-
-    if (typeof projectId !== "string") {
-      throw new Error("Invalid argument: projectId must be a string");
-    }
-
-    const project = await this.projectService.getProject(projectId);
-    if (!project) {
-      throw new Error("Project not found");
-    }
+    const project = await this.requireFeatureProject(args.featureName);
+    const projectId = project.id;
 
     // Check if can transition to requirements phase
     const validation = await this.workflowService.validatePhaseTransition(
@@ -462,16 +304,8 @@ export class SDDToolAdapter {
   }
 
   private async handleDesign(args: Record<string, unknown>): Promise<string> {
-    const { projectId } = args;
-
-    if (typeof projectId !== "string") {
-      throw new Error("Invalid argument: projectId must be a string");
-    }
-
-    const project = await this.projectService.getProject(projectId);
-    if (!project) {
-      throw new Error("Project not found");
-    }
+    const project = await this.requireFeatureProject(args.featureName);
+    const projectId = project.id;
 
     // Check if can transition to design phase
     const validation = await this.workflowService.validatePhaseTransition(
@@ -503,16 +337,9 @@ export class SDDToolAdapter {
   }
 
   private async handleTasks(args: Record<string, unknown>): Promise<string> {
-    const { projectId, reviewTestCases } = args;
-
-    if (typeof projectId !== "string") {
-      throw new Error("Invalid argument: projectId must be a string");
-    }
-
-    const project = await this.projectService.getProject(projectId);
-    if (!project) {
-      throw new Error("Project not found");
-    }
+    const { reviewTestCases } = args;
+    const project = await this.requireFeatureProject(args.featureName);
+    const projectId = project.id;
 
     // Check if can transition to tasks phase
     const validation = await this.workflowService.validatePhaseTransition(
@@ -550,28 +377,47 @@ export class SDDToolAdapter {
     return `Tasks document generated for project "${project.name}"`;
   }
 
+  private async handleImplement(args: Record<string, unknown>): Promise<unknown> {
+    const project = await this.requireFeatureProject(args.featureName);
+    const validation = await this.workflowService.validatePhaseTransition(
+      project.id,
+      WorkflowPhase.IMPLEMENTATION,
+    );
+    if (!validation.canProgress) {
+      throw new Error(`Cannot begin implementation: ${validation.reason}`);
+    }
+    const updated = await this.projectService.updateProjectPhase(
+      project.id,
+      WorkflowPhase.IMPLEMENTATION,
+    );
+    return {
+      featureName: updated.name,
+      phase: updated.phase,
+      ready: true,
+    };
+  }
+
+  private async handleApprove(args: Record<string, unknown>): Promise<unknown> {
+    const featureName = this.requireFeatureName(args.featureName);
+    const phase = args.phase;
+    if (!["requirements", "design", "tasks"].includes(phase as string)) {
+      throw new Error("Invalid argument: phase must be requirements, design, or tasks");
+    }
+    return this.workflowEngineService.approve({
+      projectRoot: process.cwd(),
+      featureName,
+      phase: phase as "requirements" | "design" | "tasks",
+    });
+  }
+
   private async handleReviewTestCases(
     args: Record<string, unknown>,
-  ): Promise<string> {
-    const { projectId } = args;
-
-    if (typeof projectId !== "string") {
-      throw new Error("Invalid argument: projectId must be a string");
-    }
-
-    const project = await this.projectService.getProject(projectId);
-    if (!project) {
-      throw new Error("Project not found");
-    }
-
-    const updatedProject = await this.projectService.updateTestCaseReviewCheckpoint(
-      projectId,
-      { required: true, reviewed: true },
-    );
-    const specContent = await this.templateService.generateSpecJson(updatedProject);
-    await this.templateService.writeProjectFile(updatedProject, "spec.json", specContent);
-
-    return `TDD test cases reviewed for project "${project.name}"`;
+  ): Promise<unknown> {
+    const featureName = this.requireFeatureName(args.featureName);
+    return this.workflowEngineService.reviewTestCases({
+      projectRoot: process.cwd(),
+      featureName,
+    });
   }
 
   private async handleQualityCheck(
@@ -593,28 +439,73 @@ export class SDDToolAdapter {
 
   private async handleContextLoad(
     args: Record<string, unknown>,
-  ): Promise<string> {
-    const { projectId, mode = "compact" } = args;
-
-    if (typeof projectId !== "string") {
-      throw new Error("Invalid argument: projectId must be a string");
-    }
-    if (!["compact", "standard", "full"].includes(mode as string)) {
-      throw new Error("Invalid argument: mode must be compact, standard, or full");
-    }
-
-    const project = await this.projectService.getProject(projectId);
-    if (!project) {
-      throw new Error("Project not found");
-    }
-
-    const context = await this.contextCompactionService.loadContext(
-      project,
-      mode as ContextLoadMode,
-    );
-
-    return context;
+  ): Promise<unknown> {
+    const featureName = this.requireFeatureName(args.featureName);
+    const {
+      mode,
+      phase,
+      maxEstimatedTokens,
+      ifNoneMatch,
+      includeUnapproved,
+    } = args;
+    return this.contextCompactionService.loadContext({
+      projectRoot: process.cwd(),
+      featureName,
+      mode: mode as ContextLoadMode | undefined,
+      phase: phase as "requirements" | "design" | "tasks" | undefined,
+      maxEstimatedTokens: maxEstimatedTokens as number | undefined,
+      ifNoneMatch: ifNoneMatch as string | undefined,
+      includeUnapproved: includeUnapproved as boolean | undefined,
+    });
   }
+  private async handleTemplateRender(args: Record<string, unknown>): Promise<unknown> {
+    const project = await this.requireFeatureProject(args.featureName);
+    const templateType = args.templateType;
+    if (args.customTemplate !== undefined) {
+      if (typeof args.customTemplate !== "string") {
+        throw new Error("Invalid argument: customTemplate must be a string");
+      }
+      return {
+        featureName: project.name,
+        templateType,
+        content: args.customTemplate,
+      };
+    }
+    let content: string;
+    switch (templateType) {
+      case "requirements":
+        content = await this.templateService.generateRequirementsTemplate(project);
+        break;
+      case "design":
+        content = await this.templateService.generateDesignTemplate(project);
+        break;
+      case "tasks":
+        content = await this.templateService.generateTasksTemplate(project);
+        break;
+      default:
+        throw new Error("Invalid argument: templateType must be requirements, design, or tasks");
+    }
+    return { featureName: project.name, templateType, content };
+  }
+
+  private async handleValidateDesign(args: Record<string, unknown>): Promise<unknown> {
+    const project = await this.requireFeatureProject(args.featureName);
+    return this.qualityService.validateDesign(project);
+  }
+
+  private async handleValidateGap(args: Record<string, unknown>): Promise<unknown> {
+    const project = await this.requireFeatureProject(args.featureName);
+    return {
+      featureName: project.name,
+      analysis: await this.codebaseAnalysisService.analyzeCodebase(project.path),
+    };
+  }
+
+  private async handleSpecImplementation(args: Record<string, unknown>): Promise<unknown> {
+    const result = await this.handleImplement(args);
+    return { ...(result as Record<string, unknown>), taskNumbers: args.taskNumbers ?? null };
+  }
+
 
   private async handleSteering(args: Record<string, unknown>): Promise<string> {
     const { updateMode = "update" } = args;
@@ -721,6 +612,13 @@ Choose Codex or Claude Code interactively, or pass \`--target\` explicitly in au
         "Invalid arguments: fileName, topic, and inclusionMode must be strings",
       );
     }
+    if (!/^[A-Za-z0-9][A-Za-z0-9._-]*\.md$/.test(fileName)) {
+      throw new Error("Invalid argument: fileName must be a Markdown basename");
+    }
+    if (!["always", "conditional", "manual"].includes(inclusionMode)) {
+      throw new Error("Invalid argument: inclusionMode must be always, conditional, or manual");
+    }
+
 
     const content = `# ${topic}
 

@@ -1,3 +1,6 @@
+import * as fs from 'fs';
+import * as os from 'os';
+import * as path from 'path';
 import { InstallSkillsCLI, CLIOptions, cliExitCode } from '../../../cli/install-skills';
 import { SkillManager } from '../../../skills/SkillManager';
 import { RulesManager } from '../../../rules/RulesManager';
@@ -83,6 +86,7 @@ describe('InstallSkillsCLI', () => {
   afterEach(() => {
     consoleLogSpy.mockRestore();
     consoleErrorSpy.mockRestore();
+    process.exitCode = undefined;
   });
 
   describe('parseArgs', () => {
@@ -238,6 +242,12 @@ describe('InstallSkillsCLI', () => {
       expect(options.codex).toBe(false);
     });
 
+    it('accepts the native OMP target and refresh option', () => {
+      const options = cli.parseArgs(['--target', 'omp', '--refresh-generated']);
+      expect(options.target).toBe('omp');
+      expect(options.refreshGenerated).toBe(true);
+    });
+
     it('should preserve path override intent for target-specific defaults', () => {
       const options = cli.parseArgs(['--target', 'codex', '--agents-path', 'custom/agents']);
 
@@ -302,33 +312,35 @@ describe('InstallSkillsCLI', () => {
       expect(consoleLogSpy).toHaveBeenCalledWith(expect.stringContaining('sdd-design'));
     });
 
-    it('should install skills to target path', async () => {
-      const options = createOptions({ targetPath: '/target/.claude/skills' });
-
-      mockSkillManager.installSkills.mockResolvedValue({
-        installed: ['sdd-requirements', 'sdd-design'],
-        failed: [],
-      });
-
-      await cli.run(options);
-
-      expect(mockSkillManager.installSkills).toHaveBeenCalledWith('/target/.claude/skills');
-      expect(consoleLogSpy).toHaveBeenCalledWith(expect.stringContaining('Installed 2 skills'));
+    it('routes install-skills through the unified target-aware renderer', async () => {
+      const originalCwd = process.cwd();
+      const temporaryRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'sdd-cli-alias-'));
+      mockSkillManager.listSkills.mockResolvedValue([]);
+      try {
+        process.chdir(temporaryRoot);
+        await cli.run(createOptions());
+        expect(mockSkillManager.installSkills).not.toHaveBeenCalled();
+        expect(fs.existsSync(path.join(temporaryRoot, 'CLAUDE.md'))).toBe(true);
+      } finally {
+        process.chdir(originalCwd);
+        fs.rmSync(temporaryRoot, { recursive: true, force: true });
+      }
     });
 
-    it('should report installation failures', async () => {
-      const options = createOptions({ targetPath: '/target/.claude/skills' });
-
-      mockSkillManager.installSkills.mockResolvedValue({
-        installed: ['sdd-requirements'],
-        failed: [{ name: 'sdd-design', error: 'Permission denied' }],
-      });
-
-      await cli.run(options);
-
-      expect(consoleLogSpy).toHaveBeenCalledWith(expect.stringContaining('Installed 1 skill'));
-      expect(consoleErrorSpy).toHaveBeenCalledWith(expect.stringContaining('Failed to install'));
-      expect(consoleErrorSpy).toHaveBeenCalledWith(expect.stringContaining('sdd-design'));
+    it('reports target-aware skill source failures', async () => {
+      const originalCwd = process.cwd();
+      const temporaryRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'sdd-cli-failure-'));
+      mockSkillManager.listSkills.mockResolvedValue([
+        { name: 'sdd-design', description: 'Design', path: '/missing/sdd-design' },
+      ]);
+      try {
+        process.chdir(temporaryRoot);
+        await cli.run(createOptions());
+        expect(consoleErrorSpy).toHaveBeenCalledWith(expect.stringContaining('skills/sdd-design'));
+      } finally {
+        process.chdir(originalCwd);
+        fs.rmSync(temporaryRoot, { recursive: true, force: true });
+      }
     });
 
     it('should handle empty skill list gracefully', async () => {
@@ -338,7 +350,44 @@ describe('InstallSkillsCLI', () => {
 
       await cli.run(options);
 
-      expect(consoleLogSpy).toHaveBeenCalledWith(expect.stringContaining('No skills available'));
+      expect(consoleLogSpy).toHaveBeenCalledWith(expect.stringContaining('(none)'));
+    });
+
+    it('installs all three native targets and merges their manifest records', async () => {
+      const originalCwd = process.cwd();
+      const temporaryRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'sdd-cli-all-tools-'));
+      const source = path.join(temporaryRoot, 'source/sdd-design');
+      fs.mkdirSync(source, { recursive: true });
+      fs.writeFileSync(path.join(source, 'SKILL.md'), '---\nname: sdd-design\ndescription: Design\n---\n\n# Design');
+      mockSkillManager.listSkills.mockResolvedValue([
+        { name: 'sdd-design', description: 'Design', path: source },
+      ]);
+      try {
+        process.chdir(temporaryRoot);
+        await cli.runUnified(createOptions({ allTools: true, components: ['skills'] }));
+        expect(fs.existsSync(path.join(temporaryRoot, '.claude/skills/sdd-design/SKILL.md'))).toBe(true);
+        expect(fs.existsSync(path.join(temporaryRoot, '.agents/skills/sdd-design/SKILL.md'))).toBe(true);
+        expect(fs.existsSync(path.join(temporaryRoot, '.omp/skills/sdd-design/SKILL.md'))).toBe(true);
+        const manifest = JSON.parse(fs.readFileSync(path.join(
+          temporaryRoot,
+          '.sdd-mcp/install-manifest.json',
+        ), 'utf8'));
+        expect(Object.keys(manifest.targets).sort()).toEqual(['claude-code', 'codex', 'omp']);
+      } finally {
+        process.chdir(originalCwd);
+        fs.rmSync(temporaryRoot, { recursive: true, force: true });
+      }
+    });
+
+    it('rejects ambiguous all-tools overrides and explicit OMP hooks', async () => {
+      await expect(cli.runUnified(createOptions({
+        allTools: true,
+        pathOverrides: { skills: 'custom' },
+      }))).rejects.toThrow('Path overrides cannot be combined with --all-tools');
+      await expect(cli.runUnified(createOptions({
+        target: 'omp',
+        components: ['hooks'],
+      }))).rejects.toThrow('does not support packaged Markdown hooks');
     });
   });
 
@@ -369,6 +418,8 @@ describe('InstallSkillsCLI', () => {
       expect(help).toContain('--target <target>');
       expect(help).toContain('codex');
       expect(help).toContain('claude-code');
+      expect(help).toContain('omp');
+      expect(help).toContain('--refresh-generated');
     });
 
     it('should include multi-tool support flags', () => {

@@ -1,6 +1,6 @@
 import * as path from 'path';
 
-export type InstallTarget = 'codex' | 'claude-code';
+export type InstallTarget = 'codex' | 'claude-code' | 'omp';
 export type InstallProfile = 'lean' | 'full';
 export type ComponentType = 'skills' | 'steering' | 'rules' | 'contexts' | 'agents' | 'hooks';
 export type AgentRole =
@@ -60,11 +60,19 @@ export interface InstallFailure {
   error: string;
 }
 
+export interface InstallConflict {
+  component: ComponentType | 'root';
+  name: string;
+  path: string;
+  reason: 'modified' | 'legacy-unmanaged' | 'obsolete-modified';
+}
+
 export interface TargetInstallReport {
   target: InstallTarget;
   installed: string[];
   skipped: string[];
   failed: InstallFailure[];
+  conflicts: InstallConflict[];
 }
 
 export class CliUsageError extends Error {
@@ -90,16 +98,16 @@ export const SUPPORTED_CODEX_MODELS = [
 export const DEFAULT_CODEX_MODEL = 'gpt-5.6-sol' as const;
 
 export const ROLE_MODEL_ROUTES = {
-  planner: route('high-level', 'gpt-5.6-sol', 'xhigh', 'opus'),
-  architect: route('high-level', 'gpt-5.6-sol', 'xhigh', 'opus'),
-  reviewer: route('high-level', 'gpt-5.6-sol', 'xhigh', 'opus'),
-  'security-auditor': route('high-level', 'gpt-5.6-sol', 'xhigh', 'opus'),
+  planner: route('advisor', 'gpt-5.6-sol', 'xhigh', 'opus'),
+  architect: route('advisor', 'gpt-5.6-sol', 'xhigh', 'opus'),
+  reviewer: route('advisor', 'gpt-5.6-sol', 'xhigh', 'opus'),
+  'security-auditor': route('advisor', 'gpt-5.6-sol', 'xhigh', 'opus'),
   implementer: route('implementation', DEFAULT_CODEX_MODEL, 'medium', 'sonnet'),
   'tdd-guide': route('implementation', DEFAULT_CODEX_MODEL, 'medium', 'sonnet'),
 } as const;
 
 function route(
-  taskClass: 'high-level' | 'implementation',
+  taskClass: 'advisor' | 'implementation' | 'local',
   model: typeof SUPPORTED_CODEX_MODELS[number],
   reasoningEffort: 'xhigh' | 'medium',
   claudeModel: 'opus' | 'sonnet',
@@ -108,6 +116,7 @@ function route(
     taskClass,
     codex: { model, reasoningEffort },
     claudeCode: { model: claudeModel },
+    omp: { model, thinkingLevel: reasoningEffort },
   } as const;
 }
 
@@ -136,7 +145,7 @@ const TARGET_POLICIES: Readonly<Record<InstallTarget, TargetPolicy>> = {
       hooks: '.claude/hooks',
       rootGuidance: 'CLAUDE.md',
     },
-    ignoreEntries: ['.claude/'],
+    ignoreEntries: ['.claude/', '.sdd-mcp/'],
   },
   codex: {
     target: 'codex',
@@ -149,12 +158,25 @@ const TARGET_POLICIES: Readonly<Record<InstallTarget, TargetPolicy>> = {
       hooks: '.codex/hooks',
       rootGuidance: 'AGENTS.md',
     },
-    ignoreEntries: ['.agents/', '.codex/'],
+    ignoreEntries: ['.agents/', '.codex/', '.sdd-mcp/'],
+  },
+  omp: {
+    target: 'omp',
+    defaultPaths: {
+      skills: '.omp/skills',
+      steering: '.spec/steering',
+      rules: '.omp/rules',
+      contexts: '.omp/contexts',
+      agents: '.omp/agents',
+      hooks: '.omp/hooks',
+      rootGuidance: '.omp/AGENTS.md',
+    },
+    ignoreEntries: ['.omp/', '.sdd-mcp/'],
   },
 };
 
 export function isInstallTarget(value: string): value is InstallTarget {
-  return value === 'codex' || value === 'claude-code';
+  return value === 'codex' || value === 'claude-code' || value === 'omp';
 }
 
 export function getTargetPolicy(target: InstallTarget): TargetPolicy {
@@ -201,7 +223,7 @@ export async function resolveInstallTarget(
   io: TargetPromptIO,
 ): Promise<ResolvedTarget> {
   if (options.target && options.legacyCodex && options.target !== 'codex') {
-    throw new CliUsageError('--codex conflicts with --target claude-code');
+    throw new CliUsageError(`--codex conflicts with --target ${options.target}`);
   }
   if (options.target) return { target: options.target, source: 'explicit' };
   if (options.legacyCodex) {
@@ -213,6 +235,6 @@ export async function resolveInstallTarget(
     if (!target) throw new InstallCancelledError();
     return { target, source: 'interactive' };
   }
-  io.writeNotice('No target selected; using claude-code. Use --target codex or --target claude-code.');
+  io.writeNotice('No target selected; using claude-code. Use --target codex, --target claude-code, or --target omp.');
   return { target: 'claude-code', source: 'compatibility-default' };
 }

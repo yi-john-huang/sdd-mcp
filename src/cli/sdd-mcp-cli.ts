@@ -5,7 +5,7 @@
  *
  * Usage:
  *   npx sdd-mcp install [options]           # Install target-native SDD components
- *   npx sdd-mcp install-skills [options]    # Install skills only (legacy)
+ *   npx sdd-mcp install-skills [options]    # Alias for install --skills
  *   npx sdd-mcp migrate-kiro [options]
  *   npx sdd-mcp --help
  */
@@ -25,7 +25,7 @@ Usage: npx sdd-mcp-server <command> [options]
 
 Commands:
   install           Install target-native SDD components (recommended)
-  install-skills    Install SDD skills only (legacy)
+  install-skills    Alias for target-aware install --skills
   migrate-kiro      Migrate .kiro directory to .spec (v2.1.0+)
   migrate-steering  Migrate steering docs to consolidated components (v3.1.0+)
 
@@ -33,12 +33,12 @@ Options:
   --help, -h        Show this help message
 
 Agent Target:
-  --target <target> Choose codex or claude-code
+  --target <target> Choose codex, claude-code, or omp
   --codex           Deprecated alias for --target codex
 
 Additional Integrations:
   --antigravity     Also create .agent/ symlinks for Google Antigravity
-  --all-tools       Enable all tool integrations (codex + antigravity)
+  --all-tools       Install Claude Code, Codex, OMP, and Antigravity
 
 Examples:
   npx sdd-mcp-server install                     # Lean target-native install
@@ -47,8 +47,9 @@ Examples:
   npx sdd-mcp-server install --list              # List available content
   npx sdd-mcp-server install --profile full      # Prompt for the target agent
   npx sdd-mcp-server install --target codex      # Native Codex install
+  npx sdd-mcp-server install --target omp        # Native Oh My Pi install
   npx sdd-mcp-server install --all-tools         # Add optional integrations
-  npx sdd-mcp-server install-skills              # Legacy: Install skills
+  npx sdd-mcp-server install-skills              # Alias for install --skills
   npx sdd-mcp-server install-skills --list       # List available skills
   npx sdd-mcp-server migrate-kiro                # Migrate .kiro to .spec
   npx sdd-mcp-server migrate-kiro --dry-run      # Preview migration
@@ -75,7 +76,7 @@ async function main() {
       break;
 
     case 'install-skills':
-      // Legacy: Install skills only
+      // Target-aware skills-only alias
       process.argv = [process.argv[0], process.argv[1], ...args.slice(1)];
       await installSkillsMain();
       break;

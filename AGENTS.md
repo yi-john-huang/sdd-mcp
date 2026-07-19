@@ -1,90 +1,25 @@
-# AGENTS.md - Spec-Driven Development (SDD)
+# SDD-MCP Project Guidance
 
-This project uses the SDD workflow powered by `sdd-mcp-server`.
-
-## Two Development Paths
-
-### Path A: Simple Task (`/simple-task`)
-For small features, bug fixes, and quick enhancements.
-
-### Path B: Full SDD Workflow
-For complex features requiring formal specification.
-
-```text
-sdd-init -> /sdd-requirements -> /sdd-design -> /sdd-tasks -> /sdd-implement
-```
-
-Each phase requires human approval before proceeding.
-
-## Component Sources and Native Targets
-
-The repository ships canonical component sources and renders only the selected agent's native project files:
-
-| Component | Package source | Claude Code target | Codex target |
-|-----------|----------------|--------------------|--------------|
-| Skills | `skills/` | `.claude/skills/` | `.agents/skills/` |
-| Steering | `steering/` | `.spec/steering/` | `.spec/steering/` |
-| Rules | `rules/` | `.claude/rules/` | `.codex/guidance/rules/` |
-| Contexts | `contexts/` | `.claude/contexts/` | `.codex/guidance/contexts/` |
-| Agents | `agents/*.md` | `.claude/agents/*.md` | `.codex/agents/*.toml` |
-| Hooks | `hooks/` | `.claude/hooks/` | `.codex/hooks.json` and `.codex/hooks/` |
-| Root guidance | `templates/` | `CLAUDE.md` | `AGENTS.md` |
-
-### Skills
-
-On-demand guidance invoked through the target agent:
-
-| Skill | Purpose |
-|-------|---------|
-| `/simple-task` | Quick implementation with best practices |
-| `/sdd-requirements` | EARS-formatted requirements generation |
-| `/sdd-design` | Architecture design with quality principles |
-| `/sdd-tasks` | TDD task breakdown with test pyramid |
-| `/sdd-implement` | Implementation guidelines (SOLID, security, TDD) |
-| `/sdd-steering` | Create/update project steering documents |
-| `/sdd-steering-custom` | Custom steering for specialized contexts |
-| `/sdd-commit` | Commit message and PR guidelines |
-| `/sdd-review` | Code review skill |
-| `/sdd-security-check` | Security audit skill |
-| `/sdd-test-gen` | Test generation skill |
-
-### Steering (`.spec/steering/`)
-Project-specific context documents. Edit these to describe your project:
-
-- `product.md` - Product context and business objectives
-- `tech.md` - Technology stack and decisions
-- `structure.md` - File organization and patterns
-
-## Model Routing
-
-| Work class | Codex | Claude Code |
-|------------|-------|-------------|
-| Planning, architecture, review, security | `gpt-5.6-sol` with xhigh effort | `opus` |
-| Implementation and TDD (default) | `gpt-5.6-sol` with medium effort | `sonnet` |
-
-Codex uses `gpt-5.6-sol` as the default model for routed work. High-level advisor roles use xhigh effort, while implementation and TDD roles use medium effort. `gpt-5.6-luna` and `gpt-5.6-terra` remain supported models but are not assigned to a default SDD role. Routed skills use compact specialist handoffs and continue in the current agent when delegation is unavailable.
-For the complete role map, generated-file examples, and delegation flow, see [docs/MODEL-ROUTING.md](docs/MODEL-ROUTING.md).
-
-## MCP Tools
-
-| Tool | Description |
-|------|-------------|
-| `sdd-init` | Initialize new SDD spec |
-| `sdd-status` | Check workflow progress |
-| `sdd-approve` | Approve workflow phases |
-| `sdd-review-test-cases` | Mark optional TDD test-case review complete |
-| `sdd-quality-check` | Code quality analysis |
-| `sdd-context-load` | Load compact, standard, or full project context |
-| `sdd-validate-design` | Design quality validation |
-| `sdd-validate-gap` | Implementation gap analysis |
-| `sdd-spec-impl` | Execute tasks with TDD |
+This repository develops `sdd-mcp-server`, a spec-driven workflow for Claude Code, Codex, and Oh My Pi (OMP).
 
 ## Workflow
 
-1. **Setup**: use `npx sdd-mcp-server install --profile full` for an interactive target choice, or pass `--target codex` / `--target claude-code` explicitly for automation.
-2. **Steering**: `/sdd-steering` to update project-specific docs when needed.
-3. **Specify**: `sdd-init` -> `/sdd-requirements` -> `/sdd-design` -> `/sdd-tasks`, approving each phase.
-4. **Context**: use `sdd-context-load` compact mode for routine continuation; use `mode: "full"` only when needed.
-5. **Implement**: `/sdd-implement` or `sdd-spec-impl`.
-6. **Review**: `sdd-quality-check`.
-7. **Commit**: `/sdd-commit`.
+- Small fixes: invoke `/skill:simple-task`.
+- Complex changes: `sdd-init` → `/skill:sdd-requirements` → approval → `/skill:sdd-design` → approval → `/skill:sdd-tasks` → approval → `/skill:sdd-implement`.
+- Never cross an unapproved phase. Optional TDD test-case review must complete before tasks approval when configured.
+- Use the installed `sdd-*` MCP tools for durable state. Load compact context by default; request standard/full only when the task needs omitted source detail.
+
+## Repository layout
+
+- Canonical components: `skills/`, `agents/`, `rules/`, `contexts/`, `hooks/`, `steering/`, `templates/`.
+- Implementation: `src/`; focused tests: `src/__tests__/`.
+- Specifications and project steering: `.spec/specs/` and `.spec/steering/`.
+- Generated native targets are installed under `.claude/`, `.agents/` + `.codex/`, or `.omp/`; do not hand-edit generated files.
+
+## Model routing
+
+Planning, architecture, review, and security run inline on Sol/medium by default in OMP; project Sol/xhigh advisors are explicit opt-in. Claude uses current-turn Opus/Sonnet routing, while Codex may use one configured Sol/xhigh custom advisor.
+
+Run implementation, TDD, simple tasks, and commits in the parent unless at least two genuinely independent implementation slices can run concurrently. If an advisor is explicitly invoked, allow one specialist without nesting; on model, auth, or agent failure, record one fallback and continue in the parent without retrying.
+
+See `docs/MODEL-ROUTING.md` for route details and `docs/WORKFLOW.md` for the complete workflow.

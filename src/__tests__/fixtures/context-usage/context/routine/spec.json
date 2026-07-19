@@ -1,0 +1,9 @@
+{
+  "featureName": "routine",
+  "currentPhase": "tasks",
+  "reviewTestCases": true,
+  "testCasesReviewed": true,
+  "requirements": { "generated": true, "approved": true },
+  "design": { "generated": true, "approved": true },
+  "tasks": { "generated": true, "approved": true }
+}

@@ -1,0 +1,3 @@
+{"type":"session","version":3,"id":"parent-before","timestamp":"2026-07-01T00:00:00.000Z","cwd":"/private/project"}
+{"type":"message","id":"u1","parentId":null,"timestamp":"2026-07-01T00:00:01.000Z","message":{"role":"user","content":[{"type":"text","text":"PRIVATE PROMPT SENTINEL"}],"timestamp":1}}
+{"type":"message","id":"a1","parentId":"u1","timestamp":"2026-07-01T00:00:02.000Z","message":{"role":"assistant","provider":"openai-codex","model":"gpt-5.6-sol","content":[{"type":"text","text":"PRIVATE RESPONSE SENTINEL"}],"usage":{"input":100,"output":25,"cacheRead":40,"cacheWrite":0,"cost":{"input":0.001,"output":0.002,"cacheRead":0.0001,"cacheWrite":0,"total":0.0031}},"timestamp":2}}

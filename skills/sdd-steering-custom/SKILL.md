@@ -1,215 +1,31 @@
 ---
 name: sdd-steering-custom
-description: Create custom steering documents for specialized contexts. Use when you need domain-specific guidance for particular file types, modules, or workflows. Invoked via /sdd-steering-custom.
+description: Define scoped custom steering for a verified project convention or domain.
+disable-model-invocation: true
 ---
 
-# SDD Custom Steering Document Creation
+# Custom Steering
 
-Create specialized steering documents that provide context-specific guidance beyond the standard product/tech/structure documents.
+## Required Workflow
 
-## When to Use Custom Steering
-
-Custom steering is useful for:
-- **Domain-specific rules**: API design, database conventions
-- **File-type guidance**: Test patterns, component standards
-- **Workflow processes**: PR reviews, deployment procedures
-- **Team conventions**: Code review standards, documentation rules
-
-## Inclusion Modes
-
-Custom steering documents can be loaded in three ways:
-
-| Mode | Behavior | Use Case |
-|------|----------|----------|
-| **ALWAYS** | Loaded in every AI interaction | Core conventions, critical rules |
-| **CONDITIONAL** | Loaded when file patterns match | Test-specific, API-specific rules |
-| **MANUAL** | Referenced with `@filename.md` | Rarely needed, specialized contexts |
-
-## Workflow
-
-### Step 1: Identify the Need
-
-Ask yourself:
-- What specialized context is missing?
-- When should this guidance apply?
-- Is this project-wide or context-specific?
-
-### Step 2: Choose Inclusion Mode
-
-```
-Is this guidance ALWAYS relevant?
-├── YES → Use ALWAYS mode
-│
-└── NO → Is it relevant for specific file types?
-         ├── YES → Use CONDITIONAL mode with patterns
-         │         Examples: *.test.ts, src/api/**/*
-         │
-         └── NO → Use MANUAL mode
-                  Reference with @filename.md when needed
-```
-
-### Step 3: Create Document
-
-Save to `.spec/steering/{filename}.md`:
-
-```markdown
-# {Topic Name}
-
-## Purpose
-{Why this steering document exists}
-
-## Scope
-{When this guidance applies}
-
-## Guidelines
-
-### Guideline 1: {Name}
-{Detailed guidance}
-
-**Do:**
-- {Good practice}
-
-**Don't:**
-- {Anti-pattern}
-
-### Guideline 2: {Name}
-{Detailed guidance}
-
-## Examples
-
-### Good Example
-```{language}
-{Code showing good practice}
-```
-
-### Bad Example
-```{language}
-// DON'T: {explanation}
-{Code showing anti-pattern}
-```
-
-## Checklist
-- [ ] {Verification item 1}
-- [ ] {Verification item 2}
-
----
-<!-- Steering Metadata -->
-Inclusion Mode: {ALWAYS | CONDITIONAL | MANUAL}
-File Patterns: {patterns for CONDITIONAL mode}
-Created: {date}
-```
-
-## Common Custom Steering Documents
-
-### API Design Standards
-```markdown
-# API Design Standards
-
-## Inclusion
-Mode: CONDITIONAL
-Patterns: src/api/**/*.ts, src/routes/**/*.ts
-
-## Guidelines
-
-### RESTful Conventions
-- Use plural nouns for resources: `/users`, not `/user`
-- Use HTTP methods correctly: GET (read), POST (create), PUT (update), DELETE (remove)
-- Return appropriate status codes
-
-### Request/Response Format
-- Use JSON for request/response bodies
-- Include `Content-Type: application/json` header
-- Wrap responses in consistent envelope
-```
-
-### Test Patterns
-```markdown
-# Test Patterns
-
-## Inclusion
-Mode: CONDITIONAL
-Patterns: **/*.test.ts, **/*.spec.ts
-
-## Guidelines
-
-### Arrange-Act-Assert
-Every test should follow:
-1. **Arrange**: Set up test data and mocks
-2. **Act**: Execute the code under test
-3. **Assert**: Verify the results
-
-### Naming Convention
-`describe('{Class/Function}', () => {`
-`  it('should {expected behavior} when {condition}', () => {`
-```
-
-### Component Standards
-```markdown
-# Component Standards
-
-## Inclusion
-Mode: CONDITIONAL
-Patterns: src/components/**/*.tsx
-
-## Guidelines
-
-### Component Structure
-1. Imports (external, internal, types)
-2. Type definitions
-3. Component function
-4. Helper functions
-5. Exports
-```
-
-### Database Conventions
-```markdown
-# Database Conventions
-
-## Inclusion
-Mode: CONDITIONAL
-Patterns: src/db/**/*.ts, **/migrations/**/*
-
-## Guidelines
-
-### Table Naming
-- Use snake_case: `user_accounts`
-- Use plural: `orders`, not `order`
-- Prefix with domain: `auth_sessions`
-
-### Column Naming
-- Use snake_case: `created_at`
-- Foreign keys: `{table}_id`
-- Booleans: `is_active`, `has_access`
-```
-
-## File Pattern Syntax
-
-Patterns use glob syntax:
-
-| Pattern | Matches |
-|---------|---------|
-| `*.test.ts` | All test files in current dir |
-| `**/*.test.ts` | All test files recursively |
-| `src/api/**/*` | All files in api directory tree |
-| `*.{ts,tsx}` | TypeScript and TSX files |
-| `!node_modules/**` | Exclude node_modules |
-
-## MCP Tool Integration
-
-Custom steering documents are managed manually. After creating:
-1. Save to `.spec/steering/{name}.md`
-2. Verify file patterns work as expected
-3. Reference in AGENTS.md/CLAUDE.md if needed
-
-## Quality Checklist
-
-- [ ] Purpose is clearly stated
-- [ ] Inclusion mode is appropriate
-- [ ] File patterns are specific (for CONDITIONAL)
-- [ ] Guidelines are actionable
-- [ ] Examples show good and bad practices
-- [ ] Checklist for verification included
+1. Define the missing guidance, its audience, and why standard steering is insufficient.
+2. Accept `fileName` only as a basename ending in `.md`; reject separators, absolute paths, traversal, control characters, and non-Markdown names.
+3. Choose the narrowest inclusion mode:
+   - always for genuinely universal project facts;
+   - conditional with explicit file globs;
+   - manual for rare or specialized guidance.
+4. Write purpose, scope, actionable rules, exceptions, and verification steps. Use examples only when they prevent ambiguity.
+5. Preserve user-authored content during updates. Never overwrite unrelated steering or weaken mandatory security guidance.
+6. Validate conditional globs against intended and unintended paths. Keep secrets and private environment values out of steering.
 
 ## Specialist Delegation
 
-When the host supports subagents, delegate this phase to the `planner` role with a compact handoff containing only the specialized domain, file scope, project constraints, and requested steering outcome. Wait for the specialist and then integrate its result into the current workflow. If specialist delegation is unavailable, state the fallback and continue in the current agent.
+Target renderers provide the `planner` route. When a native advisor is required, dispatch exactly one compact handoff with `specialistDepth: 1`; include only domain facts, intended file scope, project constraints, and output contract. The specialist must not delegate again. Keep the handoff and returned summary at or below 2,048 estimated tokens. If the advisor or routed model is unavailable, record one fallback and continue in the parent without retrying or selecting a generic child. Where a native per-turn model override applies, execute in this turn.
+
+## Output
+
+Return the contained path, inclusion mode/globs, evidence used, validation results, preserved user content, and blockers.
+
+## Optional Reference
+
+Read [REFERENCE.md](REFERENCE.md) only for templates, glob examples, or sample domain steering.

@@ -2,6 +2,7 @@ import {
   parseSourceAgent,
   renderClaudeCodeAgent,
   renderCodexAgent,
+  renderOmpAgent,
 } from '../../../cli/tool-support/target-agent-renderer';
 
 const PLANNER = `---
@@ -42,6 +43,15 @@ describe('target agent rendering', () => {
     const rendered = renderCodexAgent(parseSourceAgent(source));
     expect(rendered).toContain('model = "gpt-5.6-sol"');
     expect(rendered).toContain('model_reasoning_effort = "medium"');
+  });
+
+  it('renders OMP native route metadata without spawn tools', () => {
+    const rendered = renderOmpAgent(parseSourceAgent(PLANNER));
+    expect(rendered).toContain('model: gpt-5.6-sol');
+    expect(rendered).toContain('thinkingLevel: xhigh');
+    expect(rendered).toContain('maxTurns: 12');
+    expect(rendered).not.toMatch(/^\s*- task$/m);
+    expect(rendered).not.toContain('spawns:');
   });
 
   it('rejects an unknown role', () => {

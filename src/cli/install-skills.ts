@@ -8,7 +8,6 @@ import { RulesManager } from '../rules/RulesManager.js';
 import { ContextManager } from '../contexts/ContextManager.js';
 import { AgentManager } from '../agents/AgentManager.js';
 import { HookLoader } from '../hooks/HookLoader.js';
-import { generateCodexAgentsMd } from './tool-support/codex.js';
 import { createAntigravitySymlinks } from './tool-support/antigravity.js';
 import { getDistCliDir } from './utils/find-package-root.js';
 import {
@@ -26,7 +25,9 @@ import {
 } from './install-target.js';
 import { installClaudeCodeTarget } from './tool-support/claude-code.js';
 import { installCodexTarget } from './tool-support/codex.js';
+import { installOmpTarget } from './tool-support/omp.js';
 import { updateGeneratedIgnores } from './utils/gitignore-manager.js';
+import { PreservingWriter } from './utils/preserving-writer.js';
 
 /**
  * Component types that can be installed
@@ -79,6 +80,8 @@ export interface CLIOptions {
   allTools: boolean;
   /** Installation profile for default unified install */
   installProfile: InstallProfile;
+  /** Back up and replace package-owned generated files. */
+  refreshGenerated?: boolean;
 }
 
 /**
@@ -182,6 +185,7 @@ export class InstallSkillsCLI {
       allTools: false,
       installProfile: 'lean',
       pathOverrides: {},
+      refreshGenerated: false,
     };
 
     for (let i = 0; i < args.length; i++) {
@@ -215,7 +219,7 @@ export class InstallSkillsCLI {
         case '--target': {
           const target = requireOptionValue(args, ++i, '--target');
           if (!isInstallTarget(target)) {
-            throw new CliUsageError(`Unsupported target "${target}". Choose codex or claude-code.`);
+            throw new CliUsageError(`Unsupported target "${target}". Choose codex, claude-code, or omp.`);
           }
           options.target = target;
           break;
@@ -275,6 +279,9 @@ export class InstallSkillsCLI {
         case '--all-tools':
           options.allTools = true;
           break;
+        case '--refresh-generated':
+          options.refreshGenerated = true;
+          break;
       }
     }
 
@@ -282,21 +289,13 @@ export class InstallSkillsCLI {
   }
 
   /**
-   * Run the CLI with given options (legacy skills-only mode)
+   * Run the install-skills alias through the unified skills-only path.
    * @param options - CLI options
    */
   async run(options: CLIOptions): Promise<void> {
-    if (options.showHelp) {
-      console.log(this.getHelp());
-      return;
-    }
-
-    if (options.listOnly) {
-      await this.listSkills();
-      return;
-    }
-
-    await this.installSkills(options.targetPath);
+    options.components = ['skills'];
+    options.skillsOnly = true;
+    await this.runUnified(options);
   }
 
   /**
@@ -314,93 +313,92 @@ export class InstallSkillsCLI {
       return;
     }
 
-    const resolvedTarget = await resolveInstallTarget({
-      target: options.target,
-      legacyCodex: options.codex,
-      profile: options.installProfile,
-    }, this.promptIO);
-    const policy = getTargetPolicy(resolvedTarget.target);
-    const paths = resolveInstallPaths(policy, options.pathOverrides ?? legacyPathOverrides(options));
-
-    // If specific components requested, install only those
-    const hasSpecificComponents = options.components.length > 0;
-    const componentsToInstall = hasSpecificComponents
-      ? options.components
-      : this.getDefaultComponents(options.installProfile);
-
-    console.log(`\n🚀 SDD Component Installer (${options.installProfile} profile, ${resolvedTarget.target})\n`);
-
-    const projectRoot = process.cwd();
-    const request = {
-      projectRoot,
-      paths,
-      components: componentsToInstall,
-      sources: {
-        skillManager: this.skillManager,
-        rulesManager: this.rulesManager,
-        contextManager: this.contextManager,
-        agentManager: this.agentManager,
-        hookLoader: this.hookLoader,
-        steeringSource: this.steeringPath,
-      },
-    };
-    const report = resolvedTarget.target === 'codex'
-      ? await installCodexTarget(request)
-      : await installClaudeCodeTarget(request);
-
-    try {
-      const ignore = await updateGeneratedIgnores(projectRoot, policy.ignoreEntries);
-      console.log(`  .gitignore: ${ignore.status}`);
-    } catch (error) {
-      report.failed.push({
-        component: 'root',
-        name: '.gitignore',
-        path: path.join(projectRoot, '.gitignore'),
-        error: error instanceof Error ? error.message : String(error),
-      });
+    const overrides = options.pathOverrides ?? {};
+    if (options.allTools && Object.keys(overrides).length > 0) {
+      throw new CliUsageError('Path overrides cannot be combined with --all-tools; install each explicit target separately.');
     }
+    const resolvedTarget = options.allTools
+      ? { target: 'claude-code' as const, source: 'explicit' as const }
+      : await resolveInstallTarget({
+        target: options.target,
+        legacyCodex: options.codex,
+        profile: options.installProfile,
+      }, this.promptIO);
+    const targets: InstallTarget[] = options.allTools
+      ? ['claude-code', 'codex', 'omp']
+      : [resolvedTarget.target];
+    const projectRoot = process.cwd();
+    const sources = {
+      skillManager: this.skillManager,
+      rulesManager: this.rulesManager,
+      contextManager: this.contextManager,
+      agentManager: this.agentManager,
+      hookLoader: this.hookLoader,
+      steeringSource: this.steeringPath,
+    };
+    let installed = 0;
+    let skipped = 0;
+    let conflicts = 0;
+    const failures: Array<{ component: ComponentType | 'root'; name: string; path: string; error: string }> = [];
 
-    // Multi-tool support: Codex CLI
-    if (options.allTools && resolvedTarget.target !== 'codex') {
-      const failures = await generateCodexAgentsMd(
+    console.log(`\n🚀 SDD Component Installer (${options.installProfile} profile, ${targets.join(' + ')})\n`);
+    for (const target of targets) {
+      const policy = getTargetPolicy(target);
+      const paths = resolveInstallPaths(policy, options.allTools ? {} : overrides);
+      const components = options.components.length > 0
+        ? [...options.components]
+        : this.getDefaultComponents(options.installProfile, target);
+      if (target === 'omp' && components.includes('hooks')) {
+        if (!options.allTools) {
+          throw new CliUsageError('Oh My Pi does not support packaged Markdown hooks; omit --hooks.');
+        }
+        components.splice(components.indexOf('hooks'), 1);
+      }
+      const request = {
         projectRoot,
-        {
-          skillManager: this.skillManager,
-          rulesManager: this.rulesManager,
-          agentManager: this.agentManager,
-          listSteering: () => this.listSteering(),
-        },
-        {
-          skillsPath: paths.skills,
-          rulesPath: paths.rules,
-          agentsPath: paths.agents,
-          steeringPath: paths.steering,
-        },
-        {
-          skills: componentsToInstall.includes('skills'),
-          rules: componentsToInstall.includes('rules'),
-          agents: componentsToInstall.includes('agents'),
-          steering: componentsToInstall.includes('steering'),
-        },
-      );
-      for (const failure of failures) {
-        report.failed.push({
+        paths,
+        components,
+        sources,
+        profile: options.installProfile,
+        refreshGenerated: options.refreshGenerated,
+      };
+      const report = target === 'codex'
+        ? await installCodexTarget(request)
+        : target === 'omp'
+          ? await installOmpTarget(request)
+          : await installClaudeCodeTarget(request);
+      installed += report.installed.length;
+      skipped += report.skipped.length;
+      conflicts += report.conflicts.length;
+      failures.push(...report.failed);
+      try {
+        const ignore = await updateGeneratedIgnores(projectRoot, policy.ignoreEntries);
+        console.log(`  ${target} .gitignore: ${ignore.status}`);
+        await new PreservingWriter(projectRoot).recordShared(
+          path.join(projectRoot, '.gitignore'),
+          'gitignore',
+          false,
+        );
+      } catch (error) {
+        failures.push({
           component: 'root',
-          name: `codex/${failure.name}`,
-          path: failure.path,
-          error: failure.error,
+          name: '.gitignore',
+          path: path.join(projectRoot, '.gitignore'),
+          error: error instanceof Error ? error.message : String(error),
         });
+      }
+      if (target === 'omp') {
+        console.log('  omp model availability: not verified (optional: omp models find gpt-5.6-sol)');
       }
     }
 
-    // Multi-tool support: Google Antigravity
     if (options.antigravity || options.allTools) {
-      const failures = await createAntigravitySymlinks(projectRoot, {
-        skillsPath: paths.skills,
-        rulesPath: paths.rules,
-      });
-      for (const failure of failures) {
-        report.failed.push({
+      const antigravityPaths = getTargetPolicy('claude-code').defaultPaths;
+      for (const failure of await createAntigravitySymlinks(projectRoot, {
+        skillsPath: antigravityPaths.skills,
+        rulesPath: antigravityPaths.rules,
+      })) {
+        failures.push({
           component: 'root',
           name: failure.name === '.agent' ? failure.name : `.agent/${failure.name}`,
           path: failure.path,
@@ -409,12 +407,13 @@ export class InstallSkillsCLI {
       }
     }
 
-    console.log(`\nTarget: ${resolvedTarget.target} (${resolvedTarget.source})`);
-    console.log(`Installed: ${report.installed.length}`);
-    console.log(`Skipped: ${report.skipped.length}`);
-    console.log(`Failed: ${report.failed.length}`);
-    if (report.failed.length > 0) {
-      for (const failure of report.failed) {
+    console.log(`\nTarget: ${targets.join(', ')} (${resolvedTarget.source})`);
+    console.log(`Installed: ${installed}`);
+    console.log(`Skipped: ${skipped}`);
+    console.log(`Conflicts: ${conflicts}`);
+    console.log(`Failed: ${failures.length}`);
+    if (failures.length > 0) {
+      for (const failure of failures) {
         console.error(`  ${failure.component}/${failure.name} (${failure.path}): ${failure.error}`);
       }
       process.exitCode = 1;
@@ -424,11 +423,13 @@ export class InstallSkillsCLI {
     console.log('\n✨ Installation complete!\n');
   }
 
-  private getDefaultComponents(profile: InstallProfile): ComponentType[] {
-    if (profile === 'full') {
-      return ['skills', 'steering', 'rules', 'contexts', 'agents', 'hooks'];
+  private getDefaultComponents(profile: InstallProfile, target: InstallTarget): ComponentType[] {
+    if (target === 'omp') {
+      return profile === 'full'
+        ? ['skills', 'steering', 'agents', 'rules', 'contexts']
+        : ['skills', 'steering', 'agents'];
     }
-
+    if (profile === 'full') return ['skills', 'steering', 'rules', 'contexts', 'agents', 'hooks'];
     return ['skills', 'steering', 'hooks'];
   }
 
@@ -576,40 +577,6 @@ export class InstallSkillsCLI {
     console.log('Run "npx sdd-mcp-server install --profile full" to install all components.\n');
   }
 
-  /**
-   * Install skills to target directory
-   */
-  private async installSkills(targetPath: string): Promise<void> {
-    console.log(`\nInstalling SDD skills to: ${targetPath}\n`);
-    const result = await this.skillManager.installSkills(targetPath);
-    this.logInstallResult(result, 'skills');
-
-    if (result.installed.length > 0) {
-      console.log('Skills installed successfully!');
-      console.log('   Use /sdd-requirements, /sdd-design, etc. in Claude Code.\n');
-    }
-  }
-
-  /**
-   * Log installation results with consistent formatting
-   */
-  private logInstallResult(result: { installed: string[]; failed: Array<{ name: string; error: string }> }, typeName: string): void {
-    if (result.installed.length > 0) {
-      console.log(`Installed ${result.installed.length} ${typeName}:`);
-      for (const name of result.installed) {
-        console.log(`   - ${name}`);
-      }
-      console.log('');
-    }
-
-    if (result.failed.length > 0) {
-      console.error(`Failed to install ${result.failed.length} ${typeName}:`);
-      for (const failure of result.failed) {
-        console.error(`   - ${failure.name}: ${failure.error}`);
-      }
-      console.log('');
-    }
-  }
 
   /**
    * Get help text
@@ -652,11 +619,11 @@ SDD Unified Installer
 
 Usage: npx sdd-mcp-server install [options]
 
-Installs SDD components to your project. The default lean profile installs skills,
-steering, and hooks only to reduce always-on context and token usage.
+Installs SDD components to your project. Lean/full selections are target-aware;
+OMP lean includes native agents and OMP profiles never install Markdown hooks.
 
 Component Options (install specific types):
-  --target <target>     Primary agent target: codex or claude-code
+  --target <target>     Primary agent target: codex, claude-code, or omp
   --skills              Install skills only (to the selected target)
   --steering            Install steering documents only (to .spec/steering)
   --rules               Install rules only (to the selected target)
@@ -666,6 +633,7 @@ Component Options (install specific types):
   --all                 Install all component types
   --profile <profile>   Install profile when no component flags are provided:
                         lean (default) or full
+  --refresh-generated  Back up and replace selected package-owned generated files
 
 Path Options (customize installation targets):
   --path <dir>          Override the selected target's skills path
@@ -678,7 +646,7 @@ Path Options (customize installation targets):
 Multi-Tool Support:
   --codex               Deprecated alias for --target codex
   --antigravity         Also create .agent/ symlinks for Google Antigravity
-  --all-tools           Enable all tool integrations (codex + antigravity)
+  --all-tools           Install Claude Code, Codex, OMP, and Antigravity
 
 Other Options:
   --list, -l            List all available components
@@ -688,16 +656,17 @@ Examples:
   npx sdd-mcp-server install                     # Lean install for lower token usage
   npx sdd-mcp-server install --skills --rules    # Install skills and rules only
   npx sdd-mcp-server install --list              # List available components
-  npx sdd-mcp-server install --profile full       # Prompt for Codex or Claude Code
+  npx sdd-mcp-server install --profile full       # Prompt for Codex, Claude Code, or OMP
   npx sdd-mcp-server install --target codex       # Native Codex files
   npx sdd-mcp-server install --target claude-code # Native Claude Code files
-  npx sdd-mcp-server install --antigravity       # Add Antigravity support
-  npx sdd-mcp-server install --all-tools         # Add all tool integrations
+  npx sdd-mcp-server install --target omp         # Native Oh My Pi files
+  npx sdd-mcp-server install --target omp --refresh-generated
+  npx sdd-mcp-server install --all-tools          # All native targets + Antigravity
 
 Component Types:
   Skills    - Workflow guidance for SDD phases (/sdd-requirements, /sdd-design, etc.)
   Steering  - Project-wide rules and conventions
-  Rules     - Always-active guidelines (coding-style, security, etc.)
+  Rules     - Path/glob-scoped on-demand guidance
   Contexts  - Mode-specific system prompts (dev, review, planning)
   Agents    - Specialized AI personas (planner, architect, reviewer)
   Hooks     - Event-driven automation (pre-tool-use, post-tool-use, etc.)
@@ -715,11 +684,12 @@ Model Routing:
   Codex high-level roles: gpt-5.6-sol (xhigh); default implementation/TDD: gpt-5.6-sol (medium)
   Codex supported models: gpt-5.6-sol, gpt-5.6-luna, gpt-5.6-terra
   Claude Code high-level roles: opus; implementation/TDD: sonnet
+  Oh My Pi high-level roles: gpt-5.6-sol (xhigh); implementation/TDD: gpt-5.6-sol (medium)
 `;
   }
 }
 
-// Main entry point when run directly (legacy install-skills)
+// Main entry point for the install-skills alias.
 export async function main() {
   const cli = new InstallSkillsCLI();
   const options = cli.parseArgs(process.argv.slice(2));
@@ -762,17 +732,6 @@ function requireOptionValue(args: string[], index: number, option: string): stri
   return value;
 }
 
-function legacyPathOverrides(options: CLIOptions): PathOverrides {
-  const defaults = getTargetPolicy('claude-code').defaultPaths;
-  return {
-    ...(options.targetPath !== defaults.skills ? { skills: options.targetPath } : {}),
-    ...(options.steeringPath !== defaults.steering ? { steering: options.steeringPath } : {}),
-    ...(options.rulesPath !== defaults.rules ? { rules: options.rulesPath } : {}),
-    ...(options.contextsPath !== defaults.contexts ? { contexts: options.contextsPath } : {}),
-    ...(options.agentsPath !== defaults.agents ? { agents: options.agentsPath } : {}),
-    ...(options.hooksPath !== defaults.hooks ? { hooks: options.hooksPath } : {}),
-  };
-}
 
 function createProcessTargetPromptIO(): TargetPromptIO {
   return {
@@ -783,33 +742,12 @@ function createProcessTargetPromptIO(): TargetPromptIO {
       let cancelled = false;
       try {
         while (!cancelled) {
-          const answer = await new Promise<string | null>(resolve => {
-            let settled = false;
-            const cleanup = () => {
-              prompt.off('line', onLine);
-              prompt.off('close', onClose);
-              prompt.off('SIGINT', onSigint);
-            };
-            const settle = (value: string | null) => {
-              if (settled) return;
-              settled = true;
-              cleanup();
-              resolve(value);
-            };
-            const onLine = (line: string) => settle(line);
-            const onClose = () => settle(null);
-            const onSigint = () => {
-              settle(null);
-              prompt.close();
-            };
-
-            prompt.once('line', onLine);
-            prompt.once('close', onClose);
-            prompt.once('SIGINT', onSigint);
-            prompt.question(
-              'Choose the primary LLM agent target:\n  1) Codex\n  2) Claude Code\nSelection: ',
-            ).then(settle).catch(() => settle(null));
-          });
+          const answer = await prompt.question(
+            'Choose the primary LLM agent target:\n'
+            + '  1) Codex (.agents/skills, .codex/agents)\n'
+            + '  2) Claude Code (.claude/skills, .claude/agents)\n'
+            + '  3) Oh My Pi (.omp/skills, .omp/agents)\nSelection: ',
+          ).catch(() => null);
           if (answer === null) {
             cancelled = true;
             continue;
@@ -819,7 +757,8 @@ function createProcessTargetPromptIO(): TargetPromptIO {
           if (normalized === '2' || normalized === 'claude' || normalized === 'claude-code') {
             return 'claude-code';
           }
-          console.warn('Choose 1 (Codex) or 2 (Claude Code).');
+          if (normalized === '3' || normalized === 'omp' || normalized === 'oh-my-pi') return 'omp';
+          console.warn('Choose 1 (Codex), 2 (Claude Code), or 3 (Oh My Pi).');
         }
         return null;
       } catch {
