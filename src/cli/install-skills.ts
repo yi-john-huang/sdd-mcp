@@ -633,7 +633,7 @@ Component Options (install specific types):
   --all                 Install all component types
   --profile <profile>   Install profile when no component flags are provided:
                         lean (default) or full
-  --refresh-generated  Back up and replace selected package-owned generated files
+  --refresh-generated  One-time legacy upgrade: back up and rebuild selected generated files
 
 Path Options (customize installation targets):
   --path <dir>          Override the selected target's skills path
@@ -652,16 +652,21 @@ Other Options:
   --list, -l            List all available components
   --help, -h            Show this help message
 
-Examples:
-  npx sdd-mcp-server install                     # Lean install for lower token usage
-  npx sdd-mcp-server install --skills --rules    # Install skills and rules only
-  npx sdd-mcp-server install --list              # List available components
+Guidance:
+  New project:
+    npx sdd-mcp-server install --profile lean --target <target>
+    Do not use --refresh-generated for a new project.
+
+  Upgrade from sdd-mcp 3.x:
+    npx sdd-mcp-server install --profile full --target <target> --refresh-generated
+    Review .sdd-mcp/backups/ and reported conflicts before removing old files.
+    Subsequent v4 updates omit --refresh-generated.
+
+Other examples:
+  npx sdd-mcp-server install --skills --rules     # Install selected components
+  npx sdd-mcp-server install --list               # List available components
   npx sdd-mcp-server install --profile full       # Prompt for Codex, Claude Code, or OMP
-  npx sdd-mcp-server install --target codex       # Native Codex files
-  npx sdd-mcp-server install --target claude-code # Native Claude Code files
-  npx sdd-mcp-server install --target omp         # Native Oh My Pi files
-  npx sdd-mcp-server install --target omp --refresh-generated
-  npx sdd-mcp-server install --all-tools          # All native targets + Antigravity
+  npx sdd-mcp-server install --all-tools           # All native targets + Antigravity
 
 Component Types:
   Skills    - Workflow guidance for SDD phases (/sdd-requirements, /sdd-design, etc.)

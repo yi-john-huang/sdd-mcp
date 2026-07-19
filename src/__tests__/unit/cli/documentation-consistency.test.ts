@@ -85,4 +85,20 @@ describe('target-aware documentation consistency', () => {
     expect(readme).toContain('**Design Principles**: `rules/coding-style.md`');
     expect(readme).toContain('**TDD Methodology**: `agents/tdd-guide.md`');
   });
+
+  it('gives new installations and upgrades distinct safe procedures', () => {
+    const readme = read('README.md');
+    const installGuide = read('docs/INSTALL-GUIDE.md');
+
+    for (const content of [readme, installGuide]) {
+      expect(content).toContain('New project installation');
+      expect(content).toContain('Upgrade from sdd-mcp 3.x');
+      expect(content).toContain('--refresh-generated');
+      expect(content).toContain('.sdd-mcp/backups/');
+      expect(content).toContain('Do not use `--refresh-generated` for a new project');
+    }
+    expect(installGuide).toContain('Subsequent v4 updates');
+    expect(installGuide).toContain('Existing target');
+    expect(installGuide).toContain('v4 target');
+  });
 });
