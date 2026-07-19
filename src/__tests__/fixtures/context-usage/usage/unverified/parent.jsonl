@@ -1,0 +1,2 @@
+{"type":"session","version":3,"id":"unverified","timestamp":"2026-07-04T00:00:00.000Z","cwd":"/project"}
+{"type":"message","id":"a1","parentId":null,"timestamp":"2026-07-04T00:00:01.000Z","message":{"role":"assistant","provider":"unknown-provider","model":"mystery","content":[{"type":"text","text":"NEVER EMIT THIS"}],"usage":{"input":10,"output":2,"cacheRead":1,"cacheWrite":0,"cost":{"input":0,"output":0,"cacheRead":0,"cacheWrite":0,"total":0}},"timestamp":1}}

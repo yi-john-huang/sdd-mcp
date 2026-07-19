@@ -13,10 +13,14 @@ export interface ProjectRepository {
 export interface FileSystemPort {
   readFile(path: string): Promise<string>;
   writeFile(path: string, content: string): Promise<void>;
+  /** Atomically replaces a destination; implementations serialize writes per path. */
+  writeFileAtomic?(path: string, content: string): Promise<void>;
   exists(path: string): Promise<boolean>;
   mkdir(path: string): Promise<void>;
   readdir(path: string): Promise<string[]>;
   stat(path: string): Promise<{ isFile(): boolean; isDirectory(): boolean }>;
+  realpath?(path: string): Promise<string>;
+  unlink?(path: string): Promise<void>;
 }
 
 export interface TemplateEngine {

@@ -5,7 +5,7 @@
 ```text
 sdd-mcp/
 ├── src/
-│   ├── index.ts                  # Main MCP entry point and simplified stdio mode
+│   ├── index.ts                  # Single compiled MCP runtime and callable startup
 │   ├── adapters/cli/             # Tool adapter surface for CLI/MCP calls
 │   ├── application/services/     # Use cases and workflow orchestration
 │   ├── domain/                   # Types, ports, workflow state, quality/plugin contracts
@@ -54,15 +54,16 @@ sdd-mcp/
 - Register new services and adapters in `src/infrastructure/di/types.ts` and `src/infrastructure/di/container.ts`.
 
 ### CLI and Entry Points
-- Use `src/index.ts` for MCP server startup and simplified mode compatibility.
-- Use `src/cli/` for install and migration commands.
-- Keep primary-target policy in `install-target.ts`, provider adapters in `tool-support/`, and safe filesystem operations in `cli/utils/`.
-- Keep tool schemas and tool response behavior aligned between full adapter paths and simplified MCP paths when both are supported.
+- Keep the canonical MCP tool registry and runtime in `src/index.ts` plus `src/infrastructure/mcp/`.
+- Keep root `sdd-entry.js` and `mcp-server.js` as thin compiled-runtime launchers.
+- Use `src/cli/` for install, reporting, and migration commands.
+- Keep primary-target policy in `install-target.ts`, Claude/Codex/OMP adapters in `tool-support/`, and safe managed filesystem operations in `cli/utils/`.
+- Route feature handlers through the shared realpath-aware resolver and disk-authoritative workflow/context services.
 
 ### Packaged Components
 - Root `skills/`, `steering/`, `rules/`, `contexts/`, `agents/`, and `hooks/` are package source assets.
-- Generated local installs under `.claude/`, `.agents/`, and `.codex/` are project-local outputs and should not be treated as source assets.
-- When adding or renaming a component, update package files, installer tests, README tables, and any Codex/Claude conversion outputs as needed.
+- Generated local installs under `.claude/`, `.agents/`, `.codex/`, and `.omp/` are project-local outputs and should not be treated as source assets.
+- When adding or renaming a component, update package files, installer tests, README tables, and Claude Code/Codex/OMP renderers as needed.
 
 ## Naming Conventions
 
@@ -105,7 +106,7 @@ npx jest '--testPathPattern=__tests__.*\.test\.ts$' '--testPathIgnorePattern=int
 
 ## Generated Files and Git Hygiene
 - Do not commit `dist/`, coverage output, or local installed agent artifacts.
-- `.claude/`, `.agents/`, and `.codex/` generated install outputs are ignored except for files already tracked historically.
+- `.claude/`, `.agents/`, `.codex/`, and `.omp/` generated install outputs are ignored except for files already tracked historically.
 - Do not revert unrelated changes in `.spec/`, generated local agent directories, or user-modified docs while implementing a focused change.
 
 ## Build Output

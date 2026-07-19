@@ -23,6 +23,13 @@ describe('install target policy', () => {
       agents: '.codex/agents',
       rootGuidance: 'AGENTS.md',
     });
+    expect(getTargetPolicy('omp').defaultPaths).toMatchObject({
+      skills: '.omp/skills',
+      rules: '.omp/rules',
+      contexts: '.omp/contexts',
+      agents: '.omp/agents',
+      rootGuidance: '.omp/AGENTS.md',
+    });
   });
 
   it('uses sol medium as the default and sol xhigh for high-level roles', () => {
@@ -53,6 +60,13 @@ describe('install target policy', () => {
     });
     expect(ROLE_MODEL_ROUTES.reviewer.claudeCode.model).toBe('opus');
     expect(ROLE_MODEL_ROUTES['tdd-guide'].claudeCode.model).toBe('sonnet');
+    expect(ROLE_MODEL_ROUTES.planner.omp).toEqual({
+      model: 'gpt-5.6-sol',
+      thinkingLevel: 'xhigh',
+    });
+    expect(ROLE_MODEL_ROUTES.implementer.omp.thinkingLevel).toBe('medium');
+    expect(ROLE_MODEL_ROUTES.planner.taskClass).toBe('advisor');
+    expect(ROLE_MODEL_ROUTES.implementer.taskClass).toBe('implementation');
     expect(SUPPORTED_CODEX_MODELS).toEqual([
       'gpt-5.6-sol',
       'gpt-5.6-terra',
@@ -113,6 +127,9 @@ describe('resolveInstallTarget', () => {
     await expect(resolveInstallTarget({
       target: 'codex', legacyCodex: false, profile: 'full',
     }, nonInteractive)).resolves.toEqual({ target: 'codex', source: 'explicit' });
+    await expect(resolveInstallTarget({
+      target: 'omp', legacyCodex: false, profile: 'lean',
+    }, nonInteractive)).resolves.toEqual({ target: 'omp', source: 'explicit' });
     expect(nonInteractive.chooseTarget).not.toHaveBeenCalled();
   });
 

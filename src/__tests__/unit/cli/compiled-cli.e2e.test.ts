@@ -84,7 +84,7 @@ describe('compiled target-aware CLI journeys', () => {
 
       expect(result.status).toBe(0);
       expect(result.stdout + result.stderr).toContain('using claude-code');
-      expect(result.stdout + result.stderr).toContain('--target codex or --target claude-code');
+      expect(result.stdout + result.stderr).toContain('--target codex, --target claude-code, or --target omp');
       expect(fs.existsSync(path.join(outputRoot, 'CLAUDE.md'))).toBe(true);
     } finally {
       fs.rmSync(outputRoot, { recursive: true, force: true });

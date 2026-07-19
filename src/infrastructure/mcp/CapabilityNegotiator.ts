@@ -38,9 +38,9 @@ export class CapabilityNegotiator {
 
     const features = {
       tools: true, // Always support tools for SDD workflow
-      resources: clientCapabilities?.resources !== undefined,
-      prompts: clientCapabilities?.prompts !== undefined,
-      logging: clientCapabilities?.logging !== undefined,
+      resources: true,
+      prompts: true,
+      logging: true,
       roots: clientCapabilities?.roots !== undefined
     };
 

@@ -1,275 +1,155 @@
 # SDD-MCP Workflow
 
-This document explains how the SDD-MCP workflow works with Codex and Claude Code. Shared source components are rendered into the selected agent's native layout.
+SDD-MCP uses one durable workflow and renders its guidance for Claude Code, Codex, and Oh My Pi (OMP). Skills are manual-only; MCP tools own state changes.
 
-## Architecture Overview
+## Choose the development path
 
-```
-┌─────────────────────────────────────────────────────────────────┐
-│                 Target Agent (Codex / Claude Code)               │
-├─────────────────────────────────────────────────────────────────┤
-│                                                                  │
-│  ┌──────────┐  ┌──────────┐  ┌──────────┐  ┌──────────┐        │
-│  │  Rules   │  │ Contexts │  │  Agents  │  │  Hooks   │        │
-│  │ (always) │  │  (mode)  │  │ (persona)│  │ (events) │        │
-│  └────┬─────┘  └────┬─────┘  └────┬─────┘  └────┬─────┘        │
-│       │             │             │             │               │
-│       └─────────────┴──────┬──────┴─────────────┘               │
-│                            │                                     │
-│                    ┌───────▼───────┐                            │
-│                    │    Skills     │                            │
-│                    │ (/sdd-* cmds) │                            │
-│                    └───────┬───────┘                            │
-│                            │                                     │
-├────────────────────────────┼────────────────────────────────────┤
-│                            │                                     │
-│                    ┌───────▼───────┐                            │
-│                    │  MCP Server   │                            │
-│                    │  (sdd-mcp)    │                            │
-│                    └───────┬───────┘                            │
-│                            │                                     │
-│       ┌────────────────────┼────────────────────┐               │
-│       │                    │                    │               │
-│  ┌────▼────┐         ┌─────▼─────┐        ┌────▼────┐          │
-│  │ Project │         │  Workflow │        │ Quality │          │
-│  │  Init   │         │  Engine   │        │  Check  │          │
-│  └─────────┘         └───────────┘        └─────────┘          │
-│                                                                  │
-└─────────────────────────────────────────────────────────────────┘
-```
+| Path | Claude Code | Codex | OMP |
+|---|---|---|---|
+| Small change | `/simple-task` | `$simple-task` | `/skill:simple-task` |
+| Formal SDD | `/sdd-requirements` | `$sdd-requirements` | `/skill:sdd-requirements` |
 
-## Component Interaction Sequence
+Continue formal work with the same host prefix for `sdd-design`, `sdd-tasks`, and `sdd-implement`. Manual invocation prevents stateful workflow skills from activating from incidental prose.
 
-### 1. Session Start
+## Formal phase flow
 
 ```mermaid
 sequenceDiagram
     participant User
-    participant Agent as Target Agent
-    participant Hook as session-start Hook
-    participant Steering as Steering Docs
-    participant Rules as Active Rules
-
-    User->>Agent: Start session
-    Agent->>Hook: Trigger session-start
-    Hook->>Steering: Load project context
-    Steering-->>Agent: product.md, tech.md, structure.md
-    Hook->>Rules: Activate always-on rules
-    Rules-->>Agent: coding-style, security, testing guidance
-    Agent-->>User: Ready with project context
+    participant Skill as Manual skill
+    participant MCP as Canonical MCP runtime
+    participant Disk as .spec/specs/featureName
+    User->>MCP: sdd-init
+    MCP->>Disk: Create spec.json
+    User->>Skill: requirements command
+    Skill->>MCP: sdd-requirements(featureName)
+    MCP->>Disk: Write requirements.md
+    User->>MCP: sdd-approve(featureName, requirements)
+    MCP->>Disk: Atomically approve and publish compact handoff
+    User->>Skill: design, tasks, implementation commands
 ```
 
-### 2. SDD Workflow (Feature Development)
+The governed order is:
+
+1. `sdd-init` returns the canonical `featureName`.
+2. Generate requirements and approve them.
+3. Generate design and approve it.
+4. Generate tasks.
+5. If configured, call `sdd-review-test-cases { featureName }`.
+6. Approve tasks.
+7. Implement and run focused verification.
+
+Disk `spec.json` is authoritative; phase approval and test review do not depend on an in-memory project identifier. v4 public calls use `featureName`, not `projectId`.
+
+## Continue with bounded context
+
+Load the latest approved context:
+
+```json
+{ "featureName": "checkout", "mode": "compact" }
+```
+
+The result includes `sourceFingerprint`, the exact-response `fingerprint`, effective phase, status, payload estimates, omissions, and content. Save `fingerprint`, then avoid resending unchanged content:
+
+```json
+{
+  "featureName": "checkout",
+  "mode": "compact",
+  "ifNoneMatch": "<previous fingerprint>"
+}
+```
+
+An exact match returns `cacheStatus: "not-modified"` without `content`. Changing mode, budget, phase, or inclusion options changes the response fingerprint even if sources are unchanged.
+
+| Mode | Default maximum | Selection |
+|---|---:|---|
+| compact | 2,048 `estimatedTokens` | bounded workflow state and concise approved-phase context |
+| standard | 4,096 `estimatedTokens` | broader approved-phase context |
+| full | 16,384 `estimatedTokens` | selected raw documents; overflow is an error |
+
+Before any approval, compact/standard return bounded `init` state and “generate requirements” as the next action; they do not include draft bodies. An explicitly requested unapproved phase is rejected except for full mode with explicit `includeUnapproved: true`.
+
+Only the canonical compact cache is stored at `.spec/specs/<featureName>/context/handoff.md`. It is rebuildable and never workflow authority. A committed approval whose handoff publication fails remains valid and reports `pending-regeneration`; the next context load repairs it.
+
+## Target-native guidance flow
+
+```mermaid
+flowchart LR
+    Source[Canonical skills, rules, contexts, agents] --> Resolver[Resolve primary target]
+    Resolver --> Claude[CLAUDE.md and .claude]
+    Resolver --> Codex[AGENTS.md, .agents/skills, .codex/guidance/rules, .codex/agents]
+    Resolver --> OMP[.omp/AGENTS.md, .omp/skills, .omp/rules, .omp/agents]
+```
+
+| Component | Claude Code | Codex | OMP |
+|---|---|---|---|
+| Skills | `.claude/skills` | `.agents/skills` | `.omp/skills` |
+| Rules | `.claude/rules` with `paths` | `.codex/guidance/rules` pointers | `.omp/rules` with `globs`, `alwaysApply: false` |
+| Agents | `.claude/agents` | `.codex/agents` | `.omp/agents` |
+| Contexts | `.claude/contexts` | `.codex/guidance/contexts` | `.omp/contexts` |
+
+Rules and references are progressive guidance, not always-on workflow authority. Mandatory checks stay in the invoked skill and MCP state machine.
+
+Claude Code and Codex may install only their supported lifecycle/hook integration. OMP does **not** execute packaged Markdown as a hook: no native executable OMP hook is claimed, and an explicit `--target omp --hooks` request fails.
+
+## Model execution during a skill
+
+### Claude Code
+
+The invoked skill applies its routed model in the current turn: Opus for high-level work and Sonnet for implementation/TDD. It does not spawn a second specialist merely to change models.
+
+### Codex
+
+Implementation/TDD runs on Sol/medium. A high-level skill may request one generated Sol/xhigh custom advisor. The child cannot nest, and unavailable delegation records a single fallback before inline continuation. The repository cannot force a model switch when the host does not honor the request.
+
+### Oh My Pi
+
+OMP runs high-level work inline on the Sol/medium parent by default. Automatic Sol/xhigh children are intentionally disabled because real A/B runs increased median cost. A user may explicitly opt into one native `.omp/agents` Sol/xhigh advisor; that child has no spawn capability and no nesting or retry path. Implementation, TDD, and simple tasks also remain inline unless at least two independent slices are truly dispatched concurrently.
+
+## Installation and migration flow
 
 ```mermaid
 sequenceDiagram
-    participant User
-    participant Agent as Target Agent
-    participant Skill as SDD Skills
-    participant MCP as MCP Server
-    participant Spec as .spec/specs/
-
-    User->>Agent: /sdd-requirements my-feature
-    Agent->>Skill: Load sdd-requirements skill
-    Skill->>MCP: sdd-init (if needed)
-    MCP->>Spec: Create spec.json
-    Skill-->>Agent: EARS requirements guidance
-    Agent-->>User: Generated requirements.md
-
-    User->>Agent: /sdd-design my-feature
-    Agent->>Skill: Load sdd-design skill
-    Skill->>MCP: sdd-validate-gap
-    MCP-->>Skill: Gap analysis
-    Skill-->>Agent: Design guidance
-    Agent-->>User: Generated design.md
-
-    User->>Agent: Approve design
-    Agent->>MCP: sdd-approve design
-    MCP->>Spec: Update spec.json
-
-    User->>Agent: /sdd-tasks my-feature
-    Agent->>Skill: Load sdd-tasks skill
-    Skill-->>Agent: TDD task breakdown
-    Agent-->>User: Generated tasks.md
-
-    User->>Agent: /sdd-implement my-feature
-    Agent->>Skill: Load sdd-implement skill
-    Agent->>MCP: sdd-spec-impl
-    MCP-->>Agent: TDD execution guidance
-    Agent-->>User: Implementation with tests
-```
-
-### 3. Code Review Flow
-
-```mermaid
-sequenceDiagram
-    participant User
-    participant Target as Target Agent
-    participant Skill as sdd-review Skill
-    participant Agent as Reviewer Agent
-    participant Rules as Security Rules
-
-    User->>Target: /sdd-review src/api/
-    Target->>Skill: Load sdd-review skill
-    Skill->>Agent: Activate reviewer persona
-    Agent-->>Target: Linus-style review mindset
-    Target->>Rules: Check security guidance
-    Rules-->>Target: OWASP guidelines
-    Target->>Target: Analyze code
-    Target-->>User: Review with severity levels
-    Note over User,Target: Must Fix / Should Fix / Suggestions
-```
-
-### 4. Claude Code Pre-Tool Hook Flow
-
-Claude Code can execute the packaged pre-tool hook guidance. Codex installation maps only supported lifecycle behavior (`SessionStart` and `Stop`) to a read-only Node runner; workflow validation remains in `AGENTS.md` and phase skills.
-
-```mermaid
-sequenceDiagram
-    participant Claude as Claude Code
-    participant Hook as pre-tool-use Hook
-    participant Validator as validate-sdd-workflow
-    participant Spec as spec.json
-
-    Claude->>Claude: About to call sdd-design
-    Claude->>Hook: Trigger pre-tool-use
-    Hook->>Validator: Check workflow order
-    Validator->>Spec: Read current phase
-    Spec-->>Validator: phase: requirements
-    Validator-->>Hook: Requirements approved?
-
-    alt Requirements NOT approved
-        Hook-->>Claude: Block: Approve requirements first
-        Claude-->>Claude: Show warning to user
-    else Requirements approved
-        Hook-->>Claude: Proceed with sdd-design
-        Claude->>Claude: Execute tool
+    participant CLI
+    participant Resolver as Resolve primary target
+    participant Manifest as .sdd-mcp/install-manifest.json
+    participant Writer as Managed writer
+    participant Backup as .sdd-mcp/backups
+    CLI->>Resolver: target and target-aware profile
+    Resolver->>Manifest: Lock and read ownership hashes
+    Manifest->>Writer: Compare generated destination
+    alt unchanged managed output
+        Writer->>Writer: Upgrade atomically
+    else user-modified output
+        Writer-->>CLI: Preserve and report conflict
+    else refresh-generated
+        Writer->>Backup: Copy selected generated files
+        Writer->>Writer: Rebuild recognized package-owned set
     end
 ```
 
-### 5. Component Installation
+Interactive full installation offers Claude Code, Codex, and OMP. OMP lean installs skills, steering, and agents; OMP full adds rules and contexts. Use this migration for an old OMP-via-Codex layout:
 
-```mermaid
-sequenceDiagram
-    participant User
-    participant CLI as sdd-mcp-server CLI
-    participant Resolver as Target Resolver
-    participant Strategy as Target Installer
-    participant Writer as Preserve-First Writer
-    participant Ignore as Gitignore Manager
-
-    User->>CLI: install --profile full
-    CLI->>Resolver: Resolve primary target
-    alt Interactive terminal without --target
-        Resolver-->>User: Choose Codex or Claude Code
-        User-->>Resolver: Selected target
-    else Explicit or automated run
-        CLI->>Resolver: --target codex or claude-code
-    end
-    Resolver-->>CLI: Target policy and native paths
-    CLI->>Strategy: Install selected component plan
-    Strategy->>Writer: Create native files if absent
-    Note over Strategy,Writer: Claude: .claude/skills<br/>Codex: .agents/skills and .codex/guidance/rules
-    Writer-->>Strategy: Installed, skipped, failed
-    Strategy->>Ignore: Merge target-specific generated directories
-    Ignore-->>CLI: Created, updated, or unchanged
-    CLI-->>User: Target and aggregate result summary
+```bash
+npx sdd-mcp-server install --target omp --refresh-generated
 ```
 
-## Component Responsibilities
+Codex TOML agents are never treated as executable OMP agents.
 
-### Rules (Always Active)
-```
-rules/
-├── coding-style.md    → TypeScript/JS conventions
-├── testing.md         → TDD requirements
-├── security.md        → OWASP guidelines
-├── git-workflow.md    → Commit conventions
-├── error-handling.md  → Error patterns
-└── sdd-workflow.md    → Phase order enforcement
-```
+## Runtime inventory
 
-### Contexts (Mode-Specific)
-```
-contexts/
-├── dev.md            → Implementation focus
-├── review.md         → Quality focus
-├── planning.md       → Architecture focus
-├── security-audit.md → Threat focus
-└── research.md       → Exploration focus
+The sole packaged runtime exposes exactly 16 tools:
+
+`sdd-init`, `sdd-requirements`, `sdd-design`, `sdd-tasks`, `sdd-implement`, `sdd-status`, `sdd-approve`, `sdd-review-test-cases`, `sdd-quality-check`, `sdd-context-load`, `sdd-template-render`, `sdd-steering`, `sdd-steering-custom`, `sdd-validate-design`, `sdd-validate-gap`, and `sdd-spec-impl`.
+
+The offline `context-report` command is not an MCP tool.
+
+## Measurement and verified outcomes
+
+```bash
+npx sdd-mcp-server context-report --before ./before --after ./after
 ```
 
-### Agents (Specialized Personas)
-```
-agents/
-├── planner.md         → Roadmap & planning
-├── architect.md       → System design
-├── reviewer.md        → Code review (Linus-style)
-├── implementer.md     → TDD implementation
-├── security-auditor.md → Vulnerability assessment
-└── tdd-guide.md       → Test-driven coaching
-```
+Repository `estimatedTokens` uses `ceil(characters / 4)` and must not be read as actual tokenizer usage. The report separately shows static installed bytes, invoked/dynamic payload, provider usage/cost, and unknown host payload.
 
-### Hooks (Event Automation)
-```
-hooks/
-├── pre-tool-use/
-│   ├── validate-sdd-workflow.md  → Enforce phase order
-│   └── check-test-coverage.md    → TDD reminder
-├── post-tool-use/
-│   ├── update-spec-status.md     → Auto-update spec.json
-│   └── log-tool-execution.md     → Audit logging
-├── session-start/
-│   └── load-project-context.md   → Load steering docs
-└── session-end/
-    ├── save-session-summary.md   → Session notes
-    └── remind-uncommitted-changes.md → Git reminder
-```
-
-## Data Flow
-
-```
-User Request
-     │
-     ▼
-┌─────────────┐     ┌─────────────┐
-│   Hooks     │────▶│   Rules     │
-│ (pre-tool)  │     │  (always)   │
-└─────────────┘     └─────────────┘
-     │                    │
-     ▼                    ▼
-┌─────────────┐     ┌─────────────┐
-│  Context    │────▶│   Agent     │
-│   (mode)    │     │  (persona)  │
-└─────────────┘     └─────────────┘
-     │                    │
-     └────────┬───────────┘
-              ▼
-       ┌─────────────┐
-       │   Skill     │
-       │  (action)   │
-       └─────────────┘
-              │
-              ▼
-       ┌─────────────┐
-       │ MCP Server  │
-       │  (tools)    │
-       └─────────────┘
-              │
-              ▼
-       ┌─────────────┐
-       │   Hooks     │
-       │ (post-tool) │
-       └─────────────┘
-              │
-              ▼
-        Response
-```
-
-## Key Concepts
-
-1. **Layered Guidance**: Each layer adds context without conflicting
-2. **Event-Driven**: Hooks automate repetitive checks
-3. **Phase Enforcement**: SDD workflow order is validated automatically
-4. **Persona Switching**: Agents provide specialized expertise on demand
-5. **Mode Awareness**: Contexts adjust behavior for different tasks
+Static fresh-install reductions were **74.37% Codex**, **83.21% OMP**, and **95.64% Claude Code**. Comparable three-run provider median cost improved **6.83% simple**, **11.79% medium**, **14.09% requirements**, **9.12% design**, **1.74% security**, and **1.87% repeated context**; all task-quality checks passed.

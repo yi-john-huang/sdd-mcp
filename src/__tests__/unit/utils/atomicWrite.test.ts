@@ -194,9 +194,8 @@ describe("atomicWrite", () => {
   });
 
   describe("atomicity guarantees", () => {
-    it("should produce valid file even with concurrent writes to different files", async () => {
-      // Note: Concurrent writes to the SAME file path is inherently unsafe.
-      // This test verifies concurrent writes to DIFFERENT files work correctly.
+    it("should produce valid files with concurrent writes to different destinations", async () => {
+      // Destination queues are independent.
       const writes = Array.from({ length: 10 }, (_, i) => {
         const filePath = join(tempDir, `concurrent-${i}.json`);
         return atomicWriteJSON(filePath, { iteration: i });
@@ -211,6 +210,14 @@ describe("atomicWrite", () => {
         const parsed = JSON.parse(content);
         expect(parsed.iteration).toBe(i);
       }
+    });
+
+    it("should serialize concurrent writes to the same destination", async () => {
+      const filePath = join(tempDir, "same-destination.json");
+      await Promise.all(Array.from({ length: 25 }, (_, count) => atomicWriteJSON(filePath, { count })));
+      const parsed = JSON.parse(await readFile(filePath, "utf8"));
+      expect(parsed).toEqual({ count: 24 });
+      expect(await readdir(tempDir)).toEqual(["same-destination.json"]);
     });
 
     it("should not corrupt file with rapid sequential writes", async () => {

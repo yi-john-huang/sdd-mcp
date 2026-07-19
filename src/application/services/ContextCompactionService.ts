@@ -1,16 +1,40 @@
+import { createHash } from 'node:crypto';
+import path from 'node:path';
 import { injectable, inject } from 'inversify';
-import { v4 as uuidv4 } from 'uuid';
 import { TYPES } from '../../infrastructure/di/types.js';
 import { FileSystemPort, LoggerPort } from '../../domain/ports.js';
 import { PhaseApprovals, Project } from '../../domain/types.js';
+import { SpecPathResolver } from './SpecPathResolver.js';
 
 export type ContextLoadMode = 'compact' | 'standard' | 'full';
 export type ApprovablePhase = keyof PhaseApprovals;
+export type EffectivePhase = 'init' | ApprovablePhase;
+export type PhaseStatus = 'init' | 'approved' | 'unapproved';
 
-interface DocumentSnapshot {
-  readonly name: string;
-  readonly path: string;
-  readonly content: string;
+export interface ContextLoadRequest {
+  readonly projectRoot: string;
+  readonly featureName: string;
+  readonly mode?: ContextLoadMode;
+  readonly phase?: ApprovablePhase;
+  readonly maxEstimatedTokens?: number;
+  readonly ifNoneMatch?: string;
+  readonly includeUnapproved?: boolean;
+}
+
+export interface ContextLoadResult {
+  readonly content?: string;
+  readonly mode: ContextLoadMode;
+  readonly effectivePhase: EffectivePhase;
+  readonly phaseStatus: PhaseStatus;
+  readonly sourceFingerprint: string;
+  readonly fingerprint: string;
+  readonly cacheStatus: 'hit' | 'regenerated' | 'not-modified';
+  readonly sourceCharacters: number;
+  readonly sourceEstimatedTokens: number;
+  readonly payloadCharacters: number;
+  readonly payloadEstimatedTokens: number;
+  readonly reductionPercentage: number;
+  readonly omittedSources: string[];
 }
 
 export interface ContextSizeEstimate {
@@ -25,287 +49,533 @@ export interface HandoffResult {
   readonly path: string;
   readonly content: string;
   readonly estimate: ContextSizeEstimate;
+  readonly fingerprint?: string;
 }
+
+export class ContextBudgetTooSmallError extends Error {
+  readonly code = 'ContextBudgetTooSmall';
+  constructor(readonly requested: number, readonly minimumRequired: number) {
+    super(`Context budget ${requested} is below the mandatory minimum ${minimumRequired}`);
+    this.name = 'ContextBudgetTooSmallError';
+  }
+}
+
+export class ContextBudgetExceededError extends Error {
+  readonly code = 'ContextBudgetExceeded';
+  constructor(readonly requested: number, readonly required: number) {
+    super(`Full context requires ${required} estimated tokens; requested ${requested}`);
+    this.name = 'ContextBudgetExceededError';
+  }
+}
+
+export class PhaseNotApprovedError extends Error {
+  readonly code = 'PhaseNotApproved';
+  constructor(readonly phase: ApprovablePhase) {
+    super(`Phase is not approved: ${phase}`);
+    this.name = 'PhaseNotApprovedError';
+  }
+}
+
+export class ContextSourceError extends Error {
+  readonly code = 'ContextSourceError';
+  constructor(readonly sourcePath: string, message: string) {
+    super(`${message}: ${sourcePath}`);
+    this.name = 'ContextSourceError';
+  }
+}
+
+interface ApprovalState { generated: boolean; approved: boolean }
+interface WorkflowSpec {
+  featureName: string;
+  approvals: Record<ApprovablePhase, ApprovalState>;
+  reviewRequired: boolean;
+  reviewCompleted: boolean;
+}
+interface DocumentSnapshot { name: string; relativePath: string; absolutePath: string; content: string }
+interface SelectedState { phase: EffectivePhase; status: PhaseStatus; documents: DocumentSnapshot[] }
+interface ContextCandidate { source: string; text: string }
+
+const MODE_BUDGETS: Record<ContextLoadMode, number> = { compact: 2048, standard: 4096, full: 16384 };
+const PHASES: ApprovablePhase[] = ['requirements', 'design', 'tasks'];
+const HANDOFF_SCHEMA = 2;
+const SELECTION_VERSION = 2;
 
 @injectable()
 export class ContextCompactionService {
   constructor(
     @inject(TYPES.FileSystemPort) private readonly fileSystem: FileSystemPort,
-    @inject(TYPES.LoggerPort) private readonly logger: LoggerPort
+    @inject(TYPES.LoggerPort) private readonly logger: LoggerPort,
   ) {}
 
-  async generatePhaseHandoff(
-    project: Project,
-    approvedPhase: ApprovablePhase
-  ): Promise<HandoffResult> {
-    const correlationId = uuidv4();
-    const contextDir = this.getContextDir(project);
-    const handoffPath = `${contextDir}/handoff.md`;
-    const phaseHandoffPath = `${contextDir}/${approvedPhase}-handoff.md`;
+  async loadContext(request: ContextLoadRequest): Promise<ContextLoadResult>;
+  async loadContext(project: Project, mode?: ContextLoadMode): Promise<string>;
+  async loadContext(requestOrProject: ContextLoadRequest | Project, legacyMode: ContextLoadMode = 'compact'): Promise<ContextLoadResult | string> {
+    if (!('projectRoot' in requestOrProject)) {
+      const result = await this.loadContextRequest({ projectRoot: requestOrProject.path, featureName: requestOrProject.name, mode: legacyMode });
+      return result.content ?? '';
+    }
+    return this.loadContextRequest(requestOrProject);
+  }
 
-    this.logger.info('Generating compact workflow handoff', {
-      correlationId,
-      projectId: project.id,
-      approvedPhase
-    });
-
-    await this.fileSystem.mkdir(contextDir);
-
-    const documents = await this.loadAvailableDocuments(project);
-    const sourceCharacters = documents.reduce((sum, doc) => sum + doc.content.length, 0);
-    const content = this.buildHandoff(project, approvedPhase, documents, sourceCharacters);
-
-    await this.fileSystem.writeFile(handoffPath, content);
-    await this.fileSystem.writeFile(phaseHandoffPath, content);
-
-    const estimate = this.estimateContextSize(sourceCharacters, content.length);
-
-    this.logger.info('Compact workflow handoff generated', {
-      correlationId,
-      projectId: project.id,
-      approvedPhase,
-      sourceTokens: estimate.sourceTokens,
-      compactTokens: estimate.compactTokens,
-      reductionPercentage: estimate.reductionPercentage
-    });
-
+  async generatePhaseHandoff(project: Project, approvedPhase: ApprovablePhase): Promise<HandoffResult> {
+    const result = await this.loadContextRequest({ projectRoot: project.path, featureName: project.name, phase: approvedPhase, mode: 'compact' });
+    const content = result.content ?? '';
     return {
-      path: handoffPath,
+      path: path.join(project.path, '.spec', 'specs', project.name, 'context', 'handoff.md'),
       content,
-      estimate
+      fingerprint: result.fingerprint,
+      estimate: this.estimateContextSize(result.sourceCharacters, result.payloadCharacters),
     };
   }
 
-  async loadContext(
-    project: Project,
-    mode: ContextLoadMode = 'compact'
-  ): Promise<string> {
-    if (mode === 'full') {
-      return this.loadFullContext(project);
-    }
-
-    const handoffPath = `${this.getContextDir(project)}/handoff.md`;
+  async invalidateCanonicalHandoff(request: Pick<ContextLoadRequest, 'projectRoot' | 'featureName'>): Promise<void> {
+    const resolved = await new SpecPathResolver(this.fileSystem).resolve(request.projectRoot, request.featureName);
+    const handoffPath = path.join(resolved.featureRoot, 'context', 'handoff.md');
+    await new SpecPathResolver(this.fileSystem).assertContained(resolved.featureRoot, handoffPath);
     if (await this.fileSystem.exists(handoffPath)) {
-      const handoff = await this.fileSystem.readFile(handoffPath);
-
-      if (mode === 'standard') {
-        const spec = await this.readOptionalFile(`${this.getSpecDir(project)}/spec.json`);
-        return [
-          handoff,
-          spec ? '\n## Current Spec Metadata\n\n```json\n' + spec + '\n```' : ''
-        ].filter(Boolean).join('\n');
-      }
-
-      return handoff;
+      if (!this.fileSystem.unlink) throw new Error('FileSystemPort.unlink is required to invalidate context');
+      await this.fileSystem.unlink(handoffPath);
     }
-
-    const documents = await this.loadAvailableDocuments(project);
-    const sourceCharacters = documents.reduce((sum, doc) => sum + doc.content.length, 0);
-    return this.buildHandoff(project, 'requirements', documents, sourceCharacters);
   }
 
   estimateContextSize(sourceCharacters: number, compactCharacters: number): ContextSizeEstimate {
-    const sourceTokens = this.estimateTokens(sourceCharacters);
-    const compactTokens = this.estimateTokens(compactCharacters);
-    const reductionPercentage = sourceTokens === 0
-      ? 0
-      : Math.max(0, Math.round((1 - compactTokens / sourceTokens) * 100));
-
+    const sourceTokens = Math.ceil(sourceCharacters / 4);
+    const compactTokens = Math.ceil(compactCharacters / 4);
     return {
       sourceCharacters,
       sourceTokens,
       compactCharacters,
       compactTokens,
-      reductionPercentage
+      reductionPercentage: sourceTokens === 0 || compactTokens >= sourceTokens ? 0 : Math.round((1 - compactTokens / sourceTokens) * 100),
     };
   }
 
-  private async loadFullContext(project: Project): Promise<string> {
-    const documents = await this.loadAvailableDocuments(project);
-    const sections = documents.map((doc) => `## ${doc.name}\n\n${doc.content}`);
-    return [`# Full SDD Context: ${project.name}`, ...sections].join('\n\n');
-  }
-
-  private buildHandoff(
-    project: Project,
-    approvedPhase: ApprovablePhase,
-    documents: DocumentSnapshot[],
-    sourceCharacters: number
-  ): string {
-    const sourceTokens = this.estimateTokens(sourceCharacters);
-    const sections = documents.map((doc) => this.summarizeDocument(doc));
-    const approvals = project.metadata.approvals;
-    const checkpoint = project.metadata.checkpoints?.testCases;
-    const nextSteps = this.getNextSteps(approvedPhase, checkpoint?.required === true && !checkpoint.reviewed);
-
-    const draft = [
-      `# SDD Context Handoff: ${project.name}`,
-      '',
-      `Generated: ${new Date().toISOString()}`,
-      `Approved phase: ${approvedPhase}`,
-      '',
-      '## Workflow State',
-      '',
-      `- Requirements: ${this.formatApproval(approvals.requirements)}`,
-      `- Design: ${this.formatApproval(approvals.design)}`,
-      `- Tasks: ${this.formatApproval(approvals.tasks)}`,
-      checkpoint?.required
-        ? `- TDD test-case review: ${checkpoint.reviewed ? 'reviewed' : 'pending'}`
-        : '- TDD test-case review: not required',
-      '',
-      '## Compact Phase Summaries',
-      '',
-      sections.join('\n\n'),
-      '',
-      '## Next Actions',
-      '',
-      ...nextSteps.map((step) => `- ${step}`),
-      '',
-      '## Source References',
-      '',
-      ...documents.map((doc) => `- ${doc.path}`),
-      '',
-      '## Context Budget Estimate',
-      '',
-      `- Full source context: ~${sourceTokens} tokens`,
-      `- Handoff context: ~${this.estimateTokens(sourceCharacters > 0 ? Math.min(sourceCharacters, 1) : 0)} tokens before final write estimate`,
-      '- Use `sdd-context-load` default compact mode for routine continuation.',
-      '- Use `sdd-context-load` with `mode: "full"` only for audits or ambiguous decisions.'
-    ].join('\n');
-
-    const estimate = this.estimateContextSize(sourceCharacters, draft.length);
-    return draft.replace(
-      /- Handoff context: ~\d+ tokens before final write estimate/,
-      `- Handoff context: ~${estimate.compactTokens} tokens`
+  private async loadContextRequest(request: ContextLoadRequest): Promise<ContextLoadResult> {
+    const { mode, budget } = this.resolveLoadOptions(request);
+    const resolver = new SpecPathResolver(this.fileSystem);
+    const resolved = await resolver.resolve(request.projectRoot, request.featureName);
+    const specPath = path.join(resolved.featureRoot, 'spec.json');
+    await resolver.assertContained(resolved.featureRoot, specPath);
+    const spec = await this.readSpec(specPath, request.featureName);
+    const selected = await this.selectState(resolved.featureRoot, spec, request, resolver);
+    const sourceCharacters = selected.documents.reduce((total, document) => total + document.content.length, 0);
+    const sourceFingerprint = this.hash(JSON.stringify({
+      schema: HANDOFF_SCHEMA,
+      phase: selected.phase,
+      status: selected.status,
+      approvals: spec.approvals,
+      reviewRequired: spec.reviewRequired,
+      reviewCompleted: spec.reviewCompleted,
+      sources: selected.documents.map(({ relativePath, content }) => [relativePath, content]),
+    }));
+    const fingerprint = this.hash(JSON.stringify({
+      sourceFingerprint,
+      mode,
+      budget,
+      includeUnapproved: request.includeUnapproved === true,
+      selection: SELECTION_VERSION,
+    }));
+    const canonical = mode === 'compact'
+      && request.maxEstimatedTokens === undefined
+      && request.includeUnapproved !== true;
+    const handoffPath = path.join(resolved.featureRoot, 'context', 'handoff.md');
+    const cached = await this.readCanonicalCache(
+      canonical,
+      handoffPath,
+      resolved.featureRoot,
+      resolver,
+      selected,
+      sourceFingerprint,
+      fingerprint,
     );
-  }
-
-  private summarizeDocument(doc: DocumentSnapshot): string {
-    const lines = this.normalizeLines(doc.content);
-    const headings = this.extractHeadings(lines);
-    const bullets = this.extractBullets(lines);
-    const requirements = this.extractRequirementLikeLines(lines);
-
-    return [
-      `### ${doc.name}`,
-      '',
-      headings.length > 0 ? '**Key sections:**' : '',
-      ...headings.slice(0, 8).map((line) => `- ${line}`),
-      bullets.length > 0 ? '\n**Important points:**' : '',
-      ...bullets.slice(0, 8).map((line) => `- ${line}`),
-      requirements.length > 0 ? '\n**Constraints and acceptance signals:**' : '',
-      ...requirements.slice(0, 8).map((line) => `- ${line}`),
-      headings.length === 0 && bullets.length === 0 && requirements.length === 0
-        ? '- No structured summary points found; open source document if this phase is active.'
-        : ''
-    ].filter(Boolean).join('\n');
-  }
-
-  private async loadAvailableDocuments(project: Project): Promise<DocumentSnapshot[]> {
-    const specDir = this.getSpecDir(project);
-    const names = ['requirements.md', 'design.md', 'tasks.md', 'spec.json'];
-    const documents: DocumentSnapshot[] = [];
-
-    for (const name of names) {
-      const path = `${specDir}/${name}`;
-      const content = await this.readOptionalFile(path);
-      if (content) {
-        documents.push({ name, path, content });
-      }
+    if (cached !== undefined) {
+      const result = this.resultFor(
+        cached,
+        mode,
+        selected,
+        sourceFingerprint,
+        fingerprint,
+        sourceCharacters,
+        [],
+        'hit',
+      );
+      return this.applyEtag(result, request.ifNoneMatch);
     }
 
+    const built = mode === 'full'
+      ? this.buildFull(spec, selected, budget)
+      : this.buildBounded(spec, selected, budget, mode, sourceFingerprint, fingerprint, canonical);
+    await this.persistCanonical(canonical, handoffPath, built.content);
+    const result = this.resultFor(
+      built.content,
+      mode,
+      selected,
+      sourceFingerprint,
+      fingerprint,
+      sourceCharacters,
+      built.omittedSources,
+      'regenerated',
+    );
+    this.logger.debug('Context payload prepared', {
+      featureName: request.featureName,
+      mode,
+      phase: selected.phase,
+      payloadEstimatedTokens: result.payloadEstimatedTokens,
+    });
+    return this.applyEtag(result, request.ifNoneMatch);
+  }
+
+  private resolveLoadOptions(request: ContextLoadRequest): { mode: ContextLoadMode; budget: number } {
+    const mode = request.mode ?? 'compact';
+    const budget = request.maxEstimatedTokens ?? MODE_BUDGETS[mode];
+    if (!Number.isInteger(budget) || budget <= 0) throw new ContextBudgetTooSmallError(budget, 1);
+    if (request.includeUnapproved && mode !== 'full') {
+      throw new Error('includeUnapproved is supported only in full mode');
+    }
+    return { mode, budget };
+  }
+
+  private async readCanonicalCache(
+    canonical: boolean,
+    handoffPath: string,
+    featureRoot: string,
+    resolver: SpecPathResolver,
+    selected: SelectedState,
+    sourceFingerprint: string,
+    fingerprint: string,
+  ): Promise<string | undefined> {
+    if (!canonical || !(await this.fileSystem.exists(handoffPath))) return undefined;
+    await resolver.assertContained(featureRoot, handoffPath);
+    const cached = await this.fileSystem.readFile(handoffPath);
+    return this.cacheMatches(cached, selected.phase, sourceFingerprint, fingerprint)
+      ? cached
+      : undefined;
+  }
+
+  private async persistCanonical(canonical: boolean, handoffPath: string, content: string): Promise<void> {
+    if (!canonical) return;
+    await this.fileSystem.mkdir(path.dirname(handoffPath));
+    if (!this.fileSystem.writeFileAtomic) {
+      throw new Error('FileSystemPort.writeFileAtomic is required for context persistence');
+    }
+    await this.fileSystem.writeFileAtomic(handoffPath, content);
+  }
+
+  private applyEtag(result: ContextLoadResult, ifNoneMatch?: string): ContextLoadResult {
+    if (ifNoneMatch !== result.fingerprint) return result;
+    return {
+      ...result,
+      content: undefined,
+      cacheStatus: 'not-modified',
+      payloadCharacters: 0,
+      payloadEstimatedTokens: 0,
+    };
+  }
+
+  private async readSpec(specPath: string, expectedFeature: string): Promise<WorkflowSpec> {
+    if (!(await this.fileSystem.exists(specPath))) {
+      throw new ContextSourceError(specPath, 'Missing required workflow metadata');
+    }
+    const record = await this.readJsonRecord(specPath);
+    const approvalsRecord = this.requiredRecord(record.approvals, specPath, 'Missing approvals');
+    const options = this.optionalRecord(record.workflow_options ?? record.workflowOptions);
+    const checkpoints = this.optionalRecord(record.checkpoints);
+    const test = this.optionalRecord(checkpoints.test_cases ?? checkpoints.testCases);
+    return {
+      featureName: this.specFeatureName(record, expectedFeature, specPath),
+      approvals: this.parseApprovals(approvalsRecord),
+      reviewRequired: test.required === true
+        || options.review_test_cases === true
+        || options.reviewTestCases === true,
+      reviewCompleted: test.reviewed === true,
+    };
+  }
+
+  private async readJsonRecord(specPath: string): Promise<Record<string, unknown>> {
+    let value: unknown;
+    try {
+      value = JSON.parse(await this.fileSystem.readFile(specPath));
+    } catch {
+      throw new ContextSourceError(specPath, 'Malformed workflow metadata');
+    }
+    if (!value || typeof value !== 'object') {
+      throw new ContextSourceError(specPath, 'Invalid workflow metadata');
+    }
+    return value as Record<string, unknown>;
+  }
+
+  private requiredRecord(
+    value: unknown,
+    specPath: string,
+    message: string,
+  ): Record<string, unknown> {
+    if (!value || typeof value !== 'object') throw new ContextSourceError(specPath, message);
+    return value as Record<string, unknown>;
+  }
+
+  private optionalRecord(value: unknown): Record<string, unknown> {
+    return value && typeof value === 'object' ? value as Record<string, unknown> : {};
+  }
+
+  private parseApprovals(record: Record<string, unknown>): Record<ApprovablePhase, ApprovalState> {
+    return Object.fromEntries(PHASES.map(phase => {
+      const state = this.optionalRecord(record[phase]);
+      return [phase, { generated: state.generated === true, approved: state.approved === true }];
+    })) as Record<ApprovablePhase, ApprovalState>;
+  }
+
+  private specFeatureName(
+    record: Record<string, unknown>,
+    expectedFeature: string,
+    specPath: string,
+  ): string {
+    const persisted = typeof record.feature_name === 'string'
+      ? record.feature_name
+      : typeof record.name === 'string'
+        ? record.name
+        : undefined;
+    if (persisted !== undefined && persisted !== expectedFeature) {
+      throw new ContextSourceError(specPath, 'Feature metadata name does not match directory');
+    }
+    return expectedFeature;
+  }
+
+  private async selectState(
+    featureRoot: string,
+    spec: WorkflowSpec,
+    request: ContextLoadRequest,
+    resolver: SpecPathResolver,
+  ): Promise<SelectedState> {
+    const selection = this.resolveEffectivePhase(spec, request);
+    const documents = await this.readSelectedDocuments(featureRoot, spec, selection.phase, resolver);
+    return { ...selection, documents };
+  }
+
+  private resolveEffectivePhase(
+    spec: WorkflowSpec,
+    request: ContextLoadRequest,
+  ): Pick<SelectedState, 'phase' | 'status'> {
+    if (request.phase) return this.resolveExplicitPhase(spec, request);
+    if (request.mode === 'full' && request.includeUnapproved) {
+      const latestGenerated = [...PHASES].reverse()
+        .find(candidate => spec.approvals[candidate].generated);
+      if (!latestGenerated) return { phase: 'init', status: 'init' };
+      return {
+        phase: latestGenerated,
+        status: spec.approvals[latestGenerated].approved ? 'approved' : 'unapproved',
+      };
+    }
+    const latestApproved = [...PHASES].reverse()
+      .find(candidate => spec.approvals[candidate].approved);
+    return latestApproved
+      ? { phase: latestApproved, status: 'approved' }
+      : { phase: 'init', status: 'init' };
+  }
+
+  private resolveExplicitPhase(
+    spec: WorkflowSpec,
+    request: ContextLoadRequest & { phase?: ApprovablePhase },
+  ): Pick<SelectedState, 'phase' | 'status'> {
+    const phase = request.phase;
+    if (!phase) return { phase: 'init', status: 'init' };
+    const state = spec.approvals[phase];
+    const draftAllowed = request.mode === 'full' && request.includeUnapproved && state.generated;
+    if (!state.approved && !draftAllowed) throw new PhaseNotApprovedError(phase);
+    return { phase, status: state.approved ? 'approved' : 'unapproved' };
+  }
+
+  private async readSelectedDocuments(
+    featureRoot: string,
+    spec: WorkflowSpec,
+    phase: EffectivePhase,
+    resolver: SpecPathResolver,
+  ): Promise<DocumentSnapshot[]> {
+    if (phase === 'init') return [];
+    const documents: DocumentSnapshot[] = [];
+    const last = PHASES.indexOf(phase);
+    for (const selectedPhase of PHASES.slice(0, last + 1)) {
+      if (!spec.approvals[selectedPhase].generated) {
+        throw new ContextSourceError(`${selectedPhase}.md`, 'Selected phase metadata is inconsistent');
+      }
+      documents.push(await this.readPhaseDocument(featureRoot, selectedPhase, resolver));
+    }
     return documents;
   }
 
-  private async readOptionalFile(path: string): Promise<string | null> {
+  private async readPhaseDocument(
+    featureRoot: string,
+    selectedPhase: ApprovablePhase,
+    resolver: SpecPathResolver,
+  ): Promise<DocumentSnapshot> {
+    const name = `${selectedPhase}.md`;
+    const absolutePath = path.join(featureRoot, name);
+    await resolver.assertContained(featureRoot, absolutePath);
+    if (!(await this.fileSystem.exists(absolutePath))) {
+      throw new ContextSourceError(absolutePath, 'Missing required selected-phase document');
+    }
     try {
-      if (!(await this.fileSystem.exists(path))) {
-        return null;
-      }
-      return await this.fileSystem.readFile(path);
+      return {
+        name,
+        relativePath: name,
+        absolutePath,
+        content: await this.fileSystem.readFile(absolutePath),
+      };
     } catch {
-      return null;
+      throw new ContextSourceError(absolutePath, 'Unable to read selected-phase document');
     }
   }
 
-  private normalizeLines(content: string): string[] {
-    return content
-      .split(/\r?\n/)
-      .map((line) => line.trim())
-      .filter((line) => line.length > 0 && !line.startsWith('```'));
+  private buildBounded(
+    spec: WorkflowSpec,
+    selected: SelectedState,
+    budget: number,
+    mode: Exclude<ContextLoadMode, 'full'>,
+    sourceFingerprint: string,
+    fingerprint: string,
+    canonical: boolean,
+  ): { content: string; omittedSources: string[] } {
+    const envelope = this.buildEnvelope(spec, selected, sourceFingerprint, fingerprint, canonical);
+    const maximumCharacters = budget * 4;
+    if (envelope.length > maximumCharacters) {
+      throw new ContextBudgetTooSmallError(budget, Math.ceil(envelope.length / 4));
+    }
+    if (!selected.documents.length) {
+      return { content: this.embedEstimate(envelope), omittedSources: [] };
+    }
+    const direct = this.buildDirectPayload(envelope, selected, maximumCharacters);
+    if (direct) return { content: direct, omittedSources: [] };
+    return this.selectCandidates(
+      envelope,
+      this.collectCandidates(selected.documents, mode),
+      selected.documents,
+      maximumCharacters,
+    );
   }
 
-  private extractHeadings(lines: string[]): string[] {
-    return this.unique(lines
-      .filter((line) => /^#{1,4}\s+/.test(line))
-      .map((line) => line.replace(/^#{1,4}\s+/, '').trim()));
+  private buildEnvelope(
+    spec: WorkflowSpec,
+    selected: SelectedState,
+    sourceFingerprint: string,
+    fingerprint: string,
+    canonical: boolean,
+  ): string {
+    const metadata = canonical
+      ? `<!-- sdd-context schema=${HANDOFF_SCHEMA} phase=${selected.phase} source=${sourceFingerprint} payload=${fingerprint} -->\n`
+      : '';
+    const sourceReferences = selected.documents.length
+      ? selected.documents.map(document => `- ${document.relativePath}`).join('\n')
+      : '- spec.json';
+    const review = spec.reviewRequired
+      ? spec.reviewCompleted ? 'reviewed' : 'pending'
+      : 'not required';
+    return `${metadata}# SDD Context: ${spec.featureName}\n\n## Workflow State\n- Effective phase: ${selected.phase}\n- Phase status: ${selected.status}\n- Requirements: ${this.approvalLabel(spec.approvals.requirements)}\n- Design: ${this.approvalLabel(spec.approvals.design)}\n- Tasks: ${this.approvalLabel(spec.approvals.tasks)}\n- Test-case review: ${review}\n\n## Next Action\n${this.nextAction(spec, selected.phase)}\n\n## Source References\n${sourceReferences}\n\n## Payload Estimate\n- Payload estimated tokens: 00000`;
   }
 
-  private extractBullets(lines: string[]): string[] {
-    return this.unique(lines
-      .filter((line) => /^[-*]\s+/.test(line) || /^\d+\.\s+/.test(line))
-      .map((line) => line.replace(/^[-*]\s+/, '').replace(/^\d+\.\s+/, '').trim())
-      .filter((line) => line.length > 0 && line.length <= 220));
+  private nextAction(spec: WorkflowSpec, phase: EffectivePhase): string {
+    if (phase === 'init') return 'Generate requirements.';
+    if (phase === 'requirements') return 'Generate design from approved requirements.';
+    if (phase === 'design') return 'Generate the TDD task breakdown.';
+    if (spec.reviewRequired && !spec.reviewCompleted) {
+      return 'Review test cases before approving tasks.';
+    }
+    return 'Proceed with focused implementation.';
   }
 
-  private extractRequirementLikeLines(lines: string[]): string[] {
-    const keywords = /\b(SHALL|MUST|WHEN|IF|THEN|WHERE|constraint|risk|security|performance|error|edge case)\b/i;
-    return this.unique(lines
-      .filter((line) => keywords.test(line))
-      .map((line) => line.replace(/^[-*]\s+/, '').replace(/^\d+\.\s+/, '').trim())
-      .filter((line) => line.length <= 240));
+  private buildDirectPayload(
+    envelope: string,
+    selected: SelectedState,
+    maximumCharacters: number,
+  ): string | undefined {
+    if (selected.documents.length !== 1 || selected.documents[0].content.length > 600) {
+      return undefined;
+    }
+    const direct = `${envelope}\n\n## Approved Source\n${selected.documents[0].content.trim()}`;
+    return direct.length <= maximumCharacters ? this.embedEstimate(direct) : undefined;
   }
 
-  private unique(lines: string[]): string[] {
+  private collectCandidates(
+    documents: DocumentSnapshot[],
+    mode: Exclude<ContextLoadMode, 'full'>,
+  ): ContextCandidate[] {
     const seen = new Set<string>();
-    const result: string[] = [];
+    const candidates: ContextCandidate[] = [];
+    const perLineCap = mode === 'compact' ? 320 : 640;
+    for (const document of documents) {
+      this.collectDocumentCandidates(document, perLineCap, seen, candidates);
+    }
+    return candidates;
+  }
 
-    for (const line of lines) {
-      const key = line.toLowerCase();
-      if (!seen.has(key)) {
-        seen.add(key);
-        result.push(line);
+  private collectDocumentCandidates(
+    document: DocumentSnapshot,
+    perLineCap: number,
+    seen: Set<string>,
+    candidates: ContextCandidate[],
+  ): void {
+    for (const rawLine of document.content.split(/\r?\n/)) {
+      const normalized = rawLine.trim().replace(/^[-*]\s+/, '').replace(/^\d+\.\s+/, '');
+      if (!normalized || normalized.startsWith('```')) continue;
+      const capped = normalized.slice(0, perLineCap);
+      const key = capped.toLocaleLowerCase();
+      if (seen.has(key)) continue;
+      seen.add(key);
+      candidates.push({ source: document.relativePath, text: capped });
+    }
+  }
+
+  private selectCandidates(
+    envelope: string,
+    candidates: ContextCandidate[],
+    documents: DocumentSnapshot[],
+    maximumCharacters: number,
+  ): { content: string; omittedSources: string[] } {
+    let content = envelope;
+    const usedSources = new Set<string>();
+    for (const candidate of candidates) {
+      const line = `\n- ${candidate.text}`;
+      if (content.length + '\n\n## Selected Context'.length + line.length > maximumCharacters) {
+        continue;
       }
+      if (!content.includes('\n\n## Selected Context')) content += '\n\n## Selected Context';
+      content += line;
+      usedSources.add(candidate.source);
     }
-
-    return result;
+    return {
+      content: this.embedEstimate(content),
+      omittedSources: documents
+        .filter(document => !usedSources.has(document.relativePath))
+        .map(document => document.relativePath),
+    };
   }
 
-  private getNextSteps(approvedPhase: ApprovablePhase, testReviewPending: boolean): string[] {
-    if (approvedPhase === 'requirements') {
-      return ['Generate or review design using the approved requirements handoff.'];
-    }
-
-    if (approvedPhase === 'design') {
-      return ['Generate TDD task breakdown from the approved design handoff.'];
-    }
-
-    if (testReviewPending) {
-      return ['Review TDD test cases, then run sdd-review-test-cases before approving tasks.'];
-    }
-
-    return ['Begin implementation with compact context loaded; open full docs only for ambiguous details.'];
+  private buildFull(spec: WorkflowSpec, selected: SelectedState, budget: number): { content: string; omittedSources: string[] } {
+    let content = [`# Full SDD Context: ${spec.featureName}`, `Effective phase: ${selected.phase} (${selected.status})`, ...selected.documents.map((document) => `## ${document.name}\n\n${document.content}`), '## Payload Estimate\n- Payload estimated tokens: 00000'].join('\n\n');
+    content = this.embedEstimate(content);
+    const required = Math.ceil(content.length / 4);
+    if (required > budget) throw new ContextBudgetExceededError(budget, required);
+    return { content, omittedSources: [] };
   }
 
-  private formatApproval(status: { generated: boolean; approved: boolean }): string {
-    if (status.generated && status.approved) {
-      return 'generated, approved';
-    }
-    if (status.generated) {
-      return 'generated, pending approval';
-    }
-    return 'not generated';
+  private embedEstimate(content: string): string {
+    return content.replace('Payload estimated tokens: 00000', `Payload estimated tokens: ${String(Math.ceil(content.length / 4)).padStart(5, '0')}`);
   }
 
-  private estimateTokens(characters: number): number {
-    return Math.max(1, Math.ceil(characters / 4));
+  private resultFor(content: string, mode: ContextLoadMode, selected: SelectedState, sourceFingerprint: string, fingerprint: string, sourceCharacters: number, omittedSources: string[], cacheStatus: ContextLoadResult['cacheStatus']): ContextLoadResult {
+    const payloadEstimatedTokens = Math.ceil(content.length / 4);
+    const sourceEstimatedTokens = Math.ceil(sourceCharacters / 4);
+    return { content, mode, effectivePhase: selected.phase, phaseStatus: selected.status, sourceFingerprint, fingerprint, cacheStatus, sourceCharacters, sourceEstimatedTokens, payloadCharacters: content.length, payloadEstimatedTokens, reductionPercentage: sourceEstimatedTokens === 0 || payloadEstimatedTokens >= sourceEstimatedTokens ? 0 : Math.round((1 - payloadEstimatedTokens / sourceEstimatedTokens) * 100), omittedSources };
   }
 
-  private getSpecDir(project: Project): string {
-    return `${project.path}/.spec/specs/${project.name}`;
+  private cacheMatches(content: string, phase: EffectivePhase, sourceFingerprint: string, fingerprint: string): boolean {
+    const match = content.match(/^<!-- sdd-context schema=(\d+) phase=(\w+) source=([a-f0-9]{64}) payload=([a-f0-9]{64}) -->/);
+    return match?.[1] === String(HANDOFF_SCHEMA) && match[2] === phase && match[3] === sourceFingerprint && match[4] === fingerprint;
   }
 
-  private getContextDir(project: Project): string {
-    return `${this.getSpecDir(project)}/context`;
+  private approvalLabel(state: ApprovalState): string {
+    return state.approved ? 'approved' : state.generated ? 'generated, unapproved' : 'not generated';
+  }
+
+  private hash(content: string): string {
+    return createHash('sha256').update(content).digest('hex');
   }
 }

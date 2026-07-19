@@ -1,9 +1,18 @@
 import * as fs from 'fs';
 import * as path from 'path';
-import { SKILL_AGENT_ROUTES } from '../../../cli/install-target';
 
-describe('phase skill specialist delegation', () => {
-  it.each(Object.entries(SKILL_AGENT_ROUTES))('%s delegates to %s with a compact fallback-safe handoff', (
+const advisorRoutes = {
+  'sdd-requirements': 'planner',
+  'sdd-tasks': 'planner',
+  'sdd-steering': 'planner',
+  'sdd-steering-custom': 'planner',
+  'sdd-design': 'architect',
+  'sdd-review': 'reviewer',
+  'sdd-security-check': 'security-auditor',
+} as const;
+
+describe('skill execution guidance', () => {
+  it.each(Object.entries(advisorRoutes))('%s names its %s route with one fallback-safe depth-one handoff', (
     skill,
     role,
   ) => {
@@ -14,12 +23,22 @@ describe('phase skill specialist delegation', () => {
 
     expect(content).toContain('## Specialist Delegation');
     expect(content).toContain(`\`${role}\``);
-    expect(content).toMatch(/compact handoff/i);
-    expect(content).toMatch(/wait for.*integrate/i);
-    expect(content).toMatch(/unavailable.*state the fallback.*continue/i);
+    expect(content).toContain('specialistDepth: 1');
+    expect(content).toMatch(/exactly one compact handoff/i);
+    expect(content).toMatch(/must not delegate again/i);
+    expect(content).toMatch(/unavailable.*continue in the parent/i);
   });
 
-  it('does not add an unapproved specialist route to commit guidance', () => {
-    expect(SKILL_AGENT_ROUTES['sdd-commit']).toBeUndefined();
-  });
+  it.each(['sdd-implement', 'sdd-test-gen', 'simple-task', 'sdd-commit'])(
+    '%s remains inline for serial work',
+    skill => {
+      const content = fs.readFileSync(
+        path.resolve(process.cwd(), 'skills', skill, 'SKILL.md'),
+        'utf8',
+      );
+
+      expect(content).not.toContain('## Specialist Delegation');
+      expect(content).toMatch(/current turn|work inline/i);
+    },
+  );
 });

@@ -1,195 +1,31 @@
 ---
 name: sdd-review
-description: Perform thorough Linus-style code review focusing on correctness, maintainability, and adherence to project conventions. Use after completing implementation to ensure code quality. Invoked via /sdd-review [file-path or PR-number].
+description: Review a focused change for correctness, regressions, security, and maintainability.
+disable-model-invocation: true
 ---
 
-# SDD Code Review
+# Code Review
 
-Perform comprehensive code reviews in the style of Linus Torvalds - direct, thorough, and focused on what matters: correctness, simplicity, and long-term maintainability.
+## Required Review
 
-## Review Philosophy
+1. Establish the exact diff or artifact scope. Read related requirements, design, tests, and local conventions.
+2. Verify behavior and error paths from code and focused test evidence; do not infer correctness from style.
+3. Review data flow, state transitions, concurrency, resource ownership, compatibility, and boundary conditions.
+4. Check authorization, validation, injection, secret handling, sensitive logging, and dependency risk where applicable.
+5. Remove false positives and preference-only remarks. Cite each finding with a path and line, triggering scenario, impact, and concrete remediation.
+6. Rank findings: **critical** (security/data loss), **important** (incorrect behavior/regression), then **minor** (maintainability with real cost).
+7. State verification evidence and residual risk. If no findings remain, say so explicitly.
 
-> "Talk is cheap. Show me the code."
-> — Linus Torvalds
-
-This review focuses on:
-1. **Correctness** - Does it actually work? Does it handle edge cases?
-2. **Simplicity** - Is it more complex than necessary?
-3. **Maintainability** - Will future developers understand this?
-4. **Convention Adherence** - Does it follow project patterns?
-
-## Workflow
-
-### Step 1: Identify Review Scope
-
-Determine what to review:
-- **Single file**: `/sdd-review src/services/UserService.ts`
-- **Directory**: `/sdd-review src/services/`
-- **Git diff**: `/sdd-review HEAD~3..HEAD`
-- **PR/MR**: `/sdd-review PR-123` or `/sdd-review MR-45`
-
-### Step 2: Load Project Context
-
-Before reviewing:
-1. Read project steering documents from `.spec/steering/`
-2. Understand existing patterns in the codebase
-3. Check if there's a related spec in `.spec/specs/`
-
-### Step 3: Perform Review
-
-#### Code Correctness Checks
-
-```markdown
-## Correctness Issues
-
-### Critical
-- [ ] Logic errors that will cause bugs
-- [ ] Race conditions or threading issues
-- [ ] Resource leaks (files, connections, memory)
-- [ ] Unhandled error conditions
-
-### Important
-- [ ] Edge cases not handled
-- [ ] Assumptions that may not hold
-- [ ] Off-by-one errors
-- [ ] Type mismatches or unsafe casts
-```
+Do not edit code unless asked. Never claim a test or security check ran when it did not.
 
 ## Specialist Delegation
 
-When the host supports subagents, delegate the focused review to the `reviewer` role with a compact handoff containing only the diff or scope, approved requirements, project conventions, and verification evidence. Wait for the specialist and then integrate its result into the current workflow. If specialist delegation is unavailable, state the fallback and continue in the current agent.
+Target renderers provide the `reviewer` route. When a native advisor is required, dispatch exactly one compact handoff with `specialistDepth: 1`; include only the diff/scope, approved contracts, conventions, and verification evidence. The specialist must not delegate again. Keep the handoff and returned summary at or below 2,048 estimated tokens. If the advisor or routed model is unavailable, record one fallback and continue in the parent without retrying or selecting a generic child. Where a native per-turn model override applies, execute in this turn.
 
-#### Simplicity Assessment
+## Output
 
-Ask these questions:
-- Could this be done with less code?
-- Is there a standard library function for this?
-- Is this abstraction earning its keep?
-- Would a junior developer understand this in 6 months?
+Return findings first, ordered by severity, then assumptions, verification evidence, and unresolved blockers. Do not echo the reviewed artifact.
 
-#### Pattern Violations
+## Optional Reference
 
-Check against project conventions:
-```markdown
-## Pattern Violations
-
-### Naming
-- [ ] Variables don't follow naming convention
-- [ ] Functions named for implementation, not purpose
-
-### Structure
-- [ ] Logic in wrong layer (controller doing business logic)
-- [ ] Missing separation of concerns
-- [ ] Circular dependencies introduced
-
-### Error Handling
-- [ ] Swallowed exceptions
-- [ ] Generic error messages
-- [ ] Missing error propagation
-```
-
-### Step 4: Provide Feedback
-
-Structure feedback with clear categories:
-
-```markdown
-# Code Review: {file/PR description}
-
-## Summary
-Brief overall assessment (1-2 sentences)
-
-## 🚨 Must Fix (Blocking)
-Issues that must be resolved before merge:
-1. **Line 42**: Memory leak - connection never closed
-   ```diff
-   - const conn = await getConnection();
-   + const conn = await getConnection();
-   + try { ... } finally { conn.close(); }
-   ```
-
-## ⚠️ Should Fix (Non-blocking)
-Issues that should be addressed but won't block:
-1. **Line 78**: Magic number should be a named constant
-2. **Line 103**: Consider extracting this to a helper function
-
-## 💡 Suggestions (Optional)
-Improvements that would be nice but are truly optional:
-1. **Line 156**: This could be simplified with `Array.flatMap()`
-
-## ✅ What's Good
-Acknowledge good patterns to reinforce them:
-1. Good use of dependency injection
-2. Clear separation of concerns
-3. Comprehensive error handling in auth module
-```
-
-### Step 5: Verify Tests
-
-For any code changes:
-1. Check if tests exist for modified code
-2. Verify edge cases are tested
-3. Run existing tests to ensure no regressions
-
-```bash
-# Run tests for affected files
-npm test -- --findRelatedTests {changed-files}
-```
-
-## Review Severity Levels
-
-| Level | Meaning | Action Required |
-|-------|---------|-----------------|
-| 🚨 **Critical** | Bug, security issue, data loss risk | Must fix before merge |
-| ⚠️ **Warning** | Code smell, potential issue | Should fix, discuss if disagree |
-| 💡 **Info** | Suggestion, style preference | Optional, author's choice |
-
-## Common Issues to Watch For
-
-### TypeScript/JavaScript Specific
-- `any` type usage without justification
-- Missing null/undefined checks
-- Promises not awaited
-- Event listener memory leaks
-- Mutable shared state
-
-### General
-- Functions doing too much
-- Deep nesting (> 3 levels)
-- Boolean parameters (use options object)
-- Comments explaining *what* instead of *why*
-- Dead code or unused imports
-
-## Integration with SDD Workflow
-
-When reviewing implementation:
-1. Compare against requirements in `.spec/specs/{feature}/requirements.md`
-2. Verify design patterns from `.spec/specs/{feature}/design.md`
-3. Check task completion against `.spec/specs/{feature}/tasks.md`
-
-## Example Review
-
-```markdown
-# Code Review: UserAuthService.ts
-
-## Summary
-Good overall structure but has a critical security issue and some error handling gaps.
-
-## 🚨 Must Fix
-1. **Line 67**: Password stored in plain text in error log
-   ```typescript
-   // BAD: Leaks credentials
-   logger.error(`Login failed for ${email} with password ${password}`);
-
-   // GOOD: Never log credentials
-   logger.error(`Login failed for ${email}`);
-   ```
-
-## ⚠️ Should Fix
-1. **Line 89**: Catch block swallows all errors
-2. **Line 112-130**: This block should be extracted to a private method
-
-## ✅ What's Good
-- Clean separation between auth logic and data access
-- Good use of TypeScript discriminated unions for auth result
-- Comprehensive input validation
-```
+Read [REFERENCE.md](REFERENCE.md) only for language-specific review prompts, severity examples, or the extended checklist.

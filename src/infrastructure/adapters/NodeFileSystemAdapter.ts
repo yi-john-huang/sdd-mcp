@@ -1,6 +1,7 @@
 import { promises as fs } from 'fs';
 import { injectable } from 'inversify';
 import { FileSystemPort } from '../../domain/ports.js';
+import { atomicWriteFile } from '../../utils/atomicWrite.js';
 
 @injectable()
 export class NodeFileSystemAdapter implements FileSystemPort {
@@ -10,6 +11,9 @@ export class NodeFileSystemAdapter implements FileSystemPort {
 
   async writeFile(path: string, content: string): Promise<void> {
     await fs.writeFile(path, content, 'utf-8');
+  }
+  async writeFileAtomic(path: string, content: string): Promise<void> {
+    await atomicWriteFile(path, content);
   }
 
   async exists(path: string): Promise<boolean> {
@@ -31,5 +35,13 @@ export class NodeFileSystemAdapter implements FileSystemPort {
 
   async stat(path: string): Promise<{ isFile(): boolean; isDirectory(): boolean }> {
     return await fs.stat(path);
+  }
+
+  async realpath(path: string): Promise<string> {
+    return await fs.realpath(path);
+  }
+
+  async unlink(path: string): Promise<void> {
+    await fs.unlink(path);
   }
 }

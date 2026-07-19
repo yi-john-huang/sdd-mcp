@@ -1,0 +1,9 @@
+{
+  "featureName": "large",
+  "currentPhase": "tasks",
+  "reviewTestCases": true,
+  "testCasesReviewed": false,
+  "requirements": { "generated": true, "approved": true },
+  "design": { "generated": true, "approved": true },
+  "tasks": { "generated": true, "approved": false }
+}

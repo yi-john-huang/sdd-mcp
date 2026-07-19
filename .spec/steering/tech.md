@@ -10,7 +10,7 @@
 - **Package manager:** npm with `package-lock.json`
 
 ### Core Frameworks and Protocols
-- **Model Context Protocol SDK:** MCP server primitives, tools, resources, prompts, and stdio transport.
+- **Model Context Protocol SDK:** One compiled stdio server with an exact 16-tool workflow inventory.
 - **Inversify:** Dependency injection container for clean architecture wiring.
 - **Handlebars:** Template rendering for generated documents and project artifacts.
 - **AJV and Zod:** Runtime validation for schemas and structured input.
@@ -28,6 +28,7 @@
 | `@babel/parser`, `acorn`, `esprima`, `typescript-estree` | Source parsing and quality/codebase analysis |
 | `i18next` packages | Localization services |
 | `uuid` | Stable IDs for projects and workflow objects |
+| `write-file-atomic` | Serialized cross-platform replacement for durable specs, handoffs, and install manifests |
 
 ## Architecture
 
@@ -51,13 +52,14 @@ src/infrastructure
 Domain ports live in `src/domain/ports.ts` and are implemented in infrastructure adapters. Application services depend on ports and domain types; `src/infrastructure/di/container.ts` binds concrete implementations with Inversify.
 
 ### Main Runtime Paths
-- `src/index.ts` starts the MCP server and includes the simplified MCP mode used by `npx`/stdio clients.
-- `src/infrastructure/mcp/` implements MCP server concerns: tool registry, prompts, resources, sessions, capability negotiation, and errors.
-- `src/adapters/cli/SDDToolAdapter.ts` maps tool calls into application services.
-- `src/cli/install-target.ts` owns target selection, native default paths, role/model routes, and validation.
-- `src/cli/tool-support/` contains Claude Code and Codex render/install strategies; `src/cli/utils/` contains preserve-first and managed-ignore filesystem boundaries.
-- Other `src/cli/` modules contain install orchestration and migration commands.
-- `src/application/services/ContextCompactionService.ts` handles compact handoff generation and context loading.
+- `src/index.ts` is the single compiled MCP server source and exports callable create/start functions.
+- Root `sdd-entry.js` and `mcp-server.js` are thin compatibility launchers for the compiled runtime.
+- `src/infrastructure/mcp/` owns the exact shared tool definitions, server lifecycle, capability negotiation, and errors.
+- `src/adapters/cli/SDDToolAdapter.ts` binds the validated server workspace to disk-authoritative application services.
+- `src/cli/install-target.ts` owns three-way target selection, native default paths, role/model routes, and validation.
+- `src/cli/tool-support/` contains Claude Code, Codex, and OMP render/install strategies; `src/cli/utils/` contains managed ownership, atomic persistence, and generated-ignore boundaries.
+- `src/application/services/ContextCompactionService.ts` handles phase-aware bounded context, SHA-256 fingerprints, ETags, and canonical handoff repair.
+- `src/application/services/WorkflowEngineService.ts` treats `.spec/specs/*/spec.json` as workflow authority across server restarts.
 
 ## Development Environment
 
@@ -83,11 +85,12 @@ npm start
 
 ### Packaging
 - Published package name: `sdd-mcp-server`
-- Current version: `3.5.1`
+- Current version: `4.0.0`
 - Binaries:
   - `sdd-mcp-server` -> `sdd-entry.js`
   - `sdd-install-skills` -> `dist/cli/install-skills.js`
-- Published component directories include `skills`, `steering`, `rules`, `contexts`, `agents`, and `hooks`; templates include native root guidance and the Codex hook runner.
+  - `context-report` -> `scripts/context-usage-report.mjs`
+- Published component directories include `skills`, `steering`, `rules`, `contexts`, `agents`, and `hooks`; templates include native root guidance and supported hook assets.
 
 ### Docker
 The Docker build is multi-stage:

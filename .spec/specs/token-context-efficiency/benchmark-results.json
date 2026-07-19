@@ -1,0 +1,47 @@
+{
+  "schemaVersion": 1,
+  "date": "2026-07-19",
+  "model": "openai-codex/gpt-5.6-sol",
+  "parentThinkingLevel": "medium",
+  "runsPerBranch": 3,
+  "routingPolicy": "OMP runs inline on Sol/medium by default; native Sol/xhigh agents are explicit opt-in",
+  "qualityContract": "All 18 final after runs satisfied their observable artifact/test contract; no automatic specialist sessions occurred.",
+  "scenarios": {
+    "simple": {
+      "before": { "sessionCount": 3, "specialistCount": 0, "raw": { "input": 95102, "output": 1357, "cacheRead": 381184, "cacheWrite": 0, "cost": { "input": 0.47551, "output": 0.04071, "cacheRead": 0.190592, "cacheWrite": 0, "total": 0.706812 } }, "normalized": { "inputWorkTokens": 95102, "outputWorkTokens": 1357, "totalWorkTokens": 96459, "verified": true }, "medianCost": 0.212267, "medianNormalizedTotalWorkTokens": 25964 },
+      "after": { "sessionCount": 3, "specialistCount": 0, "raw": { "input": 56839, "output": 1700, "cacheRead": 433152, "cacheWrite": 0, "cost": { "input": 0.284195, "output": 0.051, "cacheRead": 0.216576, "cacheWrite": 0, "total": 0.551771 } }, "normalized": { "inputWorkTokens": 56839, "outputWorkTokens": 1700, "totalWorkTokens": 58539, "verified": true }, "medianCost": 0.197769, "medianNormalizedTotalWorkTokens": 24598 },
+      "medianCostChangePercentage": -6.830077214074719,
+      "passesNoRegressionGate": true
+    },
+    "medium": {
+      "before": { "sessionCount": 4, "specialistCount": 1, "raw": { "input": 119026, "output": 4885, "cacheRead": 987136, "cacheWrite": 0, "cost": { "input": 0.59513, "output": 0.14655, "cacheRead": 0.493568, "cacheWrite": 0, "total": 1.235248 } }, "normalized": { "inputWorkTokens": 119026, "outputWorkTokens": 4885, "totalWorkTokens": 123911, "verified": true }, "medianCost": 0.398256, "medianNormalizedTotalWorkTokens": 36039 },
+      "after": { "sessionCount": 3, "specialistCount": 0, "raw": { "input": 113584, "output": 4766, "cacheRead": 1037056, "cacheWrite": 0, "cost": { "input": 0.56792, "output": 0.14298, "cacheRead": 0.518528, "cacheWrite": 0, "total": 1.229428 } }, "normalized": { "inputWorkTokens": 113584, "outputWorkTokens": 4766, "totalWorkTokens": 118350, "verified": true }, "medianCost": 0.351285, "medianNormalizedTotalWorkTokens": 35312 },
+      "medianCostChangePercentage": -11.794172592503324,
+      "passesNoRegressionGate": true
+    },
+    "requirements": {
+      "before": { "sessionCount": 3, "specialistCount": 0, "raw": { "input": 129373, "output": 6608, "cacheRead": 918016, "cacheWrite": 0, "cost": { "input": 0.646865, "output": 0.19824, "cacheRead": 0.459008, "cacheWrite": 0, "total": 1.304113 } }, "normalized": { "inputWorkTokens": 129373, "outputWorkTokens": 6608, "totalWorkTokens": 135981, "verified": true }, "medianCost": 0.417888, "medianNormalizedTotalWorkTokens": 37787 },
+      "after": { "sessionCount": 3, "specialistCount": 0, "raw": { "input": 66890, "output": 8064, "cacheRead": 1107200, "cacheWrite": 0, "cost": { "input": 0.33445, "output": 0.24192, "cacheRead": 0.5536, "cacheWrite": 0, "total": 1.12997 } }, "normalized": { "inputWorkTokens": 66890, "outputWorkTokens": 8064, "totalWorkTokens": 74954, "verified": true }, "medianCost": 0.358991, "medianNormalizedTotalWorkTokens": 26002 },
+      "medianCostChangePercentage": -14.09396776169691,
+      "passesNoRegressionGate": true
+    },
+    "design": {
+      "before": { "sessionCount": 3, "specialistCount": 0, "raw": { "input": 136396, "output": 25274, "cacheRead": 1377536, "cacheWrite": 0, "cost": { "input": 0.68198, "output": 0.75822, "cacheRead": 0.688768, "cacheWrite": 0, "total": 2.128968 } }, "normalized": { "inputWorkTokens": 136396, "outputWorkTokens": 25274, "totalWorkTokens": 161670, "verified": true }, "medianCost": 0.717061, "medianNormalizedTotalWorkTokens": 54055 },
+      "after": { "sessionCount": 3, "specialistCount": 0, "raw": { "input": 128070, "output": 23368, "cacheRead": 1146624, "cacheWrite": 0, "cost": { "input": 0.64035, "output": 0.70104, "cacheRead": 0.573312, "cacheWrite": 0, "total": 1.914702 } }, "normalized": { "inputWorkTokens": 128070, "outputWorkTokens": 23368, "totalWorkTokens": 151438, "verified": true }, "medianCost": 0.651686, "medianNormalizedTotalWorkTokens": 49827 },
+      "medianCostChangePercentage": -9.117076510924448,
+      "passesNoRegressionGate": true
+    },
+    "security": {
+      "before": { "sessionCount": 4, "specialistCount": 1, "raw": { "input": 129518, "output": 14614, "cacheRead": 1210880, "cacheWrite": 0, "cost": { "input": 0.64759, "output": 0.43842, "cacheRead": 0.60544, "cacheWrite": 0, "total": 1.69145 } }, "normalized": { "inputWorkTokens": 129518, "outputWorkTokens": 14614, "totalWorkTokens": 144132, "verified": true }, "medianCost": 0.565867, "medianNormalizedTotalWorkTokens": 45525 },
+      "after": { "sessionCount": 3, "specialistCount": 0, "raw": { "input": 144764, "output": 13459, "cacheRead": 1172480, "cacheWrite": 0, "cost": { "input": 0.72382, "output": 0.40377, "cacheRead": 0.58624, "cacheWrite": 0, "total": 1.71383 } }, "normalized": { "inputWorkTokens": 144764, "outputWorkTokens": 13459, "totalWorkTokens": 158223, "verified": true }, "medianCost": 0.556021, "medianNormalizedTotalWorkTokens": 48817 },
+      "medianCostChangePercentage": -1.739984837426466,
+      "passesNoRegressionGate": true
+    },
+    "context": {
+      "before": { "sessionCount": 3, "specialistCount": 0, "raw": { "input": 62533, "output": 3172, "cacheRead": 491520, "cacheWrite": 0, "cost": { "input": 0.312665, "output": 0.09516, "cacheRead": 0.24576, "cacheWrite": 0, "total": 0.653585 } }, "normalized": { "inputWorkTokens": 62533, "outputWorkTokens": 3172, "totalWorkTokens": 65705, "verified": true }, "medianCost": 0.259184, "medianNormalizedTotalWorkTokens": 28068 },
+      "after": { "sessionCount": 3, "specialistCount": 0, "raw": { "input": 76553, "output": 3223, "cacheRead": 456704, "cacheWrite": 0, "cost": { "input": 0.382765, "output": 0.09669, "cacheRead": 0.228352, "cacheWrite": 0, "total": 0.707807 } }, "normalized": { "inputWorkTokens": 76553, "outputWorkTokens": 3223, "totalWorkTokens": 79776, "verified": true }, "medianCost": 0.254329, "medianNormalizedTotalWorkTokens": 27463 },
+      "medianCostChangePercentage": -1.8731866164577842,
+      "passesNoRegressionGate": true
+    }
+  }
+}

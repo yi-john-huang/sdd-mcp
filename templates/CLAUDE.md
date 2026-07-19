@@ -1,43 +1,31 @@
-# CLAUDE.md — Spec-Driven Development (SDD)
+# CLAUDE.md — Spec-Driven Development
 
-This project uses the SDD workflow powered by `sdd-mcp-server`.
+This project uses `sdd-mcp-server` with manual-only skills and the canonical v4 MCP runtime.
 
-## Two Development Paths
+## Development paths
 
-### Path A: Simple Task (`/simple-task`)
-For small features, bug fixes, and quick enhancements.
+### Simple task
 
-### Path B: Full SDD Workflow
-For complex features requiring formal specification.
+Invoke `/simple-task` for a small feature, bug fix, or focused enhancement.
 
+### Formal SDD
+
+For work requiring approved requirements, design, and TDD tasks:
+
+```text
+sdd-init → /sdd-requirements → sdd-approve → /sdd-design → sdd-approve → /sdd-tasks → optional test review → sdd-approve → /sdd-implement
 ```
-sdd-init → /sdd-requirements → /sdd-design → /sdd-tasks → /sdd-implement
-```
 
-Each phase requires human approval before proceeding.
+Use the installed `sdd-*` MCP tools for state changes and compact context by default. Feature-scoped calls use `featureName`, not `projectId`.
 
-## Installed Components
+For continuation, call `sdd-context-load` with `featureName`; retain the returned `fingerprint` and send it as `ifNoneMatch` on the next identical request. A `not-modified` result means the prior payload remains current and must not be requested or repeated again.
 
-The installer appends only the components selected for this target and their effective paths.
+## Model execution
 
-## MCP Tools
+Claude applies the routed model to the current skill turn: Opus for requirements, design, review, and security; Sonnet for implementation and TDD. Execute in this turn and do not spawn a second specialist merely to switch models. Commit work remains in the current turn.
 
-| Tool | Description |
-|------|-------------|
-| `sdd-init` | Initialize new SDD spec |
-| `sdd-status` | Check workflow progress |
-| `sdd-approve` | Approve workflow phases |
-| `sdd-quality-check` | Code quality analysis |
-| `sdd-context-load` | Load project context |
-| `sdd-validate-design` | Design quality validation |
-| `sdd-validate-gap` | Implementation gap analysis |
-| `sdd-spec-impl` | Execute tasks with TDD |
+## Installed components
 
-## Workflow
+The installer appends only selected components and their effective paths. Detailed rules and references load on demand; path-scoped rule bodies are not imported into this root file.
 
-1. **Setup**: `npx sdd-mcp-server install --profile full --target claude-code` (already done)
-2. **Steering** (optional): `/sdd-steering` to generate project-specific docs
-3. **Specify**: `sdd-init` → `/sdd-requirements` → `/sdd-design` → `/sdd-tasks` (approve each phase)
-4. **Implement**: `/sdd-implement` or `sdd-spec-impl`
-5. **Review**: `sdd-quality-check`
-6. **Commit**: `/sdd-commit`
+To update untouched generated guidance automatically, rerun the installer. User-modified managed files are preserved. A legacy refresh uses `--refresh-generated` and stores reversible backups under `.sdd-mcp/backups/<timestamp>/claude-code/`.

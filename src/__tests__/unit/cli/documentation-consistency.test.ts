@@ -9,12 +9,12 @@ describe('target-aware documentation consistency', () => {
   it('keeps root agent guidance target-neutral', () => {
     const guidance = read('AGENTS.md');
 
-    expect(guidance).toMatch(/^# AGENTS\.md/);
-    expect(guidance).toContain('--target codex');
-    expect(guidance).toContain('--target claude-code');
-    expect(guidance).toContain('gpt-5.6-sol');
-    expect(guidance).toContain('xhigh effort');
-    expect(guidance).toContain('medium effort');
+    expect(guidance).toMatch(/^# SDD-MCP Project Guidance/);
+    expect(guidance).toContain('Claude Code, Codex, and Oh My Pi');
+    expect(guidance).toContain('/skill:simple-task');
+    expect(guidance).toContain('Sol/xhigh');
+    expect(guidance).toContain('Sol/medium');
+    expect(guidance).not.toContain('| Skill |');
   });
 
   it('links the model routing guide from operator documentation', () => {
@@ -73,7 +73,7 @@ describe('target-aware documentation consistency', () => {
     expect(migration).not.toContain('Design principles: .claude/');
     expect(migration).toContain('Design principles: rules/coding-style.md');
     expect(server).not.toContain('installed for Claude Code');
-    expect(server).toContain('install --target codex --skills');
+    expect(server).not.toContain('install --target codex --skills');
     expect(server).not.toContain('.claude/commands/');
     expect(adapter).not.toContain('This installs both \\`.claude/skills/');
     expect(read('src/application/services/staticSteering.ts')).not.toContain('.ai agent/');

@@ -32,18 +32,52 @@ export function parseSourceAgent(content: string): SourceAgent {
 }
 
 export function renderClaudeCodeAgent(agent: SourceAgent): string {
-  const model = ROLE_MODEL_ROUTES[agent.role].claudeCode.model;
-  return `---\nname: ${agent.name}\ndescription: ${agent.description}\nrole: ${agent.role}\nexpertise: ${agent.expertise}\nmodel: ${model}\n---\n\n${agent.instructions}\n`;
+  const route = ROLE_MODEL_ROUTES[agent.role];
+  const readOnly = route.taskClass === 'advisor';
+  const tools = readOnly ? 'Read, Grep, Glob' : 'Read, Grep, Glob, Edit, Write, Bash';
+  const maxTurns = readOnly ? 12 : 24;
+  return `---\nname: ${agent.name}\ndescription: ${agent.description}\nrole: ${agent.role}\nexpertise: ${agent.expertise}\nmodel: ${route.claudeCode.model}\ntools: ${tools}\nmaxTurns: ${maxTurns}\n---\n\n${agent.instructions}\n`;
 }
 
 export function renderCodexAgent(agent: SourceAgent): string {
-  const route = ROLE_MODEL_ROUTES[agent.role].codex;
+  const roleRoute = ROLE_MODEL_ROUTES[agent.role];
+  const route = roleRoute.codex;
+  const readOnly = roleRoute.taskClass === 'advisor';
+  const instructions = `${agent.instructions}\n\nDo not delegate or spawn another agent. Return only decisions, affected artifacts, verification evidence, and unresolved blockers; at most 2,048 estimated tokens.`;
   return [
     `name = ${JSON.stringify(agent.name)}`,
     `description = ${JSON.stringify(agent.description)}`,
     `model = ${JSON.stringify(route.model)}`,
     `model_reasoning_effort = ${JSON.stringify(route.reasoningEffort)}`,
-    `developer_instructions = ${JSON.stringify(agent.instructions)}`,
+    `sandbox_mode = ${JSON.stringify(readOnly ? 'read-only' : 'workspace-write')}`,
+    `max_turns = ${readOnly ? 12 : 24}`,
+    `developer_instructions = ${JSON.stringify(instructions)}`,
+    '',
+  ].join('\n');
+}
+
+export function renderOmpAgent(agent: SourceAgent): string {
+  const route = ROLE_MODEL_ROUTES[agent.role].omp;
+  const readOnly = ROLE_MODEL_ROUTES[agent.role].taskClass === 'advisor';
+  const tools = readOnly
+    ? ['read', 'grep', 'glob']
+    : ['read', 'grep', 'glob', 'edit', 'write', 'bash'];
+  const maxTurns = readOnly ? 12 : 24;
+  return [
+    '---',
+    `name: ${agent.name}`,
+    `description: ${agent.description}`,
+    `model: ${route.model}`,
+    `thinkingLevel: ${route.thinkingLevel}`,
+    'tools:',
+    ...tools.map(tool => `  - ${tool}`),
+    `maxTurns: ${maxTurns}`,
+    '---',
+    '',
+    agent.instructions,
+    '',
+    'Return only: decisions, affected artifacts, verification evidence, and unresolved blockers.',
+    'Do not delegate or spawn another agent. Keep the result at most 2,048 estimated tokens.',
     '',
   ].join('\n');
 }
