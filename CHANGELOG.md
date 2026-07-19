@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [3.5.1] - 2026-07-19
+
 ### Changed
 - Codex implementation and TDD routing now uses `gpt-5.6-sol` with `medium` reasoning instead of the previous Luna/max route.
 

@@ -6,7 +6,7 @@
 
 A Model Context Protocol (MCP) server implementing Spec-Driven Development (SDD) workflows for AI-agent CLIs and IDEs like Claude Code, Cursor, and others.
 
-> **v3.5.0** - Target-aware native Codex and Claude Code installation, model routing, portable Codex hooks, and hardened failure reporting. See [CHANGELOG.md](CHANGELOG.md) for full version history.
+> **v3.5.1** - Target-aware native Codex and Claude Code installation with Sol/xhigh high-level routing and Sol/medium implementation routing. See [CHANGELOG.md](CHANGELOG.md) for full version history.
 
 ## Why sdd-mcp?
 
@@ -35,7 +35,7 @@ Use `sdd-mcp` when you want the AI assistant to follow a governed lifecycle, not
 npx -y sdd-mcp-server@latest
 
 # Pin exact version (optional)
-npx -y sdd-mcp-server@3.5.0
+npx -y sdd-mcp-server@3.5.1
 
 # For Claude Code MCP integration, add to your configuration:
 # "sdd-mcp-server": {
@@ -50,7 +50,7 @@ npx -y sdd-mcp-server@3.5.0
 npm install -g sdd-mcp-server@latest
 
 # Pin exact version (optional)
-npm install -g sdd-mcp-server@3.5.0
+npm install -g sdd-mcp-server@3.5.1
 
 # Start the server
 sdd-mcp-server
@@ -159,14 +159,14 @@ npm install -g sdd-mcp-server@latest
 sdd-mcp-server
 ```
 
-## 🎯 Agent Skills & Components (v3.5.0)
+## 🎯 Agent Skills & Components (v3.5.1)
 
 SDD now uses a **hybrid architecture** for better token efficiency:
 
 - **MCP Tools**: Action-oriented operations (init, status, approve, quality-check, validate, spec-impl)
 - **Agent Skills**: Template/guidance-heavy operations (requirements, design, tasks, steering, implement, commit)
 
-### Installing Components (v3.5.0)
+### Installing Components (v3.5.1)
 
 ```bash
 # Lean compatibility install (defaults to Claude Code when non-interactive)
@@ -278,7 +278,7 @@ The 6 component types work together in a **layered guidance model**:
                               │
                               ▼
 ┌──────────────────────────────────────────────────────────────┐
-│  STEERING (project-specific templates - v3.5.0)              │
+│  STEERING (project-specific templates - v3.5.1)              │
 │  • product.md → Product description                          │
 │  • tech.md → Technology stack                                │
 │  • structure.md → Project structure                          │
@@ -544,7 +544,7 @@ claude mcp add sdd "sdd-mcp-server"
 - **EARS-Formatted Requirements**: Generate acceptance criteria based on actual npm scripts and dependencies
 - **Quality Enforcement**: Linus-style 5-layer code review system with security (OWASP Top 10) checks
 
-### Plugin Architecture (v3.5.0)
+### Plugin Architecture (v3.5.1)
 - **6 Component Types**: Skills, Steering, Rules, Contexts, Agents, Hooks for comprehensive AI guidance
 - **Specialized Agents**: Planner, Architect, Reviewer, Implementer, Security-Auditor, TDD-Guide personas
 - **Always-Active Rules**: Coding-style, Testing, Security, Git-workflow, Error-handling enforcement
@@ -694,13 +694,13 @@ For detailed documentation on:
 - **Plugin Development**: See [DEPLOYMENT.md](DEPLOYMENT.md)
 - **Docker Deployment**: See [Dockerfile](Dockerfile) and [docker-compose.yml](docker-compose.yml)
 
-**Component Documentation (v3.5.0)**:
+**Component Documentation (v3.5.1)**:
 - **Rules**: See `rules/*.md` for always-active coding guidelines
 - **Contexts**: See `contexts/*.md` for mode-specific system prompts
 - **Agents**: See `agents/*.md` for specialized AI personas
 - **Hooks**: See `hooks/**/*.md` for event-driven automation
 
-**Steering Documents (v3.5.0)**:
+**Steering Documents (v3.5.1)**:
 
 Static steering content has been consolidated into enhanced components:
 - **Design Principles**: `rules/coding-style.md` (includes SOLID, DRY, KISS, YAGNI, SoC)
