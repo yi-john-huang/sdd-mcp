@@ -72,10 +72,10 @@ Installed agents include model metadata selected by role:
 | Architect | High-level advisor | `gpt-5.6-sol`, xhigh effort | `opus` |
 | Reviewer | High-level advisor | `gpt-5.6-sol`, xhigh effort | `opus` |
 | Security auditor | High-level advisor | `gpt-5.6-sol`, xhigh effort | `opus` |
-| Implementer | Implementation (default) | `gpt-5.6-luna`, max effort | `sonnet` |
-| TDD guide | Implementation (default) | `gpt-5.6-luna`, max effort | `sonnet` |
+| Implementer | Implementation (default) | `gpt-5.6-sol`, medium effort | `sonnet` |
+| TDD guide | Implementation (default) | `gpt-5.6-sol`, medium effort | `sonnet` |
 
-Codex uses `gpt-5.6-luna` as the default model for routed work. High-level advisor roles override that default with `gpt-5.6-sol` at xhigh effort. `gpt-5.6-terra` remains supported but is not selected by a default SDD role. Phase skills use compact handoffs when asking the matching specialist to work, then wait for and integrate the result. When the host cannot delegate, the skill states the fallback and continues in the current agent.
+Codex uses `gpt-5.6-sol` as the default model for routed work. High-level advisor roles use xhigh effort, while implementation and TDD roles use medium effort. `gpt-5.6-luna` and `gpt-5.6-terra` remain supported but are not selected by a default SDD role. Phase skills use compact handoffs when asking the matching specialist to work, then wait for and integrate the result. When the host cannot delegate, the skill states the fallback and continues in the current agent.
 
 GPT-5.6 preview access depends on the user's eligible Codex workspace or API organization; generated files do not grant access or bypass host entitlement checks. Specialist delegation can consume more total tokens than a single-agent run because handoffs, specialist work, and result integration add work; compact handoffs reduce but do not eliminate that cost.
 See [Model Routing](MODEL-ROUTING.md) for the complete role map, generated Codex/Claude Code examples, delegation flow, and rerun behavior.

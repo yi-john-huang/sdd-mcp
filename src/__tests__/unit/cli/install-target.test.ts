@@ -25,8 +25,8 @@ describe('install target policy', () => {
     });
   });
 
-  it('uses luna as the default and sol xhigh for high-level roles', () => {
-    expect(DEFAULT_CODEX_MODEL).toBe('gpt-5.6-luna');
+  it('uses sol medium as the default and sol xhigh for high-level roles', () => {
+    expect(DEFAULT_CODEX_MODEL).toBe('gpt-5.6-sol');
     expect(ROLE_MODEL_ROUTES.planner.codex).toEqual({
       model: 'gpt-5.6-sol',
       reasoningEffort: 'xhigh',
@@ -44,12 +44,12 @@ describe('install target policy', () => {
       reasoningEffort: 'xhigh',
     });
     expect(ROLE_MODEL_ROUTES.implementer.codex).toEqual({
-      model: 'gpt-5.6-luna',
-      reasoningEffort: 'max',
+      model: 'gpt-5.6-sol',
+      reasoningEffort: 'medium',
     });
     expect(ROLE_MODEL_ROUTES['tdd-guide'].codex).toEqual({
-      model: 'gpt-5.6-luna',
-      reasoningEffort: 'max',
+      model: 'gpt-5.6-sol',
+      reasoningEffort: 'medium',
     });
     expect(ROLE_MODEL_ROUTES.reviewer.claudeCode.model).toBe('opus');
     expect(ROLE_MODEL_ROUTES['tdd-guide'].claudeCode.model).toBe('sonnet');

@@ -217,9 +217,9 @@ The installer creates only the selected primary target's native artifacts, prese
 | Work | Codex | Claude Code |
 |------|-------|-------------|
 | Planning, architecture, review, security | `gpt-5.6-sol` (`xhigh`) | `opus` |
-| Implementation and TDD (default) | `gpt-5.6-luna` (`max`) | `sonnet` |
+| Implementation and TDD (default) | `gpt-5.6-sol` (`medium`) | `sonnet` |
 
-Codex uses `gpt-5.6-luna` as the default model for routed work. High-level advisor roles override that default with `gpt-5.6-sol` at xhigh effort. `gpt-5.6-terra` remains supported but is not selected by a default SDD role.
+Codex uses `gpt-5.6-sol` as the default model for routed work. High-level advisor roles use xhigh effort, while implementation and TDD roles use medium effort. `gpt-5.6-luna` and `gpt-5.6-terra` remain supported model identifiers but are not selected by a default SDD role.
 For a detailed explanation of role selection, native agent metadata, delegation, and rerun behavior, see [Model Routing](docs/MODEL-ROUTING.md).
 
 ### Component Architecture & Relationships

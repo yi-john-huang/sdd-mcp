@@ -5,10 +5,9 @@ This guide explains how SDD-MCP assigns models to specialized agents and what ha
 ## Short version
 
 For Codex installs:
-
-- `gpt-5.6-luna` with `max` reasoning is the default route for implementation and TDD work.
-- `gpt-5.6-sol` with `xhigh` reasoning is reserved for high-level advisor work: requirements planning, architecture, review, and security.
-- `gpt-5.6-terra` remains a supported model identifier, but no default SDD role selects it.
+- `gpt-5.6-sol` with `medium` reasoning is the default route for implementation and TDD work.
+- `gpt-5.6-sol` with `xhigh` reasoning remains reserved for high-level advisor work: requirements planning, architecture, review, and security.
+- `gpt-5.6-luna` and `gpt-5.6-terra` remain supported model identifiers, but no default SDD role selects them.
 
 For Claude Code installs, the equivalent aliases are `sonnet` for implementation/TDD and `opus` for high-level advisor work.
 
@@ -24,8 +23,8 @@ The installer assigns a model from the agent's role, not from the filename alone
 | `architect` | `/sdd-design` | `gpt-5.6-sol` / `xhigh` | `opus` |
 | `reviewer` | `/sdd-review` | `gpt-5.6-sol` / `xhigh` | `opus` |
 | `security-auditor` | `/sdd-security-check` | `gpt-5.6-sol` / `xhigh` | `opus` |
-| `implementer` | `/sdd-implement`, `/simple-task` | `gpt-5.6-luna` / `max` | `sonnet` |
-| `tdd-guide` | `/sdd-test-gen` | `gpt-5.6-luna` / `max` | `sonnet` |
+| `implementer` | `/sdd-implement`, `/simple-task` | `gpt-5.6-sol` / `medium` | `sonnet` |
+| `tdd-guide` | `/sdd-test-gen` | `gpt-5.6-sol` / `medium` | `sonnet` |
 
 `/sdd-commit` deliberately has no specialist route. Commit guidance stays with the current agent because it needs the current session's complete implementation and verification context.
 
@@ -47,8 +46,8 @@ model_reasoning_effort = "xhigh"
 ```toml
 # Default implementation agent
 name = "implementer"
-model = "gpt-5.6-luna"
-model_reasoning_effort = "max"
+model = "gpt-5.6-sol"
+model_reasoning_effort = "medium"
 ```
 
 The `model` field selects the model identifier. `model_reasoning_effort` controls the reasoning setting requested for that model. The installer does not call a model API or check entitlement; the Codex host applies the generated configuration and handles availability.

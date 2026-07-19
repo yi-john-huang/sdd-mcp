@@ -87,21 +87,21 @@ export const SUPPORTED_CODEX_MODELS = [
   'gpt-5.6-luna',
 ] as const;
 
-export const DEFAULT_CODEX_MODEL = 'gpt-5.6-luna' as const;
+export const DEFAULT_CODEX_MODEL = 'gpt-5.6-sol' as const;
 
 export const ROLE_MODEL_ROUTES = {
   planner: route('high-level', 'gpt-5.6-sol', 'xhigh', 'opus'),
   architect: route('high-level', 'gpt-5.6-sol', 'xhigh', 'opus'),
   reviewer: route('high-level', 'gpt-5.6-sol', 'xhigh', 'opus'),
   'security-auditor': route('high-level', 'gpt-5.6-sol', 'xhigh', 'opus'),
-  implementer: route('implementation', DEFAULT_CODEX_MODEL, 'max', 'sonnet'),
-  'tdd-guide': route('implementation', DEFAULT_CODEX_MODEL, 'max', 'sonnet'),
+  implementer: route('implementation', DEFAULT_CODEX_MODEL, 'medium', 'sonnet'),
+  'tdd-guide': route('implementation', DEFAULT_CODEX_MODEL, 'medium', 'sonnet'),
 } as const;
 
 function route(
   taskClass: 'high-level' | 'implementation',
   model: typeof SUPPORTED_CODEX_MODELS[number],
-  reasoningEffort: 'xhigh' | 'max',
+  reasoningEffort: 'xhigh' | 'medium',
   claudeModel: 'opus' | 'sonnet',
 ) {
   return {

@@ -60,9 +60,9 @@ Project-specific context documents. Edit these to describe your project:
 | Work class | Codex | Claude Code |
 |------------|-------|-------------|
 | Planning, architecture, review, security | `gpt-5.6-sol` with xhigh effort | `opus` |
-| Implementation and TDD (default) | `gpt-5.6-luna` with max effort | `sonnet` |
+| Implementation and TDD (default) | `gpt-5.6-sol` with medium effort | `sonnet` |
 
-Codex uses `gpt-5.6-luna` as the default model for routed work. High-level advisor roles override that default with `gpt-5.6-sol` at xhigh effort. `gpt-5.6-terra` remains a supported model but is not assigned to a default SDD role. Routed skills use compact specialist handoffs and continue in the current agent when delegation is unavailable.
+Codex uses `gpt-5.6-sol` as the default model for routed work. High-level advisor roles use xhigh effort, while implementation and TDD roles use medium effort. `gpt-5.6-luna` and `gpt-5.6-terra` remain supported models but are not assigned to a default SDD role. Routed skills use compact specialist handoffs and continue in the current agent when delegation is unavailable.
 For the complete role map, generated-file examples, and delegation flow, see [docs/MODEL-ROUTING.md](docs/MODEL-ROUTING.md).
 
 ## MCP Tools

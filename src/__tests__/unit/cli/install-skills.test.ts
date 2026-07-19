@@ -381,7 +381,7 @@ describe('InstallSkillsCLI', () => {
       expect(help).toContain('gpt-5.6-luna');
       expect(help).toContain('gpt-5.6-terra');
       expect(help).toContain('(xhigh)');
-      expect(help).toContain('(max)');
+      expect(help).toContain('(medium)');
       expect(help).toContain('opus');
       expect(help).toContain('sonnet');
     });
