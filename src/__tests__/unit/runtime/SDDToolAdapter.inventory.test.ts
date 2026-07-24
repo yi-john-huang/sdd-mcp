@@ -31,7 +31,6 @@ describe('v5 MCP tool inventory', () => {
     dependency,
     dependency,
     dependency,
-    dependency,
   );
   const tools = adapter.getSDDTools();
 
@@ -73,6 +72,16 @@ describe('v5 MCP tool inventory', () => {
       'includeUnapproved',
     ]);
     expect(context.required).toEqual(['featureName']);
+    expect(context.allOf).toEqual([{
+      if: {
+        properties: { includeUnapproved: { const: true } },
+        required: ['includeUnapproved'],
+      },
+      then: {
+        properties: { mode: { const: 'full' } },
+        required: ['mode'],
+      },
+    }]);
   });
 
   it('binds approval and review to exact revision and hash', () => {
@@ -86,12 +95,22 @@ describe('v5 MCP tool inventory', () => {
 });
 
 describe('v5 disk-authoritative handler routing', () => {
-  const templateService = { generateDesignTemplate: jest.fn() };
-  const qualityService = {};
-  const steeringService = {};
-  const codebaseAnalysisService = {};
-  const clarificationService = { analyzeDescription: jest.fn() };
-  const contextCompactionService = { loadContext: jest.fn() };
+  const templateService = {
+    generateRequirementsTemplate: jest.fn(),
+    generateDesignTemplate: jest.fn(),
+    generateTasksTemplate: jest.fn(),
+  };
+  const qualityService = {
+    performQualityCheck: jest.fn(),
+    formatQualityReport: jest.fn(),
+  };
+  const steeringService = { createSteeringDocument: jest.fn() };
+  const codebaseAnalysisService = { analyzeCodebase: jest.fn() };
+  const clarificationService = {
+    analyzeDescription: jest.fn(),
+    validateAnswers: jest.fn(),
+    synthesizeDescription: jest.fn(),
+  };
   const workflowEngineService = {
     approve: jest.fn(),
     reviewTestCases: jest.fn(),
@@ -101,16 +120,17 @@ describe('v5 disk-authoritative handler routing', () => {
     submitPhaseArtifact: jest.fn(),
     beginImplementation: jest.fn(),
     recordTaskProgress: jest.fn(),
+    loadFeatureContext: jest.fn(),
     loadProject: jest.fn(),
+    validateDesignArtifact: jest.fn(),
   };
-  const logger = {};
+  const logger = { error: jest.fn() };
   const adapter = new SDDToolAdapter(
     templateService as never,
     qualityService as never,
     steeringService as never,
     codebaseAnalysisService as never,
     clarificationService as never,
-    contextCompactionService as never,
     workflowEngineService as never,
     logger as never,
   );
@@ -121,7 +141,7 @@ describe('v5 disk-authoritative handler routing', () => {
   });
 
   it('binds the server workspace root into context requests', async () => {
-    contextCompactionService.loadContext.mockResolvedValue({
+    workflowEngineService.loadFeatureContext.mockResolvedValue({
       cacheStatus: 'not-modified',
       fingerprint: 'etag',
     });
@@ -133,7 +153,7 @@ describe('v5 disk-authoritative handler routing', () => {
       ifNoneMatch: 'etag',
       includeUnapproved: false,
     });
-    expect(contextCompactionService.loadContext).toHaveBeenCalledWith({
+    expect(workflowEngineService.loadFeatureContext).toHaveBeenCalledWith({
       projectRoot: process.cwd(),
       featureName: 'payments',
       mode: 'standard',
@@ -235,5 +255,94 @@ describe('v5 disk-authoritative handler routing', () => {
       projectRoot: process.cwd(),
       featureName: 'payments',
     });
+  });
+  it('routes quality, validation, gap, and progress handlers', async () => {
+    qualityService.performQualityCheck.mockResolvedValue({ score: 'good' });
+    qualityService.formatQualityReport.mockReturnValue('quality: good');
+    workflowEngineService.validateDesignArtifact.mockResolvedValue({ status: 'passed' });
+    workflowEngineService.recordTaskProgress.mockResolvedValue({ taskState: 'in-progress' });
+    workflowEngineService.loadProject.mockResolvedValue({ name: 'payments', path: '/workspace/payments' });
+    codebaseAnalysisService.analyzeCodebase.mockResolvedValue({ architecturePatterns: [] });
+
+    await expect(byName['sdd-quality-check']({ code: 'export {}', language: 'typescript' }))
+      .resolves.toBe('quality: good');
+    await expect(byName['sdd-validate-design']({ featureName: 'payments' }))
+      .resolves.toEqual({ status: 'passed' });
+    await expect(byName['sdd-validate-gap']({ featureName: 'payments' }))
+      .resolves.toEqual({ featureName: 'payments', analysis: { architecturePatterns: [] } });
+    await expect(byName['sdd-spec-impl']({
+      featureName: 'payments',
+      taskNumber: '1.1',
+      action: 'start',
+      expectedRevision: 0,
+    })).resolves.toEqual({ taskState: 'in-progress' });
+  });
+
+  it('renders every template form and rejects unsupported template input', async () => {
+    workflowEngineService.loadProject.mockResolvedValue({ name: 'payments' });
+    templateService.generateRequirementsTemplate.mockResolvedValue('# Requirements');
+    templateService.generateTasksTemplate.mockResolvedValue('# Tasks');
+
+    await expect(byName['sdd-template-render']({ featureName: 'payments', templateType: 'requirements' }))
+      .resolves.toMatchObject({ content: '# Requirements' });
+    await expect(byName['sdd-template-render']({ featureName: 'payments', templateType: 'tasks' }))
+      .resolves.toMatchObject({ content: '# Tasks' });
+    await expect(byName['sdd-template-render']({
+      featureName: 'payments',
+      templateType: 'design',
+      customTemplate: '# Custom design',
+    })).resolves.toMatchObject({ content: '# Custom design' });
+    await expect(byName['sdd-template-render']({ featureName: 'payments', templateType: 'unknown' }))
+      .rejects.toThrow('templateType must be requirements, design, or tasks');
+  });
+
+  it('handles clarification retries without creating premature state', async () => {
+    clarificationService.analyzeDescription.mockResolvedValue({
+      needsClarification: true,
+      questions: [{ id: 'scope', required: true }],
+    });
+    await expect(byName['sdd-init']({
+      featureName: 'payments',
+      description: 'Build payments',
+    })).resolves.toMatchObject({ status: 'clarification-required' });
+    expect(workflowEngineService.initializeFeature).not.toHaveBeenCalled();
+
+    clarificationService.validateAnswers.mockReturnValue({ valid: true, missingRequired: [] });
+    clarificationService.synthesizeDescription.mockReturnValue({ enriched: 'Build bounded payments' });
+    workflowEngineService.initializeFeature.mockResolvedValue({ name: 'payments' });
+    await expect(byName['sdd-init']({
+      featureName: 'payments',
+      description: 'Build payments',
+      clarificationAnswers: { scope: 'checkout only' },
+    })).resolves.toMatchObject({ status: 'initialized' });
+    expect(workflowEngineService.initializeFeature).toHaveBeenCalledWith(expect.objectContaining({
+      description: 'Build bounded payments',
+    }));
+  });
+
+  it('creates dynamic and custom steering through the managed service', async () => {
+    codebaseAnalysisService.analyzeCodebase.mockResolvedValue({});
+    steeringService.createSteeringDocument.mockResolvedValue({});
+
+    const steering = await byName['sdd-steering']({ updateMode: 'update' });
+    expect(steering).toContain('Steering Documents Updated');
+    expect(steeringService.createSteeringDocument).toHaveBeenCalledWith(
+      process.cwd(),
+      expect.objectContaining({ name: 'product.md' }),
+    );
+
+    await expect(byName['sdd-steering-custom']({
+      fileName: 'payments.md',
+      topic: 'Payment boundaries',
+      inclusionMode: 'conditional',
+      filePattern: 'src/payments/**',
+    })).resolves.toContain('payments.md');
+    expect(steeringService.createSteeringDocument).toHaveBeenCalledWith(
+      process.cwd(),
+      expect.objectContaining({
+        name: 'payments.md',
+        patterns: ['src/payments/**'],
+      }),
+    );
   });
 });

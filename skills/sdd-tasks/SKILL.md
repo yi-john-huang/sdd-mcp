@@ -14,6 +14,7 @@ The user invokes this Skill; backend lifecycle calls are internal. Never tell th
 2. Design and requirements must be approved. If durable status says otherwise, present the persisted blocker and make no file change.
 3. Load the latest approved compact context before method work. Load an unapproved tasks draft only with full mode and explicit unapproved inclusion.
 4. The saved test-case-review choice is authoritative. Ask once only when status has no choice; reuse it on every revision.
+5. If status reports an observed artifact identity for an orphan or manual edit, read that exact tasks file before revising. Never acknowledge its hash without inspecting and deliberately incorporating or replacing its content.
 
 If the runtime is unavailable because of host permission, report an actionable reload/trust or policy blocker; never substitute manual backend instructions.
 

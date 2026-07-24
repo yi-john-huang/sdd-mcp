@@ -1,7 +1,7 @@
 import * as crypto from 'crypto';
 import * as fs from 'fs';
 import * as path from 'path';
-import { applyEdits, modify, parse as parseJsonc, type ParseError } from 'jsonc-parser';
+import { applyEdits, modify, parse as parseJsonc, parseTree, type Node as JsoncNode, type ParseError } from 'jsonc-parser';
 import { parse as parseToml } from 'smol-toml';
 import { atomicWriteFile } from '../../utils/atomicWrite.js';
 import { PACKAGE_VERSION } from '../../shared/version.js';
@@ -20,6 +20,7 @@ export interface RuntimeRegistrationResult {
   registration: RuntimeRegistrationRecord;
   installed: string[];
   skipped: string[];
+  verify(): Promise<void>;
   rollback(): Promise<boolean>;
 }
 
@@ -76,7 +77,7 @@ export async function registerRuntimeLocked(
     permissionPath = path.resolve(projectRoot, paths.runtimePermissionConfig!);
     validateDestinationPath(projectRoot, permissionPath);
     permissionPrior = await readOptional(permissionPath);
-    const prepared = prepareClaudePermissions(permissionPrior, previous);
+    const prepared = prepareClaudePermissions(permissionPrior);
     permissionNext = prepared.bytes;
     permissionSemanticSha256 = prepared.semanticHash;
   }
@@ -98,10 +99,12 @@ export async function registerRuntimeLocked(
     }
   } catch (error) {
     for (const write of committed.reverse()) {
+      await assertHeld();
       const current = await readOptional(write.file);
       if (buffersEqual(current, write.next)) {
         if (write.prior === null) await fs.promises.rm(write.file, { force: true });
         else await atomicWriteFile(write.file, write.prior.toString('utf8'));
+        await assertHeld();
       }
     }
     throw error;
@@ -118,9 +121,18 @@ export async function registerRuntimeLocked(
     },
     installed,
     skipped,
+    verify: async () => {
+      for (const write of writes) {
+        if (!buffersEqual(await readOptional(write.file), write.next)) {
+          throw new Error(`Runtime changed before manifest commit: ${write.file}`);
+        }
+      }
+      await assertHeld();
+    },
     rollback: async () => {
       let restored = true;
       for (const write of [...committed].reverse()) {
+        await assertHeld();
         const current = await readOptional(write.file);
         if (!buffersEqual(current, write.next)) {
           restored = false;
@@ -128,10 +140,19 @@ export async function registerRuntimeLocked(
         }
         if (write.prior === null) await fs.promises.rm(write.file, { force: true });
         else await atomicWriteFile(write.file, write.prior.toString('utf8'));
+        await assertHeld();
       }
       return restored;
     },
   };
+}
+
+function uniqueJsoncProperty(node: JsoncNode | undefined, key: string, context: string): JsoncNode | undefined {
+  if (!node || node.type !== 'object') return undefined;
+  const matches = (node.children ?? []).filter((child) =>
+    child.type === 'property' && child.children?.[0]?.value === key);
+  if (matches.length > 1) throw new Error(`Duplicate JSONC property ${context}.${key}`);
+  return matches[0]?.children?.[1];
 }
 
 function prepareJsonc(prior: Buffer | null, target: 'claude-code' | 'omp', previous?: RuntimeRegistrationRecord) {
@@ -139,8 +160,17 @@ function prepareJsonc(prior: Buffer | null, target: 'claude-code' | 'omp', previ
   const errors: ParseError[] = [];
   const parsed = parseJsonc(source, errors, { allowTrailingComma: true }) as Record<string, unknown> | undefined;
   if (errors.length || !parsed || typeof parsed !== 'object' || Array.isArray(parsed)) throw new Error('Malformed JSONC runtime config');
+  const tree = parseTree(source, [], { allowTrailingComma: true });
+  const serversNode = uniqueJsoncProperty(tree, 'mcpServers', 'root');
+  uniqueJsoncProperty(serversNode, SERVER_NAME, 'mcpServers');
   const desired = { type: 'stdio', command: COMMAND, args: [...ARGS] };
   const servers = parsed.mcpServers;
+  if (
+    servers !== undefined
+    && (servers === null || typeof servers !== 'object' || Array.isArray(servers))
+  ) {
+    throw new Error('JSONC runtime config mcpServers must be an object');
+  }
   const existing = servers && typeof servers === 'object' && !Array.isArray(servers)
     ? (servers as Record<string, unknown>)[SERVER_NAME]
     : undefined;
@@ -151,11 +181,14 @@ function prepareJsonc(prior: Buffer | null, target: 'claude-code' | 'omp', previ
   return { bytes: Buffer.from(applyEdits(source, edits)), semanticHash: semanticHash(desired), target };
 }
 
-function prepareClaudePermissions(prior: Buffer | null, previous?: RuntimeRegistrationRecord) {
+function prepareClaudePermissions(prior: Buffer | null) {
   const source = prior?.toString('utf8') ?? '{}\n';
   const errors: ParseError[] = [];
   const parsed = parseJsonc(source, errors, { allowTrailingComma: true }) as Record<string, unknown> | undefined;
   if (errors.length || !parsed || typeof parsed !== 'object' || Array.isArray(parsed)) throw new Error('Malformed Claude permission settings');
+  const tree = parseTree(source, [], { allowTrailingComma: true });
+  const permissionsNode = uniqueJsoncProperty(tree, 'permissions', 'root');
+  uniqueJsoncProperty(permissionsNode, 'allow', 'permissions');
   const permissions = parsed.permissions;
   if (permissions !== undefined && (typeof permissions !== 'object' || permissions === null || Array.isArray(permissions))) {
     throw new Error('Claude permissions must be an object');
@@ -167,9 +200,6 @@ function prepareClaudePermissions(prior: Buffer | null, previous?: RuntimeRegist
   const desiredRule = 'mcp__sdd-mcp__*';
   const desiredAllow = [...(allow as string[] | undefined ?? [])];
   if (!desiredAllow.includes(desiredRule)) desiredAllow.push(desiredRule);
-  if (previous?.permissionSemanticSha256 && allow && semanticHash(desiredRule) !== previous.permissionSemanticSha256) {
-    // The manifest owns only our exact rule, never the surrounding user policy.
-  }
   const edits = modify(source, ['permissions', 'allow'], desiredAllow, {
     formattingOptions: { insertSpaces: true, tabSize: 2, eol: source.includes('\r\n') ? '\r\n' : '\n' },
   });
@@ -201,8 +231,22 @@ function prepareCodex(prior: Buffer | null, previous?: RuntimeRegistrationRecord
       throw new Error('Exact Codex runtime entry lacks managed markers');
     }
   } else {
-    if (previous?.managedRegionSha256 && sha256(Buffer.from(lines.slice(starts[0], ends[0] + 1).join(''))) !== previous.managedRegionSha256) {
-      throw new Error('Managed Codex runtime region was modified');
+    const currentRegion = Buffer.from(lines.slice(starts[0], ends[0] + 1).join(''));
+    const currentRegionHash = sha256(currentRegion);
+    if (previous?.managedRegionSha256) {
+      if (
+        currentRegionHash !== previous.managedRegionSha256
+        || existing === undefined
+        || semanticHash(existing) !== previous.entrySemanticSha256
+      ) {
+        throw new Error('Managed Codex runtime region was modified');
+      }
+    } else if (
+      currentRegionHash !== sha256(Buffer.from(block))
+      || existing === undefined
+      || semanticHash(existing) !== semanticHash(desiredEntry)
+    ) {
+      throw new Error('Unowned Codex runtime region differs from the desired entry');
     }
   }
   const next = starts.length === 1
@@ -220,6 +264,7 @@ function assertOwnedOrDesired(existing: unknown, desired: unknown, ownedHash: st
 }
 
 async function replaceCas(file: string, prior: Buffer | null, next: Buffer, assertHeld: () => Promise<void>): Promise<void> {
+  await assertHeld();
   const current = await readOptional(file);
   if (!buffersEqual(current, prior)) throw new Error(`Concurrent edit detected: ${file}`);
   await atomicWriteFile(file, next.toString('utf8'));

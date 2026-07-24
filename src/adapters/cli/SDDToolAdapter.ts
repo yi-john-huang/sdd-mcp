@@ -8,8 +8,9 @@ import { QualityService } from "../../application/services/QualityService.js";
 import { SteeringDocumentService } from "../../application/services/SteeringDocumentService.js";
 import { CodebaseAnalysisService } from "../../application/services/CodebaseAnalysisService.js";
 import { RequirementsClarificationService } from "../../application/services/RequirementsClarificationService.js";
-import { ContextCompactionService, ContextLoadMode } from "../../application/services/ContextCompactionService.js";
+import type { ContextLoadMode } from "../../application/services/ContextCompactionService.js";
 import { WorkflowEngineService } from "../../application/services/WorkflowEngineService.js";
+import { GovernanceError } from "../../application/services/WorkflowErrors.js";
 import { LoggerPort } from "../../domain/ports.js";
 import { Project, ClarificationAnswers } from "../../domain/types.js";
 import { ensureStaticSteeringDocuments } from "../../application/services/staticSteering.js";
@@ -40,8 +41,6 @@ export class SDDToolAdapter {
     private readonly codebaseAnalysisService: CodebaseAnalysisService,
     @inject(TYPES.RequirementsClarificationService)
     private readonly clarificationService: RequirementsClarificationService,
-    @inject(TYPES.ContextCompactionService)
-    private readonly contextCompactionService: ContextCompactionService,
     @inject(TYPES.WorkflowEngineService)
     private readonly workflowEngineService: WorkflowEngineService,
     @inject(TYPES.LoggerPort) private readonly logger: LoggerPort,
@@ -74,18 +73,6 @@ export class SDDToolAdapter {
     }));
   }
 
-  private canonicalFeatureName(projectName: string): string {
-    const featureName = projectName
-      .trim()
-      .toLowerCase()
-      .replace(/[^a-z0-9._-]+/g, "-")
-      .replace(/^-+|-+$/g, "")
-      .slice(0, 80);
-    if (!featureName) {
-      throw new Error("Invalid argument: projectName must contain a letter or number");
-    }
-    return featureName;
-  }
 
   private async handleProjectInit(args: Record<string, unknown>): Promise<unknown> {
     const featureName = this.requireFeatureName(args.featureName);
@@ -109,7 +96,7 @@ export class SDDToolAdapter {
           clarificationAnswers as ClarificationAnswers,
         );
         if (!validation.valid) {
-          throw new Error(`Missing required answers: ${validation.missingRequired.join(", ")}`);
+          throw new GovernanceError('InvalidParams', `Missing required answers: ${validation.missingRequired.join(", ")}`);
         }
         enrichedDescription = this.clarificationService.synthesizeDescription(
           description,
@@ -127,35 +114,6 @@ export class SDDToolAdapter {
     return { status: "initialized", featureName, revision: 0 };
   }
 
-  private formatClarificationQuestions(
-    questions: any[],
-    analysis: any,
-  ): string {
-    let output = "## Requirements Clarification Needed\n\n";
-    output +=
-      "Your project description needs more detail to ensure we build the right solution.\n\n";
-    output += `**Quality Score**: ${Math.round(analysis.qualityScore)}/100 (need 70+ to proceed)\n\n`;
-    output += "### Please answer these questions:\n\n";
-
-    let questionNum = 1;
-    for (const q of questions) {
-      output += `**${questionNum}. ${q.question}**${q.required ? " *(required)*" : ""}\n`;
-      if (q.examples && q.examples.length > 0) {
-        output += `   Examples:\n`;
-        for (const ex of q.examples) {
-          output += `   - ${ex}\n`;
-        }
-      }
-      output += `   Answer ID: \`${q.id}\`\n\n`;
-      questionNum++;
-    }
-
-    output += "\n### How to Provide Answers\n\n";
-    output +=
-      "Call sdd-init again with clarificationAnswers parameter containing your answers.\n";
-
-    return output;
-  }
 
   private async requireFeatureProject(featureName: unknown): Promise<Project> {
     return this.workflowEngineService.loadProject({
@@ -276,12 +234,7 @@ export class SDDToolAdapter {
       ifNoneMatch,
       includeUnapproved,
     } = args;
-    // Status performs locked journal recovery before context fingerprints are computed.
-    await this.workflowEngineService.getFeatureStatus({
-      projectRoot: process.cwd(),
-      featureName,
-    });
-    return this.contextCompactionService.loadContext({
+    return this.workflowEngineService.loadFeatureContext({
       projectRoot: process.cwd(),
       featureName,
       mode: mode as ContextLoadMode | undefined,

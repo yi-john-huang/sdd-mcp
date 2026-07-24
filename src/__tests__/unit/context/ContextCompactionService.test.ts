@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto';
 import { mkdtemp, readFile, rm, mkdir, writeFile, readdir, stat, realpath, unlink, symlink } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
@@ -31,7 +32,10 @@ describe('ContextCompactionService v4', () => {
   let featureRoot: string;
   let service: ContextCompactionService;
 
-  async function writeSpec(approvals: Record<string, { generated: boolean; approved: boolean }>, review = { required: true, reviewed: false }): Promise<void> {
+  async function writeSpec(
+    approvals: Record<string, { generated: boolean; approved: boolean; artifact_sha256?: string }>,
+    review = { required: true, reviewed: false },
+  ): Promise<void> {
     await writeFile(path.join(featureRoot, 'spec.json'), JSON.stringify({ feature_name: featureName, approvals, workflow_options: { review_test_cases: review.required }, checkpoints: { test_cases: review } }), 'utf8');
   }
 
@@ -65,6 +69,26 @@ describe('ContextCompactionService v4', () => {
     const draft = await service.loadContext({ projectRoot, featureName, mode: 'full', phase: 'requirements', includeUnapproved: true });
     expect(draft.phaseStatus).toBe('unapproved');
     expect(draft.content).toContain('authenticate users');
+    expect(draft.content).toContain('Continue the requirements Skill to revise, validate, and request approval');
+    expect(draft.content).not.toContain('Continue with the design Skill');
+  });
+
+  it('rejects drift while reading an approved artifact', async () => {
+    const approved = '# Requirements\n- Approved bytes.\n';
+    await writeFile(path.join(featureRoot, 'requirements.md'), approved, 'utf8');
+    await writeSpec({
+      requirements: {
+        generated: true,
+        approved: true,
+        artifact_sha256: createHash('sha256').update(approved).digest('hex'),
+      },
+      design: { generated: false, approved: false },
+      tasks: { generated: false, approved: false },
+    });
+    await writeFile(path.join(featureRoot, 'requirements.md'), `${approved}- manual edit\n`, 'utf8');
+
+    await expect(service.loadContext({ projectRoot, featureName }))
+      .rejects.toMatchObject({ code: 'ArtifactDrift', phase: 'requirements' });
   });
 
   it('selects only approved documents through the effective phase and deduplicates globally', async () => {
@@ -93,6 +117,23 @@ describe('ContextCompactionService v4', () => {
     const second = await service.loadContext({ projectRoot, featureName });
     expect(second.cacheStatus).toBe('hit');
     expect(second.content).toBe(first.content);
+    await writeFile(
+      path.join(featureRoot, 'context', 'handoff.md'),
+      `${first.content}${'x'.repeat(8_193)}`,
+      'utf8',
+    );
+    const repaired = await service.loadContext({ projectRoot, featureName });
+    expect(repaired.cacheStatus).toBe('regenerated');
+    expect(repaired.payloadEstimatedTokens).toBeLessThanOrEqual(2_048);
+    expect(repaired.content).toBe(first.content);
+    await writeFile(
+      path.join(featureRoot, 'context', 'handoff.md'),
+      `${first.content}\ntampered`,
+      'utf8',
+    );
+    const tampered = await service.loadContext({ projectRoot, featureName });
+    expect(tampered.cacheStatus).toBe('regenerated');
+    expect(tampered.content).toBe(first.content);
     const unchanged = await service.loadContext({ projectRoot, featureName, ifNoneMatch: first.fingerprint });
     expect(unchanged.cacheStatus).toBe('not-modified');
     expect(unchanged.content).toBeUndefined();
@@ -118,6 +159,24 @@ describe('ContextCompactionService v4', () => {
     await symlink(outsideFile, path.join(featureRoot, 'requirements.md'));
     await expect(service.loadContext({ projectRoot, featureName })).rejects.toBeInstanceOf(SpecPathEscapeError);
   });
+  it('rejects a symlinked canonical handoff directory before writing cache bytes', async () => {
+    await writeSpec({
+      requirements: { generated: true, approved: true },
+      design: { generated: false, approved: false },
+      tasks: { generated: false, approved: false },
+    });
+    const outside = await mkdtemp(path.join(os.tmpdir(), 'sdd-handoff-outside-'));
+    await symlink(outside, path.join(featureRoot, 'context'));
+    try {
+      await expect(service.loadContext({ projectRoot, featureName }))
+        .rejects.toBeInstanceOf(SpecPathEscapeError);
+      await expect(readFile(path.join(outside, 'handoff.md'), 'utf8'))
+        .rejects.toMatchObject({ code: 'ENOENT' });
+    } finally {
+      await rm(outside, { recursive: true, force: true });
+    }
+  });
+
   it('rejects workflow metadata belonging to a different feature directory', async () => {
     await writeFile(path.join(featureRoot, 'spec.json'), JSON.stringify({
       feature_name: 'different-feature',
@@ -159,5 +218,81 @@ describe('ContextCompactionService v4', () => {
     expect(result.content).toContain('Continue task 1.2 from red-observed');
     expect(result.payloadEstimatedTokens).toBeLessThanOrEqual(2048);
   });
+  it('bounds persisted blocker text in compact implementation progress', async () => {
+    await writeFile(path.join(featureRoot, 'spec.json'), JSON.stringify({
+      feature_name: featureName,
+      phase: 'implementation',
+      approvals: {
+        requirements: { generated: true, approved: true },
+        design: { generated: true, approved: true },
+        tasks: { generated: true, approved: true },
+      },
+      workflow_options: { review_test_cases: false },
+      checkpoints: { test_cases: { required: false, reviewed: false } },
+      implementation: {
+        revision: 2,
+        tasks: {
+          '1.1': { status: 'blocked', blocker: 'x'.repeat(2_000), dependencies: [] },
+        },
+      },
+    }), 'utf8');
+
+    const result = await service.loadContext({ projectRoot, featureName, phase: 'implementation' });
+    expect(result.content).toContain(`${'x'.repeat(159)}…`);
+    expect(result.content).not.toContain('x'.repeat(160));
+    expect(result.payloadEstimatedTokens).toBeLessThanOrEqual(2048);
+  });
+
+  it('selects only dependency-ready tasks in implementation context', async () => {
+    await writeFile(path.join(featureRoot, 'spec.json'), JSON.stringify({
+      feature_name: featureName,
+      phase: 'implementation',
+      approvals: {
+        requirements: { generated: true, approved: true },
+        design: { generated: true, approved: true },
+        tasks: { generated: true, approved: true },
+      },
+      workflow_options: { review_test_cases: false },
+      checkpoints: { test_cases: { required: false, reviewed: false } },
+      implementation: {
+        revision: 2,
+        tasks: {
+          '1.1': { status: 'pending', dependencies: ['1.2'] },
+          '1.2': { status: 'pending', dependencies: [] },
+        },
+      },
+    }), 'utf8');
+
+    const result = await service.loadContext({ projectRoot, featureName, phase: 'implementation' });
+    expect(result.content).toContain('Start task 1.2.');
+    expect(result.content).not.toContain('Start task 1.1.');
+  });
+
+  it('bounds implementation candidates in compact context', async () => {
+    const implementationTasks = Object.fromEntries(
+      Array.from({ length: 25 }, (_, index) => [
+        `2.${index + 1}`,
+        { status: 'pending', dependencies: [] },
+      ]),
+    );
+    await writeFile(path.join(featureRoot, 'spec.json'), JSON.stringify({
+      feature_name: featureName,
+      phase: 'implementation',
+      approvals: {
+        requirements: { generated: true, approved: true },
+        design: { generated: true, approved: true },
+        tasks: { generated: true, approved: true },
+      },
+      workflow_options: { review_test_cases: false },
+      checkpoints: { test_cases: { required: false, reviewed: false } },
+      implementation: { revision: 1, tasks: implementationTasks },
+    }), 'utf8');
+
+    const result = await service.loadContext({ projectRoot, featureName, phase: 'implementation' });
+    expect(result.content).toContain('and 5 more');
+    expect(result.content).not.toContain('2.21');
+    expect(result.payloadEstimatedTokens).toBeLessThanOrEqual(2048);
+  });
+
 
 });

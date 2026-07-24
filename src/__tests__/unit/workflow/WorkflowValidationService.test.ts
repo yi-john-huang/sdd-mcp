@@ -85,6 +85,8 @@ describe('WorkflowValidationService', () => {
     const result = service.validateDesign(invalid, requirements);
     expect(codes(result.blockers)).toContain('UnknownCoverageId');
     expect(codes(result.blockers)).toContain('CoverageMissing');
+    const uncovered = design.replace('**Covers:** FR-1, NFR-1', '**Covers:** FR-1');
+    expect(codes(service.validateDesign(uncovered, requirements).blockers)).toContain('CoverageMissing');
   });
 
   it('parses task governance metadata without changing prose casing', () => {
@@ -114,10 +116,57 @@ describe('WorkflowValidationService', () => {
     ]));
   });
 
+  it('rejects task metadata that cannot be persisted safely', () => {
+    const invalid = tasks
+      .replace('**Dependencies:** 1.1', '**Dependencies:** 1.1, 1.1')
+      .replace(
+        '**Affected artifacts:** src/order.ts, src/order.test.ts',
+        '**Affected artifacts:** ../outside.ts, C:\\outside.ts, ../outside.ts, none',
+      );
+    const result = service.validateTasks(invalid, requirements, design);
+    expect(codes(result.blockers)).toEqual(expect.arrayContaining([
+      'DuplicateListItem',
+      'InvalidArtifactPath',
+      'InvalidListValue',
+    ]));
+  });
+
   it('rejects duplicate task and decision IDs', () => {
     const duplicateDesign = `${design}\n### D-1: Duplicate\n**Covers:** FR-1\n**Decision:** no\n**Failure behavior:** no\n**Verification:** no`;
     expect(codes(service.validateDesign(duplicateDesign, requirements).blockers)).toContain('DuplicateId');
     const duplicateTasks = `${tasks}\n${tasks.slice(tasks.indexOf('### 1.1'))}`;
     expect(codes(service.validateTasks(duplicateTasks, requirements, design).blockers)).toContain('DuplicateId');
   });
+  it('rejects duplicate machine metadata labels', () => {
+    const duplicateMetadata = tasks.replace(
+      '**TDD:** required',
+      '**TDD:** required\n**TDD:** not-applicable — conflicting duplicate',
+    );
+    expect(codes(service.validateTasks(duplicateMetadata, requirements, design).blockers)).toContain('DuplicateMetadata');
+  });
+
+  it('bounds task identifiers and titles before they become durable state', () => {
+    const invalid = tasks.replace(
+      '### 1.1 Create order transaction',
+      `### 1.${'1'.repeat(49)} ${'x'.repeat(501)}`,
+    );
+    const result = service.validateTasks(invalid, requirements, design);
+
+    expect(codes(result.blockers)).toEqual(expect.arrayContaining([
+      'InvalidTaskId',
+      'InvalidTaskTitle',
+    ]));
+  });
+
+  it('bounds persisted validation blockers for highly invalid drafts', () => {
+    const invalid = Array.from(
+      { length: 101 },
+      (_, index) => `### FR-${index + 1}: Missing metadata`,
+    ).join('\n');
+    const result = service.validateRequirements(invalid);
+
+    expect(result.status).toBe('failed');
+    expect(result.blockers).toHaveLength(100);
+  });
+
 });

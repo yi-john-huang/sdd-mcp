@@ -76,6 +76,14 @@ export class PhaseNotApprovedError extends Error {
   }
 }
 
+export class ContextArtifactDriftError extends Error {
+  readonly code = 'ArtifactDrift';
+  constructor(readonly phase: ApprovablePhase) {
+    super(`Approved artifact has drifted: ${phase}`);
+    this.name = 'ContextArtifactDriftError';
+  }
+}
+
 export class ContextSourceError extends Error {
   readonly code = 'ContextSourceError';
   constructor(readonly sourcePath: string, message: string) {
@@ -84,7 +92,7 @@ export class ContextSourceError extends Error {
   }
 }
 
-interface ApprovalState { generated: boolean; approved: boolean }
+interface ApprovalState { generated: boolean; approved: boolean; artifactSha256?: string }
 interface WorkflowSpec {
   featureName: string;
   phase: string;
@@ -93,7 +101,7 @@ interface WorkflowSpec {
   reviewCompleted: boolean;
   implementation?: {
     revision: number;
-    tasks: Record<string, { status: string; blocker?: string }>;
+    tasks: Record<string, { status: string; blocker?: string; dependencies: string[] }>;
   };
 }
 interface DocumentSnapshot { name: string; relativePath: string; absolutePath: string; content: string }
@@ -136,7 +144,10 @@ export class ContextCompactionService {
   async invalidateCanonicalHandoff(request: Pick<ContextLoadRequest, 'projectRoot' | 'featureName'>): Promise<void> {
     const resolved = await new SpecPathResolver(this.fileSystem).resolve(request.projectRoot, request.featureName);
     const handoffPath = path.join(resolved.featureRoot, 'context', 'handoff.md');
-    await new SpecPathResolver(this.fileSystem).assertContained(resolved.featureRoot, handoffPath);
+    const contextRoot = path.dirname(handoffPath);
+    const resolver = new SpecPathResolver(this.fileSystem);
+    await resolver.assertContained(resolved.featureRoot, contextRoot);
+    await resolver.assertContained(resolved.featureRoot, handoffPath);
     if (await this.fileSystem.exists(handoffPath)) {
       if (!this.fileSystem.unlink) throw new Error('FileSystemPort.unlink is required to invalidate context');
       await this.fileSystem.unlink(handoffPath);
@@ -185,14 +196,15 @@ export class ContextCompactionService {
       && request.maxEstimatedTokens === undefined
       && request.includeUnapproved !== true;
     const handoffPath = path.join(resolved.featureRoot, 'context', 'handoff.md');
+    const built = mode === 'full'
+      ? this.buildFull(spec, selected, budget)
+      : this.buildBounded(spec, selected, budget, mode, sourceFingerprint, fingerprint, canonical);
     const cached = await this.readCanonicalCache(
       canonical,
       handoffPath,
       resolved.featureRoot,
       resolver,
-      selected,
-      sourceFingerprint,
-      fingerprint,
+      built.content,
     );
     if (cached !== undefined) {
       const result = this.resultFor(
@@ -208,10 +220,13 @@ export class ContextCompactionService {
       return this.applyEtag(result, request.ifNoneMatch);
     }
 
-    const built = mode === 'full'
-      ? this.buildFull(spec, selected, budget)
-      : this.buildBounded(spec, selected, budget, mode, sourceFingerprint, fingerprint, canonical);
-    await this.persistCanonical(canonical, handoffPath, built.content);
+    await this.persistCanonical(
+      canonical,
+      handoffPath,
+      built.content,
+      resolved.featureRoot,
+      resolver,
+    );
     const result = this.resultFor(
       built.content,
       mode,
@@ -246,21 +261,27 @@ export class ContextCompactionService {
     handoffPath: string,
     featureRoot: string,
     resolver: SpecPathResolver,
-    selected: SelectedState,
-    sourceFingerprint: string,
-    fingerprint: string,
+    expectedContent: string,
   ): Promise<string | undefined> {
     if (!canonical || !(await this.fileSystem.exists(handoffPath))) return undefined;
     await resolver.assertContained(featureRoot, handoffPath);
     const cached = await this.fileSystem.readFile(handoffPath);
-    return this.cacheMatches(cached, selected.phase, sourceFingerprint, fingerprint)
-      ? cached
-      : undefined;
+    return cached === expectedContent ? cached : undefined;
   }
 
-  private async persistCanonical(canonical: boolean, handoffPath: string, content: string): Promise<void> {
+  private async persistCanonical(
+    canonical: boolean,
+    handoffPath: string,
+    content: string,
+    featureRoot: string,
+    resolver: SpecPathResolver,
+  ): Promise<void> {
     if (!canonical) return;
-    await this.fileSystem.mkdir(path.dirname(handoffPath));
+    const contextRoot = path.dirname(handoffPath);
+    await resolver.assertContained(featureRoot, contextRoot);
+    await this.fileSystem.mkdir(contextRoot);
+    await resolver.assertContained(featureRoot, contextRoot);
+    await resolver.assertContained(featureRoot, handoffPath);
     if (!this.fileSystem.writeFileAtomic) {
       throw new Error('FileSystemPort.writeFileAtomic is required for context persistence');
     }
@@ -302,9 +323,13 @@ export class ContextCompactionService {
             revision: typeof implementationRecord.revision === 'number' ? implementationRecord.revision : 0,
             tasks: Object.fromEntries(Object.entries(implementationTasks).map(([taskNumber, value]) => {
               const task = this.optionalRecord(value);
+              const dependencies = Array.isArray(task.dependencies)
+                ? task.dependencies.filter((dependency): dependency is string => typeof dependency === 'string')
+                : [];
               return [taskNumber, {
                 status: typeof task.status === 'string' ? task.status : 'pending',
                 blocker: typeof task.blocker === 'string' ? task.blocker : undefined,
+                dependencies,
               }];
             })),
           }
@@ -341,7 +366,15 @@ export class ContextCompactionService {
   private parseApprovals(record: Record<string, unknown>): Record<ApprovablePhase, ApprovalState> {
     return Object.fromEntries(PHASES.map(phase => {
       const state = this.optionalRecord(record[phase]);
-      return [phase, { generated: state.generated === true, approved: state.approved === true }];
+      return [phase, {
+        generated: state.generated === true,
+        approved: state.approved === true,
+        artifactSha256: typeof state.artifact_sha256 === 'string'
+          ? state.artifact_sha256
+          : typeof state.artifactSha256 === 'string'
+            ? state.artifactSha256
+            : undefined,
+      }];
     })) as Record<ApprovablePhase, ApprovalState>;
   }
 
@@ -423,7 +456,12 @@ export class ContextCompactionService {
       if (!spec.approvals[selectedPhase].generated) {
         throw new ContextSourceError(`${selectedPhase}.md`, 'Selected phase metadata is inconsistent');
       }
-      documents.push(await this.readPhaseDocument(featureRoot, selectedPhase, resolver));
+      documents.push(await this.readPhaseDocument(
+        featureRoot,
+        selectedPhase,
+        spec.approvals[selectedPhase],
+        resolver,
+      ));
     }
     return documents;
   }
@@ -431,6 +469,7 @@ export class ContextCompactionService {
   private async readPhaseDocument(
     featureRoot: string,
     selectedPhase: ApprovablePhase,
+    approval: ApprovalState,
     resolver: SpecPathResolver,
   ): Promise<DocumentSnapshot> {
     const name = `${selectedPhase}.md`;
@@ -439,16 +478,21 @@ export class ContextCompactionService {
     if (!(await this.fileSystem.exists(absolutePath))) {
       throw new ContextSourceError(absolutePath, 'Missing required selected-phase document');
     }
+    let content: string;
     try {
-      return {
-        name,
-        relativePath: name,
-        absolutePath,
-        content: await this.fileSystem.readFile(absolutePath),
-      };
+      content = await this.fileSystem.readFile(absolutePath);
     } catch {
       throw new ContextSourceError(absolutePath, 'Unable to read selected-phase document');
     }
+    if (approval.approved && approval.artifactSha256 && this.hash(content) !== approval.artifactSha256) {
+      throw new ContextArtifactDriftError(selectedPhase);
+    }
+    return {
+      name,
+      relativePath: name,
+      absolutePath,
+      content,
+    };
   }
 
   private buildBounded(
@@ -497,22 +541,47 @@ export class ContextCompactionService {
     const implementationProgress = spec.implementation
       ? `\n\n## Implementation Progress\n${this.implementationProgress(spec)}`
       : '';
-    return `${metadata}# SDD Context: ${spec.featureName}\n\n## Workflow State\n- Effective phase: ${selected.phase}\n- Phase status: ${selected.status}\n- Requirements: ${this.approvalLabel(spec.approvals.requirements)}\n- Design: ${this.approvalLabel(spec.approvals.design)}\n- Tasks: ${this.approvalLabel(spec.approvals.tasks)}\n- Test-case review: ${review}${implementationProgress}\n\n## Next Action\n${this.nextAction(spec, selected.phase)}\n\n## Source References\n${sourceReferences}\n\n## Payload Estimate\n- Payload estimated tokens: 00000`;
+    return `${metadata}# SDD Context: ${spec.featureName}\n\n## Workflow State\n- Effective phase: ${selected.phase}\n- Phase status: ${selected.status}\n- Requirements: ${this.approvalLabel(spec.approvals.requirements)}\n- Design: ${this.approvalLabel(spec.approvals.design)}\n- Tasks: ${this.approvalLabel(spec.approvals.tasks)}\n- Test-case review: ${review}${implementationProgress}\n\n## Next Action\n${this.nextAction(spec, selected)}\n\n## Source References\n${sourceReferences}\n\n## Payload Estimate\n- Payload estimated tokens: 00000`;
   }
 
-  private nextAction(spec: WorkflowSpec, phase: EffectivePhase): string {
+  private nextAction(spec: WorkflowSpec, selected: SelectedState): string {
+    const phase = selected.phase;
+    if (selected.status === 'unapproved') {
+      return `Continue the ${phase} Skill to revise, validate, and request approval for this draft.`;
+    }
     if (phase === 'init') return 'Generate requirements through the requirements Skill.';
     if (phase === 'requirements') return 'Continue with the design Skill.';
     if (phase === 'design') return 'Continue with the tasks Skill.';
     if (phase === 'implementation' && spec.implementation) {
-      const active = Object.entries(spec.implementation.tasks).find(([, task]) =>
+      const tasks = Object.entries(spec.implementation.tasks);
+      const active = tasks.filter(([, task]) =>
         ['in-progress', 'red-observed', 'green-observed', 'blocked'].includes(task.status));
-      if (active) return `Continue task ${active[0]} from ${active[1].status}.`;
-      const pending = Object.entries(spec.implementation.tasks).find(([, task]) => task.status === 'pending');
-      return pending ? `Start task ${pending[0]}.` : 'Implementation is complete.';
+      if (active.length === 1) return `Continue task ${active[0][0]} from ${active[0][1].status}.`;
+      if (active.length > 1) {
+        return `Select a resumable task: ${this.taskCandidateSummary(active, true)}.`;
+      }
+      const ready = tasks.filter(([, task]) =>
+        task.status === 'pending'
+        && task.dependencies.every((dependency) =>
+          spec.implementation!.tasks[dependency]?.status === 'completed'));
+      if (ready.length === 1) return `Start task ${ready[0][0]}.`;
+      if (ready.length > 1) return `Select a ready task: ${this.taskCandidateSummary(ready, false)}.`;
+      return tasks.every(([, task]) => task.status === 'completed')
+        ? 'Implementation is complete.'
+        : 'No dependency-ready task is available; inspect persisted task blockers.';
     }
     if (spec.reviewRequired && !spec.reviewCompleted) return 'Review test cases before approving tasks.';
     return 'Start governed implementation.';
+  }
+
+  private taskCandidateSummary(
+    candidates: Array<[string, { status: string }]>,
+    includeStatus: boolean,
+  ): string {
+    const visible = candidates.slice(0, 20).map(([id, task]) =>
+      includeStatus ? `${id} (${task.status})` : id);
+    const omitted = candidates.length - visible.length;
+    return `${visible.join(', ')}${omitted > 0 ? `, and ${omitted} more` : ''}`;
   }
 
   private implementationProgress(spec: WorkflowSpec): string {
@@ -522,9 +591,16 @@ export class ContextCompactionService {
     const active = tasks.filter(([, task]) => ['in-progress', 'red-observed', 'green-observed'].includes(task.status));
     const blocked = tasks.filter(([, task]) => task.status === 'blocked');
     const details = [...active, ...blocked].slice(0, 20)
-      .map(([taskNumber, task]) => `- ${taskNumber}: ${task.status}${task.blocker ? ` — ${task.blocker}` : ''}`)
+      .map(([taskNumber, task]) => `- ${taskNumber}: ${task.status}${this.blockerSummary(task.blocker)}`)
       .join('\n');
     return `- Revision: ${spec.implementation.revision}\n- Completed: ${completed}/${tasks.length}\n- Active: ${active.length}\n- Blocked: ${blocked.length}${details ? `\n${details}` : ''}`;
+  }
+
+  private blockerSummary(blocker: string | undefined): string {
+    if (!blocker) return '';
+    const normalized = blocker.replace(/\s+/g, ' ').trim();
+    const summary = normalized.length > 160 ? `${normalized.slice(0, 159)}…` : normalized;
+    return ` — ${summary}`;
   }
 
   private buildDirectPayload(
@@ -595,7 +671,13 @@ export class ContextCompactionService {
   }
 
   private buildFull(spec: WorkflowSpec, selected: SelectedState, budget: number): { content: string; omittedSources: string[] } {
-    let content = [`# Full SDD Context: ${spec.featureName}`, `Effective phase: ${selected.phase} (${selected.status})`, ...selected.documents.map((document) => `## ${document.name}\n\n${document.content}`), '## Payload Estimate\n- Payload estimated tokens: 00000'].join('\n\n');
+    let content = [
+      `# Full SDD Context: ${spec.featureName}`,
+      `Effective phase: ${selected.phase} (${selected.status})`,
+      `Next action: ${this.nextAction(spec, selected)}`,
+      ...selected.documents.map((document) => `## ${document.name}\n\n${document.content}`),
+      '## Payload Estimate\n- Payload estimated tokens: 00000',
+    ].join('\n\n');
     content = this.embedEstimate(content);
     const required = Math.ceil(content.length / 4);
     if (required > budget) throw new ContextBudgetExceededError(budget, required);
@@ -612,10 +694,6 @@ export class ContextCompactionService {
     return { content, mode, effectivePhase: selected.phase, phaseStatus: selected.status, sourceFingerprint, fingerprint, cacheStatus, sourceCharacters, sourceEstimatedTokens, payloadCharacters: content.length, payloadEstimatedTokens, reductionPercentage: sourceEstimatedTokens === 0 || payloadEstimatedTokens >= sourceEstimatedTokens ? 0 : Math.round((1 - payloadEstimatedTokens / sourceEstimatedTokens) * 100), omittedSources };
   }
 
-  private cacheMatches(content: string, phase: EffectivePhase, sourceFingerprint: string, fingerprint: string): boolean {
-    const match = content.match(/^<!-- sdd-context schema=(\d+) phase=(\w+) source=([a-f0-9]{64}) payload=([a-f0-9]{64}) -->/);
-    return match?.[1] === String(HANDOFF_SCHEMA) && match[2] === phase && match[3] === sourceFingerprint && match[4] === fingerprint;
-  }
 
   private approvalLabel(state: ApprovalState): string {
     return state.approved ? 'approved' : state.generated ? 'generated, unapproved' : 'not generated';

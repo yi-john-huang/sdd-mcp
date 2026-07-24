@@ -1,4 +1,4 @@
-import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
+import { mkdtemp, readFile, rename, rm, truncate, writeFile } from 'node:fs/promises';
 import { hostname, tmpdir } from 'node:os';
 import { join } from 'node:path';
 import {
@@ -59,6 +59,15 @@ describe('withFilesystemLock', () => {
     expect(JSON.parse(await readFile(lockPath, 'utf8'))).toEqual(owner);
   });
 
+  it('treats oversized owner metadata as a non-evictable malformed lock', async () => {
+    await writeFile(lockPath, '');
+    await truncate(lockPath, 4_097);
+    await expect(withFilesystemLock(lockPath, async () => undefined, {
+      timeoutMs: 30,
+      retryDelayMs: 5,
+    })).rejects.toHaveProperty('code', 'LockTimeout');
+  });
+
   it('takes over a proven-dead local owner', async () => {
     await writeFile(lockPath, JSON.stringify({
       token: 'dead-owner',
@@ -93,5 +102,26 @@ describe('withFilesystemLock', () => {
       await lease.assertHeld();
     })).rejects.toBeInstanceOf(FilesystemLockCompromisedError);
     expect(JSON.parse(await readFile(lockPath, 'utf8'))).toEqual(replacement);
+  });
+
+  it('reports ownership compromise even when the action also fails', async () => {
+    const replacement = { token: 'replacement', pid: process.pid, hostname: hostname() };
+    await expect(withFilesystemLock(lockPath, async () => {
+      await writeFile(lockPath, JSON.stringify(replacement));
+      throw new Error('action failed');
+    })).rejects.toBeInstanceOf(FilesystemLockCompromisedError);
+    expect(JSON.parse(await readFile(lockPath, 'utf8'))).toEqual(replacement);
+  });
+
+  it('detects same-token inode replacement and preserves the replacement', async () => {
+    let replacementBytes = '';
+    await expect(withFilesystemLock(lockPath, async (lease) => {
+      replacementBytes = await readFile(lockPath, 'utf8');
+      const replacementPath = join(directory, 'replacement.lock');
+      await writeFile(replacementPath, replacementBytes);
+      await rename(replacementPath, lockPath);
+      await lease.assertHeld();
+    })).rejects.toBeInstanceOf(FilesystemLockCompromisedError);
+    expect(await readFile(lockPath, 'utf8')).toBe(replacementBytes);
   });
 });

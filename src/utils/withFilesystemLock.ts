@@ -1,5 +1,5 @@
 import { randomUUID } from 'node:crypto';
-import { open, link, mkdir, readFile, rename, unlink } from 'node:fs/promises';
+import { link, lstat, mkdir, open, rename, unlink } from 'node:fs/promises';
 import { hostname as localHostname } from 'node:os';
 import { basename, dirname, join } from 'node:path';
 
@@ -7,6 +7,11 @@ interface LockOwner {
   token: string;
   pid: number;
   hostname: string;
+}
+
+interface LockSnapshot {
+  owner?: LockOwner;
+  identity: { dev: bigint; ino: bigint };
 }
 
 export interface FilesystemLockLease {
@@ -50,13 +55,36 @@ function parseOwner(bytes: string): LockOwner | undefined {
   }
 }
 
-async function readOwner(lockPath: string): Promise<LockOwner | undefined> {
+async function readSnapshot(lockPath: string): Promise<LockSnapshot | undefined> {
+  let handle;
   try {
-    return parseOwner(await readFile(lockPath, 'utf8'));
+    handle = await open(lockPath, 'r');
   } catch (error) {
     if ((error as NodeJS.ErrnoException).code === 'ENOENT') return undefined;
     throw error;
   }
+  try {
+    const stat = await handle.stat({ bigint: true });
+    const bytes = stat.size <= 4_096n ? await handle.readFile('utf8') : undefined;
+    const canonical = await lstat(lockPath, { bigint: true }).catch((error: NodeJS.ErrnoException) => {
+      if (error.code === 'ENOENT') return undefined;
+      throw error;
+    });
+    if (!canonical || canonical.dev !== stat.dev || canonical.ino !== stat.ino) return undefined;
+    return {
+      owner: bytes === undefined ? undefined : parseOwner(bytes),
+      identity: { dev: stat.dev, ino: stat.ino },
+    };
+  } finally {
+    await handle.close();
+  }
+}
+
+function sameIdentity(
+  left: LockSnapshot['identity'],
+  right: LockSnapshot['identity'],
+): boolean {
+  return left.dev === right.dev && left.ino === right.ino;
 }
 
 function ownerIsProvenDead(owner: LockOwner, hostname: string): boolean {
@@ -87,10 +115,19 @@ async function writeDurableOwner(path: string, owner: LockOwner): Promise<void> 
   }
 }
 
-async function tryEvictDeadOwner(lockPath: string, observed: LockOwner, hostname: string): Promise<boolean> {
-  if (!ownerIsProvenDead(observed, hostname)) return false;
-  const current = await readOwner(lockPath);
-  if (!current || current.token !== observed.token || !ownerIsProvenDead(current, hostname)) return false;
+async function tryEvictDeadOwner(
+  lockPath: string,
+  observed: LockSnapshot,
+  hostname: string,
+): Promise<boolean> {
+  if (!observed.owner || !ownerIsProvenDead(observed.owner, hostname)) return false;
+  const current = await readSnapshot(lockPath);
+  if (
+    !current?.owner
+    || current.owner.token !== observed.owner.token
+    || !sameIdentity(current.identity, observed.identity)
+    || !ownerIsProvenDead(current.owner, hostname)
+  ) return false;
   const quarantine = join(dirname(lockPath), `.${basename(lockPath)}.${randomUUID()}.quarantine`);
   try {
     await rename(lockPath, quarantine);
@@ -98,12 +135,18 @@ async function tryEvictDeadOwner(lockPath: string, observed: LockOwner, hostname
     if ((error as NodeJS.ErrnoException).code === 'ENOENT') return true;
     throw error;
   }
-  const moved = await readOwner(quarantine);
-  if (!moved || moved.token !== observed.token) {
+  const moved = await readSnapshot(quarantine);
+  if (
+    !moved?.owner
+    || moved.owner.token !== observed.owner.token
+    || moved.owner.pid !== observed.owner.pid
+    || moved.owner.hostname !== observed.owner.hostname
+    || !sameIdentity(moved.identity, observed.identity)
+  ) {
     try {
       await link(quarantine, lockPath);
     } catch {
-      // A new owner already occupies the canonical path; never overwrite it.
+      // Preserve whichever owner currently occupies the canonical path.
     }
     await removeIfPresent(quarantine);
     return false;
@@ -142,7 +185,7 @@ export async function withFilesystemLock<T>(
       } catch (error) {
         const code = (error as NodeJS.ErrnoException).code;
         if (code !== 'EEXIST') throw error;
-        const observed = await readOwner(lockPath);
+        const observed = await readSnapshot(lockPath);
         if (observed) await tryEvictDeadOwner(lockPath, observed, owner.hostname);
         if (Date.now() >= deadline) throw new FilesystemLockTimeoutError(lockPath);
         await delay(retryDelayMs);
@@ -151,10 +194,18 @@ export async function withFilesystemLock<T>(
   } finally {
     await removeIfPresent(tempPath);
   }
+  const acquiredSnapshot = await readSnapshot(lockPath);
+  if (!acquiredSnapshot?.owner || acquiredSnapshot.owner.token !== owner.token) {
+    throw new FilesystemLockCompromisedError(lockPath);
+  }
 
   const assertHeld = async (): Promise<void> => {
-    const current = await readOwner(lockPath);
-    if (!current || current.token !== owner.token) throw new FilesystemLockCompromisedError(lockPath);
+    const current = await readSnapshot(lockPath);
+    if (
+      !current?.owner
+      || current.owner.token !== owner.token
+      || !sameIdentity(current.identity, acquiredSnapshot.identity)
+    ) throw new FilesystemLockCompromisedError(lockPath);
   };
 
   let actionError: unknown;
@@ -170,8 +221,12 @@ export async function withFilesystemLock<T>(
     await assertHeld();
     const releasePath = join(dirname(lockPath), `.${basename(lockPath)}.${owner.token}.release`);
     await rename(lockPath, releasePath);
-    const released = await readOwner(releasePath);
-    if (!released || released.token !== owner.token) {
+    const released = await readSnapshot(releasePath);
+    if (
+      !released?.owner
+      || released.owner.token !== owner.token
+      || !sameIdentity(released.identity, acquiredSnapshot.identity)
+    ) {
       try {
         await link(releasePath, lockPath);
       } catch {
@@ -181,7 +236,10 @@ export async function withFilesystemLock<T>(
     }
     await removeIfPresent(releasePath);
   } catch (releaseError) {
-    if (actionError === undefined) actionError = releaseError;
+    if (
+      actionError === undefined
+      || releaseError instanceof FilesystemLockCompromisedError
+    ) actionError = releaseError;
   }
 
   if (actionError !== undefined) throw actionError;

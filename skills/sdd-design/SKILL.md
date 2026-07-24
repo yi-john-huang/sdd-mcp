@@ -13,6 +13,7 @@ The user invokes this Skill; backend lifecycle calls are internal. Never tell th
 1. Internally resolve status. If no feature name is supplied, resume the sole incomplete feature or ask the user to select when several exist.
 2. Requirements must be approved. If durable status says otherwise, present the persisted blocker and make no file change.
 3. Load the latest approved compact context before method work. Load an unapproved design draft only with full mode and explicit unapproved inclusion.
+4. If status reports an observed artifact identity for an orphan or manual edit, read that exact design file before revising. Never acknowledge its hash without inspecting and deliberately incorporating or replacing its content.
 
 If the runtime is unavailable because of host permission, report an actionable reload/trust or policy blocker; never substitute manual backend instructions.
 

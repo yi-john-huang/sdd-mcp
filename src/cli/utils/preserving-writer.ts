@@ -98,7 +98,9 @@ export class PreservingWriter {
     warnings: string[];
   }>();
   private activeLeaseAssert?: () => Promise<void>;
-  private readonly pendingWrites = new Map<InstallTarget, Map<string, { prior: Buffer | null; next: Buffer }>>();
+  private readonly pendingWrites = new Map<InstallTarget, Map<string, { prior: Buffer | null; next: Buffer | null }>>();
+  private readonly committedTargets = new Set<InstallTarget>();
+  private readonly preservedModifiedFiles = new Map<InstallTarget, Set<string>>();
   private backupStamp?: string;
 
   constructor(private readonly projectRoot: string) {}
@@ -110,23 +112,50 @@ export class PreservingWriter {
     refreshGenerated = false,
   ): void {
     this.generated.set(target, new Map());
+    this.preservedModifiedFiles.set(target, new Set());
+    this.committedTargets.delete(target);
+    this.runtimeResults.delete(target);
     this.profiles.set(target, profile);
     this.selectedComponents.set(target, new Set<ComponentType | 'root'>([...components, 'root']));
     if (refreshGenerated) this.refreshTargets.add(target);
+    else this.refreshTargets.delete(target);
   }
 
   async withInstallLock<T>(action: () => Promise<T>): Promise<T> {
     if (this.activeLeaseAssert) return action();
     const lockPath = path.join(this.projectRoot, '.sdd-mcp', 'install.lock');
+    this.validateDestination(lockPath);
     await fs.promises.mkdir(path.dirname(lockPath), { recursive: true });
-    return withFilesystemLock(lockPath, async lease => {
-      this.activeLeaseAssert = lease.assertHeld;
-      try {
-        return await action();
-      } finally {
-        this.activeLeaseAssert = undefined;
+    this.validateDestination(lockPath);
+    const committedBefore = new Set(this.committedTargets);
+    let completed = false;
+    let value: T | undefined;
+    try {
+      return await withFilesystemLock(lockPath, async lease => {
+        this.activeLeaseAssert = lease.assertHeld;
+        try {
+          value = await action();
+          completed = true;
+          return value;
+        } finally {
+          this.activeLeaseAssert = undefined;
+        }
+      });
+    } catch (error) {
+      const committedDuringAction = [...this.committedTargets]
+        .filter((target) => !committedBefore.has(target));
+      if (!completed || committedDuringAction.length === 0) throw error;
+      const warning = `Installation committed, but install lock release reported an error: ${error instanceof Error ? error.message : String(error)}`;
+      for (const target of committedDuringAction) {
+        const result = this.runtimeResults.get(target);
+        if (result && !result.warnings.includes(warning)) result.warnings.push(warning);
       }
-    });
+      if (value && typeof value === 'object' && 'warnings' in value) {
+        const warnings = value.warnings;
+        if (Array.isArray(warnings) && !warnings.includes(warning)) warnings.push(warning);
+      }
+      return value as T;
+    }
   }
 
   requireRuntimeRegistration(target: InstallTarget, paths: ResolvedInstallPaths): void {
@@ -137,14 +166,21 @@ export class PreservingWriter {
   }
 
 
-  async rollbackUncommitted(target: InstallTarget): Promise<void> {
+  async rollbackUncommitted(
+    target: InstallTarget,
+    assertHeld: (() => Promise<void>) | undefined = this.activeLeaseAssert,
+  ): Promise<void> {
     const writes = this.pendingWrites.get(target);
     if (!writes) return;
+    const leaseAssert = assertHeld ?? (async () => undefined);
     for (const [filePath, snapshot] of [...writes].reverse()) {
-      const current = await readOptionalBytes(filePath);
-      if (!current?.equals(snapshot.next)) continue;
-      if (snapshot.prior === null) await fs.promises.rm(filePath, { force: true });
-      else await atomicWriteFile(filePath, snapshot.prior.toString('utf8'));
+      if (snapshot.prior === null) {
+        if (snapshot.next !== null) {
+          await this.removeBytesCas(filePath, snapshot.next, leaseAssert);
+        }
+      } else {
+        await this.replaceBytesCas(filePath, snapshot.next, snapshot.prior, leaseAssert);
+      }
     }
     this.pendingWrites.delete(target);
   }
@@ -164,8 +200,7 @@ export class PreservingWriter {
     if (component === 'steering') {
       if (!exists) {
         this.trackPendingWrite(target, filePath, null, Buffer.from(content));
-        await atomicWriteFile(filePath, content);
-        await this.activeLeaseAssert?.();
+        await this.replaceManagedBytesCas(filePath, null, Buffer.from(content));
         this.pendingShared.set(relative, { sha256: desiredHash, component: 'steering', mutable: true });
         return { outcome: 'installed' };
       }
@@ -173,35 +208,43 @@ export class PreservingWriter {
       this.pendingShared.set(relative, { sha256: existingHash, component: 'steering', mutable: true });
       return { outcome: 'skipped' };
     }
-    this.generatedFor(target).set(relative, { sha256: desiredHash, component });
+    const generated = this.generatedFor(target);
     const prior = manifest.targets[target]?.files[relative];
 
     if (!exists) {
+      generated.set(relative, { sha256: desiredHash, component });
       this.trackPendingWrite(target, filePath, null, Buffer.from(content));
-      await atomicWriteFile(filePath, content);
-      await this.activeLeaseAssert?.();
+      await this.replaceManagedBytesCas(filePath, null, Buffer.from(content));
       return { outcome: 'installed' };
     }
 
     const existing = await fs.promises.readFile(filePath, 'utf8');
     const existingHash = sha256(existing);
-    if (existingHash === desiredHash) return { outcome: 'skipped' };
+    if (existingHash === desiredHash) {
+      generated.set(relative, { sha256: desiredHash, component });
+      return { outcome: 'skipped' };
+    }
 
     if (this.refreshTargets.has(target)) {
+      generated.set(relative, { sha256: desiredHash, component });
       this.trackPendingWrite(target, filePath, Buffer.from(existing), Buffer.from(content));
-      await this.backup(target, relative, filePath);
-      await atomicWriteFile(filePath, content);
       await this.activeLeaseAssert?.();
+      await this.backup(target, relative, filePath);
+      await this.replaceManagedBytesCas(filePath, Buffer.from(existing), Buffer.from(content));
       return { outcome: 'installed' };
     }
 
     if (prior && existingHash === prior.sha256) {
+      generated.set(relative, { sha256: desiredHash, component });
       this.trackPendingWrite(target, filePath, Buffer.from(existing), Buffer.from(content));
-      await atomicWriteFile(filePath, content);
-      await this.activeLeaseAssert?.();
+      await this.replaceManagedBytesCas(filePath, Buffer.from(existing), Buffer.from(content));
       return { outcome: 'installed' };
     }
 
+    if (prior) {
+      generated.set(relative, prior);
+      this.preservedModifiedFiles.get(target)?.add(relative);
+    }
     return {
       outcome: 'skipped',
       conflict: {
@@ -217,19 +260,19 @@ export class PreservingWriter {
     target: InstallTarget,
     paths: ResolvedInstallPaths = getTargetPolicy(target).defaultPaths,
   ): Promise<{ installed: string[]; skipped: string[]; warnings: string[] }> {
-    const lockPath = path.join(this.projectRoot, '.sdd-mcp', 'install.lock');
-    await fs.promises.mkdir(path.dirname(lockPath), { recursive: true });
-    return withFilesystemLock(lockPath, async lease => {
-      const manifest = await this.readManifest();
+    return this.withInstallLock(async () => {
+      const assertHeld = this.requireActiveLease();
+      const manifestSnapshot = await this.readManifestSnapshot();
+      const manifest = manifestSnapshot.manifest;
       const previous = manifest.targets[target];
       const runtime = await registerRuntimeLocked(
         this.projectRoot,
         target,
         paths,
         previous?.registrations[0],
-        lease.assertHeld,
+        assertHeld,
       );
-      const latest = await this.readManifest();
+      const latest = manifest;
       latest.targets[target] = {
         profile: previous?.profile ?? 'lean',
         packageVersion: PACKAGE_VERSION,
@@ -237,41 +280,52 @@ export class PreservingWriter {
         files: previous?.files ?? {},
         registrations: [runtime.registration],
       };
-      const priorManifestBytes = await readOptionalBytes(this.manifestPath);
+      const priorManifestBytes = manifestSnapshot.bytes;
       const nextManifestBytes = Buffer.from(`${JSON.stringify(latest, null, 2)}\n`);
       try {
-        await atomicWriteFile(this.manifestPath, nextManifestBytes.toString('utf8'));
+        await runtime.verify();
+        await this.replaceBytesCas(this.manifestPath, priorManifestBytes, nextManifestBytes, assertHeld);
       } catch (error) {
         const currentManifestBytes = await readOptionalBytes(this.manifestPath);
-        if (currentManifestBytes?.equals(nextManifestBytes)) {
+        if (buffersEqual(currentManifestBytes, nextManifestBytes)) {
+          this.markTargetCommitted(target);
           return {
             installed: runtime.installed,
             skipped: runtime.skipped,
             warnings: [`Runtime registration committed, but manifest write reported an error: ${error instanceof Error ? error.message : String(error)}`],
           };
         }
-        if ((priorManifestBytes === null && currentManifestBytes === null)
-          || (priorManifestBytes !== null && currentManifestBytes?.equals(priorManifestBytes))) {
+        if (buffersEqual(currentManifestBytes, priorManifestBytes)) {
           await runtime.rollback();
+          throw error;
         }
-        throw error;
+        throw new Error('Install manifest changed to unknown bytes; runtime partials were preserved');
       }
-      await lease.assertHeld();
+      this.markTargetCommitted(target);
       return { installed: runtime.installed, skipped: runtime.skipped, warnings: [] };
     });
   }
 
   async finalizeTarget(target: InstallTarget): Promise<InstallConflict[]> {
     this.validateDestination(this.manifestPath);
-    if (this.activeLeaseAssert) return this.finalizeTargetLocked(target, this.activeLeaseAssert);
-    const lockPath = path.join(this.projectRoot, '.sdd-mcp', 'install.lock');
-    await fs.promises.mkdir(path.dirname(lockPath), { recursive: true });
-    return withFilesystemLock(lockPath, async lease => this.finalizeTargetLocked(target, lease.assertHeld));
+    return this.withInstallLock(
+      async () => this.finalizeTargetLocked(target, this.requireActiveLease()),
+    );
   }
 
   async finalizeTargetLocked(target: InstallTarget, assertHeld: () => Promise<void>): Promise<InstallConflict[]> {
+    try {
+      return await this.commitTargetLocked(target, assertHeld);
+    } catch (error) {
+      await this.rollbackUncommitted(target, assertHeld);
+      throw error;
+    }
+  }
+
+  private async commitTargetLocked(target: InstallTarget, assertHeld: () => Promise<void>): Promise<InstallConflict[]> {
     const conflicts: InstallConflict[] = [];
-    const manifest = await this.readManifest();
+    const manifestSnapshot = await this.readManifestSnapshot();
+    const manifest = manifestSnapshot.manifest;
     const previousTarget = manifest.targets[target];
     const previous = previousTarget?.files ?? {};
     const generated = this.generatedFor(target);
@@ -282,7 +336,8 @@ export class PreservingWriter {
       const destination = path.join(this.projectRoot, relative);
       if (!await pathExists(destination)) continue;
       this.validateDestination(destination);
-      const currentHash = sha256(await fs.promises.readFile(destination));
+      const currentBytes = await fs.promises.readFile(destination);
+      const currentHash = sha256(currentBytes);
       if (currentHash !== record.sha256 && !this.refreshTargets.has(target)) {
         conflicts.push({
           component: record.component,
@@ -292,8 +347,10 @@ export class PreservingWriter {
         });
         continue;
       }
+      this.trackPendingWrite(target, destination, currentBytes, null);
+      await assertHeld();
       await this.backup(target, relative, destination);
-      await fs.promises.rm(destination, { force: true });
+      await this.removeBytesCas(destination, currentBytes, assertHeld);
     }
 
     if (this.refreshTargets.has(target)) {
@@ -302,8 +359,11 @@ export class PreservingWriter {
         const destination = path.join(this.projectRoot, relative);
         if (!await pathExists(destination)) continue;
         this.validateDestination(destination);
+        const currentBytes = await fs.promises.readFile(destination);
+        this.trackPendingWrite(target, destination, currentBytes, null);
+        await assertHeld();
         await this.backup(target, relative, destination);
-        await fs.promises.rm(destination, { force: true });
+        await this.removeBytesCas(destination, currentBytes, assertHeld);
       }
     }
 
@@ -315,43 +375,48 @@ export class PreservingWriter {
       previousTarget?.registrations[0],
       assertHeld,
     );
-    await assertHeld();
-    const latest = await this.readManifest();
+    const retainedUnselected = Object.fromEntries(
+      Object.entries(previous).filter(([, record]) => !selected.has(record.component)),
+    );
+    const latest = manifest;
     latest.targets[target] = {
       profile: this.profiles.get(target) ?? 'lean',
       packageVersion: PACKAGE_VERSION,
       rendererVersion: INSTALL_RENDERER_VERSION,
-      files: Object.fromEntries(generated),
+      files: { ...retainedUnselected, ...Object.fromEntries(generated) },
       registrations: [runtime.registration],
     };
     Object.assign(latest.shared, Object.fromEntries(this.pendingShared));
-    const priorManifestBytes = await readOptionalBytes(this.manifestPath);
+    const priorManifestBytes = manifestSnapshot.bytes;
     const nextManifestBytes = Buffer.from(`${JSON.stringify(latest, null, 2)}\n`);
     try {
-      await atomicWriteFile(this.manifestPath, nextManifestBytes.toString('utf8'));
+      await this.verifyPendingOwnership(target, generated, assertHeld);
+      await runtime.verify();
+      await this.replaceBytesCas(this.manifestPath, priorManifestBytes, nextManifestBytes, assertHeld);
     } catch (error) {
       const currentManifestBytes = await readOptionalBytes(this.manifestPath);
-      if (currentManifestBytes?.equals(nextManifestBytes)) {
+      if (buffersEqual(currentManifestBytes, nextManifestBytes)) {
         this.runtimeResults.set(target, {
           installed: runtime.installed,
           skipped: runtime.skipped,
           warnings: [`Installation committed, but manifest write reported an error: ${error instanceof Error ? error.message : String(error)}`],
         });
+        this.markTargetCommitted(target);
         return conflicts;
       }
-      if ((priorManifestBytes === null && currentManifestBytes === null)
-        || (priorManifestBytes !== null && currentManifestBytes?.equals(priorManifestBytes))) {
+      if (buffersEqual(currentManifestBytes, priorManifestBytes)) {
         await runtime.rollback();
+        throw error;
       }
-      throw error;
+      this.pendingWrites.delete(target);
+      throw new Error('Install manifest changed to unknown bytes; installer partials were preserved');
     }
-    await assertHeld();
     this.runtimeResults.set(target, {
       installed: runtime.installed,
       skipped: runtime.skipped,
       warnings: [],
     });
-    this.pendingWrites.delete(target);
+    this.markTargetCommitted(target);
     return conflicts;
   }
 
@@ -363,14 +428,16 @@ export class PreservingWriter {
     this.validateDestination(filePath);
     if (!await pathExists(filePath)) return;
     const relative = this.relative(filePath);
-    const digest = sha256(await fs.promises.readFile(filePath));
-    const lockPath = path.join(this.projectRoot, '.sdd-mcp', 'install.lock');
-    await fs.promises.mkdir(path.dirname(lockPath), { recursive: true });
-    await withFilesystemLock(lockPath, async lease => {
-      const manifest = await this.readManifest();
-      manifest.shared[relative] = { sha256: digest, component, mutable };
-      await atomicWriteFile(this.manifestPath, `${JSON.stringify(manifest, null, 2)}\n`);
-      await lease.assertHeld();
+    await this.withInstallLock(async () => {
+      const assertHeld = this.requireActiveLease();
+      const snapshot = await this.readManifestSnapshot();
+      const content = await readOptionalBytes(filePath);
+      if (content === null) return;
+      const record = { sha256: sha256(content), component, mutable };
+      snapshot.manifest.shared[relative] = record;
+      const next = Buffer.from(`${JSON.stringify(snapshot.manifest, null, 2)}\n`);
+      await this.verifyOwnedFile(relative, record.sha256);
+      await this.replaceBytesCas(this.manifestPath, snapshot.bytes, next, assertHeld);
     });
   }
 
@@ -439,60 +506,247 @@ export class PreservingWriter {
     await fs.promises.copyFile(source, destination);
   }
 
+  private async verifyPendingOwnership(
+    target: InstallTarget,
+    generated: ReadonlyMap<string, ManifestFile>,
+    assertHeld: () => Promise<void>,
+  ): Promise<void> {
+    const preservedModified = this.preservedModifiedFiles.get(target);
+    for (const [relative, record] of generated) {
+      if (preservedModified?.has(relative)) continue;
+      await this.verifyOwnedFile(relative, record.sha256);
+    }
+    for (const [relative, record] of this.pendingShared) {
+      await this.verifyOwnedFile(relative, record.sha256);
+    }
+    await assertHeld();
+  }
+
+  private async verifyOwnedFile(relative: string, expectedSha256: string): Promise<void> {
+    const destination = path.resolve(this.projectRoot, relative);
+    this.validateDestination(destination);
+    const current = await readOptionalBytes(destination);
+    if (current === null || sha256(current) !== expectedSha256) {
+      throw new Error(`Managed file changed before manifest commit: ${relative}`);
+    }
+  }
+
   private get manifestPath(): string {
     return path.join(this.projectRoot, '.sdd-mcp', 'install-manifest.json');
   }
 
   private async readManifest(): Promise<InstallManifest> {
-    try {
-      const parsed = JSON.parse(await fs.promises.readFile(this.manifestPath, 'utf8')) as InstallManifest;
-      if (!parsed.targets || !parsed.shared || (parsed.schemaVersion !== 1 && parsed.schemaVersion !== INSTALL_MANIFEST_SCHEMA_VERSION)) {
-        throw new Error('Unsupported install manifest schema');
+    return (await this.readManifestSnapshot()).manifest;
+  }
+
+  private async readManifestSnapshot(): Promise<{ bytes: Buffer | null; manifest: InstallManifest }> {
+    this.validateDestination(this.manifestPath);
+    const bytes = await readOptionalBytes(this.manifestPath);
+    return {
+      bytes,
+      manifest: bytes === null
+        ? { schemaVersion: INSTALL_MANIFEST_SCHEMA_VERSION, targets: {}, shared: {} }
+        : this.parseManifest(bytes),
+    };
+  }
+
+  private parseManifest(bytes: Buffer): InstallManifest {
+    const value: unknown = JSON.parse(bytes.toString('utf8'));
+    const parsed = this.requireManifestRecord(value, 'Unsupported install manifest schema');
+    if (!hasOnlyKeys(parsed, ['schemaVersion', 'targets', 'shared']) || (parsed.schemaVersion !== 1 && parsed.schemaVersion !== INSTALL_MANIFEST_SCHEMA_VERSION)) throw new Error('Unsupported install manifest schema');
+    const targetsRaw = this.requireManifestRecord(parsed.targets, 'Unsupported install manifest schema');
+    const sharedRaw = this.requireManifestRecord(parsed.shared, 'Unsupported install manifest schema');
+    const targets: InstallManifest['targets'] = Object.create(null) as InstallManifest['targets'];
+    for (const [targetName, targetValue] of Object.entries(targetsRaw)) {
+      if (!isInstallTarget(targetName)) throw new Error('Invalid install manifest target');
+      const target = this.requireManifestRecord(targetValue, 'Invalid install manifest ownership entry');
+      if (!hasOnlyKeys(target, ['profile', 'packageVersion', 'rendererVersion', 'files', 'registrations'])) {
+        throw new Error('Invalid install manifest target metadata');
       }
-      for (const target of Object.values(parsed.targets)) {
-        if (!target || typeof target.files !== 'object') throw new Error('Invalid install manifest ownership entry');
-        for (const record of Object.values(target.files)) {
-          if (!record || typeof record.sha256 !== 'string' || typeof record.component !== 'string') {
-            throw new Error('Invalid install manifest ownership entry');
-          }
-        }
-        if (parsed.schemaVersion === 1) {
-          target.registrations = [];
-        } else {
-          if (!Array.isArray(target.registrations)) throw new Error('Invalid install manifest registration entry');
-          for (const registration of target.registrations) {
-            if (!registration
-              || registration.serverName !== 'sdd-mcp'
-              || typeof registration.path !== 'string'
-              || !/^[a-f0-9]{64}$/.test(registration.entrySemanticSha256)
-              || (registration.managedRegionSha256 !== undefined && !/^[a-f0-9]{64}$/.test(registration.managedRegionSha256))
-              || (registration.permissionSemanticSha256 !== undefined && !/^[a-f0-9]{64}$/.test(registration.permissionSemanticSha256))) {
-              throw new Error('Invalid install manifest registration entry');
-            }
-          }
-        }
+      if (
+        (target.profile !== 'lean' && target.profile !== 'full')
+        || typeof target.packageVersion !== 'string'
+        || target.packageVersion.length === 0
+        || !Number.isInteger(target.rendererVersion)
+        || (target.rendererVersion as number) < 1
+      ) {
+        throw new Error('Invalid install manifest target metadata');
       }
-      for (const record of Object.values(parsed.shared)) {
-        if (!record
-          || typeof record.sha256 !== 'string'
-          || (record.component !== 'steering' && record.component !== 'gitignore')
-          || typeof record.mutable !== 'boolean') {
+      const filesRaw = this.requireManifestRecord(target.files, 'Invalid install manifest ownership entry');
+      const files = Object.create(null) as Record<string, ManifestFile>;
+      for (const [relativePath, fileValue] of Object.entries(filesRaw)) {
+        this.validateManifestRelativePath(relativePath);
+        const record = this.requireManifestRecord(fileValue, 'Invalid install manifest ownership entry');
+        if (!hasOnlyKeys(record, ['sha256', 'component']) || !isSha256(record.sha256) || !isManifestComponent(record.component)) {
           throw new Error('Invalid install manifest ownership entry');
         }
+        files[relativePath] = { sha256: record.sha256, component: record.component };
       }
-      parsed.schemaVersion = INSTALL_MANIFEST_SCHEMA_VERSION;
-      return parsed;
-    } catch (error) {
-      if (!isMissing(error)) throw error;
-      return { schemaVersion: INSTALL_MANIFEST_SCHEMA_VERSION, targets: {}, shared: {} };
+      if (parsed.schemaVersion === 1 && target.registrations !== undefined) {
+        throw new Error('Invalid install manifest registration entry');
+      }
+
+      let registrations: RuntimeRegistrationRecord[] = [];
+      if (parsed.schemaVersion !== 1) {
+        if (!Array.isArray(target.registrations) || target.registrations.length > 1) {
+          throw new Error('Invalid install manifest registration entry');
+        }
+        registrations = target.registrations.map((registrationValue) => {
+          const registration = this.requireManifestRecord(
+            registrationValue,
+            'Invalid install manifest registration entry',
+          );
+          if (!hasOnlyKeys(registration, [
+            'path',
+            'serverName',
+            'entrySemanticSha256',
+            'managedRegionSha256',
+            'permissionPath',
+            'permissionSemanticSha256',
+          ])) {
+            throw new Error('Invalid install manifest registration entry');
+          }
+          if (
+            registration.serverName !== 'sdd-mcp'
+            || !isSha256(registration.entrySemanticSha256)
+            || (registration.managedRegionSha256 !== undefined
+              && !isSha256(registration.managedRegionSha256))
+            || (registration.permissionSemanticSha256 !== undefined
+              && !isSha256(registration.permissionSemanticSha256))
+          ) {
+            throw new Error('Invalid install manifest registration entry');
+          }
+          const registrationPath = this.requireManifestRelativePath(registration.path);
+          const permissionPath = registration.permissionPath === undefined
+            ? undefined
+            : this.requireManifestRelativePath(registration.permissionPath);
+          if (registration.permissionSemanticSha256 !== undefined && permissionPath === undefined) {
+            throw new Error('Invalid install manifest registration entry');
+          }
+          return {
+            path: registrationPath,
+            serverName: 'sdd-mcp',
+            entrySemanticSha256: registration.entrySemanticSha256,
+            managedRegionSha256: typeof registration.managedRegionSha256 === 'string'
+              ? registration.managedRegionSha256
+              : undefined,
+            permissionPath,
+            permissionSemanticSha256: typeof registration.permissionSemanticSha256 === 'string'
+              ? registration.permissionSemanticSha256
+              : undefined,
+          };
+        });
+      }
+      targets[targetName] = {
+        profile: target.profile,
+        packageVersion: target.packageVersion,
+        rendererVersion: target.rendererVersion as number,
+        files,
+        registrations,
+      };
     }
+
+    const shared = Object.create(null) as InstallManifest['shared'];
+    for (const [relativePath, sharedValue] of Object.entries(sharedRaw)) {
+      this.validateManifestRelativePath(relativePath);
+      const record = this.requireManifestRecord(sharedValue, 'Invalid install manifest ownership entry');
+      if (
+        !hasOnlyKeys(record, ['sha256', 'component', 'mutable'])
+        || !isSha256(record.sha256)
+        || (record.component !== 'steering' && record.component !== 'gitignore')
+        || typeof record.mutable !== 'boolean'
+      ) {
+        throw new Error('Invalid install manifest ownership entry');
+      }
+      shared[relativePath] = {
+        sha256: record.sha256,
+        component: record.component,
+        mutable: record.mutable,
+      };
+    }
+    return {
+      schemaVersion: INSTALL_MANIFEST_SCHEMA_VERSION,
+      targets,
+      shared,
+    };
+  }
+
+  private requireManifestRecord(value: unknown, message: string): Record<string, unknown> {
+    if (!value || typeof value !== 'object' || Array.isArray(value)) throw new Error(message);
+    return value as Record<string, unknown>;
+  }
+
+  private requireManifestRelativePath(value: unknown): string {
+    if (typeof value !== 'string') throw new Error('Invalid install manifest path');
+    this.validateManifestRelativePath(value);
+    return value;
+  }
+
+  private validateManifestRelativePath(value: string): void {
+    if (!value || value.includes('\\') || value.includes('\0')) {
+      throw new Error('Invalid install manifest path');
+    }
+    const destination = path.resolve(this.projectRoot, value);
+    this.validateDestination(destination);
+    if (this.relative(destination) !== value) throw new Error('Invalid install manifest path');
+  }
+
+  private async replaceManagedBytesCas(
+    filePath: string,
+    expected: Buffer | null,
+    desired: Buffer,
+  ): Promise<void> {
+    await this.replaceBytesCas(
+      filePath,
+      expected,
+      desired,
+      this.activeLeaseAssert ?? (async () => undefined),
+    );
+  }
+
+  private async replaceBytesCas(
+    filePath: string,
+    expected: Buffer | null,
+    desired: Buffer,
+    assertHeld: () => Promise<void>,
+  ): Promise<void> {
+    await assertHeld();
+    const current = await readOptionalBytes(filePath);
+    if (!buffersEqual(current, expected)) {
+      if (buffersEqual(current, desired)) {
+        await assertHeld();
+        return;
+      }
+      throw new Error(`Concurrent installer state change at ${this.relative(filePath)}`);
+    }
+    await atomicWriteFile(filePath, desired.toString('utf8'));
+    if (!buffersEqual(await readOptionalBytes(filePath), desired)) {
+      throw new Error(`Installer write verification failed at ${this.relative(filePath)}`);
+    }
+    await assertHeld();
+  }
+
+  private async removeBytesCas(
+    filePath: string,
+    expected: Buffer,
+    assertHeld: () => Promise<void>,
+  ): Promise<void> {
+    await assertHeld();
+    if (!buffersEqual(await readOptionalBytes(filePath), expected)) {
+      throw new Error(`Concurrent installer state change at ${this.relative(filePath)}`);
+    }
+    await fs.promises.rm(filePath, { force: true });
+    if (await readOptionalBytes(filePath) !== null) {
+      throw new Error(`Installer delete verification failed at ${this.relative(filePath)}`);
+    }
+    await assertHeld();
   }
 
   private relative(filePath: string): string {
     return path.relative(this.projectRoot, filePath).split(path.sep).join('/');
   }
 
-  private trackPendingWrite(target: InstallTarget, filePath: string, prior: Buffer | null, next: Buffer): void {
+  private trackPendingWrite(target: InstallTarget, filePath: string, prior: Buffer | null, next: Buffer | null): void {
     let writes = this.pendingWrites.get(target);
     if (!writes) {
       writes = new Map();
@@ -500,6 +754,16 @@ export class PreservingWriter {
     }
     if (!writes.has(filePath)) writes.set(filePath, { prior, next });
     else writes.get(filePath)!.next = next;
+  }
+
+  private markTargetCommitted(target: InstallTarget): void {
+    this.pendingWrites.delete(target);
+    this.committedTargets.add(target);
+  }
+
+  private requireActiveLease(): () => Promise<void> {
+    if (!this.activeLeaseAssert) throw new Error('Installer lock lease is not active');
+    return this.activeLeaseAssert;
   }
 
   private validateDestination(destination: string): void {
@@ -515,6 +779,32 @@ async function readOptionalBytes(filePath: string): Promise<Buffer | null> {
     if (isMissing(error)) return null;
     throw error;
   }
+}
+
+function buffersEqual(left: Buffer | null, right: Buffer | null): boolean {
+  return left === null || right === null ? left === right : left.equals(right);
+}
+
+function hasOnlyKeys(record: Record<string, unknown>, allowed: readonly string[]): boolean {
+  return Object.keys(record).every((key) => allowed.includes(key));
+}
+
+function isInstallTarget(value: string): value is InstallTarget {
+  return value === 'claude-code' || value === 'codex' || value === 'omp';
+}
+
+function isManifestComponent(value: unknown): value is ManifestFile['component'] {
+  return value === 'root'
+    || value === 'skills'
+    || value === 'steering'
+    || value === 'rules'
+    || value === 'contexts'
+    || value === 'agents'
+    || value === 'hooks';
+}
+
+function isSha256(value: unknown): value is string {
+  return typeof value === 'string' && /^[a-f0-9]{64}$/.test(value);
 }
 
 function sha256(content: string | Buffer): string {

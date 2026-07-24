@@ -42,7 +42,7 @@ const evidence = {
 };
 const affectedArtifacts = {
   type: 'array', maxItems: 100, uniqueItems: true,
-  items: { type: 'string', minLength: 1, pattern: '^(?![/\\\\])(?![A-Za-z]:)(?!.*(?:^|[/\\\\])\\.\\.(?:[/\\\\]|$))(?!.*\\u0000).+$' },
+  items: { type: 'string', minLength: 1, maxLength: 500, pattern: '^(?![/\\\\])(?![A-Za-z]:)(?!.*(?:^|[/\\\\])\\.\\.(?:[/\\\\]|$))(?!.*\\u0000).+$' },
 };
 
 export const SDD_TOOL_DEFINITIONS: ReadonlyArray<Tool & { name: SDDToolName }> = [
@@ -69,7 +69,29 @@ export const SDD_TOOL_DEFINITIONS: ReadonlyArray<Tool & { name: SDDToolName }> =
   { name: 'sdd-approve', description: 'Approve an exact validated phase revision', inputSchema: featureSchema({ phase, expectedRevision: revision, expectedArtifactSha256: { type: 'string', pattern: '^[a-f0-9]{64}$' } }, ['phase', 'expectedRevision', 'expectedArtifactSha256']) },
   { name: 'sdd-review-test-cases', description: 'Record review for an exact tasks revision', inputSchema: featureSchema({ expectedTasksRevision: revision, expectedArtifactSha256: { type: 'string', pattern: '^[a-f0-9]{64}$' } }, ['expectedTasksRevision', 'expectedArtifactSha256']) },
   { name: 'sdd-quality-check', description: 'Perform code quality analysis', inputSchema: { type: 'object', properties: { code: { type: 'string' }, language: { type: 'string' } }, required: ['code'], additionalProperties: false } },
-  { name: 'sdd-context-load', description: 'Load phase-aware governed context', inputSchema: featureSchema({ mode: { type: 'string', enum: ['compact', 'standard', 'full'] }, phase: { type: 'string', enum: ['requirements', 'design', 'tasks', 'implementation'] }, maxEstimatedTokens: { type: 'integer', minimum: 1 }, ifNoneMatch: { type: 'string' }, includeUnapproved: { type: 'boolean' } }) },
+  {
+    name: 'sdd-context-load',
+    description: 'Load phase-aware governed context',
+    inputSchema: {
+      ...featureSchema({
+        mode: { type: 'string', enum: ['compact', 'standard', 'full'] },
+        phase: { type: 'string', enum: ['requirements', 'design', 'tasks', 'implementation'] },
+        maxEstimatedTokens: { type: 'integer', minimum: 1 },
+        ifNoneMatch: { type: 'string' },
+        includeUnapproved: { type: 'boolean' },
+      }),
+      allOf: [{
+        if: {
+          properties: { includeUnapproved: { const: true } },
+          required: ['includeUnapproved'],
+        },
+        then: {
+          properties: { mode: { const: 'full' } },
+          required: ['mode'],
+        },
+      }],
+    },
+  },
   { name: 'sdd-template-render', description: 'Render an optional SDD scaffold', inputSchema: featureSchema({ templateType: phase, customTemplate: { type: 'string' } }, ['templateType']) },
   { name: 'sdd-steering', description: 'Create or update project steering documents', inputSchema: { type: 'object', properties: { updateMode: { type: 'string', enum: ['create', 'update'] } }, additionalProperties: false } },
   { name: 'sdd-steering-custom', description: 'Create a custom steering document', inputSchema: { type: 'object', properties: { fileName: { type: 'string' }, topic: { type: 'string' }, inclusionMode: { type: 'string', enum: ['always', 'conditional', 'manual'] }, filePattern: { type: 'string' } }, required: ['fileName', 'topic', 'inclusionMode'], additionalProperties: false } },
@@ -80,7 +102,7 @@ export const SDD_TOOL_DEFINITIONS: ReadonlyArray<Tool & { name: SDDToolName }> =
     inputSchema: {
       type: 'object',
       properties: {
-        featureName, taskNumber: { type: 'string', minLength: 1 },
+        featureName, taskNumber: { type: 'string', minLength: 1, maxLength: 50, pattern: '^\\d+(?:\\.\\d+)*$' },
         action: { type: 'string', enum: ['start', 'record-red', 'record-green', 'complete', 'block'] },
         expectedRevision: revision, evidence, affectedArtifacts,
         blocker: { type: 'string', minLength: 1, maxLength: 2000 },

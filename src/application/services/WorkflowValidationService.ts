@@ -47,9 +47,16 @@ const REQUIRED_DESIGN_HEADINGS = [
 function resultStatus(blockers: ValidationBlocker[]): 'passed' | 'failed' {
   return blockers.length === 0 ? 'passed' : 'failed';
 }
+function bounded(blockers: ValidationBlocker[]): ValidationBlocker[] {
+  return blockers.slice(0, 100);
+}
+
 
 function blocker(code: string, message: string, reference?: string): ValidationBlocker {
-  return reference === undefined ? { code, message } : { code, message, reference };
+  const boundedMessage = message.slice(0, 2_000);
+  return reference === undefined
+    ? { code: code.slice(0, 100), message: boundedMessage }
+    : { code: code.slice(0, 100), message: boundedMessage, reference: reference.slice(0, 200) };
 }
 
 /** Removes fenced regions while preserving line boundaries for deterministic parsing. */
@@ -96,19 +103,38 @@ function parseSections(lines: string[], heading: RegExp): { sections: Section[];
   return { sections, duplicates: [...new Set(duplicates)] };
 }
 
-function metadata(section: Section, label: string): string | undefined {
+function metadataValues(section: Section, label: string): string[] {
   const escaped = label.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
   const expression = new RegExp(`^\\s*\\*\\*${escaped}:\\*\\*\\s*(\\S(?:.*\\S)?)\\s*$`);
+  const values: string[] = [];
   for (const line of section.body) {
     const match = expression.exec(line);
-    if (match) return match[1];
+    if (match) values.push(match[1]);
   }
-  return undefined;
+  return values;
+}
+
+function metadata(section: Section, label: string): string | undefined {
+  return metadataValues(section, label)[0];
 }
 
 function parseList(value: string | undefined): string[] {
   if (!value || value.trim() === 'none') return [];
   return value.split(',').map((item) => item.trim()).filter(Boolean);
+}
+
+function hasDuplicates(values: readonly string[]): boolean {
+  return new Set(values).size !== values.length;
+}
+
+function isProjectRelativePath(value: string): boolean {
+  return value.length > 0
+    && value.length <= 500
+    && !/^[/\\]/.test(value)
+    && !/^[A-Za-z]:/.test(value)
+    && !value.includes('\0')
+    && !value.split(/[\\/]/).includes('..')
+    && value === value.trim();
 }
 
 function uniqueSections(sections: Section[]): Section[] {
@@ -138,8 +164,10 @@ function requireMetadata(
 ): Record<string, string | undefined> {
   const values: Record<string, string | undefined> = {};
   for (const label of labels) {
-    values[label] = metadata(section, label);
+    const matches = metadataValues(section, label);
+    values[label] = matches[0];
     if (!values[label]) blockers.push(blocker('MissingMetadata', `Missing or empty **${label}:** metadata`, section.id));
+    if (matches.length > 1) blockers.push(blocker('DuplicateMetadata', `Metadata label appears more than once: **${label}:**`, section.id));
   }
   return values;
 }
@@ -176,7 +204,7 @@ export class WorkflowValidationService {
       }
     }
     const requirementIds = uniqueSections(sections).map(({ id }) => id);
-    return { status: resultStatus(blockers), blockers, requirementIds };
+    return { status: resultStatus(blockers), blockers: bounded(blockers), requirementIds };
   }
 
   validateDesign(content: string, approvedRequirementsContent: string): DesignValidationResult {
@@ -193,22 +221,21 @@ export class WorkflowValidationService {
     if (sections.length === 0) blockers.push(blocker('DesignDecisionMissing', 'At least one D-N decision section is required'));
     const knownRequirements = extractRequirementIds(approvedRequirementsContent);
     const knownSet = new Set(knownRequirements);
-    const designText = lines.join('\n');
+    const covered = new Set<string>();
     for (const section of uniqueSections(sections)) {
       const values = requireMetadata(blockers, section, ['Covers', 'Decision', 'Failure behavior', 'Verification']);
       for (const id of parseList(values.Covers)) {
-        if (!knownSet.has(id)) blockers.push(blocker('UnknownCoverageId', `Covers references unknown requirement: ${id}`, section.id));
+        if (!knownSet.has(id)) {
+          blockers.push(blocker('UnknownCoverageId', `Covers references unknown requirement: ${id}`, section.id));
+        } else {
+          covered.add(id);
+        }
       }
     }
-    for (const id of knownRequirements) {
-      const escaped = id.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-      if (!new RegExp(`(^|[^A-Z0-9-])${escaped}(?![A-Z0-9-])`).test(designText)) {
-        blockers.push(blocker('CoverageMissing', `Required identifier is not covered: ${id}`, id));
-      }
-    }
+    blockers.push(...coverageBlockers(covered, knownRequirements));
     return {
       status: resultStatus(blockers),
-      blockers,
+      blockers: bounded(blockers),
       decisionIds: uniqueSections(sections).map(({ id }) => id),
     };
   }
@@ -221,8 +248,18 @@ export class WorkflowValidationService {
     );
     addDuplicateBlockers(blockers, duplicates);
     if (sections.length === 0) blockers.push(blocker('TaskMissing', 'At least one N.M task section is required'));
+    const unique = uniqueSections(sections);
+    if (unique.length > 1_000) {
+      blockers.push(blocker('TaskLimitExceeded', 'Tasks must contain at most 1000 unique task sections'));
+    }
     const tasks: Record<string, ParsedTask> = {};
-    for (const section of uniqueSections(sections)) {
+    for (const section of unique) {
+      if (section.id.length > 50) {
+        blockers.push(blocker('InvalidTaskId', 'Task identifiers must contain at most 50 characters', section.id.slice(0, 50)));
+      }
+      if (section.title.trim().length === 0 || section.title.length > 500) {
+        blockers.push(blocker('InvalidTaskTitle', 'Task titles must be non-whitespace and at most 500 characters', section.id.slice(0, 50)));
+      }
       const values = requireMetadata(blockers, section, [
         'Covers',
         'Dependencies',
@@ -238,11 +275,32 @@ export class WorkflowValidationService {
         blockers.push(blocker('InvalidTdd', 'TDD must be required or not-applicable — <reason>', section.id));
       }
       const dependencies = parseList(values.Dependencies);
+      const plannedArtifacts = parseList(values['Affected artifacts']);
+      if (dependencies.includes('none') || plannedArtifacts.includes('none')) {
+        blockers.push(blocker('InvalidListValue', 'none must be the only value in an empty metadata list', section.id));
+      }
+      if (dependencies.length > 100) {
+        blockers.push(blocker('ListTooLong', 'Dependencies must contain at most 100 entries', section.id));
+      }
+      if (plannedArtifacts.length > 100) {
+        blockers.push(blocker('ListTooLong', 'Affected artifacts must contain at most 100 entries', section.id));
+      }
+      if (hasDuplicates(dependencies)) {
+        blockers.push(blocker('DuplicateListItem', 'Dependencies must not contain duplicate task IDs', section.id));
+      }
+      if (hasDuplicates(plannedArtifacts)) {
+        blockers.push(blocker('DuplicateListItem', 'Affected artifacts must not contain duplicate paths', section.id));
+      }
+      for (const artifact of plannedArtifacts) {
+        if (!isProjectRelativePath(artifact)) {
+          blockers.push(blocker('InvalidArtifactPath', `Affected artifact must be project-relative: ${artifact}`, section.id));
+        }
+      }
       tasks[section.id] = {
         title: section.title,
         tddRequired,
         dependencies,
-        plannedArtifacts: parseList(values['Affected artifacts']),
+        plannedArtifacts,
       };
       const acceptance = values['Acceptance criteria'];
       if (acceptance && !/(?:^|\s)\d+\.\s+\S/.test(acceptance)) {
@@ -271,7 +329,7 @@ export class WorkflowValidationService {
     };
     for (const id of taskIds) visit(id);
     if (cycleFound) blockers.push(blocker('DependencyCycle', 'Task dependencies must form an acyclic graph'));
-    return { status: resultStatus(blockers), blockers, tasks };
+    return { status: resultStatus(blockers), blockers: bounded(blockers), tasks };
   }
 
   validateTasks(
@@ -296,6 +354,6 @@ export class WorkflowValidationService {
       }
     }
     blockers.push(...coverageBlockers(covered, known));
-    return { status: resultStatus(blockers), blockers, tasks: parsed.tasks };
+    return { status: resultStatus(blockers), blockers: bounded(blockers), tasks: parsed.tasks };
   }
 }

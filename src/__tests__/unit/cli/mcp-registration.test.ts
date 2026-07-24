@@ -47,6 +47,38 @@ describe('MCP runtime registration', () => {
     expect(fs.readFileSync(config, 'utf8')).toBe(prior);
   });
 
+  it('preserves an invalid JSONC server container byte-for-byte', async () => {
+    const config = path.join(root, '.omp/mcp.json');
+    fs.mkdirSync(path.dirname(config), { recursive: true });
+    const prior = '{\n  "mcpServers": "custom"\n}\n';
+    fs.writeFileSync(config, prior);
+
+    await expect(registerRuntimeLocked(root, 'omp', getTargetPolicy('omp').defaultPaths))
+      .rejects.toThrow('mcpServers must be an object');
+    expect(fs.readFileSync(config, 'utf8')).toBe(prior);
+  });
+
+  it('preserves ambiguous duplicate governed JSONC keys byte-for-byte', async () => {
+    const ompConfig = path.join(root, '.omp/mcp.json');
+    fs.mkdirSync(path.dirname(ompConfig), { recursive: true });
+    const duplicateServers = '{"mcpServers": {}, "mcpServers": {}}\n';
+    fs.writeFileSync(ompConfig, duplicateServers);
+    await expect(registerRuntimeLocked(root, 'omp', getTargetPolicy('omp').defaultPaths))
+      .rejects.toThrow('Duplicate JSONC property root.mcpServers');
+    expect(fs.readFileSync(ompConfig, 'utf8')).toBe(duplicateServers);
+
+    const claudeConfig = path.join(root, '.mcp.json');
+    const settings = path.join(root, '.claude/settings.json');
+    fs.mkdirSync(path.dirname(settings), { recursive: true });
+    const duplicatePermissions = '{"permissions": {}, "permissions": {}}\n';
+    fs.writeFileSync(claudeConfig, '{}\n');
+    fs.writeFileSync(settings, duplicatePermissions);
+    await expect(registerRuntimeLocked(root, 'claude-code', getTargetPolicy('claude-code').defaultPaths))
+      .rejects.toThrow('Duplicate JSONC property root.permissions');
+    expect(fs.readFileSync(claudeConfig, 'utf8')).toBe('{}\n');
+    expect(fs.readFileSync(settings, 'utf8')).toBe(duplicatePermissions);
+  });
+
   it('appends one owned Codex block and preserves unrelated TOML bytes', async () => {
     const config = path.join(root, '.codex/config.toml');
     fs.mkdirSync(path.dirname(config), { recursive: true });
@@ -66,6 +98,8 @@ describe('MCP runtime registration', () => {
       startup_timeout_sec: 30,
     });
     expect(result.registration.managedRegionSha256).toMatch(/^[a-f0-9]{64}$/);
+    const adopted = await registerRuntimeLocked(root, 'codex', getTargetPolicy('codex').defaultPaths);
+    expect(adopted.skipped).toContain('.codex/config.toml');
   });
 
   it('preserves malformed and unmarked Codex configs byte-for-byte', async () => {
@@ -81,4 +115,21 @@ describe('MCP runtime registration', () => {
     await expect(registerRuntimeLocked(root, 'codex', getTargetPolicy('codex').defaultPaths)).rejects.toThrow('Unmanaged sdd-mcp');
     expect(fs.readFileSync(config, 'utf8')).toBe(unmanaged);
   });
+  it('does not adopt a complete but unowned Codex marker region with different bytes', async () => {
+    const config = path.join(root, '.codex/config.toml');
+    fs.mkdirSync(path.dirname(config), { recursive: true });
+    const unowned = [
+      '# >>> sdd-mcp managed runtime',
+      '[mcp_servers."sdd-mcp"]',
+      'command = "custom"',
+      '# <<< sdd-mcp managed runtime',
+      '',
+    ].join('\n');
+    fs.writeFileSync(config, unowned);
+
+    await expect(registerRuntimeLocked(root, 'codex', getTargetPolicy('codex').defaultPaths))
+      .rejects.toThrow('Unowned Codex runtime region differs');
+    expect(fs.readFileSync(config, 'utf8')).toBe(unowned);
+  });
+
 });

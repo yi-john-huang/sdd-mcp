@@ -52,6 +52,18 @@ describe('PreservingWriter', () => {
       fs.rmSync(outside, { recursive: true, force: true });
     }
   });
+  it('rejects a symlinked installer state directory before locking', async () => {
+    const outside = fs.mkdtempSync(path.join(os.tmpdir(), 'sdd-writer-state-'));
+    fs.symlinkSync(outside, path.join(root, '.sdd-mcp'), 'dir');
+    try {
+      await expect(writer.withInstallLock(async () => undefined))
+        .rejects.toThrow('traverses symlink');
+      expect(fs.readdirSync(outside)).toEqual([]);
+    } finally {
+      fs.rmSync(outside, { recursive: true, force: true });
+    }
+  });
+
   it('rejects destinations outside the project root', async () => {
     const outside = path.join(root, '..', 'outside.txt');
 
@@ -80,6 +92,9 @@ describe('PreservingWriter', () => {
       .resolves.toMatchObject({ outcome: 'skipped', conflict: { reason: 'legacy-unmanaged' } });
     await writer.finalizeTarget('codex');
     expect(fs.readFileSync(custom, 'utf8')).toBe('user');
+    const manifest = JSON.parse(fs.readFileSync(path.join(root, '.sdd-mcp/install-manifest.json'), 'utf8'));
+    expect(manifest.targets.codex.files['.agents/skills/a/SKILL.md']).toBeDefined();
+    expect(manifest.targets.codex.files['.agents/skills/b/SKILL.md']).toBeUndefined();
   });
 
   it('updates unchanged managed output and preserves modified managed output', async () => {
@@ -100,6 +115,10 @@ describe('PreservingWriter', () => {
     await expect(conflict.writeManaged('omp', 'root', 'AGENTS.md', file, 'v3'))
       .resolves.toMatchObject({ conflict: { reason: 'modified' } });
     expect(fs.readFileSync(file, 'utf8')).toBe('user');
+    await conflict.finalizeTarget('omp');
+    const manifest = JSON.parse(fs.readFileSync(path.join(root, '.sdd-mcp/install-manifest.json'), 'utf8'));
+    expect(manifest.targets.omp.files['.omp/AGENTS.md'].sha256)
+      .toBe(crypto.createHash('sha256').update('v2').digest('hex'));
   });
 
   it('removes unchanged obsolete output and preserves modified obsolete output', async () => {
@@ -136,6 +155,24 @@ describe('PreservingWriter', () => {
     expect(fs.readdirSync(backupRoot)).toHaveLength(1);
   });
 
+  it('retains ownership for components omitted by a narrower rerun', async () => {
+    const skill = path.join(root, '.omp/skills/a/SKILL.md');
+    const context = path.join(root, '.omp/contexts/a.md');
+    writer.beginTarget('omp', 'full', ['skills', 'contexts']);
+    await writer.writeManaged('omp', 'skills', 'a', skill, 'skill');
+    await writer.writeManaged('omp', 'contexts', 'a', context, 'context');
+    await writer.finalizeTarget('omp');
+
+    const lean = new PreservingWriter(root);
+    lean.beginTarget('omp', 'lean', ['skills']);
+    await lean.writeManaged('omp', 'skills', 'a', skill, 'skill');
+    await lean.finalizeTarget('omp');
+
+    const manifest = JSON.parse(fs.readFileSync(path.join(root, '.sdd-mcp/install-manifest.json'), 'utf8'));
+    expect(manifest.targets.omp.files['.omp/contexts/a.md']).toBeDefined();
+    expect(fs.readFileSync(context, 'utf8')).toBe('context');
+  });
+
   it('merges concurrent target ownership records without replacement', async () => {
     const codex = new PreservingWriter(root);
     const omp = new PreservingWriter(root);
@@ -148,6 +185,40 @@ describe('PreservingWriter', () => {
     const manifest = JSON.parse(fs.readFileSync(path.join(root, '.sdd-mcp/install-manifest.json'), 'utf8'));
     expect(Object.keys(manifest.targets).sort()).toEqual(['codex', 'omp']);
   });
+  it.each([
+    ['unknown target', {
+      schemaVersion: 2,
+      targets: { editor: { profile: 'lean', packageVersion: '5.0.0', rendererVersion: 5, files: {}, registrations: [] } },
+      shared: {},
+    }],
+    ['invalid ownership hash', {
+      schemaVersion: 2,
+      targets: { omp: { profile: 'lean', packageVersion: '5.0.0', rendererVersion: 5, files: { '.omp/a': { sha256: 'bad', component: 'skills' } }, registrations: [] } },
+      shared: {},
+    }],
+    ['escaping ownership path', {
+      schemaVersion: 2,
+      targets: { omp: { profile: 'lean', packageVersion: '5.0.0', rendererVersion: 5, files: { '../outside': { sha256: 'a'.repeat(64), component: 'skills' } }, registrations: [] } },
+      shared: {},
+    }],
+    ['unknown schema field', {
+      schemaVersion: 2,
+      targets: {},
+      shared: {},
+      futureOwnership: true,
+    }],
+  ])('rejects a manifest with %s before writing guidance', async (_label, manifest) => {
+    const stateRoot = path.join(root, '.sdd-mcp');
+    const generated = path.join(root, '.omp/skills/example/SKILL.md');
+    fs.mkdirSync(stateRoot, { recursive: true });
+    fs.writeFileSync(path.join(stateRoot, 'install-manifest.json'), JSON.stringify(manifest));
+    writer.beginTarget('omp', 'lean', ['skills']);
+
+    await expect(writer.writeManaged('omp', 'skills', 'example/SKILL.md', generated, 'generated'))
+      .rejects.toThrow();
+    expect(fs.existsSync(generated)).toBe(false);
+  });
+
   it('upgrades a v1 manifest without losing existing file ownership', async () => {
     const managed = path.join(root, '.omp/skills/example/SKILL.md');
     const content = 'managed\n';
@@ -180,6 +251,150 @@ describe('PreservingWriter', () => {
       component: 'skills',
     });
     expect(manifest.targets.omp.registrations).toHaveLength(1);
+  });
+
+  it('rolls back generated files when runtime registration fails', async () => {
+    const generated = path.join(root, '.omp/skills/example/SKILL.md');
+    const runtimeConfig = path.join(root, '.omp/mcp.json');
+    fs.mkdirSync(path.dirname(runtimeConfig), { recursive: true });
+    fs.writeFileSync(runtimeConfig, '{ invalid json');
+    writer.beginTarget('omp', 'lean', ['skills']);
+    await writer.writeManaged('omp', 'skills', 'example/SKILL.md', generated, 'generated');
+
+    await expect(writer.finalizeTarget('omp')).rejects.toThrow();
+    expect(fs.existsSync(generated)).toBe(false);
+    expect(fs.readFileSync(runtimeConfig, 'utf8')).toBe('{ invalid json');
+    expect(fs.existsSync(path.join(root, '.sdd-mcp/install-manifest.json'))).toBe(false);
+  });
+
+  it('refuses manifest ownership when a managed file changes before commit', async () => {
+    const generated = path.join(root, '.omp/skills/example/SKILL.md');
+    const runtimeConfig = path.join(root, '.omp/mcp.json');
+    const manifestPath = path.join(root, '.sdd-mcp/install-manifest.json');
+    writer.beginTarget('omp', 'lean', ['skills']);
+    await writer.writeManaged('omp', 'skills', 'example/SKILL.md', generated, 'generated');
+    let edited = false;
+    const assertHeld = async (): Promise<void> => {
+      if (!edited && fs.existsSync(runtimeConfig)) {
+        edited = true;
+        fs.writeFileSync(generated, 'editor change');
+      }
+    };
+
+    await expect(writer.finalizeTargetLocked('omp', assertHeld)).rejects.toThrow();
+    expect(fs.readFileSync(generated, 'utf8')).toBe('editor change');
+    expect(fs.existsSync(runtimeConfig)).toBe(false);
+    expect(fs.existsSync(manifestPath)).toBe(false);
+  });
+
+  it('preserves an editor change to runtime config before manifest commit', async () => {
+    const generated = path.join(root, '.omp/skills/example/SKILL.md');
+    const runtimeConfig = path.join(root, '.omp/mcp.json');
+    const manifestPath = path.join(root, '.sdd-mcp/install-manifest.json');
+    writer.beginTarget('omp', 'lean', ['skills']);
+    await writer.writeManaged('omp', 'skills', 'example/SKILL.md', generated, 'generated');
+    let edited = false;
+    const editorBytes = '{"editor":true}\n';
+    const assertHeld = async (): Promise<void> => {
+      if (!edited && fs.existsSync(runtimeConfig)) {
+        edited = true;
+        fs.writeFileSync(runtimeConfig, editorBytes);
+      }
+    };
+
+    await expect(writer.finalizeTargetLocked('omp', assertHeld)).rejects.toThrow();
+    expect(fs.readFileSync(runtimeConfig, 'utf8')).toBe(editorBytes);
+    expect(fs.existsSync(manifestPath)).toBe(false);
+    expect(fs.existsSync(generated)).toBe(false);
+  });
+
+  it('rolls back unchanged partials when manifest remains at prior bytes', async () => {
+    const generated = path.join(root, '.omp/skills/example/SKILL.md');
+    const runtimeConfig = path.join(root, '.omp/mcp.json');
+    const manifestPath = path.join(root, '.sdd-mcp/install-manifest.json');
+    writer.beginTarget('omp', 'lean', ['skills']);
+    await writer.writeManaged('omp', 'skills', 'example/SKILL.md', generated, 'generated');
+    let runtimeAssertions = 0;
+    let injected = false;
+    const assertHeld = async (): Promise<void> => {
+      if (fs.existsSync(runtimeConfig)) runtimeAssertions += 1;
+      if (!injected && runtimeAssertions === 2) {
+        injected = true;
+        throw new Error('injected pre-manifest failure');
+      }
+    };
+
+    await expect(writer.finalizeTargetLocked('omp', assertHeld))
+      .rejects.toThrow('injected pre-manifest failure');
+    expect(fs.existsSync(manifestPath)).toBe(false);
+    expect(fs.existsSync(runtimeConfig)).toBe(false);
+    expect(fs.existsSync(generated)).toBe(false);
+  });
+
+  it('keeps committed bytes and reports a warning when manifest reaches next bytes', async () => {
+    const generated = path.join(root, '.omp/skills/example/SKILL.md');
+    const runtimeConfig = path.join(root, '.omp/mcp.json');
+    const manifestPath = path.join(root, '.sdd-mcp/install-manifest.json');
+    writer.beginTarget('omp', 'lean', ['skills']);
+    await writer.writeManaged('omp', 'skills', 'example/SKILL.md', generated, 'generated');
+    let injected = false;
+    const assertHeld = async (): Promise<void> => {
+      if (!injected && fs.existsSync(manifestPath)) {
+        injected = true;
+        throw new Error('injected post-manifest failure');
+      }
+    };
+
+    await expect(writer.finalizeTargetLocked('omp', assertHeld)).resolves.toEqual([]);
+    expect(writer.takeRuntimeResult('omp').warnings).toEqual([
+      expect.stringContaining('injected post-manifest failure'),
+    ]);
+    expect(fs.existsSync(manifestPath)).toBe(true);
+    expect(fs.existsSync(runtimeConfig)).toBe(true);
+    expect(fs.existsSync(generated)).toBe(true);
+  });
+
+  it('preserves installer partials when manifest bytes become unknown', async () => {
+    const generated = path.join(root, '.omp/skills/example/SKILL.md');
+    const runtimeConfig = path.join(root, '.omp/mcp.json');
+    const manifestPath = path.join(root, '.sdd-mcp/install-manifest.json');
+    writer.beginTarget('omp', 'lean', ['skills']);
+    await writer.writeManaged('omp', 'skills', 'example/SKILL.md', generated, 'generated');
+    let injected = false;
+    const assertHeld = async (): Promise<void> => {
+      if (!injected && fs.existsSync(runtimeConfig)) {
+        injected = true;
+        fs.mkdirSync(path.dirname(manifestPath), { recursive: true });
+        fs.writeFileSync(manifestPath, 'external manifest edit\n');
+      }
+    };
+
+    await expect(writer.finalizeTargetLocked('omp', assertHeld))
+      .rejects.toThrow('manifest changed to unknown bytes');
+    expect(fs.readFileSync(manifestPath, 'utf8')).toBe('external manifest edit\n');
+    expect(fs.existsSync(runtimeConfig)).toBe(true);
+    expect(fs.existsSync(generated)).toBe(true);
+  });
+
+  it('reports a release failure as a warning after manifest commit', async () => {
+    const generated = path.join(root, '.omp/skills/example/SKILL.md');
+    writer.beginTarget('omp', 'lean', ['skills']);
+    const report = await writer.withInstallLock(async () => {
+      await writer.writeManaged('omp', 'skills', 'example/SKILL.md', generated, 'generated');
+      await writer.finalizeTarget('omp');
+      fs.writeFileSync(path.join(root, '.sdd-mcp/install.lock'), JSON.stringify({
+        token: 'replacement',
+        pid: process.pid,
+        hostname: os.hostname(),
+      }));
+      return { warnings: [] as string[] };
+    });
+
+    expect(report.warnings).toEqual([
+      expect.stringContaining('Installation committed, but install lock release reported an error'),
+    ]);
+    expect(fs.existsSync(generated)).toBe(true);
+    expect(fs.existsSync(path.join(root, '.sdd-mcp/install-manifest.json'))).toBe(true);
   });
 
   it('recovers a dead owner lock before installing again', async () => {

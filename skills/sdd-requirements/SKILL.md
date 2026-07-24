@@ -14,6 +14,7 @@ The user invokes this Skill; all MCP calls below are internal. Never ask the use
 2. With a supplied missing feature, internally initialize it from the user's name and complete goal. If clarification is required, present the structured questions, collect answers, and retry initialization. Use the returned canonical feature name.
 3. With no supplied name: ask for a name and goal when no feature exists; resume the sole incomplete feature; when several are incomplete, list them and ask the user to select. Never infer identity from process memory.
 4. Load compact approved context. For a failed or unapproved requirements revision, load that draft only with full mode and explicit unapproved inclusion.
+5. If status reports an observed artifact identity for an orphan or manual edit, read that exact requirements file before revising. Never acknowledge its hash without inspecting and deliberately incorporating or replacing its content.
 
 If durable state reports a conflict or host permission failure, present an actionable blocker and make no artifact change.
 
@@ -23,7 +24,7 @@ If durable state reports a conflict or host permission failure, present an actio
 2. Write independently testable EARS requirements. Every requirement uses a unique `### FR-N: ...` or `### NFR-N: ...` section and same-line metadata labels:
    - `**Objective:** ...`
    - `**EARS Specification:** ... SHALL ...`
-   - `**Acceptance Criteria:**` followed by at least one numbered item.
+   - `**Acceptance Criteria:** 1. ...` with at least one numbered item on the same line.
 3. Replace ambiguous words with observable bounds. Include security, privacy, accessibility, compatibility, errors, and performance only when relevant.
 4. Check completeness, consistency, feasibility, traceability, and testability; run gap analysis internally when existing code is in scope.
 
