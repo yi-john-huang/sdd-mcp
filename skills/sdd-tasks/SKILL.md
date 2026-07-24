@@ -6,30 +6,41 @@ disable-model-invocation: true
 
 # SDD Tasks
 
-## Prerequisites
+The user invokes this Skill; backend lifecycle calls are internal. Never tell the user to call a raw MCP tool or expose revision, hash, fingerprint, or backend JSON except in explicit debug output.
 
-- Resolve the feature with `sdd-status`.
-- Design must be generated and approved. Stop rather than planning from an unapproved draft.
-- Read the approved requirements and design, including interfaces, dependencies, risks, and acceptance criteria.
+## Resolve and Restore
 
-## Workflow
+1. Internally resolve status. If no feature name is supplied, resume the sole incomplete feature or ask the user to select when several exist.
+2. Design and requirements must be approved. If durable status says otherwise, present the persisted blocker and make no file change.
+3. Load the latest approved compact context before method work. Load an unapproved tasks draft only with full mode and explicit unapproved inclusion.
+4. The saved test-case-review choice is authoritative. Ask once only when status has no choice; reuse it on every revision.
 
-1. Map every design component and requirement to implementation and verification work.
-2. Split work into small, ordered slices that each produce observable value. State affected artifacts, dependencies, and acceptance criteria.
-3. For behavioral work, make RED → GREEN → REFACTOR explicit: first a focused failing test, then minimal implementation, then cleanup with the test green.
-4. Cover happy paths, boundaries, errors, state transitions, security controls, migration, and integration where applicable. Do not impose a test ratio when the architecture calls for a different mix.
-5. Mark genuinely independent slices so they may run concurrently; never invent parallelism or a serial specialist.
-6. Ask whether the optional test case review checkpoint is required. If enabled, record behavior/edge/error cases and require `sdd-review-test-cases` before tasks approval.
-7. Write `.spec/specs/{feature}/tasks.md`. Request tasks approval only after dependencies, traceability, and completion criteria are validated.
+If the runtime is unavailable because of host permission, report an actionable reload/trust or policy blocker; never substitute manual backend instructions.
+
+## Method and Artifact Contract
+
+1. Map every requirement and design decision to small, ordered implementation and verification slices.
+2. Use unique `### N.M ...` task sections with same-line labels `**Covers:**`, `**Dependencies:**`, `**TDD:**`, `**Affected artifacts:**`, `**Acceptance criteria:**`, and `**Verification:**`.
+3. `Covers`, dependencies, and affected artifacts are comma-separated; an empty set is exactly `none`. Dependencies name existing task IDs and must be acyclic.
+4. `TDD` is exactly `required` or `not-applicable — <reason>`. Behavioral work uses RED → GREEN → REFACTOR and covers relevant boundaries, errors, transitions, security, migration, and integration.
+5. Mark concurrency only for genuinely independent slices.
+
+Internally submit complete Markdown with the exact revision and artifact identity last observed and the persisted review choice. Submission is the canonical write. Present the saved path and concise validation outcome. A failed validation remains a durable draft to revise and cannot advance.
+
+## Human Gates
+
+If test-case review is required, present the concrete behavior, boundary, and error cases. Only explicit confirmation records the internal checkpoint for the exact tasks revision and artifact. This is separate from approval.
+
+After validation and any required review, ask **“Approve these implementation tasks?”** Only an unambiguous affirmative answer in this Skill flow permits internal approval of the exact reviewed artifact. Never self-approve. Reread status after each checkpoint and approval.
 
 ## Specialist Delegation
 
-Target renderers provide the `planner` route. When a native advisor is required, dispatch exactly one compact handoff with `specialistDepth: 1`; include only approved design decisions, constraints, dependencies, and task output contract. The specialist must not delegate again. Keep the handoff and returned summary at or below 2,048 estimated tokens. If the advisor or routed model is unavailable, record one fallback and continue in the parent without retrying or selecting a generic child. Where a native per-turn model override applies, execute in this turn.
+Target renderers provide the `planner` route. When a native advisor is required, dispatch exactly one compact handoff with `specialistDepth: 1`; include only approved decisions, constraints, dependencies, and the task contract. The specialist must not delegate again. Keep the handoff and returned summary at or below 2,048 estimated tokens. If unavailable, record one fallback and continue in the parent without retrying or selecting a generic child.
 
 ## Output
 
-Return the saved path, requirement/design traceability, checkpoint choice, validation evidence, and approval as the next action.
+Return the canonical saved path, traceability, saved checkpoint choice, concise validation evidence, the current human decision, and durable blockers. Do not present raw MCP operations as next steps.
 
 ## Optional Reference
 
-Read [REFERENCE.md](REFERENCE.md) only for task templates, sizing heuristics, dependency diagrams, or the extended checklist.
+Read [REFERENCE.md](REFERENCE.md) only for the exact task template, sizing heuristics, dependency diagrams, or extended checklist.

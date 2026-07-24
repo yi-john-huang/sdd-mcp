@@ -1,4 +1,5 @@
 import * as fs from 'fs';
+import * as crypto from 'crypto';
 import * as os from 'os';
 import * as path from 'path';
 import { PreservingWriter, validateChildName } from '../../../cli/utils/preserving-writer';
@@ -147,13 +148,45 @@ describe('PreservingWriter', () => {
     const manifest = JSON.parse(fs.readFileSync(path.join(root, '.sdd-mcp/install-manifest.json'), 'utf8'));
     expect(Object.keys(manifest.targets).sort()).toEqual(['codex', 'omp']);
   });
-  it('recovers an abandoned manifest lock before installing again', async () => {
+  it('upgrades a v1 manifest without losing existing file ownership', async () => {
+    const managed = path.join(root, '.omp/skills/example/SKILL.md');
+    const content = 'managed\n';
+    fs.mkdirSync(path.dirname(managed), { recursive: true });
+    fs.writeFileSync(managed, content);
+    const digest = crypto.createHash('sha256').update(content).digest('hex');
     const stateRoot = path.join(root, '.sdd-mcp');
-    const lockPath = path.join(stateRoot, 'install-manifest.lock');
     fs.mkdirSync(stateRoot, { recursive: true });
-    fs.writeFileSync(lockPath, 'abandoned');
-    const old = new Date(Date.now() - 60_000);
-    fs.utimesSync(lockPath, old, old);
+    fs.writeFileSync(path.join(stateRoot, 'install-manifest.json'), JSON.stringify({
+      schemaVersion: 1,
+      targets: {
+        omp: {
+          profile: 'lean',
+          packageVersion: '4.0.0',
+          rendererVersion: 4,
+          files: { '.omp/skills/example/SKILL.md': { sha256: digest, component: 'skills' } },
+        },
+      },
+      shared: {},
+    }));
+    writer.beginTarget('omp', 'lean', ['skills']);
+    await writer.writeManaged('omp', 'skills', 'example/SKILL.md', managed, content);
+
+    await writer.finalizeTarget('omp');
+
+    const manifest = JSON.parse(fs.readFileSync(path.join(stateRoot, 'install-manifest.json'), 'utf8'));
+    expect(manifest.schemaVersion).toBe(2);
+    expect(manifest.targets.omp.files['.omp/skills/example/SKILL.md']).toEqual({
+      sha256: digest,
+      component: 'skills',
+    });
+    expect(manifest.targets.omp.registrations).toHaveLength(1);
+  });
+
+  it('recovers a dead owner lock before installing again', async () => {
+    const stateRoot = path.join(root, '.sdd-mcp');
+    const lockPath = path.join(stateRoot, 'install.lock');
+    fs.mkdirSync(stateRoot, { recursive: true });
+    fs.writeFileSync(lockPath, JSON.stringify({ token: 'dead-owner', pid: 2_147_483_647, hostname: os.hostname() }));
     writer.beginTarget('omp', 'lean', ['skills']);
 
     await expect(writer.finalizeTarget('omp')).resolves.toEqual([]);

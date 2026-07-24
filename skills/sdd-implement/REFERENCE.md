@@ -2,6 +2,10 @@
 
 Read only when a detailed checklist is needed for the current task.
 
+## Progress Recording Example
+
+For a TDD-required task, persist the observed sequence: start; RED with the exact command, non-zero exit code, and failure summary; GREEN with command, zero exit code, and passing summary; final zero-exit verification plus affected project-relative artifacts. If interrupted, status supplies the persisted state and next action; never reconstruct it from conversation history.
+
 ## Design Prompts
 
 - SRP: does each unit own one reason to change?

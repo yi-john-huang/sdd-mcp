@@ -19,6 +19,8 @@ export interface ResolvedInstallPaths {
   agents: string;
   hooks: string;
   rootGuidance: string;
+  runtimeConfig: string;
+  runtimePermissionConfig?: string;
 }
 
 export interface PathOverrides {
@@ -54,7 +56,7 @@ export interface ResolvedTarget {
 }
 
 export interface InstallFailure {
-  component: ComponentType | 'root';
+  component: ComponentType | 'root' | 'runtime';
   name: string;
   path: string;
   error: string;
@@ -73,6 +75,7 @@ export interface TargetInstallReport {
   skipped: string[];
   failed: InstallFailure[];
   conflicts: InstallConflict[];
+  warnings: string[];
 }
 
 export class CliUsageError extends Error {
@@ -144,6 +147,8 @@ const TARGET_POLICIES: Readonly<Record<InstallTarget, TargetPolicy>> = {
       agents: '.claude/agents',
       hooks: '.claude/hooks',
       rootGuidance: 'CLAUDE.md',
+      runtimeConfig: '.mcp.json',
+      runtimePermissionConfig: '.claude/settings.json',
     },
     ignoreEntries: ['.claude/', '.sdd-mcp/'],
   },
@@ -157,6 +162,7 @@ const TARGET_POLICIES: Readonly<Record<InstallTarget, TargetPolicy>> = {
       agents: '.codex/agents',
       hooks: '.codex/hooks',
       rootGuidance: 'AGENTS.md',
+      runtimeConfig: '.codex/config.toml',
     },
     ignoreEntries: ['.agents/', '.codex/', '.sdd-mcp/'],
   },
@@ -170,6 +176,7 @@ const TARGET_POLICIES: Readonly<Record<InstallTarget, TargetPolicy>> = {
       agents: '.omp/agents',
       hooks: '.omp/hooks',
       rootGuidance: '.omp/AGENTS.md',
+      runtimeConfig: '.omp/mcp.json',
     },
     ignoreEntries: ['.omp/', '.sdd-mcp/'],
   },

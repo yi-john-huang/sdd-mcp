@@ -8,14 +8,14 @@ import { SpecPathResolver } from './SpecPathResolver.js';
 
 export type ContextLoadMode = 'compact' | 'standard' | 'full';
 export type ApprovablePhase = keyof PhaseApprovals;
-export type EffectivePhase = 'init' | ApprovablePhase;
+export type EffectivePhase = 'init' | ApprovablePhase | 'implementation';
 export type PhaseStatus = 'init' | 'approved' | 'unapproved';
 
 export interface ContextLoadRequest {
   readonly projectRoot: string;
   readonly featureName: string;
   readonly mode?: ContextLoadMode;
-  readonly phase?: ApprovablePhase;
+  readonly phase?: ApprovablePhase | 'implementation';
   readonly maxEstimatedTokens?: number;
   readonly ifNoneMatch?: string;
   readonly includeUnapproved?: boolean;
@@ -87,9 +87,14 @@ export class ContextSourceError extends Error {
 interface ApprovalState { generated: boolean; approved: boolean }
 interface WorkflowSpec {
   featureName: string;
+  phase: string;
   approvals: Record<ApprovablePhase, ApprovalState>;
   reviewRequired: boolean;
   reviewCompleted: boolean;
+  implementation?: {
+    revision: number;
+    tasks: Record<string, { status: string; blocker?: string }>;
+  };
 }
 interface DocumentSnapshot { name: string; relativePath: string; absolutePath: string; content: string }
 interface SelectedState { phase: EffectivePhase; status: PhaseStatus; documents: DocumentSnapshot[] }
@@ -166,6 +171,7 @@ export class ContextCompactionService {
       approvals: spec.approvals,
       reviewRequired: spec.reviewRequired,
       reviewCompleted: spec.reviewCompleted,
+      implementation: spec.implementation,
       sources: selected.documents.map(({ relativePath, content }) => [relativePath, content]),
     }));
     const fingerprint = this.hash(JSON.stringify({
@@ -281,13 +287,28 @@ export class ContextCompactionService {
     const options = this.optionalRecord(record.workflow_options ?? record.workflowOptions);
     const checkpoints = this.optionalRecord(record.checkpoints);
     const test = this.optionalRecord(checkpoints.test_cases ?? checkpoints.testCases);
+    const implementationRecord = this.optionalRecord(record.implementation);
+    const implementationTasks = this.optionalRecord(implementationRecord.tasks);
     return {
       featureName: this.specFeatureName(record, expectedFeature, specPath),
+      phase: typeof record.phase === 'string' ? record.phase : 'init',
       approvals: this.parseApprovals(approvalsRecord),
       reviewRequired: test.required === true
         || options.review_test_cases === true
         || options.reviewTestCases === true,
       reviewCompleted: test.reviewed === true,
+      implementation: Object.keys(implementationTasks).length > 0
+        ? {
+            revision: typeof implementationRecord.revision === 'number' ? implementationRecord.revision : 0,
+            tasks: Object.fromEntries(Object.entries(implementationTasks).map(([taskNumber, value]) => {
+              const task = this.optionalRecord(value);
+              return [taskNumber, {
+                status: typeof task.status === 'string' ? task.status : 'pending',
+                blocker: typeof task.blocker === 'string' ? task.blocker : undefined,
+              }];
+            })),
+          }
+        : undefined,
     };
   }
 
@@ -355,6 +376,7 @@ export class ContextCompactionService {
     spec: WorkflowSpec,
     request: ContextLoadRequest,
   ): Pick<SelectedState, 'phase' | 'status'> {
+    if (spec.implementation && !request.phase) return { phase: 'implementation', status: 'approved' };
     if (request.phase) return this.resolveExplicitPhase(spec, request);
     if (request.mode === 'full' && request.includeUnapproved) {
       const latestGenerated = [...PHASES].reverse()
@@ -374,10 +396,14 @@ export class ContextCompactionService {
 
   private resolveExplicitPhase(
     spec: WorkflowSpec,
-    request: ContextLoadRequest & { phase?: ApprovablePhase },
+    request: ContextLoadRequest & { phase?: ApprovablePhase | 'implementation' },
   ): Pick<SelectedState, 'phase' | 'status'> {
     const phase = request.phase;
     if (!phase) return { phase: 'init', status: 'init' };
+    if (phase === 'implementation') {
+      if (!spec.approvals.tasks.approved || !spec.implementation) throw new PhaseNotApprovedError('tasks');
+      return { phase, status: 'approved' };
+    }
     const state = spec.approvals[phase];
     const draftAllowed = request.mode === 'full' && request.includeUnapproved && state.generated;
     if (!state.approved && !draftAllowed) throw new PhaseNotApprovedError(phase);
@@ -392,7 +418,7 @@ export class ContextCompactionService {
   ): Promise<DocumentSnapshot[]> {
     if (phase === 'init') return [];
     const documents: DocumentSnapshot[] = [];
-    const last = PHASES.indexOf(phase);
+    const last = phase === 'implementation' ? PHASES.length - 1 : PHASES.indexOf(phase);
     for (const selectedPhase of PHASES.slice(0, last + 1)) {
       if (!spec.approvals[selectedPhase].generated) {
         throw new ContextSourceError(`${selectedPhase}.md`, 'Selected phase metadata is inconsistent');
@@ -468,17 +494,37 @@ export class ContextCompactionService {
     const review = spec.reviewRequired
       ? spec.reviewCompleted ? 'reviewed' : 'pending'
       : 'not required';
-    return `${metadata}# SDD Context: ${spec.featureName}\n\n## Workflow State\n- Effective phase: ${selected.phase}\n- Phase status: ${selected.status}\n- Requirements: ${this.approvalLabel(spec.approvals.requirements)}\n- Design: ${this.approvalLabel(spec.approvals.design)}\n- Tasks: ${this.approvalLabel(spec.approvals.tasks)}\n- Test-case review: ${review}\n\n## Next Action\n${this.nextAction(spec, selected.phase)}\n\n## Source References\n${sourceReferences}\n\n## Payload Estimate\n- Payload estimated tokens: 00000`;
+    const implementationProgress = spec.implementation
+      ? `\n\n## Implementation Progress\n${this.implementationProgress(spec)}`
+      : '';
+    return `${metadata}# SDD Context: ${spec.featureName}\n\n## Workflow State\n- Effective phase: ${selected.phase}\n- Phase status: ${selected.status}\n- Requirements: ${this.approvalLabel(spec.approvals.requirements)}\n- Design: ${this.approvalLabel(spec.approvals.design)}\n- Tasks: ${this.approvalLabel(spec.approvals.tasks)}\n- Test-case review: ${review}${implementationProgress}\n\n## Next Action\n${this.nextAction(spec, selected.phase)}\n\n## Source References\n${sourceReferences}\n\n## Payload Estimate\n- Payload estimated tokens: 00000`;
   }
 
   private nextAction(spec: WorkflowSpec, phase: EffectivePhase): string {
-    if (phase === 'init') return 'Generate requirements.';
-    if (phase === 'requirements') return 'Generate design from approved requirements.';
-    if (phase === 'design') return 'Generate the TDD task breakdown.';
-    if (spec.reviewRequired && !spec.reviewCompleted) {
-      return 'Review test cases before approving tasks.';
+    if (phase === 'init') return 'Generate requirements through the requirements Skill.';
+    if (phase === 'requirements') return 'Continue with the design Skill.';
+    if (phase === 'design') return 'Continue with the tasks Skill.';
+    if (phase === 'implementation' && spec.implementation) {
+      const active = Object.entries(spec.implementation.tasks).find(([, task]) =>
+        ['in-progress', 'red-observed', 'green-observed', 'blocked'].includes(task.status));
+      if (active) return `Continue task ${active[0]} from ${active[1].status}.`;
+      const pending = Object.entries(spec.implementation.tasks).find(([, task]) => task.status === 'pending');
+      return pending ? `Start task ${pending[0]}.` : 'Implementation is complete.';
     }
-    return 'Proceed with focused implementation.';
+    if (spec.reviewRequired && !spec.reviewCompleted) return 'Review test cases before approving tasks.';
+    return 'Start governed implementation.';
+  }
+
+  private implementationProgress(spec: WorkflowSpec): string {
+    if (!spec.implementation) return '';
+    const tasks = Object.entries(spec.implementation.tasks);
+    const completed = tasks.filter(([, task]) => task.status === 'completed').length;
+    const active = tasks.filter(([, task]) => ['in-progress', 'red-observed', 'green-observed'].includes(task.status));
+    const blocked = tasks.filter(([, task]) => task.status === 'blocked');
+    const details = [...active, ...blocked].slice(0, 20)
+      .map(([taskNumber, task]) => `- ${taskNumber}: ${task.status}${task.blocker ? ` — ${task.blocker}` : ''}`)
+      .join('\n');
+    return `- Revision: ${spec.implementation.revision}\n- Completed: ${completed}/${tasks.length}\n- Active: ${active.length}\n- Blocked: ${blocked.length}${details ? `\n${details}` : ''}`;
   }
 
   private buildDirectPayload(

@@ -132,4 +132,32 @@ describe('ContextCompactionService v4', () => {
       'Feature metadata name does not match directory',
     );
   });
+  it('includes bounded durable implementation progress without draft bodies', async () => {
+    await writeFile(path.join(featureRoot, 'spec.json'), JSON.stringify({
+      feature_name: featureName,
+      phase: 'implementation',
+      approvals: {
+        requirements: { generated: true, approved: true },
+        design: { generated: true, approved: true },
+        tasks: { generated: true, approved: true },
+      },
+      workflow_options: { review_test_cases: false },
+      checkpoints: { test_cases: { required: false, reviewed: false } },
+      implementation: {
+        revision: 3,
+        tasks: {
+          '1.1': { status: 'completed' },
+          '1.2': { status: 'red-observed' },
+        },
+      },
+    }), 'utf8');
+    const result = await service.loadContext({ projectRoot, featureName, phase: 'implementation' });
+    expect(result.effectivePhase).toBe('implementation');
+    expect(result.content).toContain('## Implementation Progress');
+    expect(result.content).toContain('Completed: 1/2');
+    expect(result.content).toContain('1.2: red-observed');
+    expect(result.content).toContain('Continue task 1.2 from red-observed');
+    expect(result.payloadEstimatedTokens).toBeLessThanOrEqual(2048);
+  });
+
 });

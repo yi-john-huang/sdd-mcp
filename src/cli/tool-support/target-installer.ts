@@ -47,7 +47,7 @@ export class TargetInstallSession {
     components: readonly ComponentType[],
     refreshGenerated = false,
   ) {
-    this.report = { target, installed: [], skipped: [], failed: [], conflicts: [] };
+    this.report = { target, installed: [], skipped: [], failed: [], conflicts: [], warnings: [] };
     writer.beginTarget(target, profile, components, refreshGenerated);
   }
 
@@ -129,16 +129,22 @@ export class TargetInstallSession {
     }
   }
 
-  async complete(): Promise<TargetInstallReport> {
+  async complete(paths: ResolvedInstallPaths): Promise<TargetInstallReport> {
     try {
+      this.writer.requireRuntimeRegistration(this.target, paths);
       this.report.conflicts.push(...await this.writer.finalizeTarget(this.target));
+      const runtime = this.writer.takeRuntimeResult(this.target);
+      this.report.installed.push(...runtime.installed);
+      this.report.skipped.push(...runtime.skipped);
+      this.report.warnings.push(...runtime.warnings);
     } catch (error) {
-      this.fail('root', 'install-manifest.json', path.join(this.projectRoot, '.sdd-mcp/install-manifest.json'), error);
+      await this.writer.rollbackUncommitted(this.target);
+      this.fail('runtime', 'sdd-mcp', this.resolve(paths.runtimeConfig), error);
     }
     return this.report;
   }
 
-  fail(component: ComponentType | 'root', name: string, destination: string, error: unknown): void {
+  fail(component: ComponentType | 'root' | 'runtime', name: string, destination: string, error: unknown): void {
     const failure: InstallFailure = {
       component,
       name,

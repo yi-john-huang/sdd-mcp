@@ -1,75 +1,55 @@
 # SDD-MCP Workflow
 
-SDD-MCP uses one durable workflow and renders its guidance for Claude Code, Codex, and Oh My Pi (OMP). Skills are manual-only; MCP tools own state changes.
+SDD-MCP uses one durable workflow rendered for Claude Code, Codex, and Oh My Pi (OMP). Users operate manual-only phase Skills; the registered MCP runtime remains behind the Skill boundary.
 
-## Choose the development path
+## Start in the host
+
+1. Install the target-native profile.
+2. Reload or restart the host and accept project trust. Claude organization/project `ask` or `deny` rules can still take precedence.
+3. Invoke the native Skill:
 
 | Path | Claude Code | Codex | OMP |
 |---|---|---|---|
 | Small change | `/simple-task` | `$simple-task` | `/skill:simple-task` |
-| Formal SDD | `/sdd-requirements` | `$sdd-requirements` | `/skill:sdd-requirements` |
+| Formal SDD | `/sdd-requirements <feature>` | `$sdd-requirements <feature>` | `/skill:sdd-requirements <feature>` |
 
-Continue formal work with the same host prefix for `sdd-design`, `sdd-tasks`, and `sdd-implement`. Manual invocation prevents stateful workflow skills from activating from incidental prose.
+Continue Formal SDD with the same host prefix for `sdd-design`, `sdd-tasks`, and `sdd-implement`. Do not call backend tools or paste workflow JSON; each Skill restores durable state and approved compact context.
 
 ## Formal phase flow
 
 ```mermaid
-sequenceDiagram
-    participant User
-    participant Skill as Manual skill
-    participant MCP as Canonical MCP runtime
-    participant Disk as .spec/specs/featureName
-    User->>MCP: sdd-init
-    MCP->>Disk: Create spec.json
-    User->>Skill: requirements command
-    Skill->>MCP: sdd-requirements(featureName)
-    MCP->>Disk: Write requirements.md
-    User->>MCP: sdd-approve(featureName, requirements)
-    MCP->>Disk: Atomically approve and publish compact handoff
-    User->>Skill: design, tasks, implementation commands
+flowchart LR
+    User --> Skill
+    Skill --> MCP
+    MCP --> Spec[".spec/specs/<feature>"]
 ```
 
-The governed order is:
+The Skill-governed journey is:
 
-1. `sdd-init` returns the canonical `featureName`.
-2. Generate requirements and approve them.
-3. Generate design and approve it.
-4. Generate tasks.
-5. If configured, call `sdd-review-test-cases { featureName }`.
-6. Approve tasks.
-7. Implement and run focused verification.
+1. Requirements resolves the feature. It initializes a named missing feature, presents clarification questions when needed, or resumes/selects incomplete work without relying on process memory.
+2. Requirements creates and internally submits the canonical artifact. Deterministic validation must pass before the Skill asks the human to approve.
+3. Design and tasks each load the latest approved compact context, create and submit their artifact, present validation, and ask a separate explicit approval question.
+4. Tasks asks once whether test-case review is required. When enabled, confirmation of the presented cases is one human gate; tasks approval is another.
+5. Implementation resumes persisted task state and records observed RED, GREEN, blocking, affected artifacts, and final verification internally.
 
-Disk `spec.json` is authoritative; phase approval and test review do not depend on an in-memory project identifier. v4 public calls use `featureName`, not `projectId`.
+Only an unambiguous affirmative response inside the active phase Skill can approve that exact revision. Host permission is not approval. Invoking a later Skill early presents the persisted blocker and makes no file change.
 
-## Continue with bounded context
+## Durable authority and continuation
 
-Load the latest approved context:
+`.spec/specs/<feature>/spec.json` is the sole workflow authority. Phase Markdown is human-readable governed input, while `context/handoff.md` is a bounded rebuildable cache. Skills load approved context by default. A failed or unapproved draft is loaded only explicitly in full mode for revision; it never leaks into later approved context.
 
-```json
-{ "featureName": "checkout", "mode": "compact" }
-```
+Durable status determines the next action across sessions: submit or revise a phase, request approval/review, begin implementation, continue/select a task, report an artifact-drift blocker, or complete. Approved artifact drift blocks rather than silently overwriting the reviewed bytes. Implementation completion derives only from persisted task states, never chat output or task checkboxes.
 
-The result includes `sourceFingerprint`, the exact-response `fingerprint`, effective phase, status, payload estimates, omissions, and content. Save `fingerprint`, then avoid resending unchanged content:
+## Responsibility boundary
 
-```json
-{
-  "featureName": "checkout",
-  "mode": "compact",
-  "ifNoneMatch": "<previous fingerprint>"
-}
-```
+| Layer | Owns |
+|---|---|
+| User | Goals, clarification, explicit test-review and phase-approval decisions |
+| Skill | Method, artifact composition, concise validation presentation, human gates, and host-native invocation |
+| MCP runtime | Feature identity, canonical writes, deterministic structure/traceability gates, revisions/hashes, approvals/checkpoints, task progress, recovery, and handoff |
+| `.spec` | Durable workflow record and readable artifacts |
 
-An exact match returns `cacheStatus: "not-modified"` without `content`. Changing mode, budget, phase, or inclusion options changes the response fingerprint even if sources are unchanged.
-
-| Mode | Default maximum | Selection |
-|---|---:|---|
-| compact | 2,048 `estimatedTokens` | bounded workflow state and concise approved-phase context |
-| standard | 4,096 `estimatedTokens` | broader approved-phase context |
-| full | 16,384 `estimatedTokens` | selected raw documents; overflow is an error |
-
-Before any approval, compact/standard return bounded `init` state and “generate requirements” as the next action; they do not include draft bodies. An explicitly requested unapproved phase is rejected except for full mode with explicit `includeUnapproved: true`.
-
-Only the canonical compact cache is stored at `.spec/specs/<featureName>/context/handoff.md`. It is rebuildable and never workflow authority. A committed approval whose handoff publication fails remains valid and reports `pending-regeneration`; the next context load repairs it.
+Target renderers add native invocation and model metadata only; they do not duplicate this choreography.
 
 ## Target-native guidance flow
 
@@ -130,18 +110,20 @@ sequenceDiagram
 
 The two operator journeys are deliberately different:
 
-- **New project:** install the chosen target with the lean or full profile and do not pass `--refresh-generated`.
-- **Upgrade from sdd-mcp 3.x:** preserve the current repository state, select the host that will execute v4, and run one `--refresh-generated` migration. Review `.sdd-mcp/backups/` and conflicts before removing old files; omit the flag on subsequent v4 updates.
+- **New project:** install the chosen target with the lean or full profile and do not pass `--refresh-generated`; runtime registration is mandatory.
+- **Upgrade from sdd-mcp 3.x or 4.x:** preserve the repository, select the host that will execute v5, and run one `--refresh-generated` migration. Review `.sdd-mcp/backups/` and conflicts; omit the flag on subsequent v5 updates.
 
 An old OMP-via-Codex project must select `--target omp`. Codex TOML agents remain preserved but are never treated as executable OMP agents. See [INSTALL-GUIDE.md](INSTALL-GUIDE.md) for target mapping and commands.
 
-## Runtime inventory
+## Integrator/runtime reference: exact inventory
 
-The sole packaged runtime exposes exactly 16 tools:
+For protocol integrators and runtime maintainers, the sole packaged runtime exposes exactly 16 tools. End users invoke phase Skills instead:
 
 `sdd-init`, `sdd-requirements`, `sdd-design`, `sdd-tasks`, `sdd-implement`, `sdd-status`, `sdd-approve`, `sdd-review-test-cases`, `sdd-quality-check`, `sdd-context-load`, `sdd-template-render`, `sdd-steering`, `sdd-steering-custom`, `sdd-validate-design`, `sdd-validate-gap`, and `sdd-spec-impl`.
 
 The offline `context-report` command is not an MCP tool.
+
+These names are a transport contract, not the user workflow.
 
 ## Measurement and verified outcomes
 

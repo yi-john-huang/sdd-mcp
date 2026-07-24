@@ -21,7 +21,7 @@ const EXPECTED_TOOLS = [
 ] as const;
 
 
-describe('v4 MCP tool inventory', () => {
+describe('v5 MCP tool inventory', () => {
   const dependency = {} as never;
   const adapter = new SDDToolAdapter(
     dependency,
@@ -75,17 +75,17 @@ describe('v4 MCP tool inventory', () => {
     expect(context.required).toEqual(['featureName']);
   });
 
-  it('keeps approval and test review inputs metadata-only', () => {
+  it('binds approval and review to exact revision and hash', () => {
     const approve = tools.find(({ name }) => name === 'sdd-approve')!.tool.inputSchema;
     const review = tools.find(({ name }) => name === 'sdd-review-test-cases')!.tool.inputSchema;
-    expect(Object.keys(approve.properties ?? {})).toEqual(['featureName', 'phase']);
-    expect(approve.required).toEqual(['featureName', 'phase']);
-    expect(Object.keys(review.properties ?? {})).toEqual(['featureName']);
-    expect(review.required).toEqual(['featureName']);
+    expect(Object.keys(approve.properties ?? {})).toEqual(['featureName', 'phase', 'expectedRevision', 'expectedArtifactSha256']);
+    expect(approve.required).toEqual(['featureName', 'phase', 'expectedRevision', 'expectedArtifactSha256']);
+    expect(Object.keys(review.properties ?? {})).toEqual(['featureName', 'expectedTasksRevision', 'expectedArtifactSha256']);
+    expect(review.required).toEqual(['featureName', 'expectedTasksRevision', 'expectedArtifactSha256']);
   });
 });
 
-describe('v4 disk-authoritative handler routing', () => {
+describe('v5 disk-authoritative handler routing', () => {
   const templateService = { generateDesignTemplate: jest.fn() };
   const qualityService = {};
   const steeringService = {};
@@ -98,8 +98,9 @@ describe('v4 disk-authoritative handler routing', () => {
     initializeFeature: jest.fn(),
     listFeatureStatuses: jest.fn(),
     getFeatureStatus: jest.fn(),
-    generatePhase: jest.fn(),
+    submitPhaseArtifact: jest.fn(),
     beginImplementation: jest.fn(),
+    recordTaskProgress: jest.fn(),
     loadProject: jest.fn(),
   };
   const logger = {};
@@ -150,19 +151,27 @@ describe('v4 disk-authoritative handler routing', () => {
     await expect(byName['sdd-approve']({
       featureName: 'payments',
       phase: 'requirements',
+      expectedRevision: 1,
+      expectedArtifactSha256: 'a'.repeat(64),
     })).resolves.toEqual({ approved: true });
     await expect(byName['sdd-review-test-cases']({
       featureName: 'payments',
+      expectedTasksRevision: 2,
+      expectedArtifactSha256: 'b'.repeat(64),
     })).resolves.toEqual({ reviewed: true });
 
     expect(workflowEngineService.approve).toHaveBeenCalledWith({
       projectRoot: process.cwd(),
       featureName: 'payments',
       phase: 'requirements',
+      expectedRevision: 1,
+      expectedArtifactSha256: 'a'.repeat(64),
     });
     expect(workflowEngineService.reviewTestCases).toHaveBeenCalledWith({
       projectRoot: process.cwd(),
       featureName: 'payments',
+      expectedTasksRevision: 2,
+      expectedArtifactSha256: 'b'.repeat(64),
     });
   });
 
@@ -171,31 +180,31 @@ describe('v4 disk-authoritative handler routing', () => {
     workflowEngineService.initializeFeature.mockResolvedValue({ name: 'payments' });
 
     await expect(byName['sdd-init']({
-      projectName: 'Payments',
+      featureName: 'Payments',
       description: 'Create a bounded payment flow',
-      reviewTestCases: true,
-    })).resolves.toMatchObject({ featureName: 'payments', initialized: true });
+      language: 'en',
+    })).resolves.toMatchObject({ featureName: 'Payments', status: 'initialized', revision: 0 });
     expect(workflowEngineService.initializeFeature).toHaveBeenCalledWith({
       projectRoot: process.cwd(),
-      featureName: 'payments',
+      featureName: 'Payments',
+      description: 'Create a bounded payment flow',
       language: 'en',
-      reviewTestCases: true,
     });
   });
 
   it('routes every workflow and project lookup through disk-authoritative services', async () => {
     workflowEngineService.listFeatureStatuses.mockResolvedValue([{ featureName: 'payments' }]);
     workflowEngineService.getFeatureStatus.mockResolvedValue({ featureName: 'payments', currentPhase: 'init' });
-    workflowEngineService.generatePhase.mockResolvedValue('generated');
+    workflowEngineService.submitPhaseArtifact.mockResolvedValue({ validation: { status: 'passed' } });
     workflowEngineService.beginImplementation.mockResolvedValue({ featureName: 'payments', ready: true });
     workflowEngineService.loadProject.mockResolvedValue({ name: 'payments' });
     templateService.generateDesignTemplate.mockResolvedValue('# Design');
 
     await expect(byName['sdd-status']({})).resolves.toEqual({ features: [{ featureName: 'payments' }] });
     await expect(byName['sdd-status']({ featureName: 'payments' })).resolves.toMatchObject({ featureName: 'payments' });
-    await expect(byName['sdd-requirements']({ featureName: 'payments' })).resolves.toBe('generated');
-    await expect(byName['sdd-design']({ featureName: 'payments' })).resolves.toBe('generated');
-    await expect(byName['sdd-tasks']({ featureName: 'payments', reviewTestCases: true })).resolves.toBe('generated');
+    await expect(byName['sdd-requirements']({ featureName: 'payments', content: '# Requirements', expectedRevision: 0, expectedArtifactSha256: null })).resolves.toMatchObject({ validation: { status: 'passed' } });
+    await expect(byName['sdd-design']({ featureName: 'payments', content: '# Design', expectedRevision: 0, expectedArtifactSha256: null })).resolves.toMatchObject({ validation: { status: 'passed' } });
+    await expect(byName['sdd-tasks']({ featureName: 'payments', content: '# Tasks', expectedRevision: 0, expectedArtifactSha256: null, reviewTestCases: true })).resolves.toMatchObject({ validation: { status: 'passed' } });
     await expect(byName['sdd-implement']({ featureName: 'payments' })).resolves.toMatchObject({ ready: true });
     await expect(byName['sdd-template-render']({ featureName: 'payments', templateType: 'design' })).resolves.toMatchObject({
       featureName: 'payments',
@@ -204,15 +213,22 @@ describe('v4 disk-authoritative handler routing', () => {
 
     expect(workflowEngineService.listFeatureStatuses).toHaveBeenCalledWith({ projectRoot: process.cwd() });
     expect(workflowEngineService.getFeatureStatus).toHaveBeenCalledWith({ projectRoot: process.cwd(), featureName: 'payments' });
-    expect(workflowEngineService.generatePhase).toHaveBeenNthCalledWith(1, {
+    expect(workflowEngineService.submitPhaseArtifact).toHaveBeenNthCalledWith(1, {
       projectRoot: process.cwd(),
       featureName: 'payments',
       phase: 'requirements',
+      content: '# Requirements',
+      expectedRevision: 0,
+      expectedArtifactSha256: null,
+      reviewTestCases: undefined,
     });
-    expect(workflowEngineService.generatePhase).toHaveBeenNthCalledWith(3, {
+    expect(workflowEngineService.submitPhaseArtifact).toHaveBeenNthCalledWith(3, {
       projectRoot: process.cwd(),
       featureName: 'payments',
       phase: 'tasks',
+      content: '# Tasks',
+      expectedRevision: 0,
+      expectedArtifactSha256: null,
       reviewTestCases: true,
     });
     expect(workflowEngineService.loadProject).toHaveBeenCalledWith({
