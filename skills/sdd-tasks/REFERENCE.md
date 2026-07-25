@@ -5,16 +5,16 @@ Read only for formatting and decomposition help.
 ## Task Template
 
 ```markdown
-### N.M Outcome
-Affected artifacts:
-Requirements/design traceability:
-Dependencies:
-RED: focused failing behavior test and command
-GREEN: smallest complete behavior
-REFACTOR: bounded cleanup
-Acceptance criteria:
-Verification:
+### 1.1 Observable outcome
+**Covers:** FR-1, NFR-1, D-1
+**Dependencies:** none
+**TDD:** required
+**Affected artifacts:** src/example.ts, src/example.test.ts
+**Acceptance criteria:** The stated behavior and failure boundary are observable.
+**Verification:** Run the focused test, then the affected checks.
 ```
+
+Use comma-separated values for `Covers`, `Dependencies`, and `Affected artifacts`; use literal `none` for an empty set. For non-behavioral work, write `**TDD:** not-applicable — <specific reason>`.
 
 ## Decomposition
 

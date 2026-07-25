@@ -35,10 +35,15 @@ export interface CodexInstallRequest extends BaseTargetInstallRequest {
 }
 
 export async function installCodexTarget(request: CodexInstallRequest) {
+  const writer = request.writer ?? new PreservingWriter(request.projectRoot);
+  return writer.withInstallLock(() => installCodexTargetLocked({ ...request, writer }));
+}
+
+async function installCodexTargetLocked(request: CodexInstallRequest & { writer: PreservingWriter }) {
   const session = new TargetInstallSession(
     'codex',
     request.projectRoot,
-    request.writer ?? new PreservingWriter(request.projectRoot),
+    request.writer,
     request.profile ?? 'lean',
     request.components,
     request.refreshGenerated,
@@ -122,7 +127,7 @@ export async function installCodexTarget(request: CodexInstallRequest) {
       ),
     );
   }
-  return session.complete();
+  return session.complete(request.paths);
 }
 
 

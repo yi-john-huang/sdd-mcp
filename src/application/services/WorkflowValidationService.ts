@@ -1,781 +1,359 @@
-import { injectable, inject } from 'inversify';
-import { v4 as uuidv4 } from 'uuid';
-import { TYPES } from '../../infrastructure/di/types.js';
-import { 
-  Project, 
-  WorkflowPhase, 
-  PhaseApprovals,
-  Requirement,
-  Task 
-} from '../../domain/types.js';
-import { 
-  ProjectRepository, 
-  FileSystemPort, 
-  ValidationPort,
-  LoggerPort 
-} from '../../domain/ports.js';
-import { WorkflowStateMachine } from '../../domain/workflow/WorkflowStateMachine.js';
+import { injectable } from 'inversify';
 
-export interface PhaseCompletionValidation {
-  isComplete: boolean;
-  missingItems: string[];
-  qualityIssues: string[];
-  readinessScore: number; // 0-100
-  recommendations: string[];
+export interface ValidationBlocker {
+  code: string;
+  message: string;
+  reference?: string;
 }
 
-export interface CrossPhaseValidation {
-  isConsistent: boolean;
-  inconsistencies: string[];
-  traceabilityIssues: string[];
-  coverageGaps: string[];
+export interface ParsedTask {
+  title: string;
+  tddRequired: boolean;
+  dependencies: string[];
+  plannedArtifacts: string[];
 }
 
-export interface WorkflowRollbackValidation {
-  canRollback: boolean;
-  reason?: string;
-  impactedItems: string[];
-  rollbackActions: string[];
+export interface ArtifactValidationResult {
+  status: 'passed' | 'failed';
+  blockers: ValidationBlocker[];
+}
+
+export interface RequirementsValidationResult extends ArtifactValidationResult {
+  requirementIds: string[];
+}
+
+export interface DesignValidationResult extends ArtifactValidationResult {
+  decisionIds: string[];
+}
+
+export interface TasksValidationResult extends ArtifactValidationResult {
+  tasks: Record<string, ParsedTask>;
+}
+
+interface Section {
+  id: string;
+  title: string;
+  body: string[];
+}
+
+const REQUIRED_DESIGN_HEADINGS = [
+  'Requirements Traceability',
+  'Architecture and Data Flow',
+  'Components and Interfaces',
+  'Failure Handling',
+  'Verification',
+] as const;
+
+function resultStatus(blockers: ValidationBlocker[]): 'passed' | 'failed' {
+  return blockers.length === 0 ? 'passed' : 'failed';
+}
+function bounded(blockers: ValidationBlocker[]): ValidationBlocker[] {
+  return blockers.slice(0, 100);
+}
+
+
+function blocker(code: string, message: string, reference?: string): ValidationBlocker {
+  const boundedMessage = message.slice(0, 2_000);
+  return reference === undefined
+    ? { code: code.slice(0, 100), message: boundedMessage }
+    : { code: code.slice(0, 100), message: boundedMessage, reference: reference.slice(0, 200) };
+}
+
+/** Removes fenced regions while preserving line boundaries for deterministic parsing. */
+function visibleLines(content: string): string[] {
+  const lines = content.replace(/\r\n?/g, '\n').split('\n');
+  let fence: { marker: '`' | '~'; length: number } | undefined;
+  return lines.map((line) => {
+    const match = /^\s*(`{3,}|~{3,})/.exec(line);
+    if (!fence) {
+      if (match) {
+        fence = { marker: match[1][0] as '`' | '~', length: match[1].length };
+        return '';
+      }
+      return line;
+    }
+    const close = new RegExp(`^\\s*${fence.marker}{${fence.length},}\\s*$`);
+    if (close.test(line)) fence = undefined;
+    return '';
+  });
+}
+
+function parseSections(lines: string[], heading: RegExp): { sections: Section[]; duplicates: string[] } {
+  const sections: Section[] = [];
+  let current: Section | undefined;
+  for (const line of lines) {
+    const headingMatch = heading.exec(line);
+    if (headingMatch) {
+      current = { id: headingMatch[1], title: headingMatch[2].trim(), body: [] };
+      sections.push(current);
+      continue;
+    }
+    if (/^#{1,3}(?:\s|$)/.test(line)) {
+      current = undefined;
+      continue;
+    }
+    current?.body.push(line);
+  }
+  const seen = new Set<string>();
+  const duplicates: string[] = [];
+  for (const section of sections) {
+    if (seen.has(section.id)) duplicates.push(section.id);
+    seen.add(section.id);
+  }
+  return { sections, duplicates: [...new Set(duplicates)] };
+}
+
+function metadataValues(section: Section, label: string): string[] {
+  const escaped = label.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  const expression = new RegExp(`^\\s*\\*\\*${escaped}:\\*\\*\\s*(\\S(?:.*\\S)?)\\s*$`);
+  const values: string[] = [];
+  for (const line of section.body) {
+    const match = expression.exec(line);
+    if (match) values.push(match[1]);
+  }
+  return values;
+}
+
+function metadata(section: Section, label: string): string | undefined {
+  return metadataValues(section, label)[0];
+}
+
+function parseList(value: string | undefined): string[] {
+  if (!value || value.trim() === 'none') return [];
+  return value.split(',').map((item) => item.trim()).filter(Boolean);
+}
+
+function hasDuplicates(values: readonly string[]): boolean {
+  return new Set(values).size !== values.length;
+}
+
+function isProjectRelativePath(value: string): boolean {
+  return value.length > 0
+    && value.length <= 500
+    && !/^[/\\]/.test(value)
+    && !/^[A-Za-z]:/.test(value)
+    && !value.includes('\0')
+    && !value.split(/[\\/]/).includes('..')
+    && value === value.trim();
+}
+
+function uniqueSections(sections: Section[]): Section[] {
+  const byId = new Map<string, Section>();
+  for (const section of sections) if (!byId.has(section.id)) byId.set(section.id, section);
+  return [...byId.values()];
+}
+
+function extractRequirementIds(content: string): string[] {
+  const { sections } = parseSections(visibleLines(content), /^###\s+((?:FR|NFR)-\d+):\s*(.+?)\s*$/);
+  return uniqueSections(sections).map(({ id }) => id);
+}
+
+function extractDecisionIds(content: string): string[] {
+  const { sections } = parseSections(visibleLines(content), /^###\s+(D-\d+):\s*(.+?)\s*$/);
+  return uniqueSections(sections).map(({ id }) => id);
+}
+
+function addDuplicateBlockers(blockers: ValidationBlocker[], duplicates: string[]): void {
+  for (const id of duplicates) blockers.push(blocker('DuplicateId', `Identifier is declared more than once: ${id}`, id));
+}
+
+function requireMetadata(
+  blockers: ValidationBlocker[],
+  section: Section,
+  labels: readonly string[],
+): Record<string, string | undefined> {
+  const values: Record<string, string | undefined> = {};
+  for (const label of labels) {
+    const matches = metadataValues(section, label);
+    values[label] = matches[0];
+    if (!values[label]) blockers.push(blocker('MissingMetadata', `Missing or empty **${label}:** metadata`, section.id));
+    if (matches.length > 1) blockers.push(blocker('DuplicateMetadata', `Metadata label appears more than once: **${label}:**`, section.id));
+  }
+  return values;
+}
+
+function coverageBlockers(actual: Set<string>, expected: readonly string[]): ValidationBlocker[] {
+  return expected
+    .filter((id) => !actual.has(id))
+    .map((id) => blocker('CoverageMissing', `Required identifier is not covered: ${id}`, id));
 }
 
 @injectable()
 export class WorkflowValidationService {
-  private readonly stateMachine: WorkflowStateMachine;
-
-  constructor(
-    @inject(TYPES.ProjectRepository) private readonly projectRepository: ProjectRepository,
-    @inject(TYPES.FileSystemPort) private readonly fileSystem: FileSystemPort,
-    @inject(TYPES.ValidationPort) private readonly validation: ValidationPort,
-    @inject(TYPES.LoggerPort) private readonly logger: LoggerPort
-  ) {
-    this.stateMachine = new WorkflowStateMachine();
+  validateRequirements(content: string): RequirementsValidationResult {
+    const blockers: ValidationBlocker[] = [];
+    if (content.trim().length === 0) blockers.push(blocker('EmptyContent', 'Requirements content must not be empty'));
+    const { sections, duplicates } = parseSections(
+      visibleLines(content),
+      /^###\s+((?:FR|NFR)-\d+):\s*(.+?)\s*$/,
+    );
+    addDuplicateBlockers(blockers, duplicates);
+    if (sections.length === 0) blockers.push(blocker('RequirementsMissing', 'At least one FR-N requirement section is required'));
+    if (!sections.some(({ id }) => id.startsWith('FR-'))) {
+      blockers.push(blocker('FunctionalRequirementMissing', 'At least one FR-N requirement section is required'));
+    }
+    for (const section of uniqueSections(sections)) {
+      const values = requireMetadata(blockers, section, ['Objective', 'EARS Specification', 'Acceptance Criteria']);
+      const ears = values['EARS Specification'];
+      if (ears && !/\bSHALL\b/.test(ears)) {
+        blockers.push(blocker('EarsShallMissing', 'EARS Specification must contain SHALL', section.id));
+      }
+      const acceptance = values['Acceptance Criteria'];
+      if (acceptance && !/(?:^|\s)\d+\.\s+\S/.test(acceptance)) {
+        blockers.push(blocker('AcceptanceCriteriaMissing', 'Acceptance Criteria must contain a numbered item', section.id));
+      }
+    }
+    const requirementIds = uniqueSections(sections).map(({ id }) => id);
+    return { status: resultStatus(blockers), blockers: bounded(blockers), requirementIds };
   }
 
-  async validateRequirementsCompletion(projectId: string): Promise<PhaseCompletionValidation> {
-    const correlationId = uuidv4();
-    
-    this.logger.info('Validating requirements completion', {
-      correlationId,
-      projectId
-    });
-
-    const project = await this.projectRepository.findById(projectId);
-    if (!project) {
-      return {
-        isComplete: false,
-        missingItems: ['Project not found'],
-        qualityIssues: [],
-        readinessScore: 0,
-        recommendations: []
-      };
+  validateDesign(content: string, approvedRequirementsContent: string): DesignValidationResult {
+    const blockers: ValidationBlocker[] = [];
+    const lines = visibleLines(content);
+    if (content.trim().length === 0) blockers.push(blocker('EmptyContent', 'Design content must not be empty'));
+    for (const heading of REQUIRED_DESIGN_HEADINGS) {
+      if (!lines.some((line) => line === `## ${heading}`)) {
+        blockers.push(blocker('MissingHeading', `Missing exact heading: ## ${heading}`, heading));
+      }
     }
-
-    const missingItems: string[] = [];
-    const qualityIssues: string[] = [];
-    const recommendations: string[] = [];
-    let readinessScore = 0;
-
-    try {
-      // Check if requirements document exists
-      const requirementsPath = `${project.path}/.spec/specs/${project.name}/requirements.md`;
-      if (!(await this.fileSystem.exists(requirementsPath))) {
-        missingItems.push('requirements.md file not found');
-      } else {
-        const content = await this.fileSystem.readFile(requirementsPath);
-        
-        // Basic content validation
-        if (content.trim().length < 100) {
-          qualityIssues.push('Requirements document is too short (less than 100 characters)');
-        }
-
-        // Check for EARS format patterns
-        const earsPatterns = ['WHEN', 'WHERE', 'IF', 'THEN', 'SHALL'];
-        const hasEarsFormat = earsPatterns.some(pattern => content.includes(pattern));
-        if (!hasEarsFormat) {
-          qualityIssues.push('Requirements do not follow EARS format (missing WHEN/WHERE/IF...THEN/SHALL patterns)');
+    const { sections, duplicates } = parseSections(lines, /^###\s+(D-\d+):\s*(.+?)\s*$/);
+    addDuplicateBlockers(blockers, duplicates);
+    if (sections.length === 0) blockers.push(blocker('DesignDecisionMissing', 'At least one D-N decision section is required'));
+    const knownRequirements = extractRequirementIds(approvedRequirementsContent);
+    const knownSet = new Set(knownRequirements);
+    const covered = new Set<string>();
+    for (const section of uniqueSections(sections)) {
+      const values = requireMetadata(blockers, section, ['Covers', 'Decision', 'Failure behavior', 'Verification']);
+      for (const id of parseList(values.Covers)) {
+        if (!knownSet.has(id)) {
+          blockers.push(blocker('UnknownCoverageId', `Covers references unknown requirement: ${id}`, section.id));
         } else {
-          readinessScore += 30;
-        }
-
-        // Check for acceptance criteria
-        if (content.includes('Acceptance Criteria') || content.includes('acceptance criteria')) {
-          readinessScore += 20;
-        } else {
-          missingItems.push('Acceptance criteria sections');
-        }
-
-        // Check for requirement numbering
-        const requirementCount = (content.match(/### Requirement \d+:/g) || []).length;
-        if (requirementCount === 0) {
-          missingItems.push('Numbered requirement sections');
-        } else {
-          readinessScore += 20;
-        }
-
-        if (requirementCount >= 3) {
-          readinessScore += 10; // Bonus for having multiple requirements
+          covered.add(id);
         }
       }
-
-      // Check approval status
-      if (project.metadata.approvals.requirements.generated) {
-        readinessScore += 10;
-      } else {
-        missingItems.push('Requirements generation flag');
-      }
-
-      if (project.metadata.approvals.requirements.approved) {
-        readinessScore += 10;
-      } else {
-        recommendations.push('Requirements need review and approval before proceeding to design');
-      }
-
-      // Generate recommendations
-      if (missingItems.length > 0) {
-        recommendations.push('Complete missing requirements items before approval');
-      }
-      
-      if (qualityIssues.length > 0) {
-        recommendations.push('Address quality issues to improve requirements clarity');
-      }
-
-      if (readinessScore >= 80) {
-        recommendations.push('Requirements are ready for design phase');
-      } else if (readinessScore >= 60) {
-        recommendations.push('Requirements need minor improvements before design');
-      } else {
-        recommendations.push('Requirements need significant work before design phase');
-      }
-
-      this.logger.info('Requirements validation completed', {
-        correlationId,
-        projectId,
-        readinessScore,
-        missingCount: missingItems.length,
-        qualityIssueCount: qualityIssues.length
-      });
-
-      return {
-        isComplete: missingItems.length === 0 && qualityIssues.length === 0,
-        missingItems,
-        qualityIssues,
-        readinessScore: Math.min(readinessScore, 100),
-        recommendations
-      };
-
-    } catch (error) {
-      this.logger.error('Requirements validation failed', error as Error, {
-        correlationId,
-        projectId
-      });
-
-      return {
-        isComplete: false,
-        missingItems: [`Validation error: ${(error as Error).message}`],
-        qualityIssues: [],
-        readinessScore: 0,
-        recommendations: ['Fix validation errors and try again']
-      };
     }
-  }
-
-  async validateDesignApproval(projectId: string): Promise<PhaseCompletionValidation> {
-    const correlationId = uuidv4();
-    
-    this.logger.info('Validating design approval readiness', {
-      correlationId,
-      projectId
-    });
-
-    const project = await this.projectRepository.findById(projectId);
-    if (!project) {
-      return {
-        isComplete: false,
-        missingItems: ['Project not found'],
-        qualityIssues: [],
-        readinessScore: 0,
-        recommendations: []
-      };
-    }
-
-    const missingItems: string[] = [];
-    const qualityIssues: string[] = [];
-    const recommendations: string[] = [];
-    let readinessScore = 0;
-
-    try {
-      // Check if design document exists
-      const designPath = `${project.path}/.spec/specs/${project.name}/design.md`;
-      if (!(await this.fileSystem.exists(designPath))) {
-        missingItems.push('design.md file not found');
-      } else {
-        const content = await this.fileSystem.readFile(designPath);
-        
-        // Basic content validation
-        if (content.trim().length < 200) {
-          qualityIssues.push('Design document is too short (less than 200 characters)');
-        }
-
-        // Check for key design sections
-        const designSections = [
-          'Architecture',
-          'Components',
-          'Interface',
-          'Data Model',
-          'Technology'
-        ];
-
-        let foundSections = 0;
-        for (const section of designSections) {
-          if (content.toLowerCase().includes(section.toLowerCase())) {
-            foundSections++;
-          }
-        }
-
-        readinessScore += (foundSections / designSections.length) * 40;
-        
-        if (foundSections < 3) {
-          missingItems.push(`Design missing key sections (found ${foundSections}/${designSections.length})`);
-        }
-
-        // Check for architectural diagrams or descriptions
-        if (content.includes('```') || content.includes('diagram') || content.includes('architecture')) {
-          readinessScore += 20;
-        } else {
-          qualityIssues.push('Design lacks architectural diagrams or detailed descriptions');
-        }
-
-        // Check for technology decisions
-        if (content.toLowerCase().includes('technology') || content.toLowerCase().includes('stack')) {
-          readinessScore += 15;
-        } else {
-          missingItems.push('Technology stack decisions');
-        }
-      }
-
-      // Validate requirements are approved first
-      if (!project.metadata.approvals.requirements.approved) {
-        missingItems.push('Requirements must be approved before design approval');
-      } else {
-        readinessScore += 15;
-      }
-
-      // Check approval status
-      if (project.metadata.approvals.design.generated) {
-        readinessScore += 5;
-      } else {
-        missingItems.push('Design generation flag');
-      }
-
-      if (project.metadata.approvals.design.approved) {
-        readinessScore += 5;
-      } else {
-        recommendations.push('Design needs review and approval before proceeding to tasks');
-      }
-
-      // Generate recommendations
-      if (readinessScore >= 80) {
-        recommendations.push('Design is ready for tasks phase');
-      } else if (readinessScore >= 60) {
-        recommendations.push('Design needs minor improvements before tasks');
-      } else {
-        recommendations.push('Design needs significant work before tasks phase');
-      }
-
-      this.logger.info('Design validation completed', {
-        correlationId,
-        projectId,
-        readinessScore,
-        missingCount: missingItems.length,
-        qualityIssueCount: qualityIssues.length
-      });
-
-      return {
-        isComplete: missingItems.length === 0 && qualityIssues.length === 0,
-        missingItems,
-        qualityIssues,
-        readinessScore: Math.min(readinessScore, 100),
-        recommendations
-      };
-
-    } catch (error) {
-      this.logger.error('Design validation failed', error as Error, {
-        correlationId,
-        projectId
-      });
-
-      return {
-        isComplete: false,
-        missingItems: [`Validation error: ${(error as Error).message}`],
-        qualityIssues: [],
-        readinessScore: 0,
-        recommendations: ['Fix validation errors and try again']
-      };
-    }
-  }
-
-  async validateTaskApproval(projectId: string): Promise<PhaseCompletionValidation> {
-    const correlationId = uuidv4();
-    
-    this.logger.info('Validating task approval readiness', {
-      correlationId,
-      projectId
-    });
-
-    const project = await this.projectRepository.findById(projectId);
-    if (!project) {
-      return {
-        isComplete: false,
-        missingItems: ['Project not found'],
-        qualityIssues: [],
-        readinessScore: 0,
-        recommendations: []
-      };
-    }
-
-    const missingItems: string[] = [];
-    const qualityIssues: string[] = [];
-    const recommendations: string[] = [];
-    let readinessScore = 0;
-
-    try {
-      // Check if tasks document exists
-      const tasksPath = `${project.path}/.spec/specs/${project.name}/tasks.md`;
-      if (!(await this.fileSystem.exists(tasksPath))) {
-        missingItems.push('tasks.md file not found');
-      } else {
-        const content = await this.fileSystem.readFile(tasksPath);
-        
-        // Basic content validation
-        if (content.trim().length < 150) {
-          qualityIssues.push('Tasks document is too short (less than 150 characters)');
-        }
-
-        // Count tasks
-        const taskMatches = content.match(/- \[ \] \d+\./g) || [];
-        const taskCount = taskMatches.length;
-
-        if (taskCount === 0) {
-          missingItems.push('No tasks found in checkbox format');
-        } else {
-          readinessScore += Math.min(taskCount * 5, 30); // Up to 30 points for tasks
-        }
-
-        // Check for requirement references
-        const requirementRefs = (content.match(/_Requirements: /g) || []).length;
-        if (requirementRefs === 0) {
-          qualityIssues.push('Tasks missing requirement traceability references');
-        } else {
-          readinessScore += 20;
-        }
-
-        // Check for subtasks
-        const subtaskMatches = content.match(/  - [A-Z]/g) || [];
-        if (subtaskMatches.length === 0) {
-          qualityIssues.push('Tasks missing detailed subtasks');
-        } else {
-          readinessScore += 15;
-        }
-
-        // Check task categories/organization
-        if (content.includes('# Implementation Plan') || content.includes('## ')) {
-          readinessScore += 10;
-        } else {
-          qualityIssues.push('Tasks lack proper organization/categorization');
-        }
-      }
-
-      // Validate design is approved first
-      if (!project.metadata.approvals.design.approved) {
-        missingItems.push('Design must be approved before task approval');
-      } else {
-        readinessScore += 15;
-      }
-
-      // Check approval status
-      if (project.metadata.approvals.tasks.generated) {
-        readinessScore += 5;
-      } else {
-        missingItems.push('Tasks generation flag');
-      }
-
-      if (project.metadata.approvals.tasks.approved) {
-        readinessScore += 5;
-      } else {
-        recommendations.push('Tasks need review and approval before proceeding to implementation');
-      }
-
-      // Generate recommendations
-      if (readinessScore >= 80) {
-        recommendations.push('Tasks are ready for implementation phase');
-        recommendations.push('Begin implementing tasks in order of priority');
-      } else if (readinessScore >= 60) {
-        recommendations.push('Tasks need minor improvements before implementation');
-      } else {
-        recommendations.push('Tasks need significant work before implementation phase');
-      }
-
-      this.logger.info('Tasks validation completed', {
-        correlationId,
-        projectId,
-        readinessScore,
-        missingCount: missingItems.length,
-        qualityIssueCount: qualityIssues.length
-      });
-
-      return {
-        isComplete: missingItems.length === 0 && qualityIssues.length === 0,
-        missingItems,
-        qualityIssues,
-        readinessScore: Math.min(readinessScore, 100),
-        recommendations
-      };
-
-    } catch (error) {
-      this.logger.error('Tasks validation failed', error as Error, {
-        correlationId,
-        projectId
-      });
-
-      return {
-        isComplete: false,
-        missingItems: [`Validation error: ${(error as Error).message}`],
-        qualityIssues: [],
-        readinessScore: 0,
-        recommendations: ['Fix validation errors and try again']
-      };
-    }
-  }
-
-  async validateCrossPhaseConsistency(projectId: string): Promise<CrossPhaseValidation> {
-    const correlationId = uuidv4();
-    
-    this.logger.info('Validating cross-phase consistency', {
-      correlationId,
-      projectId
-    });
-
-    const project = await this.projectRepository.findById(projectId);
-    if (!project) {
-      return {
-        isConsistent: false,
-        inconsistencies: ['Project not found'],
-        traceabilityIssues: [],
-        coverageGaps: []
-      };
-    }
-
-    const inconsistencies: string[] = [];
-    const traceabilityIssues: string[] = [];
-    const coverageGaps: string[] = [];
-
-    try {
-      const basePath = `${project.path}/.spec/specs/${project.name}`;
-      
-      // Read all phase documents
-      const documents: { [key: string]: string } = {};
-      const files = ['requirements.md', 'design.md', 'tasks.md'];
-      
-      for (const file of files) {
-        const filePath = `${basePath}/${file}`;
-        if (await this.fileSystem.exists(filePath)) {
-          documents[file] = await this.fileSystem.readFile(filePath);
-        }
-      }
-
-      // Validate Requirements -> Design traceability
-      if (documents['requirements.md'] && documents['design.md']) {
-        const requirements = documents['requirements.md'];
-        const design = documents['design.md'];
-        
-        // Extract requirement titles
-        const reqMatches = requirements.match(/### Requirement \d+: (.+)/g) || [];
-        const requirementTitles = reqMatches.map(match => 
-          match.replace(/### Requirement \d+: /, '').trim()
-        );
-
-        // Check if design addresses all requirements
-        for (const reqTitle of requirementTitles) {
-          const keywords = reqTitle.split(' ').filter(word => word.length > 3);
-          const hasReference = keywords.some(keyword => 
-            design.toLowerCase().includes(keyword.toLowerCase())
-          );
-          
-          if (!hasReference) {
-            traceabilityIssues.push(`Design may not address requirement: "${reqTitle}"`);
-          }
-        }
-      }
-
-      // Validate Design -> Tasks traceability
-      if (documents['design.md'] && documents['tasks.md']) {
-        const design = documents['design.md'];
-        const tasks = documents['tasks.md'];
-
-        // Look for component mentions in design
-        const componentMatches = design.match(/## (.+Component|.+Service|.+Manager)/g) || [];
-        const components = componentMatches.map(match => 
-          match.replace('## ', '').trim()
-        );
-
-        // Check if tasks cover all components
-        for (const component of components) {
-          const keywords = component.split(' ').filter(word => word.length > 3);
-          const hasCoverage = keywords.some(keyword => 
-            tasks.toLowerCase().includes(keyword.toLowerCase())
-          );
-          
-          if (!hasCoverage) {
-            coverageGaps.push(`Tasks may not cover design component: "${component}"`);
-          }
-        }
-      }
-
-      // Validate phase consistency with project metadata
-      const { phase, metadata } = project;
-      
-      if (phase === WorkflowPhase.REQUIREMENTS && !metadata.approvals.requirements.generated) {
-        inconsistencies.push('Project in requirements phase but requirements not marked as generated');
-      }
-      
-      if (phase === WorkflowPhase.DESIGN && !metadata.approvals.design.generated) {
-        inconsistencies.push('Project in design phase but design not marked as generated');
-      }
-      
-      if (phase === WorkflowPhase.TASKS && !metadata.approvals.tasks.generated) {
-        inconsistencies.push('Project in tasks phase but tasks not marked as generated');
-      }
-
-      // Check for orphaned approvals (approved but not generated)
-      Object.entries(metadata.approvals).forEach(([phaseName, approval]) => {
-        if (approval.approved && !approval.generated) {
-          inconsistencies.push(`${phaseName} marked as approved but not generated`);
-        }
-      });
-
-      this.logger.info('Cross-phase validation completed', {
-        correlationId,
-        projectId,
-        inconsistencyCount: inconsistencies.length,
-        traceabilityIssueCount: traceabilityIssues.length,
-        coverageGapCount: coverageGaps.length
-      });
-
-      return {
-        isConsistent: inconsistencies.length === 0 && 
-                     traceabilityIssues.length === 0 && 
-                     coverageGaps.length === 0,
-        inconsistencies,
-        traceabilityIssues,
-        coverageGaps
-      };
-
-    } catch (error) {
-      this.logger.error('Cross-phase validation failed', error as Error, {
-        correlationId,
-        projectId
-      });
-
-      return {
-        isConsistent: false,
-        inconsistencies: [`Validation error: ${(error as Error).message}`],
-        traceabilityIssues: [],
-        coverageGaps: []
-      };
-    }
-  }
-
-  async validateWorkflowRollback(
-    projectId: string, 
-    targetPhase: WorkflowPhase
-  ): Promise<WorkflowRollbackValidation> {
-    const correlationId = uuidv4();
-    
-    this.logger.info('Validating workflow rollback', {
-      correlationId,
-      projectId,
-      targetPhase
-    });
-
-    const project = await this.projectRepository.findById(projectId);
-    if (!project) {
-      return {
-        canRollback: false,
-        reason: 'Project not found',
-        impactedItems: [],
-        rollbackActions: []
-      };
-    }
-
-    const impactedItems: string[] = [];
-    const rollbackActions: string[] = [];
-
-    try {
-      // Check if rollback is valid
-      const validation = this.stateMachine.canTransition(project, targetPhase);
-      if (!validation.allowed) {
-        return {
-          canRollback: false,
-          reason: validation.reason,
-          impactedItems: [],
-          rollbackActions: []
-        };
-      }
-
-      // Identify impacted items based on rollback target
-      const currentPhase = project.phase;
-      
-      switch (currentPhase) {
-        case WorkflowPhase.REQUIREMENTS:
-          if (targetPhase === WorkflowPhase.INIT) {
-            impactedItems.push('Requirements document and approval status');
-            rollbackActions.push('Reset requirements approval status');
-            rollbackActions.push('Optionally backup requirements.md');
-          }
-          break;
-
-        case WorkflowPhase.DESIGN:
-          if (targetPhase === WorkflowPhase.REQUIREMENTS) {
-            impactedItems.push('Design document and approval status');
-            rollbackActions.push('Reset design approval status');
-            rollbackActions.push('Optionally backup design.md');
-          }
-          break;
-
-        case WorkflowPhase.TASKS:
-          if (targetPhase === WorkflowPhase.DESIGN) {
-            impactedItems.push('Tasks document and approval status');
-            rollbackActions.push('Reset tasks approval status');
-            rollbackActions.push('Optionally backup tasks.md');
-          }
-          break;
-
-        case WorkflowPhase.IMPLEMENTATION:
-          if (targetPhase === WorkflowPhase.TASKS) {
-            impactedItems.push('Implementation progress');
-            rollbackActions.push('Implementation work may be lost');
-            rollbackActions.push('Consider backing up current implementation');
-          }
-          break;
-      }
-
-      // Add general rollback actions
-      rollbackActions.push('Update project phase in spec.json');
-      rollbackActions.push('Update project metadata timestamps');
-      rollbackActions.push('Create audit trail entry');
-
-      this.logger.info('Workflow rollback validation completed', {
-        correlationId,
-        projectId,
-        currentPhase,
-        targetPhase,
-        impactedCount: impactedItems.length
-      });
-
-      return {
-        canRollback: true,
-        impactedItems,
-        rollbackActions
-      };
-
-    } catch (error) {
-      this.logger.error('Workflow rollback validation failed', error as Error, {
-        correlationId,
-        projectId,
-        targetPhase
-      });
-
-      return {
-        canRollback: false,
-        reason: `Validation error: ${(error as Error).message}`,
-        impactedItems: [],
-        rollbackActions: []
-      };
-    }
-  }
-
-  async generateComprehensiveValidationReport(projectId: string): Promise<{
-    project: Project;
-    overall: {
-      isValid: boolean;
-      readinessScore: number;
-      phase: WorkflowPhase;
-      canProgress: boolean;
-    };
-    phases: {
-      requirements: PhaseCompletionValidation;
-      design: PhaseCompletionValidation;
-      tasks: PhaseCompletionValidation;
-    };
-    crossPhase: CrossPhaseValidation;
-    recommendations: string[];
-    nextActions: string[];
-  } | null> {
-    const project = await this.projectRepository.findById(projectId);
-    if (!project) {
-      return null;
-    }
-
-    const phases = {
-      requirements: await this.validateRequirementsCompletion(projectId),
-      design: await this.validateDesignApproval(projectId),
-      tasks: await this.validateTaskApproval(projectId)
-    };
-
-    const crossPhase = await this.validateCrossPhaseConsistency(projectId);
-
-    // Calculate overall readiness
-    const phaseScores = [
-      phases.requirements.readinessScore,
-      phases.design.readinessScore,
-      phases.tasks.readinessScore
-    ];
-    const overallScore = Math.round(phaseScores.reduce((sum, score) => sum + score, 0) / 3);
-
-    // Determine overall validity
-    const isValid = phases.requirements.isComplete && 
-                   phases.design.isComplete && 
-                   phases.tasks.isComplete && 
-                   crossPhase.isConsistent;
-
-    // Check if can progress
-    const nextPhase = this.stateMachine.getNextPhase(project.phase);
-    const canProgress = nextPhase ? 
-      this.stateMachine.canTransition(project, nextPhase).allowed : false;
-
-    // Collect recommendations
-    const recommendations = [
-      ...phases.requirements.recommendations,
-      ...phases.design.recommendations,
-      ...phases.tasks.recommendations
-    ];
-
-    // Generate next actions
-    const nextActions: string[] = [];
-    if (!canProgress && nextPhase) {
-      nextActions.push(`Complete requirements for ${nextPhase} phase progression`);
-    }
-    
-    if (crossPhase.inconsistencies.length > 0) {
-      nextActions.push('Resolve cross-phase consistency issues');
-    }
-    
-    if (isValid && canProgress) {
-      nextActions.push('Project is ready for phase progression');
-    }
-
+    blockers.push(...coverageBlockers(covered, knownRequirements));
     return {
-      project,
-      overall: {
-        isValid,
-        readinessScore: overallScore,
-        phase: project.phase,
-        canProgress
-      },
-      phases,
-      crossPhase,
-      recommendations: [...new Set(recommendations)], // Remove duplicates
-      nextActions
+      status: resultStatus(blockers),
+      blockers: bounded(blockers),
+      decisionIds: uniqueSections(sections).map(({ id }) => id),
     };
+  }
+
+  parseTasks(content: string): TasksValidationResult {
+    const blockers: ValidationBlocker[] = [];
+    const { sections, duplicates } = parseSections(
+      visibleLines(content),
+      /^###\s+(\d+(?:\.\d+)+)\s+(.+?)\s*$/,
+    );
+    addDuplicateBlockers(blockers, duplicates);
+    if (sections.length === 0) blockers.push(blocker('TaskMissing', 'At least one N.M task section is required'));
+    const unique = uniqueSections(sections);
+    if (unique.length > 1_000) {
+      blockers.push(blocker('TaskLimitExceeded', 'Tasks must contain at most 1000 unique task sections'));
+    }
+    const tasks: Record<string, ParsedTask> = {};
+    for (const section of unique) {
+      if (section.id.length > 50) {
+        blockers.push(blocker('InvalidTaskId', 'Task identifiers must contain at most 50 characters', section.id.slice(0, 50)));
+      }
+      if (section.title.trim().length === 0 || section.title.length > 500) {
+        blockers.push(blocker('InvalidTaskTitle', 'Task titles must be non-whitespace and at most 500 characters', section.id.slice(0, 50)));
+      }
+      const values = requireMetadata(blockers, section, [
+        'Covers',
+        'Dependencies',
+        'TDD',
+        'Affected artifacts',
+        'Acceptance criteria',
+        'Verification',
+      ]);
+      const tdd = values.TDD;
+      let tddRequired = false;
+      if (tdd === 'required') tddRequired = true;
+      else if (!tdd || !/^not-applicable — \S(?:.*\S)?$/.test(tdd)) {
+        blockers.push(blocker('InvalidTdd', 'TDD must be required or not-applicable — <reason>', section.id));
+      }
+      const dependencies = parseList(values.Dependencies);
+      const plannedArtifacts = parseList(values['Affected artifacts']);
+      if (dependencies.includes('none') || plannedArtifacts.includes('none')) {
+        blockers.push(blocker('InvalidListValue', 'none must be the only value in an empty metadata list', section.id));
+      }
+      if (dependencies.length > 100) {
+        blockers.push(blocker('ListTooLong', 'Dependencies must contain at most 100 entries', section.id));
+      }
+      if (plannedArtifacts.length > 100) {
+        blockers.push(blocker('ListTooLong', 'Affected artifacts must contain at most 100 entries', section.id));
+      }
+      if (hasDuplicates(dependencies)) {
+        blockers.push(blocker('DuplicateListItem', 'Dependencies must not contain duplicate task IDs', section.id));
+      }
+      if (hasDuplicates(plannedArtifacts)) {
+        blockers.push(blocker('DuplicateListItem', 'Affected artifacts must not contain duplicate paths', section.id));
+      }
+      for (const artifact of plannedArtifacts) {
+        if (!isProjectRelativePath(artifact)) {
+          blockers.push(blocker('InvalidArtifactPath', `Affected artifact must be project-relative: ${artifact}`, section.id));
+        }
+      }
+      tasks[section.id] = {
+        title: section.title,
+        tddRequired,
+        dependencies,
+        plannedArtifacts,
+      };
+      const acceptance = values['Acceptance criteria'];
+      if (acceptance && !/(?:^|\s)\d+\.\s+\S/.test(acceptance)) {
+        blockers.push(blocker('AcceptanceCriteriaMissing', 'Acceptance criteria must contain a numbered item', section.id));
+      }
+    }
+    const taskIds = new Set(Object.keys(tasks));
+    for (const [id, task] of Object.entries(tasks)) {
+      for (const dependency of task.dependencies) {
+        if (!taskIds.has(dependency)) blockers.push(blocker('UnknownDependency', `Unknown dependency: ${dependency}`, id));
+      }
+    }
+    const visiting = new Set<string>();
+    const visited = new Set<string>();
+    let cycleFound = false;
+    const visit = (id: string): void => {
+      if (visiting.has(id)) {
+        cycleFound = true;
+        return;
+      }
+      if (visited.has(id)) return;
+      visiting.add(id);
+      for (const dependency of tasks[id]?.dependencies ?? []) if (taskIds.has(dependency)) visit(dependency);
+      visiting.delete(id);
+      visited.add(id);
+    };
+    for (const id of taskIds) visit(id);
+    if (cycleFound) blockers.push(blocker('DependencyCycle', 'Task dependencies must form an acyclic graph'));
+    return { status: resultStatus(blockers), blockers: bounded(blockers), tasks };
+  }
+
+  validateTasks(
+    content: string,
+    approvedRequirementsContent: string,
+    approvedDesignContent: string,
+  ): TasksValidationResult {
+    const parsed = this.parseTasks(content);
+    const blockers = [...parsed.blockers];
+    if (content.trim().length === 0 && !blockers.some(({ code }) => code === 'EmptyContent')) {
+      blockers.unshift(blocker('EmptyContent', 'Tasks content must not be empty'));
+    }
+    const known = [...extractRequirementIds(approvedRequirementsContent), ...extractDecisionIds(approvedDesignContent)];
+    const knownSet = new Set(known);
+    const covered = new Set<string>();
+    const lines = visibleLines(content);
+    const { sections } = parseSections(lines, /^###\s+(\d+(?:\.\d+)+)\s+(.+?)\s*$/);
+    for (const section of uniqueSections(sections)) {
+      for (const id of parseList(metadata(section, 'Covers'))) {
+        if (!knownSet.has(id)) blockers.push(blocker('UnknownCoverageId', `Covers references unknown identifier: ${id}`, section.id));
+        else covered.add(id);
+      }
+    }
+    blockers.push(...coverageBlockers(covered, known));
+    return { status: resultStatus(blockers), blockers: bounded(blockers), tasks: parsed.tasks };
   }
 }

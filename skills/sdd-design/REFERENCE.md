@@ -9,6 +9,22 @@ Read only for format help after the mandatory core design workflow is understood
 - Event-driven: asynchronous producers and consumers are inherent to the requirement.
 - Service split: independent ownership/deployment is proven; do not choose it merely for fashion.
 
+## Exact Document Shape
+
+```markdown
+# Design: Feature
+## Requirements Traceability
+## Architecture and Data Flow
+## Components and Interfaces
+### D-1: Decision title
+**Covers:** FR-1, NFR-1
+**Decision:** The chosen mechanism and trade-off.
+**Failure behavior:** The observable safe failure.
+**Verification:** How the decision is tested.
+## Failure Handling
+## Verification
+```
+
 ## Component Template
 
 ```markdown

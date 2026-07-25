@@ -60,10 +60,17 @@ sdd-mcp/
 - Keep primary-target policy in `install-target.ts`, Claude/Codex/OMP adapters in `tool-support/`, and safe managed filesystem operations in `cli/utils/`.
 - Route feature handlers through the shared realpath-aware resolver and disk-authoritative workflow/context services.
 
+### Workflow Ownership
+- Skill source owns method, artifact composition, human-facing validation, and explicit approval/review questions.
+- Application/runtime code owns identity, canonical artifact writes, revision/hash checks, deterministic gates, approvals/checkpoints, implementation progress, recovery, and handoff.
+- `.spec/specs/<feature>/spec.json` is the sole durable workflow authority; phase Markdown is readable governed content and `context/handoff.md` is a rebuildable cache.
+
 ### Packaged Components
-- Root `skills/`, `steering/`, `rules/`, `contexts/`, `agents/`, and `hooks/` are package source assets.
-- Generated local installs under `.claude/`, `.agents/`, `.codex/`, and `.omp/` are project-local outputs and should not be treated as source assets.
-- When adding or renaming a component, update package files, installer tests, README tables, and Claude Code/Codex/OMP renderers as needed.
+- Root `skills/`, `steering/`, `rules/`, `contexts/`, `agents/`, and `hooks/` are canonical package source assets.
+- The four canonical phase Skill bodies own workflow choreography; move optional examples/checklists to their colocated `REFERENCE.md` files.
+- Target renderers may add native invocation/model metadata but must not duplicate phase lifecycle logic.
+- Generated local installs under `.claude/`, `.agents/`, `.codex/`, and `.omp/` are project-local outputs; never hand-edit them or treat them as source assets.
+- When adding or renaming a component, update package files, installer tests, README tables, and all supported renderers as needed.
 
 ## Naming Conventions
 

@@ -15,10 +15,15 @@ export interface ClaudeCodeInstallRequest extends BaseTargetInstallRequest {
 }
 
 export async function installClaudeCodeTarget(request: ClaudeCodeInstallRequest) {
+  const writer = request.writer ?? new PreservingWriter(request.projectRoot);
+  return writer.withInstallLock(() => installClaudeCodeTargetLocked({ ...request, writer }));
+}
+
+async function installClaudeCodeTargetLocked(request: ClaudeCodeInstallRequest & { writer: PreservingWriter }) {
   const session = new TargetInstallSession(
     'claude-code',
     request.projectRoot,
-    request.writer ?? new PreservingWriter(request.projectRoot),
+    request.writer,
     request.profile ?? 'lean',
     request.components,
     request.refreshGenerated,
@@ -87,7 +92,7 @@ export async function installClaudeCodeTarget(request: ClaudeCodeInstallRequest)
         session.resolve(request.paths.rootGuidance),
         error,
       );
-      return session.complete();
+      return session.complete(request.paths);
     }
     await session.write(
       'root',
@@ -96,7 +101,7 @@ export async function installClaudeCodeTarget(request: ClaudeCodeInstallRequest)
       buildCompactRootGuidance('claude-code', request.paths, selected, rootPreamble),
     );
   }
-  return session.complete();
+  return session.complete(request.paths);
 }
 
 

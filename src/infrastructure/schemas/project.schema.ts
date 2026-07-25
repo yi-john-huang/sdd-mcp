@@ -8,7 +8,7 @@ export const projectSchema = {
     path: { type: 'string', minLength: 1 },
     phase: { 
       type: 'string', 
-      enum: ['init', 'requirements-generated', 'design-generated', 'tasks-generated', 'implementation-ready'] 
+      enum: ['init', 'requirements', 'design', 'tasks', 'implementation', 'implementation-completed']
     },
     metadata: {
       type: 'object',
@@ -59,7 +59,7 @@ export const projectSchema = {
         workflowOptions: {
           type: 'object',
           properties: {
-            reviewTestCases: { type: 'boolean' }
+            reviewTestCases: { type: ['boolean', 'null'] }
           },
           required: ['reviewTestCases']
         },

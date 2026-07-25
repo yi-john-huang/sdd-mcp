@@ -10,7 +10,7 @@
 - **Package manager:** npm with `package-lock.json`
 
 ### Core Frameworks and Protocols
-- **Model Context Protocol SDK:** One compiled stdio server with an exact 16-tool workflow inventory.
+- **Model Context Protocol SDK:** One compiled stdio server with an exact 16-tool v5 integrator contract.
 - **Inversify:** Dependency injection container for clean architecture wiring.
 - **Handlebars:** Template rendering for generated documents and project artifacts.
 - **AJV and Zod:** Runtime validation for schemas and structured input.
@@ -61,6 +61,12 @@ Domain ports live in `src/domain/ports.ts` and are implemented in infrastructure
 - `src/application/services/ContextCompactionService.ts` handles phase-aware bounded context, SHA-256 fingerprints, ETags, and canonical handoff repair.
 - `src/application/services/WorkflowEngineService.ts` treats `.spec/specs/*/spec.json` as workflow authority across server restarts.
 
+### Workflow Responsibility Boundary
+- Canonical `skills/sdd-{requirements,design,tasks,implement}/` owns method, artifact composition, concise validation presentation, and explicit human gates.
+- `WorkflowEngineService` and MCP adapters own durable feature identity, schema-v5 revisions/hashes, deterministic validation, approval/checkpoint governance, implementation progress, recovery, and handoff publication.
+- `.spec/specs/<feature>/spec.json` is authoritative; Markdown artifacts are governed readable content and `context/handoff.md` is rebuildable.
+- Target renderers add only native invocation/model metadata. Generated `.claude/`, `.agents/`, `.codex/`, and `.omp/` trees are outputs, not workflow sources.
+
 ## Development Environment
 
 ### Setup
@@ -85,7 +91,7 @@ npm start
 
 ### Packaging
 - Published package name: `sdd-mcp-server`
-- Current version: `4.0.0`
+- Current version: `5.0.0`
 - Binaries:
   - `sdd-mcp-server` -> `sdd-entry.js`
   - `sdd-install-skills` -> `dist/cli/install-skills.js`

@@ -21,14 +21,14 @@ const skillNames = [
 
 const requiredCoreChecks: Record<typeof skillNames[number], RegExp[]> = {
   'sdd-commit': [/inspect.*changes/i, /never.*secret/i, /focused.*test/i],
-  'sdd-design': [/requirements.*approved/i, /validate.*design/i, /approval/i],
-  'sdd-implement': [/tasks.*approved/i, /red.*green.*refactor/is, /security/i],
-  'sdd-requirements': [/ears/i, /acceptance criteria/i, /approval/i],
+  'sdd-design': [/requirements.*approved/i, /approved compact context/i, /approve this design/i],
+  'sdd-implement': [/tasks.*approved/i, /red.*green.*refactor/is, /record.*blocker/i, /security/i],
+  'sdd-requirements': [/ears/i, /acceptance criteria/i, /approve these requirements/i],
   'sdd-review': [/correctness/i, /security/i, /verification/i],
   'sdd-security-check': [/owasp/i, /secret/i, /severity/i],
   'sdd-steering': [/preserve.*user/i, /security/i, /validate/i],
   'sdd-steering-custom': [/fileName/i, /\.md/, /preserve.*user/i],
-  'sdd-tasks': [/design.*approved/i, /test.case.review/i, /approval/i],
+  'sdd-tasks': [/design.*approved/i, /test.case.review/i, /approve these implementation tasks/i],
   'sdd-test-gen': [/failing.*test/i, /observable.*behavior/i, /focused.*test/i],
   'simple-task': [/failing.*test/i, /security/i, /focused.*test/i],
 };
@@ -79,6 +79,31 @@ describe('canonical progressive assets', () => {
     }
   });
 
+
+  it('keeps the formal phase lifecycle inside canonical Skills', () => {
+    const requirements = read('skills/sdd-requirements/SKILL.md');
+    const design = read('skills/sdd-design/SKILL.md');
+    const tasks = read('skills/sdd-tasks/SKILL.md');
+    const implement = read('skills/sdd-implement/SKILL.md');
+
+    expect(requirements).toMatch(/missing feature.*internally initialize/is);
+    expect(requirements).toMatch(/no supplied name.*sole incomplete feature/is);
+    expect(requirements).toMatch(/clarification.*retry initialization/is);
+
+    for (const content of [requirements, design, tasks]) {
+      expect(content).toMatch(/compact approved context|approved compact context/i);
+      expect(content).toMatch(/exact revision and artifact/i);
+      expect(content).toMatch(/reread status/i);
+      expect(content).toMatch(/never (ask|tell).*raw MCP|never ask.*backend tool/is);
+    }
+
+    expect(tasks).toMatch(/saved test-case-review choice is authoritative/i);
+    expect(tasks).toMatch(/separate from approval/i);
+    expect(implement).toMatch(/record.*non-zero exit code/is);
+    expect(implement).toMatch(/record.*zero exit code/is);
+    expect(implement).toMatch(/affected project-relative artifacts/i);
+    expect(implement).toMatch(/resume.*persisted/is);
+  });
   it('keeps serial execution local and bounds advisor handoffs', () => {
     for (const skillName of ['sdd-implement', 'sdd-test-gen', 'simple-task', 'sdd-commit']) {
       const content = read(`skills/${skillName}/SKILL.md`);

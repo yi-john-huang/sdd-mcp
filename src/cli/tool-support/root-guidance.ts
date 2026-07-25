@@ -36,8 +36,8 @@ export function buildCompactRootGuidance(
     '',
     '## Workflow',
     '',
-    `Use \`${invocation}simple-task <description>\` for small changes. For formal work, run \`${invocation}sdd-requirements <feature-name>\`, then \`${invocation}sdd-design\`, \`${invocation}sdd-tasks\`, and \`${invocation}sdd-implement\` after each approval.`,
-    'Use installed `sdd-*` MCP tools for durable workflow state; load compact context by default.',
+    `After installation, reload or restart the host and accept project trust. Use \`${invocation}simple-task <description>\` for small changes. For formal work, invoke \`${invocation}sdd-requirements <feature-name>\`, then \`${invocation}sdd-design\`, \`${invocation}sdd-tasks\`, and \`${invocation}sdd-implement\` after each explicit approval.`,
+    'Skills automatically restore durable workflow state and approved compact context; users do not call MCP tools or paste workflow JSON.',
     '',
   ];
   if (selected.size > 0) {

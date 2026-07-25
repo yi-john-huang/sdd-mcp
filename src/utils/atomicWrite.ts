@@ -1,6 +1,8 @@
 import { mkdir } from 'node:fs/promises';
-import { dirname } from 'node:path';
+import { dirname, resolve } from 'node:path';
 import writeFileAtomic from "write-file-atomic";
+
+const pendingWrites = new Map<string, Promise<void>>();
 
 export interface AtomicWriteOptions {
   readonly encoding?: BufferEncoding;
@@ -17,11 +19,23 @@ export async function atomicWriteFile(
   content: string,
   options: AtomicWriteOptions = {},
 ): Promise<void> {
-  await mkdir(dirname(filePath), { recursive: true });
-  await writeFileAtomic(filePath, content, {
-    encoding: options.encoding ?? "utf8",
-    mode: options.mode,
-  });
+  const key = resolve(filePath);
+  const prior = pendingWrites.get(key) ?? Promise.resolve();
+  const operation = prior
+    .catch(() => undefined)
+    .then(async () => {
+      await mkdir(dirname(filePath), { recursive: true });
+      await writeFileAtomic(filePath, content, {
+        encoding: options.encoding ?? "utf8",
+        mode: options.mode,
+      });
+    });
+  pendingWrites.set(key, operation);
+  try {
+    await operation;
+  } finally {
+    if (pendingWrites.get(key) === operation) pendingWrites.delete(key);
+  }
 }
 
 /**

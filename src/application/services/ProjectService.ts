@@ -49,9 +49,9 @@ export class ProjectService {
         updatedAt: new Date(),
         language,
         approvals: {
-          requirements: { generated: false, approved: false },
-          design: { generated: false, approved: false },
-          tasks: { generated: false, approved: false }
+          requirements: { generated: false, approved: false, revision: 0, validation: { status: 'not-run', blockers: [] } },
+          design: { generated: false, approved: false, revision: 0, validation: { status: 'not-run', blockers: [] } },
+          tasks: { generated: false, approved: false, revision: 0, validation: { status: 'not-run', blockers: [] } }
         },
         workflowOptions: {
           reviewTestCases: options.reviewTestCases ?? false

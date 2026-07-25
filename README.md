@@ -5,14 +5,14 @@
 
 A Model Context Protocol server and target-native installer for governed Spec-Driven Development (SDD) in Claude Code, Codex, and Oh My Pi (OMP).
 
-> **v4.0.0** — One 16-tool runtime, native OMP installation, manual-only skills, phase-aware bounded context, and managed generated-file upgrades.
+> **v5.0.0** — Skill-governed Formal SDD, durable revision-bound approvals and task progress, hidden MCP runtime registration, and managed target-native installation.
 
 ## Why sdd-mcp?
 
-`sdd-mcp` keeps requirements, design, tasks, approvals, optional TDD review, implementation, and continuation state on disk. Skills provide on-demand guidance; MCP tools enforce workflow behavior. This avoids treating a large prompt catalog as workflow state.
+Skills own the requirements, design, task-planning, and TDD method plus the user conversation. The MCP runtime stays behind the Skill boundary and owns feature identity, canonical artifact writes, deterministic validation, revision-bound approvals, optional test review, implementation progress, and restart-safe context.
 
 ```text
-sdd-init -> requirements -> approve -> design -> approve -> tasks -> review tests -> approve -> implement
+User -> Skill -> MCP -> .spec
 ```
 
 ## New project installation
@@ -25,21 +25,17 @@ Use this path when the repository has never had sdd-mcp-generated guidance.
 
 ```bash
 # Recommended explicit lean installation
-npx sdd-mcp-server@4.0.0 install --profile lean --target claude-code
-npx sdd-mcp-server@4.0.0 install --profile lean --target codex
-npx sdd-mcp-server@4.0.0 install --profile lean --target omp
+npx sdd-mcp-server@5.0.0 install --profile lean --target claude-code
+npx sdd-mcp-server@5.0.0 install --profile lean --target codex
+npx sdd-mcp-server@5.0.0 install --profile lean --target omp
 
 # Interactive full installation: choose Claude Code, Codex, or OMP
-npx sdd-mcp-server@4.0.0 install --profile full
+npx sdd-mcp-server@5.0.0 install --profile full
 ```
 
-Do not use `--refresh-generated` for a new project. There is no legacy generated set to replace, and a normal installation already records package ownership in `.sdd-mcp/install-manifest.json`.
+Do not use `--refresh-generated` for a new project. A normal installation records package ownership in `.sdd-mcp/install-manifest.json` and registers the hidden project runtime.
 
-After installation, restart or reload the host if it does not discover new project guidance immediately. Then initialize the first feature with the installed SDD workflow. To run only the MCP server without installing project guidance:
-
-```bash
-npx -y sdd-mcp-server@4.0.0
-```
+After installation, restart or reload the host and accept its project trust prompt. Then invoke the native requirements Skill with a feature name and goal; the Skill initializes or resumes durable state automatically.
 
 A non-interactive install without `--target` retains the compatibility default, `claude-code`, and prints a notice. `--codex` remains a deprecated Codex-only alias. `--all-tools` installs all three native targets plus Antigravity; it does not make Codex artifacts executable by OMP.
 
@@ -52,7 +48,7 @@ SDD skills are explicit commands and do not activate implicitly from ordinary pr
 | Small task | `/simple-task` | `$simple-task` | `/skill:simple-task` |
 | Formal SDD | `/sdd-requirements` → `/sdd-design` → `/sdd-tasks` → `/sdd-implement` | `$sdd-requirements` → `$sdd-design` → `$sdd-tasks` → `$sdd-implement` | `/skill:sdd-requirements` → `/skill:sdd-design` → `/skill:sdd-tasks` → `/skill:sdd-implement` |
 
-The phase approvals are MCP operations; command syntax only invokes the relevant guidance.
+Approvals and optional test-case review are explicit questions inside the relevant Skill flow. Status, context, validation, persistence, and progress recording happen internally.
 
 ## Profiles and native paths
 
@@ -69,17 +65,17 @@ Claude Code and Codex lean profiles install skills, steering, and their supporte
 
 See [Installation Guide](docs/INSTALL-GUIDE.md) and [Model Routing](docs/MODEL-ROUTING.md).
 
-## Upgrade from sdd-mcp 3.x
+## Upgrade from sdd-mcp 3.x or 4.x
 
 Use this path when the project already contains generated sdd-mcp files from an earlier release.
 
 1. Commit or otherwise preserve the current repository state.
-2. Select the v4 target that the host actually uses. Existing Claude Code and Codex projects keep their native target; an OMP project previously using Codex files must select `omp`.
+2. Select the v5 target that the host actually uses. Existing Claude Code and Codex projects keep their native target; an OMP project previously using Codex files must select `omp`.
 3. Run one reversible refresh:
 
 ```bash
 # Replace <target> with claude-code, codex, or omp
-npx sdd-mcp-server@4.0.0 install \
+npx sdd-mcp-server@5.0.0 install \
   --profile full \
   --target <target> \
   --refresh-generated
@@ -89,10 +85,9 @@ The refresh backs up selected generated files under `.sdd-mcp/backups/<timestamp
 
 For an OMP migration, Codex TOML agents remain preserved but are not executable OMP agents. The new native files are written under `.omp/`.
 
-After this one-time migration, use a normal install without `--refresh-generated` for subsequent v4 updates. Review any reported conflicts before deleting old target directories.
+After this one-time migration, use a normal install without `--refresh-generated` for subsequent v5 updates. Review conflicts, then reload/restart the host and accept project trust before invoking a native phase Skill.
 
-## Canonical v4 MCP runtime
-
+## Integrator/runtime reference: canonical v5 inventory
 Every packaged entrypoint exposes the same 16 tools:
 
 1. `sdd-init`
@@ -112,23 +107,11 @@ Every packaged entrypoint exposes the same 16 tools:
 15. `sdd-validate-gap`
 16. `sdd-spec-impl`
 
-Feature-scoped tools use `featureName`; v4 removes public `projectId` locators. `sdd-list-skills` is not a runtime tool because hosts already discover installed skills and the installer supports `--list`.
+Feature-scoped tools use `featureName`; v5 payloads bind phase mutations and approvals to exact revisions and artifact hashes. This inventory is for MCP integrators and runtime maintainers—not end-user workflow instructions. Hosts discover installed Skills, and the installer supports `--list`.
 
-## Compact continuation and ETags
+## Integrator/runtime reference: compact continuation
 
-Context loading defaults to compact mode and uses the latest approved phase:
-
-```json
-{ "featureName": "checkout", "mode": "compact" }
-```
-
-Save the returned `fingerprint`. On the next unchanged load, send it as `ifNoneMatch`:
-
-```json
-{ "featureName": "checkout", "mode": "compact", "ifNoneMatch": "<fingerprint>" }
-```
-
-A matching exact response fingerprint returns a short `not-modified` envelope without duplicate context. Compact, standard, and full default bounds are 2,048, 4,096, and 16,384 `estimatedTokens`. Full mode never silently truncates raw documents.
+The runtime's context API defaults to bounded approved context and supports exact-response ETags. Phase Skills manage fingerprints and draft opt-in internally. Integrators that call the protocol directly must preserve the returned fingerprint for `ifNoneMatch`, request unapproved source only explicitly in full mode, and treat `.spec/specs/<feature>/spec.json` as workflow authority. Compact, standard, and full default bounds are 2,048, 4,096, and 16,384 `estimatedTokens`; full mode never silently truncates raw documents.
 
 ## Context and usage measurement
 
