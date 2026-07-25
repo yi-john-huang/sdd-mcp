@@ -98,6 +98,10 @@ describe('target-specific installers', () => {
     expect(fs.readFileSync(path.join(root, '.claude/agents/planner.md'), 'utf8')).toContain('model: opus');
     expect(fs.readFileSync(path.join(root, '.claude/agents/implementer.md'), 'utf8')).toContain('model: sonnet');
     expect(fs.existsSync(path.join(root, 'CLAUDE.md'))).toBe(true);
+    expect(JSON.parse(fs.readFileSync(path.join(root, '.mcp.json'), 'utf8')).mcpServers['sdd-mcp'])
+      .toEqual({ type: 'stdio', command: 'npx', args: ['-y', 'sdd-mcp-server@5.0.0'] });
+    expect(JSON.parse(fs.readFileSync(path.join(root, '.claude/settings.json'), 'utf8')).permissions.allow)
+      .toContain('mcp__sdd-mcp__*');
     expect(fs.existsSync(path.join(root, '.codex'))).toBe(false);
     expect(fs.existsSync(path.join(root, 'AGENTS.md'))).toBe(false);
   });
@@ -155,6 +159,8 @@ describe('target-specific installers', () => {
       .toContain('Request the configured architect custom agent once');
     expect(fs.existsSync(path.join(root, '.agents/skills/sdd-design/references/example.md'))).toBe(true);
     expect(Buffer.byteLength(fs.readFileSync(path.join(root, 'AGENTS.md')))).toBeLessThanOrEqual(2000);
+    expect(fs.readFileSync(path.join(root, '.codex/config.toml'), 'utf8'))
+      .toContain('sdd-mcp-server@5.0.0');
     expect(fs.existsSync(path.join(root, '.claude'))).toBe(false);
     expect(fs.existsSync(path.join(root, 'CLAUDE.md'))).toBe(false);
   });
@@ -287,6 +293,8 @@ describe('target-specific installers', () => {
     const guidance = fs.readFileSync(path.join(root, '.omp/AGENTS.md'), 'utf8');
     expect(guidance).toContain('- Agents: `.omp/agents/`');
     expect(guidance).not.toContain('- Rules:');
+    expect(JSON.parse(fs.readFileSync(path.join(root, '.omp/mcp.json'), 'utf8')).mcpServers['sdd-mcp'])
+      .toEqual({ type: 'stdio', command: 'npx', args: ['-y', 'sdd-mcp-server@5.0.0'] });
   });
 
   it('renders native OMP full output without hooks or spawn capability', async () => {
@@ -328,4 +336,26 @@ describe('target-specific installers', () => {
       sources: makeSources(sourceRoot),
     })).rejects.toThrow('does not support packaged Markdown hooks');
   });
+  it('reports runtime conflicts without overwriting existing target config', async () => {
+    const config = path.join(root, '.omp/mcp.json');
+    fs.mkdirSync(path.dirname(config), { recursive: true });
+    const prior = '{\n  \"mcpServers\": { \"sdd-mcp\": { \"command\": \"private-runtime\" } }\n}\n';
+    fs.writeFileSync(config, prior);
+
+    const report = await installOmpTarget({
+      projectRoot: root,
+      paths: getTargetPolicy('omp').defaultPaths,
+      components: ['skills'],
+      sources: makeSources(sourceRoot),
+    });
+
+    expect(report.failed).toEqual([
+      expect.objectContaining({ component: 'runtime', path: config }),
+    ]);
+    expect(fs.readFileSync(config, 'utf8')).toBe(prior);
+    expect(fs.existsSync(path.join(root, '.sdd-mcp/install-manifest.json'))).toBe(false);
+    expect(fs.existsSync(path.join(root, '.omp/skills/sdd-design/SKILL.md'))).toBe(false);
+    expect(fs.existsSync(path.join(root, '.omp/AGENTS.md'))).toBe(false);
+  });
+
 });

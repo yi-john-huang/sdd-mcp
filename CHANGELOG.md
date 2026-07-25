@@ -7,6 +7,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [5.0.0] - 2026-07-25
+
+### Added
+- Schema-v5 disk-authoritative workflow state with revision/hash-bound submissions, approvals, test-case checkpoints, deterministic phase validation, crash journals, and durable TDD task progress.
+- Mandatory project-scoped MCP runtime registration for Claude Code, Codex, and OMP installs, committed with manifest-v2 ownership and preserve-first recovery.
+
+### Changed
+- Made the four phase Skills the public Formal SDD workflow: Skills own method and human gates while MCP owns canonical writes, validation, governance, context, and continuation.
+- Updated compact context handoffs, native target renderers, onboarding, and runtime references for the Skill-governed 16-tool contract.
+
+### Security
+- Added owner-fenced cross-process locks, CAS mutation and recovery checks, approved-artifact drift blocking, symlink containment, bounded machine fields, and strict runtime-config ownership validation.
+
 ## [4.0.0] - 2026-07-19
 
 ### Added

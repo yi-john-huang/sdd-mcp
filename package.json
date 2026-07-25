@@ -1,6 +1,6 @@
 {
   "name": "sdd-mcp-server",
-  "version": "4.0.0",
+  "version": "5.0.0",
   "description": "MCP server for spec-driven development workflows across AI-agent CLIs and IDEs",
   "main": "dist/index.js",
   "bin": {
@@ -38,7 +38,7 @@
     "test:e2e": "jest --testPathPattern=e2e.*\\.test\\.ts$",
     "test:watch": "jest --watch",
     "test:coverage": "jest --coverage",
-    "test:ci": "jest --coverage --ci --watchAll=false --passWithNoTests",
+    "test:ci": "jest --coverage --ci --runInBand --watchAll=false --passWithNoTests",
     "lint": "eslint src --ext .ts",
     "lint:fix": "eslint src --ext .ts --fix",
     "typecheck": "tsc --noEmit",
@@ -75,8 +75,10 @@
     "i18next-fs-backend": "^2.6.0",
     "i18next-http-middleware": "^3.8.0",
     "inversify": "^6.0.2",
+    "jsonc-parser": "^3.3.1",
     "os-locale": "^6.0.2",
     "reflect-metadata": "^0.2.2",
+    "smol-toml": "^1.7.0",
     "uuid": "^11.1.1",
     "write-file-atomic": "^5.0.1",
     "zod": "^3.23.8"

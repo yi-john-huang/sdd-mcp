@@ -1,20 +1,18 @@
 # AGENTS.md — Spec-Driven Development (SDD)
 
-This project uses the SDD workflow powered by `sdd-mcp-server`.
+This project uses `sdd-mcp-server` with manual-only Skills and its hidden governed runtime.
 
-## Development Paths
+## Start
 
-### Simple Tasks
-For small features, bug fixes, and quick enhancements — just start coding with best practices.
+After installation, reload Codex and accept project trust when prompted. Use `$simple-task` for a small feature, bug fix, or focused enhancement.
 
-### Full SDD Workflow
-For complex features requiring formal specification:
+For formal work, invoke only:
 
-```
-Initialize → Requirements → Design → Tasks → Implement
+```text
+$sdd-requirements <feature-name> → explicit approval → $sdd-design → explicit approval → $sdd-tasks → optional explicit test review → explicit approval → $sdd-implement
 ```
 
-Each phase builds on the previous and requires review before proceeding.
+Each Skill restores durable status and approved compact context, performs validation and persistence internally, and asks for required human decisions. Do not ask the user to call MCP tools or paste workflow JSON.
 
 ## Installed Components
 

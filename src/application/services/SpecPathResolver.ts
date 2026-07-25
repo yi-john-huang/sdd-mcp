@@ -26,7 +26,7 @@ export interface ResolvedSpecPaths {
 }
 
 export function validateFeatureName(featureName: string): void {
-  if (!/^[A-Za-z0-9][A-Za-z0-9._-]*$/.test(featureName) || featureName === '.' || featureName === '..') {
+  if (!/^[A-Za-z0-9][A-Za-z0-9._-]{0,79}$/.test(featureName) || featureName === '.' || featureName === '..') {
     throw new InvalidFeatureNameError(featureName);
   }
 }

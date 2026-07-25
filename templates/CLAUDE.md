@@ -1,24 +1,18 @@
 # CLAUDE.md — Spec-Driven Development
 
-This project uses `sdd-mcp-server` with manual-only skills and the canonical v4 MCP runtime.
+This project uses `sdd-mcp-server` with manual-only Skills and its hidden governed runtime.
 
-## Development paths
+## Start
 
-### Simple task
+After installation, reload Claude Code and accept the project MCP trust prompt. Invoke `/simple-task` for a small feature, bug fix, or focused enhancement.
 
-Invoke `/simple-task` for a small feature, bug fix, or focused enhancement.
-
-### Formal SDD
-
-For work requiring approved requirements, design, and TDD tasks:
+For formal work, invoke only the phase Skills:
 
 ```text
-sdd-init → /sdd-requirements → sdd-approve → /sdd-design → sdd-approve → /sdd-tasks → optional test review → sdd-approve → /sdd-implement
+/sdd-requirements <feature-name> → explicit approval → /sdd-design → explicit approval → /sdd-tasks → optional explicit test review → explicit approval → /sdd-implement
 ```
 
-Use the installed `sdd-*` MCP tools for state changes and compact context by default. Feature-scoped calls use `featureName`, not `projectId`.
-
-For continuation, call `sdd-context-load` with `featureName`; retain the returned `fingerprint` and send it as `ifNoneMatch` on the next identical request. A `not-modified` result means the prior payload remains current and must not be requested or repeated again.
+Each Skill restores durable status and approved compact context, performs validation and persistence internally, and asks for any required human decision. Do not ask the user to call MCP tools or paste workflow JSON. A cloned project still requires the host's project trust; organization or project deny rules may override local permissions.
 
 ## Model execution
 

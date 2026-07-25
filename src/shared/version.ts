@@ -1,0 +1,3 @@
+export const PACKAGE_VERSION = '5.0.0';
+export const INSTALL_MANIFEST_SCHEMA_VERSION = 2;
+export const INSTALL_RENDERER_VERSION = 5;

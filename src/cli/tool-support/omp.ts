@@ -15,13 +15,18 @@ export interface OmpInstallRequest extends BaseTargetInstallRequest {
 }
 
 export async function installOmpTarget(request: OmpInstallRequest) {
+  const writer = request.writer ?? new PreservingWriter(request.projectRoot);
+  return writer.withInstallLock(() => installOmpTargetLocked({ ...request, writer }));
+}
+
+async function installOmpTargetLocked(request: OmpInstallRequest & { writer: PreservingWriter }) {
   if (request.components.includes('hooks')) {
     throw new CliUsageError('Oh My Pi does not support packaged Markdown hooks; omit --hooks.');
   }
   const session = new TargetInstallSession(
     'omp',
     request.projectRoot,
-    request.writer ?? new PreservingWriter(request.projectRoot),
+    request.writer,
     request.profile ?? 'lean',
     request.components,
     request.refreshGenerated,
@@ -58,5 +63,5 @@ export async function installOmpTarget(request: OmpInstallRequest) {
       buildCompactRootGuidance('omp', request.paths, selected, request.rootGuidancePreamble),
     );
   }
-  return session.complete();
+  return session.complete(request.paths);
 }

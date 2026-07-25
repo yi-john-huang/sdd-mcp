@@ -4,10 +4,11 @@ This repository develops `sdd-mcp-server`, a spec-driven workflow for Claude Cod
 
 ## Workflow
 
+- Install the chosen host target, reload it, and accept the host's project trust prompt before starting.
 - Small fixes: invoke `/skill:simple-task`.
-- Complex changes: `sdd-init` → `/skill:sdd-requirements` → approval → `/skill:sdd-design` → approval → `/skill:sdd-tasks` → approval → `/skill:sdd-implement`.
-- Never cross an unapproved phase. Optional TDD test-case review must complete before tasks approval when configured.
-- Use the installed `sdd-*` MCP tools for durable state. Load compact context by default; request standard/full only when the task needs omitted source detail.
+- Formal work: invoke `/skill:sdd-requirements <feature-name>`, then `/skill:sdd-design`, `/skill:sdd-tasks`, and `/skill:sdd-implement` after each explicit approval.
+- Never cross an unapproved phase. When configured, test-case review is a separate explicit decision before tasks approval.
+- Skills automatically restore durable status and approved compact context. Do not ask users to operate MCP tools or paste workflow JSON.
 
 ## Repository layout
 

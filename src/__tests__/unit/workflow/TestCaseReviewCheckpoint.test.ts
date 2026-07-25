@@ -14,9 +14,9 @@ function createReadyProject(checkpoint: { required: boolean; reviewed: boolean }
       updatedAt: new Date('2026-06-21T00:00:00.000Z'),
       language: 'en',
       approvals: {
-        requirements: { generated: true, approved: true },
-        design: { generated: true, approved: true },
-        tasks: { generated: true, approved: true }
+        requirements: { generated: true, approved: true, revision: 1, validation: { status: 'passed', blockers: [] } },
+        design: { generated: true, approved: true, revision: 1, validation: { status: 'passed', blockers: [] } },
+        tasks: { generated: true, approved: true, revision: 1, validation: { status: 'passed', blockers: [] } }
       },
       workflowOptions: {
         reviewTestCases: checkpoint.required

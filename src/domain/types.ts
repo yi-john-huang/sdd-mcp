@@ -23,13 +23,30 @@ export interface PhaseApprovals {
   readonly tasks: ApprovalStatus;
 }
 
-export interface ApprovalStatus {
-  readonly generated: boolean;
-  readonly approved: boolean;
+export type ValidationStatus = 'not-run' | 'passed' | 'failed' | 'legacy-accepted';
+
+export interface ValidationBlocker {
+  readonly code: string;
+  readonly message: string;
+  readonly reference?: string;
 }
 
+export interface PhaseRecord {
+  readonly generated: boolean;
+  readonly approved: boolean;
+  readonly revision: number;
+  readonly artifactSha256?: string;
+  readonly validation: {
+    readonly status: ValidationStatus;
+    readonly checkedAt?: string;
+    readonly blockers: readonly ValidationBlocker[];
+  };
+}
+
+export type ApprovalStatus = PhaseRecord;
+
 export interface WorkflowOptions {
-  readonly reviewTestCases: boolean;
+  readonly reviewTestCases: boolean | null;
 }
 
 export interface WorkflowCheckpoints {
@@ -40,14 +57,55 @@ export interface ReviewCheckpoint {
   readonly required: boolean;
   readonly reviewed: boolean;
   readonly reviewedAt?: Date;
+  readonly reviewedRevision?: number;
+  readonly reviewedArtifactSha256?: string;
 }
 
 export enum WorkflowPhase {
   INIT = "init",
-  REQUIREMENTS = "requirements-generated",
-  DESIGN = "design-generated",
-  TASKS = "tasks-generated",
-  IMPLEMENTATION = "implementation-ready",
+  REQUIREMENTS = "requirements",
+  DESIGN = "design",
+  TASKS = "tasks",
+  IMPLEMENTATION = "implementation",
+  IMPLEMENTATION_COMPLETED = "implementation-completed",
+}
+
+export type TaskStatus =
+  | 'pending'
+  | 'in-progress'
+  | 'red-observed'
+  | 'green-observed'
+  | 'blocked'
+  | 'completed';
+
+export interface ExecutionEvidence {
+  readonly command: string;
+  readonly exitCode: number;
+  readonly summary: string;
+  readonly observedAt: string;
+}
+
+export interface ImplementationTaskState {
+  readonly title: string;
+  readonly tddRequired: boolean;
+  readonly dependencies: readonly string[];
+  readonly status: TaskStatus;
+  readonly blocker?: string;
+  readonly blockedFrom?: 'in-progress' | 'red-observed' | 'green-observed';
+  readonly evidence: {
+    readonly red?: ExecutionEvidence;
+    readonly green?: ExecutionEvidence;
+    readonly verification?: ExecutionEvidence;
+  };
+  readonly plannedArtifacts: readonly string[];
+  readonly observedArtifacts: readonly string[];
+}
+
+export interface ImplementationState {
+  readonly revision: number;
+  readonly tasksRevision: number;
+  readonly legacyImported: boolean;
+  readonly tasks: Readonly<Record<string, ImplementationTaskState>>;
 }
 
 export enum WorkflowState {

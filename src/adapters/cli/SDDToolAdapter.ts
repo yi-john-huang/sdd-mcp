@@ -8,8 +8,9 @@ import { QualityService } from "../../application/services/QualityService.js";
 import { SteeringDocumentService } from "../../application/services/SteeringDocumentService.js";
 import { CodebaseAnalysisService } from "../../application/services/CodebaseAnalysisService.js";
 import { RequirementsClarificationService } from "../../application/services/RequirementsClarificationService.js";
-import { ContextCompactionService, ContextLoadMode } from "../../application/services/ContextCompactionService.js";
+import type { ContextLoadMode } from "../../application/services/ContextCompactionService.js";
 import { WorkflowEngineService } from "../../application/services/WorkflowEngineService.js";
+import { GovernanceError } from "../../application/services/WorkflowErrors.js";
 import { LoggerPort } from "../../domain/ports.js";
 import { Project, ClarificationAnswers } from "../../domain/types.js";
 import { ensureStaticSteeringDocuments } from "../../application/services/staticSteering.js";
@@ -40,8 +41,6 @@ export class SDDToolAdapter {
     private readonly codebaseAnalysisService: CodebaseAnalysisService,
     @inject(TYPES.RequirementsClarificationService)
     private readonly clarificationService: RequirementsClarificationService,
-    @inject(TYPES.ContextCompactionService)
-    private readonly contextCompactionService: ContextCompactionService,
     @inject(TYPES.WorkflowEngineService)
     private readonly workflowEngineService: WorkflowEngineService,
     @inject(TYPES.LoggerPort) private readonly logger: LoggerPort,
@@ -74,131 +73,47 @@ export class SDDToolAdapter {
     }));
   }
 
-  private canonicalFeatureName(projectName: string): string {
-    const featureName = projectName
-      .trim()
-      .toLowerCase()
-      .replace(/[^a-z0-9._-]+/g, "-")
-      .replace(/^-+|-+$/g, "")
-      .slice(0, 80);
-    if (!featureName) {
-      throw new Error("Invalid argument: projectName must contain a letter or number");
+
+  private async handleProjectInit(args: Record<string, unknown>): Promise<unknown> {
+    const featureName = this.requireFeatureName(args.featureName);
+    const description = args.description;
+    if (typeof description !== "string") {
+      throw new Error("Invalid argument: description must be a string");
     }
-    return featureName;
-  }
-
-  private async handleProjectInit(
-    args: Record<string, unknown>,
-  ): Promise<unknown> {
-    const {
-      projectName,
-      description = "",
-      clarificationAnswers,
-      reviewTestCases = false,
-    } = args;
-
-    if (typeof projectName !== "string") {
-      throw new Error("Invalid arguments: projectName must be a string");
-    }
-    const featureName = this.canonicalFeatureName(projectName);
-
-    const currentPath = process.cwd();
-
-    // FIRST PASS: Analyze description quality
+    const clarificationAnswers = args.clarificationAnswers;
     if (!clarificationAnswers) {
-      const result = await this.clarificationService.analyzeDescription(
-        description as string,
-        currentPath,
-      );
-
-      // If clarification needed, BLOCK and return questions
+      const result = await this.clarificationService.analyzeDescription(description, process.cwd());
       if (result.needsClarification && result.questions) {
-        return this.formatClarificationQuestions(
-          result.questions,
-          result.analysis!,
-        );
+        return { status: "clarification-required", featureName, questions: result.questions };
       }
     }
-
-    // SECOND PASS: Validate and synthesize enriched description
-    let enrichedDescription = description as string;
+    let enrichedDescription = description;
     if (clarificationAnswers && typeof clarificationAnswers === "object") {
-      const result = await this.clarificationService.analyzeDescription(
-        description as string,
-        currentPath,
-      );
-
+      const result = await this.clarificationService.analyzeDescription(description, process.cwd());
       if (result.questions) {
         const validation = this.clarificationService.validateAnswers(
           result.questions,
           clarificationAnswers as ClarificationAnswers,
         );
-
         if (!validation.valid) {
-          throw new Error(
-            `Missing required answers: ${validation.missingRequired.join(", ")}`,
-          );
+          throw new GovernanceError('InvalidParams', `Missing required answers: ${validation.missingRequired.join(", ")}`);
         }
-
-        const enriched = this.clarificationService.synthesizeDescription(
-          description as string,
+        enrichedDescription = this.clarificationService.synthesizeDescription(
+          description,
           result.questions,
           clarificationAnswers as ClarificationAnswers,
-        );
-
-        enrichedDescription = enriched.enriched;
+        ).enriched;
       }
     }
-
     await this.workflowEngineService.initializeFeature({
-      projectRoot: currentPath,
+      projectRoot: process.cwd(),
       featureName,
-      language: "en",
-      reviewTestCases: reviewTestCases === true,
-    });
-
-    const clarificationNote = clarificationAnswers
-      ? "\n\n✅ Requirements Clarification: Your answers have been incorporated into an enriched project description."
-      : "";
-
-    return {
-      featureName,
-      initialized: true,
       description: enrichedDescription,
-      clarificationApplied: Boolean(clarificationAnswers),
-      message: `Project "${projectName}" initialized successfully${clarificationNote}`,
-    };
+      language: (args.language as "en" | "ja" | "zh-TW" | undefined) ?? "en",
+    });
+    return { status: "initialized", featureName, revision: 0 };
   }
 
-  private formatClarificationQuestions(
-    questions: any[],
-    analysis: any,
-  ): string {
-    let output = "## Requirements Clarification Needed\n\n";
-    output +=
-      "Your project description needs more detail to ensure we build the right solution.\n\n";
-    output += `**Quality Score**: ${Math.round(analysis.qualityScore)}/100 (need 70+ to proceed)\n\n`;
-    output += "### Please answer these questions:\n\n";
-
-    let questionNum = 1;
-    for (const q of questions) {
-      output += `**${questionNum}. ${q.question}**${q.required ? " *(required)*" : ""}\n`;
-      if (q.examples && q.examples.length > 0) {
-        output += `   Examples:\n`;
-        for (const ex of q.examples) {
-          output += `   - ${ex}\n`;
-        }
-      }
-      output += `   Answer ID: \`${q.id}\`\n\n`;
-      questionNum++;
-    }
-
-    output += "\n### How to Provide Answers\n\n";
-    output +=
-      "Call sdd-init again with clarificationAnswers parameter containing your answers.\n";
-
-    return output;
-  }
 
   private async requireFeatureProject(featureName: unknown): Promise<Project> {
     return this.workflowEngineService.loadProject({
@@ -230,34 +145,30 @@ export class SDDToolAdapter {
     });
   }
 
-  private async handleRequirements(
+  private async handleRequirements(args: Record<string, unknown>): Promise<unknown> {
+    return this.handlePhaseSubmission(args, "requirements");
+  }
+
+  private async handleDesign(args: Record<string, unknown>): Promise<unknown> {
+    return this.handlePhaseSubmission(args, "design");
+  }
+
+  private async handleTasks(args: Record<string, unknown>): Promise<unknown> {
+    return this.handlePhaseSubmission(args, "tasks");
+  }
+
+  private async handlePhaseSubmission(
     args: Record<string, unknown>,
-  ): Promise<string> {
-    return this.workflowEngineService.generatePhase({
+    phase: "requirements" | "design" | "tasks",
+  ): Promise<unknown> {
+    return this.workflowEngineService.submitPhaseArtifact({
       projectRoot: process.cwd(),
       featureName: this.requireFeatureName(args.featureName),
-      phase: "requirements",
-    });
-  }
-
-  private async handleDesign(args: Record<string, unknown>): Promise<string> {
-    return this.workflowEngineService.generatePhase({
-      projectRoot: process.cwd(),
-      featureName: this.requireFeatureName(args.featureName),
-      phase: "design",
-    });
-  }
-
-  private async handleTasks(args: Record<string, unknown>): Promise<string> {
-    const reviewTestCases = args.reviewTestCases;
-    if (reviewTestCases !== undefined && typeof reviewTestCases !== "boolean") {
-      throw new Error("Invalid argument: reviewTestCases must be a boolean");
-    }
-    return this.workflowEngineService.generatePhase({
-      projectRoot: process.cwd(),
-      featureName: this.requireFeatureName(args.featureName),
-      phase: "tasks",
-      reviewTestCases: reviewTestCases as boolean | undefined,
+      phase,
+      content: args.content as string,
+      expectedRevision: args.expectedRevision as number,
+      expectedArtifactSha256: args.expectedArtifactSha256 as string | null,
+      reviewTestCases: phase === "tasks" ? args.reviewTestCases as boolean : undefined,
     });
   }
 
@@ -278,6 +189,8 @@ export class SDDToolAdapter {
       projectRoot: process.cwd(),
       featureName,
       phase: phase as "requirements" | "design" | "tasks",
+      expectedRevision: args.expectedRevision as number,
+      expectedArtifactSha256: args.expectedArtifactSha256 as string,
     });
   }
 
@@ -288,6 +201,8 @@ export class SDDToolAdapter {
     return this.workflowEngineService.reviewTestCases({
       projectRoot: process.cwd(),
       featureName,
+      expectedTasksRevision: args.expectedTasksRevision as number,
+      expectedArtifactSha256: args.expectedArtifactSha256 as string,
     });
   }
 
@@ -319,11 +234,11 @@ export class SDDToolAdapter {
       ifNoneMatch,
       includeUnapproved,
     } = args;
-    return this.contextCompactionService.loadContext({
+    return this.workflowEngineService.loadFeatureContext({
       projectRoot: process.cwd(),
       featureName,
       mode: mode as ContextLoadMode | undefined,
-      phase: phase as "requirements" | "design" | "tasks" | undefined,
+      phase: phase as "requirements" | "design" | "tasks" | "implementation" | undefined,
       maxEstimatedTokens: maxEstimatedTokens as number | undefined,
       ifNoneMatch: ifNoneMatch as string | undefined,
       includeUnapproved: includeUnapproved as boolean | undefined,
@@ -360,8 +275,10 @@ export class SDDToolAdapter {
   }
 
   private async handleValidateDesign(args: Record<string, unknown>): Promise<unknown> {
-    const project = await this.requireFeatureProject(args.featureName);
-    return this.qualityService.validateDesign(project);
+    return this.workflowEngineService.validateDesignArtifact({
+      projectRoot: process.cwd(),
+      featureName: this.requireFeatureName(args.featureName),
+    });
   }
 
   private async handleValidateGap(args: Record<string, unknown>): Promise<unknown> {
@@ -373,8 +290,16 @@ export class SDDToolAdapter {
   }
 
   private async handleSpecImplementation(args: Record<string, unknown>): Promise<unknown> {
-    const result = await this.handleImplement(args);
-    return { ...(result as Record<string, unknown>), taskNumbers: args.taskNumbers ?? null };
+    return this.workflowEngineService.recordTaskProgress({
+      projectRoot: process.cwd(),
+      featureName: this.requireFeatureName(args.featureName),
+      taskNumber: args.taskNumber as string,
+      action: args.action as "start" | "record-red" | "record-green" | "complete" | "block",
+      expectedRevision: args.expectedRevision as number,
+      evidence: args.evidence as { command: string; exitCode: number; summary: string } | undefined,
+      affectedArtifacts: args.affectedArtifacts as string[] | undefined,
+      blocker: args.blocker as string | undefined,
+    });
   }
 
 

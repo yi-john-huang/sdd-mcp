@@ -19,6 +19,8 @@ import { ResourceManager } from './ResourceManager.js';
 import { PromptManager } from './PromptManager.js';
 import { ToolRegistry } from './ToolRegistry.js';
 import { SDDToolAdapter } from '../../adapters/cli/SDDToolAdapter.js';
+import { serializeToolError } from '../../application/services/WorkflowErrors.js';
+import { PACKAGE_VERSION } from '../../shared/version.js';
 
 interface MCPServerConfig {
   [x: string]: unknown;
@@ -59,7 +61,7 @@ export class MCPServer {
     
     const config: MCPServerConfig = {
       name: 'sdd-mcp-server',
-      version: '1.0.0',
+      version: PACKAGE_VERSION,
       description: 'MCP server for spec-driven development workflows'
     };
 
@@ -153,7 +155,7 @@ export class MCPServer {
           content: [
             {
               type: 'text',
-              text: `Error executing tool ${tool.name}: ${(error as Error).message}`
+              text: JSON.stringify(serializeToolError(error))
             }
           ],
           isError: true
@@ -197,17 +199,16 @@ export class MCPServer {
             }
           ]
         };
-      } else {
-        return {
-          content: [
-            {
-              type: 'text',
-              text: `Error: ${result.error}`
-            }
-          ],
-          isError: true
-        };
       }
+      return {
+        content: [
+          {
+            type: 'text',
+            text: JSON.stringify(result.error)
+          }
+        ],
+        isError: true
+      };
     });
 
     // Resource handlers

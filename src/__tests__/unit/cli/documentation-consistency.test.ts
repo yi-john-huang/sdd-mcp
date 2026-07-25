@@ -92,13 +92,42 @@ describe('target-aware documentation consistency', () => {
 
     for (const content of [readme, installGuide]) {
       expect(content).toContain('New project installation');
-      expect(content).toContain('Upgrade from sdd-mcp 3.x');
+      expect(content).toMatch(/Upgrade from sdd-mcp 3\.x or 4\.x/);
       expect(content).toContain('--refresh-generated');
       expect(content).toContain('.sdd-mcp/backups/');
       expect(content).toContain('Do not use `--refresh-generated` for a new project');
+      expect(content).toContain('5.0.0');
+      expect(content).toMatch(/reload|restart/i);
+      expect(content).toMatch(/project trust/i);
     }
-    expect(installGuide).toContain('Subsequent v4 updates');
-    expect(installGuide).toContain('Existing target');
-    expect(installGuide).toContain('v4 target');
+    expect(installGuide).toContain('Subsequent v5 updates');
+    expect(installGuide).toContain('Runtime registration');
+    expect(installGuide).toContain('.mcp.json');
+    expect(installGuide).toContain('.codex/config.toml');
+    expect(installGuide).toContain('.omp/mcp.json');
+  });
+
+  it('documents a Skill-first journey and confines raw tools to integrator reference', () => {
+    const publicGuidance = [
+      read('AGENTS.md'),
+      read('templates/CLAUDE.md'),
+      read('templates/codex-AGENTS.md'),
+      read('README.md'),
+      read('docs/WORKFLOW.md'),
+      read('docs/INSTALL-GUIDE.md'),
+    ];
+
+    for (const content of publicGuidance) {
+      expect(content).toMatch(/sdd-requirements/);
+      expect(content).toMatch(/reload|restart/i);
+      expect(content).toMatch(/trust/i);
+      expect(content).not.toMatch(/\b(?:user|you)\s+(?:must|should|can|then)?\s*call\s+`?sdd-(?:init|status|approve|context-load|review-test-cases|spec-impl)/i);
+    }
+
+    expect(read('README.md')).toContain('Integrator/runtime reference: canonical v5 inventory');
+    expect(read('docs/WORKFLOW.md')).toContain('Integrator/runtime reference: exact inventory');
+    expect(read('docs/WORKFLOW.md')).toContain('User --> Skill');
+    expect(read('docs/WORKFLOW.md')).toContain('Skill --> MCP');
+    expect(read('docs/WORKFLOW.md')).toContain('MCP --> Spec');
   });
 });

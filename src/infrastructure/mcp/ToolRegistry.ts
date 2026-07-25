@@ -4,6 +4,7 @@ import { v4 as uuidv4 } from 'uuid';
 import { TYPES } from '../di/types.js';
 import { LoggerPort, ValidationPort } from '../../domain/ports.js';
 import { SDDToolAdapter, SDDToolHandler } from '../../adapters/cli/SDDToolAdapter.js';
+import { GovernanceError, serializeToolError } from '../../application/services/WorkflowErrors.js';
 
 export interface ToolExecutionContext {
   sessionId: string;
@@ -15,7 +16,7 @@ export interface ToolExecutionContext {
 export interface ToolExecutionResult {
   success: boolean;
   data?: unknown;
-  error?: string;
+  error?: { code: string; message: string; details?: Readonly<Record<string, unknown>> };
   metadata?: {
     executionTime: number;
     sessionId: string;
@@ -112,10 +113,18 @@ export class ToolRegistry {
         throw new Error(`Tool not found: ${toolName}`);
       }
 
-      // Validate arguments if schema exists
+      // Validate arguments at the protocol boundary. AJV details are retained as a
+      // typed InvalidParams error rather than being flattened into prose.
       const schema = this.toolSchemas.get(toolName);
       if (schema) {
-        await this.validation.validate(args, schema);
+        try {
+          await this.validation.validate(args, schema);
+        } catch (error) {
+          throw new GovernanceError(
+            'InvalidParams',
+            error instanceof Error ? error.message : 'Invalid tool parameters',
+          );
+        }
       }
 
       // Execute tool
@@ -141,7 +150,7 @@ export class ToolRegistry {
 
     } catch (error) {
       const executionTime = Date.now() - startTime;
-      const errorMessage = error instanceof Error ? error.message : String(error);
+      const serialized = serializeToolError(error);
 
       this.logger.error('Tool execution failed', error as Error, {
         correlationId,
@@ -152,7 +161,7 @@ export class ToolRegistry {
 
       return {
         success: false,
-        error: errorMessage,
+        error: serialized,
         metadata: {
           executionTime,
           sessionId,

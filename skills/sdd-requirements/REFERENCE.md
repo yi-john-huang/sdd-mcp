@@ -12,18 +12,26 @@ WHERE test-case review is enabled THE service SHALL require review before tasks 
 IF handoff publication fails after approval THEN the service SHALL retain the approved state and report pending regeneration.
 ```
 
-## Suggested Document Shape
+## Exact Document Shape
 
 ```markdown
 # Requirements: Feature
-## Scope
+
 ## Functional Requirements
-### FR-1: Name
-EARS statement
-Acceptance criteria
+
+### FR-1: Observable outcome
+**Objective:** Why this behavior matters.
+**EARS Specification:** WHEN an event occurs THEN the system SHALL produce an observable result.
+**Acceptance Criteria:**
+1. A measurable result is observed.
+
 ## Non-functional Requirements
-## Constraints and assumptions
-## Traceability
+
+### NFR-1: Bounded quality
+**Objective:** The quality attribute and stakeholder value.
+**EARS Specification:** The system SHALL satisfy a measurable bound.
+**Acceptance Criteria:**
+1. The bound is verified under stated conditions.
 ```
 
 ## Quality Checklist

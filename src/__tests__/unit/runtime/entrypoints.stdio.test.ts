@@ -117,66 +117,108 @@ describe.each(['sdd-entry.js', 'mcp-server.js'])('%s stdio runtime', (entrypoint
     expect(tools.map(({ name }) => name)).toEqual(SDD_TOOL_NAMES);
     const byName = Object.fromEntries(tools.map((tool) => [tool.name, tool.inputSchema]));
     expect(byName['sdd-approve']).toMatchObject({
-      required: ['featureName', 'phase'],
+      required: ['featureName', 'phase', 'expectedRevision', 'expectedArtifactSha256'],
     });
     expect(byName['sdd-context-load']).toMatchObject({
       required: ['featureName'],
       properties: {
         featureName: { type: 'string' },
         mode: { enum: ['compact', 'standard', 'full'] },
-        phase: { enum: ['requirements', 'design', 'tasks'] },
+        phase: { enum: ['requirements', 'design', 'tasks', 'implementation'] },
         maxEstimatedTokens: { type: 'integer', minimum: 1 },
         ifNoneMatch: { type: 'string' },
         includeUnapproved: { type: 'boolean' },
       },
     });
+    expect(byName['sdd-spec-impl']).toHaveProperty('allOf');
   });
 });
 
 describe('compiled workflow restart durability', () => {
-  it('discovers a disk feature and generates its next phase in fresh server processes', async () => {
+  it('persists submit, approval, context, and next phase across fresh processes', async () => {
     const projectRoot = await mkdtemp(path.join(os.tmpdir(), 'sdd-stdio-restart-'));
     const featureRoot = path.join(projectRoot, '.spec', 'specs', 'restart-flow');
     await mkdir(featureRoot, { recursive: true });
+    const empty = { generated: false, approved: false, revision: 0, validation: { status: 'not-run', blockers: [] } };
     await writeFile(path.join(featureRoot, 'spec.json'), `${JSON.stringify({
+      schema_version: 5,
       feature_name: 'restart-flow',
+      description: 'Persist workflow governance across runtime restarts.',
       created_at: '2026-07-19T00:00:00.000Z',
       updated_at: '2026-07-19T00:00:00.000Z',
       language: 'en',
       phase: 'init',
-      approvals: {
-        requirements: { generated: false, approved: false },
-        design: { generated: false, approved: false },
-        tasks: { generated: false, approved: false },
-      },
-      workflow_options: { review_test_cases: false },
-      checkpoints: { test_cases: { required: false, reviewed: true } },
-      ready_for_implementation: false,
+      approvals: { requirements: empty, design: empty, tasks: empty },
+      workflow_options: { review_test_cases: null },
+      checkpoints: { test_cases: { required: false, reviewed: false } },
     }, null, 2)}\n`, 'utf8');
+    const requirementsContent = [
+      '# Requirements',
+      '### FR-1: Restart durability',
+      '**Objective:** Preserve workflow state',
+      '**EARS Specification:** WHEN the runtime restarts, THE system SHALL preserve approved state.',
+      '**Acceptance Criteria:** 1. A fresh process observes approval.',
+    ].join('\n');
+    const designContent = [
+      '# Design',
+      '## Requirements Traceability', 'FR-1',
+      '## Architecture and Data Flow', 'Runtime reads canonical disk state.',
+      '## Components and Interfaces', 'Workflow service and spec store.',
+      '## Failure Handling', 'Invalid state is rejected.',
+      '## Verification', 'Restart the process.',
+      '### D-1: Disk authority',
+      '**Covers:** FR-1',
+      '**Decision:** Use spec.json as authority.',
+      '**Failure behavior:** Reject inconsistent bytes.',
+      '**Verification:** Read from a fresh process.',
+    ].join('\n');
+
+    const obsoletePayload = await callTool('sdd-entry.js', projectRoot, 'sdd-requirements', {
+      featureName: 'restart-flow',
+    });
+    expect(JSON.parse(obsoletePayload.result?.content?.[0]?.text ?? '{}')).toMatchObject({
+      code: 'InvalidParams',
+    });
+    await expect(readFile(path.join(featureRoot, 'requirements.md'), 'utf8')).rejects.toMatchObject({ code: 'ENOENT' });
 
     try {
-      const status = await callTool('sdd-entry.js', projectRoot, 'sdd-status', {
+      const submittedResponse = await callTool('sdd-entry.js', projectRoot, 'sdd-requirements', {
         featureName: 'restart-flow',
+        content: requirementsContent,
+        expectedRevision: 0,
+        expectedArtifactSha256: null,
       });
-      expect(status.error).toBeUndefined();
-      expect(JSON.parse(status.result?.content?.[0]?.text ?? '{}')).toMatchObject({
-        featureName: 'restart-flow',
-        currentPhase: 'init',
-      });
+      const submitted = JSON.parse(submittedResponse.result?.content?.[0]?.text ?? '{}');
+      expect(submitted).toMatchObject({ revision: 1, validation: { status: 'passed' }, approvalRequired: true });
 
-      const requirements = await callTool('sdd-entry.js', projectRoot, 'sdd-requirements', {
+      const approvedResponse = await callTool('sdd-entry.js', projectRoot, 'sdd-approve', {
         featureName: 'restart-flow',
+        phase: 'requirements',
+        expectedRevision: submitted.revision,
+        expectedArtifactSha256: submitted.artifact.sha256,
       });
-      expect(requirements.error).toBeUndefined();
-      expect(requirements.result?.content?.[0]?.text).toContain('Requirements document generated');
-      await expect(readFile(path.join(featureRoot, 'requirements.md'), 'utf8')).resolves.toContain('# Requirements');
-      const persisted = JSON.parse(await readFile(path.join(featureRoot, 'spec.json'), 'utf8')) as {
-        phase: string;
-        approvals: { requirements: { generated: boolean } };
-      };
+      expect(JSON.parse(approvedResponse.result?.content?.[0]?.text ?? '{}')).toMatchObject({ approved: true });
+
+      const statusResponse = await callTool('sdd-entry.js', projectRoot, 'sdd-status', { featureName: 'restart-flow' });
+      expect(JSON.parse(statusResponse.result?.content?.[0]?.text ?? '{}')).toMatchObject({
+        phases: { requirements: { approved: true, revision: 1, artifactSha256: submitted.artifact.sha256 } },
+        nextAction: { kind: 'submit-phase', phase: 'design' },
+      });
+      const contextResponse = await callTool('sdd-entry.js', projectRoot, 'sdd-context-load', { featureName: 'restart-flow' });
+      expect(JSON.parse(contextResponse.result?.content?.[0]?.text ?? '{}').content).toContain('Restart durability');
+
+      const designResponse = await callTool('sdd-entry.js', projectRoot, 'sdd-design', {
+        featureName: 'restart-flow',
+        content: designContent,
+        expectedRevision: 0,
+        expectedArtifactSha256: null,
+      });
+      expect(JSON.parse(designResponse.result?.content?.[0]?.text ?? '{}')).toMatchObject({ revision: 1, validation: { status: 'passed' } });
+      const persisted = JSON.parse(await readFile(path.join(featureRoot, 'spec.json'), 'utf8'));
       expect(persisted).toMatchObject({
-        phase: 'requirements-generated',
-        approvals: { requirements: { generated: true } },
+        schema_version: 5,
+        phase: 'design',
+        approvals: { requirements: { approved: true, artifact_sha256: submitted.artifact.sha256 }, design: { revision: 1 } },
       });
     } finally {
       await rm(projectRoot, { recursive: true, force: true });

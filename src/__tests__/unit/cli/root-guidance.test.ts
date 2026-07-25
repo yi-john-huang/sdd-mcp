@@ -15,10 +15,14 @@ describe('compact target root guidance', () => {
       '# Target guidance\n\nA deliberately long template body that must not be retained.\n',
     );
     expect(guidance).toContain(`\`${prefix}simple-task <description>\``);
-    expect(guidance).toContain('load compact context by default');
+    expect(guidance).toContain(`\`${prefix}sdd-requirements <feature-name>\``);
+    expect(guidance).toContain('reload or restart the host');
+    expect(guidance).toContain('accept project trust');
+    expect(guidance).toContain('automatically restore durable workflow state and approved compact context');
     expect(guidance).not.toContain('deliberately long template body');
     expect(guidance).not.toContain('| Description |');
-    expect(guidance).not.toContain('sdd-context-load |');
+    expect(guidance).not.toContain('sdd-context-load');
+    expect(guidance).not.toMatch(/call [`"]?sdd-(?:init|status|approve|context-load)/);
     expect(Buffer.byteLength(guidance)).toBeLessThanOrEqual(budget);
   });
 

@@ -339,7 +339,7 @@ export class InstallSkillsCLI {
     let installed = 0;
     let skipped = 0;
     let conflicts = 0;
-    const failures: Array<{ component: ComponentType | 'root'; name: string; path: string; error: string }> = [];
+    const failures: Array<{ component: ComponentType | 'root' | 'runtime'; name: string; path: string; error: string }> = [];
 
     console.log(`\n🚀 SDD Component Installer (${options.installProfile} profile, ${targets.join(' + ')})\n`);
     for (const target of targets) {
