@@ -130,4 +130,10 @@ describe('target-aware documentation consistency', () => {
     expect(read('docs/WORKFLOW.md')).toContain('Skill --> MCP');
     expect(read('docs/WORKFLOW.md')).toContain('MCP --> Spec');
   });
+  it('publishes the versioned changelog with the npm package', () => {
+    const packageJson = JSON.parse(read('package.json')) as { files?: unknown };
+
+    expect(Array.isArray(packageJson.files)).toBe(true);
+    expect(packageJson.files).toContain('CHANGELOG.md');
+  });
 });
