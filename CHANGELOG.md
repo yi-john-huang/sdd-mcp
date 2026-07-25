@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [5.0.0] - 2026-07-25
+
 ### Added
 - Schema-v5 disk-authoritative workflow state with revision/hash-bound submissions, approvals, test-case checkpoints, deterministic phase validation, crash journals, and durable TDD task progress.
 - Mandatory project-scoped MCP runtime registration for Claude Code, Codex, and OMP installs, committed with manifest-v2 ownership and preserve-first recovery.
