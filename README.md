@@ -1,5 +1,7 @@
 # MCP SDD Server
 
+[![MCP Toplist](https://mcptoplist.com/badge/glama%2Fyi-john-huang%2Fsdd-mcp.svg)](https://mcptoplist.com/server/glama%2Fyi-john-huang%2Fsdd-mcp)
+
 [![npm version](https://badge.fury.io/js/sdd-mcp-server.svg)](https://www.npmjs.com/package/sdd-mcp-server)
 [![MCP Compatible](https://img.shields.io/badge/MCP-Compatible-blue.svg)](https://modelcontextprotocol.io)
 
