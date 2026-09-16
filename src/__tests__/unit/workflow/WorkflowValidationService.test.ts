@@ -69,6 +69,21 @@ describe('WorkflowValidationService', () => {
     expect(service.validateRequirements(fenced).status).toBe('passed');
   });
 
+  it('accepts the documented multi-line Acceptance Criteria shape', () => {
+    const multiLine = [
+      '# 需求',
+      '### FR-1: 結帳',
+      '**Objective:** 讓使用者完成結帳',
+      '**EARS Specification:** WHEN a cart is valid, THE system SHALL create an order.',
+      '**Acceptance Criteria:**',
+      '1. A persisted order is returned.',
+      '2. The cart is cleared.',
+    ].join('\n');
+    const result = service.validateRequirements(multiLine);
+    expect(result.status).toBe('passed');
+    expect(result.requirementIds).toEqual(['FR-1']);
+  });
+
   it('rejects duplicate IDs, missing SHALL, and missing numbered acceptance criteria', () => {
     const invalid = `${requirements.replace(' SHALL ', ' will ').replace('1. A persisted', 'A persisted')}\n### FR-1: Duplicate\n**Objective:** Duplicate\n**EARS Specification:** THE system SHALL reject it.\n**Acceptance Criteria:** 1. Rejected.`;
     const result = service.validateRequirements(invalid);
