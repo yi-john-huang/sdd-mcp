@@ -6,6 +6,8 @@ import { installCodexTarget } from '../../../cli/tool-support/codex';
 import { installOmpTarget } from '../../../cli/tool-support/omp';
 import { getTargetPolicy } from '../../../cli/install-target';
 
+const packageVersion = JSON.parse(fs.readFileSync(path.resolve(process.cwd(), 'package.json'), 'utf8')).version;
+
 function sourceFile(root: string, relative: string, content: string): string {
   const filePath = path.join(root, relative);
   fs.mkdirSync(path.dirname(filePath), { recursive: true });
@@ -99,7 +101,7 @@ describe('target-specific installers', () => {
     expect(fs.readFileSync(path.join(root, '.claude/agents/implementer.md'), 'utf8')).toContain('model: sonnet');
     expect(fs.existsSync(path.join(root, 'CLAUDE.md'))).toBe(true);
     expect(JSON.parse(fs.readFileSync(path.join(root, '.mcp.json'), 'utf8')).mcpServers['sdd-mcp'])
-      .toEqual({ type: 'stdio', command: 'npx', args: ['-y', 'sdd-mcp-server@5.0.0'] });
+      .toEqual({ type: 'stdio', command: 'npx', args: ['-y', `sdd-mcp-server@${packageVersion}`] });
     expect(JSON.parse(fs.readFileSync(path.join(root, '.claude/settings.json'), 'utf8')).permissions.allow)
       .toContain('mcp__sdd-mcp__*');
     expect(fs.existsSync(path.join(root, '.codex'))).toBe(false);
@@ -160,7 +162,7 @@ describe('target-specific installers', () => {
     expect(fs.existsSync(path.join(root, '.agents/skills/sdd-design/references/example.md'))).toBe(true);
     expect(Buffer.byteLength(fs.readFileSync(path.join(root, 'AGENTS.md')))).toBeLessThanOrEqual(2000);
     expect(fs.readFileSync(path.join(root, '.codex/config.toml'), 'utf8'))
-      .toContain('sdd-mcp-server@5.0.0');
+      .toContain(`sdd-mcp-server@${packageVersion}`);
     expect(fs.existsSync(path.join(root, '.claude'))).toBe(false);
     expect(fs.existsSync(path.join(root, 'CLAUDE.md'))).toBe(false);
   });
@@ -294,7 +296,7 @@ describe('target-specific installers', () => {
     expect(guidance).toContain('- Agents: `.omp/agents/`');
     expect(guidance).not.toContain('- Rules:');
     expect(JSON.parse(fs.readFileSync(path.join(root, '.omp/mcp.json'), 'utf8')).mcpServers['sdd-mcp'])
-      .toEqual({ type: 'stdio', command: 'npx', args: ['-y', 'sdd-mcp-server@5.0.0'] });
+      .toEqual({ type: 'stdio', command: 'npx', args: ['-y', `sdd-mcp-server@${packageVersion}`] });
   });
 
   it('renders native OMP full output without hooks or spawn capability', async () => {

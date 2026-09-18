@@ -5,7 +5,7 @@
 
 A Model Context Protocol server and target-native installer for governed Spec-Driven Development (SDD) in Claude Code, Codex, and Oh My Pi (OMP).
 
-> **v5.0.0** — Skill-governed Formal SDD, durable revision-bound approvals and task progress, hidden MCP runtime registration, and managed target-native installation.
+> **v5.0.1** — Fixes validation of multiline requirement metadata, including numbered acceptance criteria beneath their label. Includes the v5 Skill-governed workflow, durable approvals and task progress, and managed target-native installation.
 
 ## Why sdd-mcp?
 
@@ -25,12 +25,12 @@ Use this path when the repository has never had sdd-mcp-generated guidance.
 
 ```bash
 # Recommended explicit lean installation
-npx sdd-mcp-server@5.0.0 install --profile lean --target claude-code
-npx sdd-mcp-server@5.0.0 install --profile lean --target codex
-npx sdd-mcp-server@5.0.0 install --profile lean --target omp
+npx sdd-mcp-server@5.0.1 install --profile lean --target claude-code
+npx sdd-mcp-server@5.0.1 install --profile lean --target codex
+npx sdd-mcp-server@5.0.1 install --profile lean --target omp
 
 # Interactive full installation: choose Claude Code, Codex, or OMP
-npx sdd-mcp-server@5.0.0 install --profile full
+npx sdd-mcp-server@5.0.1 install --profile full
 ```
 
 Do not use `--refresh-generated` for a new project. A normal installation records package ownership in `.sdd-mcp/install-manifest.json` and registers the hidden project runtime.
@@ -75,7 +75,7 @@ Use this path when the project already contains generated sdd-mcp files from an 
 
 ```bash
 # Replace <target> with claude-code, codex, or omp
-npx sdd-mcp-server@5.0.0 install \
+npx sdd-mcp-server@5.0.1 install \
   --profile full \
   --target <target> \
   --refresh-generated

@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [5.0.1] - 2026-09-18
+
+### Fixed
+- Accept requirement metadata values on lines following their labels, including the documented numbered list beneath `**Acceptance Criteria:**`. Valid multiline requirements no longer fail with `MissingMetadata` or `AcceptanceCriteriaMissing` ([#50](https://github.com/yi-john-huang/sdd-mcp/pull/50), thanks to @jakehsiaos).
+
+### Documentation
+- Clarified inline and multiline requirement metadata formatting and updated installation examples to 5.0.1.
+
 ## [5.0.0] - 2026-07-25
 
 ### Added
