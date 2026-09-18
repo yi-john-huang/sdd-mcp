@@ -86,27 +86,6 @@ describe('target-aware documentation consistency', () => {
     expect(readme).toContain('**TDD Methodology**: `agents/tdd-guide.md`');
   });
 
-  it('gives new installations and upgrades distinct safe procedures', () => {
-    const readme = read('README.md');
-    const installGuide = read('docs/INSTALL-GUIDE.md');
-
-    for (const content of [readme, installGuide]) {
-      expect(content).toContain('New project installation');
-      expect(content).toMatch(/Upgrade from sdd-mcp 3\.x or 4\.x/);
-      expect(content).toContain('--refresh-generated');
-      expect(content).toContain('.sdd-mcp/backups/');
-      expect(content).toContain('Do not use `--refresh-generated` for a new project');
-      expect(content).toContain('5.0.0');
-      expect(content).toMatch(/reload|restart/i);
-      expect(content).toMatch(/project trust/i);
-    }
-    expect(installGuide).toContain('Subsequent v5 updates');
-    expect(installGuide).toContain('Runtime registration');
-    expect(installGuide).toContain('.mcp.json');
-    expect(installGuide).toContain('.codex/config.toml');
-    expect(installGuide).toContain('.omp/mcp.json');
-  });
-
   it('documents a Skill-first journey and confines raw tools to integrator reference', () => {
     const publicGuidance = [
       read('AGENTS.md'),

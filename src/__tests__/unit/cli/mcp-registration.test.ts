@@ -6,6 +6,8 @@ import { parse as parseToml } from 'smol-toml';
 import { getTargetPolicy } from '../../../cli/install-target';
 import { registerRuntimeLocked } from '../../../cli/tool-support/mcp-registration';
 
+const packageVersion = JSON.parse(fs.readFileSync(path.resolve(process.cwd(), 'package.json'), 'utf8')).version;
+
 describe('MCP runtime registration', () => {
   let root: string;
 
@@ -28,7 +30,7 @@ describe('MCP runtime registration', () => {
 
     expect(runtime.mcpServers.other.command).toBe('other');
     expect(runtime.mcpServers['sdd-mcp']).toEqual({
-      type: 'stdio', command: 'npx', args: ['-y', 'sdd-mcp-server@5.0.0'],
+      type: 'stdio', command: 'npx', args: ['-y', `sdd-mcp-server@${packageVersion}`],
     });
     expect(settings.permissions).toEqual({
       allow: ['Bash(npm test)', 'mcp__sdd-mcp__*'], ask: ['Read'], deny: ['Bash(rm *)'],
@@ -92,7 +94,7 @@ describe('MCP runtime registration', () => {
     expect(next.match(/^# >>> sdd-mcp managed runtime$/gm)).toHaveLength(1);
     expect(parsed.mcp_servers['sdd-mcp']).toEqual({
       command: 'npx',
-      args: ['-y', 'sdd-mcp-server@5.0.0'],
+      args: ['-y', `sdd-mcp-server@${packageVersion}`],
       required: true,
       default_tools_approval_mode: 'auto',
       startup_timeout_sec: 30,

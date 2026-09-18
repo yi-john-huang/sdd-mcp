@@ -34,6 +34,8 @@ The Skill-governed journey is:
 
 Only an unambiguous affirmative response inside the active phase Skill can approve that exact revision. Host permission is not approval. Invoking a later Skill early presents the persisted blocker and makes no file change.
 
+Requirement metadata supports both inline values and values on lines below their labels. In particular, `**Acceptance Criteria:**` may be followed by a numbered list on subsequent lines; this documented shape is accepted starting in 5.0.1. See the [Requirements Reference](../skills/sdd-requirements/REFERENCE.md) for the complete document shape.
+
 ## Durable authority and continuation
 
 `.spec/specs/<feature>/spec.json` is the sole workflow authority. Phase Markdown is human-readable governed input, while `context/handoff.md` is a bounded rebuildable cache. Skills load approved context by default. A failed or unapproved draft is loaded only explicitly in full mode for revision; it never leaks into later approved context.

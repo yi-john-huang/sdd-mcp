@@ -103,13 +103,36 @@ function parseSections(lines: string[], heading: RegExp): { sections: Section[];
   return { sections, duplicates: [...new Set(duplicates)] };
 }
 
+const ANY_METADATA_LABEL = /^\s*\*\*[^*]+:\*\*/;
+
+/**
+ * A metadata value may sit inline after the label or, per the documented
+ * requirements shape (skills/sdd-requirements/REFERENCE.md), on the lines
+ * that follow a label with nothing after it (e.g. `**Acceptance Criteria:**`
+ * followed by a numbered list). Collect both forms.
+ */
 function metadataValues(section: Section, label: string): string[] {
   const escaped = label.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-  const expression = new RegExp(`^\\s*\\*\\*${escaped}:\\*\\*\\s*(\\S(?:.*\\S)?)\\s*$`);
+  const start = new RegExp(`^\\s*\\*\\*${escaped}:\\*\\*\\s*(.*)$`);
+  const body = section.body;
   const values: string[] = [];
-  for (const line of section.body) {
-    const match = expression.exec(line);
-    if (match) values.push(match[1]);
+  for (let i = 0; i < body.length; i++) {
+    const match = start.exec(body[i]);
+    if (!match) continue;
+    const collected: string[] = [];
+    const inline = match[1].trim();
+    if (inline) collected.push(inline);
+    let j = i + 1;
+    while (j < body.length && !ANY_METADATA_LABEL.test(body[j])) {
+      collected.push(body[j]);
+      j++;
+    }
+    while (collected.length > 0 && collected[collected.length - 1] === '') {
+      collected.pop();
+    }
+    const value = collected.join('\n').trim();
+    if (value) values.push(value);
+    i = j - 1;
   }
   return values;
 }

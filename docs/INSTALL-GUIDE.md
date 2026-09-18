@@ -83,7 +83,7 @@ Manual skill syntax is `/skill:<name>` in OMP, `/<name>` in Claude Code, and `$<
 
 ### Published-host smoke
 
-This smoke requires `sdd-mcp-server@5.0.0` to be published or otherwise resolvable by `npx`; repository CI cannot substitute a real host trust prompt. In a clean temporary repository, run `npx sdd-mcp-server@5.0.0 install --profile lean --target <claude-code|codex|omp>`, reload the selected host, and accept project trust once. Invoke only the host-native requirements Skill shown above, approve the artifact explicitly, restart the host, then invoke only its design Skill. Verify that `.spec/specs/<feature>/spec.json` retains the requirements revision, hash, and approval, that `requirements.md` contains the Skill-produced content, and that `context/handoff.md` is repairable without any user-facing raw MCP instruction.
+This smoke requires `sdd-mcp-server@5.0.1` to be published or otherwise resolvable by `npx`; repository CI cannot substitute a real host trust prompt. In a clean temporary repository, run `npx sdd-mcp-server@5.0.1 install --profile lean --target <claude-code|codex|omp>`, reload the selected host, and accept project trust once. Invoke only the host-native requirements Skill shown above, approve the artifact explicitly, restart the host, then invoke only its design Skill. Verify that `.spec/specs/<feature>/spec.json` retains the requirements revision, hash, and approval, that `requirements.md` contains the Skill-produced content, and that `context/handoff.md` is repairable without any user-facing raw MCP instruction.
 
 ## Managed ownership and reruns
 
@@ -120,7 +120,7 @@ Do not select a target merely because its files already exist: select the host t
 
 ```bash
 # Replace <target> with claude-code, codex, or omp
-npx sdd-mcp-server@5.0.0 install \
+npx sdd-mcp-server@5.0.1 install \
   --profile full \
   --target <target> \
   --refresh-generated
@@ -150,10 +150,12 @@ The refresh rebuilds only the selected package-owned set and removes recognized 
 After the one-time migration, rerun the same target and profile without `--refresh-generated`:
 
 ```bash
-npx sdd-mcp-server@5.0.0 install --profile full --target <target>
+npx sdd-mcp-server@5.0.1 install --profile full --target <target>
 ```
 
 The ownership manifest then upgrades unchanged package files automatically and continues to preserve modified files.
+
+For an update from 5.0.0 to 5.0.1, use the profile and target already installed, review any conflicts, and reload or restart the host so its registered runtime uses 5.0.1. No specification migration is required. Requirements that were rejected because `**Acceptance Criteria:**` was followed by a numbered list on separate lines can be resubmitted through the requirements Skill without rewriting that format.
 
 ## Model routing and availability
 
