@@ -90,7 +90,7 @@ export class TargetInstallSession {
     }
   }
 
-  async copySkills(sourceManager: SkillManager, configuredPath: string): Promise<void> {
+  async copySkills(sourceManager: Pick<SkillManager, 'listSkills'>, configuredPath: string): Promise<void> {
     const destinationRoot = this.resolve(configuredPath);
     for (const skill of await sourceManager.listSkills()) {
       try {

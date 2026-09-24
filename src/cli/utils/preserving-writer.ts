@@ -140,8 +140,8 @@ export class PreservingWriter {
     else this.refreshTargets.delete(target);
   }
 
-  async withInstallLock<T>(action: () => Promise<T>): Promise<T> {
-    if (this.activeLeaseAssert) return action();
+  async withInstallLock<T>(action: (assertHeld: () => Promise<void>) => Promise<T>): Promise<T> {
+    if (this.activeLeaseAssert) return action(this.activeLeaseAssert);
     const lockPath = path.join(this.stateRoot, 'install.lock');
     this.validateDestination(lockPath);
     await fs.promises.mkdir(path.dirname(lockPath), { recursive: true });
@@ -153,7 +153,7 @@ export class PreservingWriter {
       return await withFilesystemLock(lockPath, async lease => {
         this.activeLeaseAssert = lease.assertHeld;
         try {
-          value = await action();
+          value = await action(lease.assertHeld);
           completed = true;
           return value;
         } finally {

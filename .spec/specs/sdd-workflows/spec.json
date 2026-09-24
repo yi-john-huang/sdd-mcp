@@ -5,7 +5,7 @@
   "language": "en",
   "phase": "implementation",
   "created_at": "2026-09-24T03:19:04.799Z",
-  "updated_at": "2026-09-24T04:31:40.631Z",
+  "updated_at": "2026-09-24T04:42:59.361Z",
   "approvals": {
     "requirements": {
       "generated": true,
@@ -54,7 +54,7 @@
     }
   },
   "implementation": {
-    "revision": 35,
+    "revision": 51,
     "tasks_revision": 3,
     "legacy_imported": false,
     "tasks": {
@@ -307,13 +307,36 @@
           "1.5",
           "2.2"
         ],
-        "status": "in-progress",
-        "evidence": {},
+        "status": "completed",
+        "evidence": {
+          "red": {
+            "command": "npm test -- --runInBand --runTestsByPath src/__tests__/unit/cli/setup-global.test.ts",
+            "exit_code": 1,
+            "summary": "Real global install scenarios fail compilation because GlobalSetupCLI.run does not exist.",
+            "observed_at": "2026-09-24T04:32:48.149Z"
+          },
+          "green": {
+            "command": "npm test -- --runInBand --runTestsByPath src/__tests__/unit/cli/setup-global.test.ts",
+            "exit_code": 0,
+            "summary": "48 tests pass including real all-host and Codex-only setup, pinned native configs, unchanged Claude settings, rendered Skills/reference/policy assets, separate manifests and runtime-refusal continuation.",
+            "observed_at": "2026-09-24T04:34:22.968Z"
+          },
+          "verification": {
+            "command": "npm test -- --runInBand --runTestsByPath src/__tests__/unit/cli/setup-global.test.ts",
+            "exit_code": 0,
+            "summary": "48 tests pass including real all-host and Codex-only setup, pinned native configs, unchanged Claude settings, rendered Skills/reference/policy assets, separate manifests and runtime-refusal continuation.",
+            "observed_at": "2026-09-24T04:34:23.015Z"
+          }
+        },
         "planned_artifacts": [
           "src/cli/setup-global.ts",
           "src/__tests__/unit/cli/setup-global.test.ts"
         ],
-        "observed_artifacts": []
+        "observed_artifacts": [
+          "src/cli/setup-global.ts",
+          "src/cli/tool-support/target-installer.ts",
+          "src/__tests__/unit/cli/setup-global.test.ts"
+        ]
       },
       "2.4": {
         "title": "Report preserved conflicts separately from operational failures",
@@ -321,13 +344,35 @@
         "dependencies": [
           "2.3"
         ],
-        "status": "pending",
-        "evidence": {},
+        "status": "completed",
+        "evidence": {
+          "red": {
+            "command": "npm test -- --runInBand --runTestsByPath src/__tests__/unit/cli/setup-global.test.ts",
+            "exit_code": 1,
+            "summary": "Reporting/exit status integration tests fail: mainGlobalSetup is not exported.",
+            "observed_at": "2026-09-24T04:35:13.098Z"
+          },
+          "green": {
+            "command": "npm test -- --runInBand --runTestsByPath src/__tests__/unit/cli/setup-global.test.ts",
+            "exit_code": 0,
+            "summary": "51 tests pass: runtime ownership conflicts vs malformed/I/O failures, continued hosts, committed-runtime partial reporting, category output and nonzero exit status. Reporting test now isolates with absolute CLAUDE_CONFIG_DIR; native-home incident artifacts removed after timestamp/hash checks, unrelated configuration preserved.",
+            "observed_at": "2026-09-24T04:38:31.024Z"
+          },
+          "verification": {
+            "command": "npm test -- --runInBand --runTestsByPath src/__tests__/unit/cli/setup-global.test.ts",
+            "exit_code": 0,
+            "summary": "51 tests pass: runtime ownership conflicts vs malformed/I/O failures, continued hosts, committed-runtime partial reporting, category output and nonzero exit status. Reporting test now isolates with absolute CLAUDE_CONFIG_DIR; native-home incident artifacts removed after timestamp/hash checks, unrelated configuration preserved.",
+            "observed_at": "2026-09-24T04:38:31.065Z"
+          }
+        },
         "planned_artifacts": [
           "src/cli/setup-global.ts",
           "src/__tests__/unit/cli/setup-global.test.ts"
         ],
-        "observed_artifacts": []
+        "observed_artifacts": [
+          "src/cli/setup-global.ts",
+          "src/__tests__/unit/cli/setup-global.test.ts"
+        ]
       },
       "2.5": {
         "title": "Preserve upgrade ownership and serialize cross-store installs",
@@ -335,15 +380,38 @@
         "dependencies": [
           "2.4"
         ],
-        "status": "pending",
-        "evidence": {},
+        "status": "completed",
+        "evidence": {
+          "red": {
+            "command": "npm test -- --runInBand --runTestsByPath src/__tests__/unit/cli/setup-global.test.ts",
+            "exit_code": 1,
+            "summary": "Deterministic two-version barrier reproduces success with mixed outputs: runtime pinned to 5.0.1 but Skill body still Version 4.0.0. Sequential upgrade/rerun/customized preservation scenarios pass.",
+            "observed_at": "2026-09-24T04:40:13.661Z"
+          },
+          "green": {
+            "command": "npm test -- --runInBand --runTestsByPath src/__tests__/unit/cli/setup-global.test.ts src/__tests__/unit/cli/preserving-writer.test.ts src/__tests__/unit/cli/target-installers.test.ts",
+            "exit_code": 0,
+            "summary": "100 tests pass. Deterministic concurrent-version reproduction now converges runtime and Skills to 5.0.1; owned upgrade, identical rerun, customized conflicts, CAS/rollback compatibility also pass.",
+            "observed_at": "2026-09-24T04:41:32.827Z"
+          },
+          "verification": {
+            "command": "npm test -- --runInBand --runTestsByPath src/__tests__/unit/cli/setup-global.test.ts src/__tests__/unit/cli/preserving-writer.test.ts src/__tests__/unit/cli/target-installers.test.ts",
+            "exit_code": 0,
+            "summary": "100 tests pass. Deterministic concurrent-version reproduction now converges runtime and Skills to 5.0.1; owned upgrade, identical rerun, customized conflicts, CAS/rollback compatibility also pass.",
+            "observed_at": "2026-09-24T04:41:32.871Z"
+          }
+        },
         "planned_artifacts": [
           "src/cli/setup-global.ts",
           "src/cli/utils/preserving-writer.ts",
           "src/__tests__/unit/cli/setup-global.test.ts",
           "src/__tests__/unit/cli/preserving-writer.test.ts"
         ],
-        "observed_artifacts": []
+        "observed_artifacts": [
+          "src/cli/setup-global.ts",
+          "src/cli/utils/preserving-writer.ts",
+          "src/__tests__/unit/cli/setup-global.test.ts"
+        ]
       },
       "3.1": {
         "title": "Bind every project-sensitive runtime operation to one root",
@@ -387,14 +455,37 @@
         "dependencies": [
           "2.5"
         ],
-        "status": "pending",
-        "evidence": {},
+        "status": "completed",
+        "evidence": {
+          "red": {
+            "command": "npm test -- --runInBand --runTestsByPath src/__tests__/unit/cli/compiled-cli.e2e.test.ts",
+            "exit_code": 1,
+            "summary": "Two public dispatch cases fail: package entry starts stdio/hangs on setup-global, compiled CLI rejects valid command. Eight legacy journeys pass.",
+            "observed_at": "2026-09-24T04:42:18.853Z"
+          },
+          "green": {
+            "command": "npm test -- --runInBand --runTestsByPath src/__tests__/unit/cli/compiled-cli.e2e.test.ts src/__tests__/unit/runtime/entrypoints.stdio.test.ts src/__tests__/unit/cli/setup-global.test.ts src/__tests__/unit/cli/bootstrap.test.ts",
+            "exit_code": 0,
+            "summary": "73 tests pass, including both rebuilt CLI dispatch boundaries, legacy project installs, stdio inventory/workspace, global setup and executable bootstrap.",
+            "observed_at": "2026-09-24T04:42:59.276Z"
+          },
+          "verification": {
+            "command": "npm test -- --runInBand --runTestsByPath src/__tests__/unit/cli/compiled-cli.e2e.test.ts src/__tests__/unit/runtime/entrypoints.stdio.test.ts src/__tests__/unit/cli/setup-global.test.ts src/__tests__/unit/cli/bootstrap.test.ts",
+            "exit_code": 0,
+            "summary": "73 tests pass, including both rebuilt CLI dispatch boundaries, legacy project installs, stdio inventory/workspace, global setup and executable bootstrap.",
+            "observed_at": "2026-09-24T04:42:59.324Z"
+          }
+        },
         "planned_artifacts": [
           "sdd-entry.js",
           "src/cli/sdd-mcp-cli.ts",
           "src/__tests__/unit/cli/compiled-cli.e2e.test.ts"
         ],
-        "observed_artifacts": []
+        "observed_artifacts": [
+          "src/cli/sdd-mcp-cli.ts",
+          "sdd-entry.js",
+          "src/__tests__/unit/cli/compiled-cli.e2e.test.ts"
+        ]
       },
       "3.3": {
         "title": "Deliver an executable POSIX bootstrap wrapper",
@@ -440,7 +531,7 @@
           "3.2",
           "3.3"
         ],
-        "status": "pending",
+        "status": "in-progress",
         "evidence": {},
         "planned_artifacts": [],
         "observed_artifacts": []
