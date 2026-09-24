@@ -19,6 +19,7 @@
     "templates/**/*",
     "scripts/context-usage-report.mjs",
     "sdd-entry.js",
+    "bootstrap.sh",
     "mcp-server.js",
     "atomicWrite.js",
     "documentGenerator.js",
