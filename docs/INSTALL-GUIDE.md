@@ -1,8 +1,88 @@
 # SDD-MCP Installation Guide
 
-The unified installer creates native project guidance and registers the hidden MCP runtime for Claude Code, Codex, or Oh My Pi (OMP). It does not invoke a model, inspect authentication, or grant host/project trust.
+Use one-time personal setup for a local user/profile, or the optional project installer for shared repository guidance. Neither invokes a model, inspects authentication, or grants host/project trust.
+
+## One-time personal setup
+
+From any directory with Node.js >=18 and npm available:
+
+```bash
+npx -y sdd-mcp-server@latest setup-global
+npx -y sdd-mcp-server@latest setup-global --target claude-code
+npx -y sdd-mcp-server@latest setup-global --target codex
+npx -y sdd-mcp-server@latest setup-global --target omp
+```
+
+Without `--target`, setup processes Claude Code, Codex, then OMP. The only option is one `--target` with one of those values; project install flags such as `--all-tools` and `--profile` are not accepted.
+
+The equivalent source-checkout wrapper is `./bootstrap.sh` (POSIX `sh` required only for the wrapper). It delegates to `npx -y "${SDD_MCP_PACKAGE:-sdd-mcp-server@latest}" setup-global "$@"`, preserving arguments and exit status. It needs neither `sudo` nor `npm install -g`. The resolved package's exact version is pinned in all runtime entries.
+
+### Native personal paths
+
+`H` is the user home. `P` is nonempty `CLAUDE_CONFIG_DIR`, otherwise `H/.claude`; `C` is nonempty `CODEX_HOME`, otherwise `H/.codex`; `A` is the discovered/fallback OMP agent directory.
+
+| Host | Runtime configuration | Runtime ownership directory | Skills | Skills ownership directory |
+|---|---|---|---|---|
+| Claude, no override | `H/.claude.json` | `H/.claude/.sdd-mcp/global-runtime` | `H/.claude/skills/` | `H/.claude/.sdd-mcp/global-skills` |
+| Claude, nonempty override | `P/.claude.json` | `P/.sdd-mcp/global-runtime` | `P/skills/` | `P/.sdd-mcp/global-skills` |
+| Codex | `C/config.toml` | `C/.sdd-mcp/global-runtime` | `H/.agents/skills/` | `H/.agents/.sdd-mcp/global-skills` |
+| OMP | `A/mcp.json` | `A/.sdd-mcp/global-runtime` | `A/skills/` | `A/.sdd-mcp/global-skills` |
+
+Each ownership directory contains `install-manifest.json`, the transient `install.lock`, and any `backups/<timestamp>/<target>/...`. Runtime and Skills ownership use separate stores. `CODEX_HOME` does not move personal Skills. A nonempty Claude override equal to `H/.claude` still selects the override row.
+
+Explicit directory overrides must be absolute after expanding only `~` or `~/...`; spaces are preserved. Relative paths, control characters, escaping destinations, and managed symlink traversal fail rather than selecting the current directory.
+
+### OMP discovery and profiles
+
+For a selected OMP target, setup calls `omp config path` once without a shell. A single absolute output line selects `A`. Missing/unusable discovery prints a fallback notice:
+
+1. A defined `OMP_PROFILE` wins over `PI_PROFILE`, including an explicitly empty value. Empty, whitespace-only, or `default` selects the default profile.
+2. The default profile uses nonempty `PI_CODING_AGENT_DIR` when supplied; otherwise `H/<config-dir>/agent`.
+3. A named profile uses `H/<config-dir>/profiles/<profile>/agent` and ignores `PI_CODING_AGENT_DIR`. Run setup once per named profile.
+4. `<config-dir>` is nonempty `PI_CONFIG_DIR` or `.omp`, relative to home; absolute/escaping config directories and unsafe profile names are rejected.
+
+An unsafe path returned by successful discovery fails; it is not replaced by a guessed fallback.
+
+### Scope, preservation, and verification
+
+Personal setup installs only the runtime and target-rendered, manual-only Skills with supporting references and Codex explicit-invocation policy. It creates no `CLAUDE.md`, `AGENTS.md`, agents, rules, contexts, hooks, steering, `.gitignore`, or project installation files. It neither creates nor changes **any Claude permission settings**, even if an existing settings file is malformed. Existing user/project/managed permission policy continues to apply.
+
+These Skills are local-machine/user-profile assets. Claude cloud/Cowork sessions do not read these local personal Skills. Reload/restart the host and accept its normal trust and tool permission prompts. Run these checks from a directory without a same-name project runtime entry:
+
+```text
+claude mcp get sdd-mcp
+codex mcp get sdd-mcp
+# In OMP:
+/mcp test sdd-mcp
+```
+
+Existing project-scoped `sdd-mcp` registrations take precedence over personal runtime configuration. To use personal scope, remove only the shadowing `sdd-mcp` entry from the project's `.mcp.json`, `.codex/config.toml`, or `.omp/mcp.json`, preserving other entries and settings. Review an owned Codex marked block before removing it. Setup does not scan repositories or perform this migration. Runtime scope precedence is not Skill precedence: Skill-name collisions follow each host's own discovery rules; inspect the Skill source rather than assuming a runtime switch selects a different Skill copy.
+
+Rerunning setup upgrades unmodified owned runtime entries and Skills. User-modified/unknown conflicting content is preserved under **Preserved conflicts**; malformed configuration, unsafe paths, or I/O/state errors appear under **Failures**. Either category yields exit status 1, while independent hosts continue. **Installed / unchanged** lists retained results, not rolled-back attempts. A Skills failure does not remove an already committed runtime; fix the reported path and rerun explicitly. Concurrent setup versions hold the runtime lock through the nested Skills pass.
+
+Workflow state stays project-local: a nonempty `CLAUDE_PROJECT_DIR` selects the project; otherwise the runtime uses its process working directory. A supplied invalid root fails instead of falling back.
+
+### Packed-package and host acceptance
+
+For local release testing, use an absolute npm **file spec**, not a bare archive path:
+
+```bash
+npm run build
+npm pack --pack-destination /absolute/temp
+SDD_MCP_PACKAGE=file:/absolute/temp/sdd-mcp-server-5.0.1.tgz ./bootstrap.sh
+# Independent cross-platform path, without the wrapper:
+npx -y file:/absolute/temp/sdd-mcp-server-5.0.1.tgz setup-global
+```
+
+Use fresh, distinct temporary home/config/project directories for each path; pass `HOME`, `CLAUDE_CONFIG_DIR`, `CODEX_HOME`, and the OMP profile/agent settings to the child process. Control `omp` discovery on `PATH` so an unrelated installed host cannot select real user state. Rerun both commands, check pinned entries/rendered references and unchanged Claude settings, then exercise conflicts and Skills failures. Native npm 11.12.1 attempts to execute a bare `/absolute/package.tgz` (exit 126); the explicit `file:` syntax is the verified package-resolution path.
+
+Release acceptance exercised Claude Code 2.1.181 (`claude mcp get`: user scope, connected), Codex 0.147.0 (`codex mcp get`: pinned stdio entry), and OMP 18.3.0 (`/mcp test`: connected). The isolated Claude check specifically confirmed `<CLAUDE_CONFIG_DIR>/.claude.json`; file existence alone is not this host-discovery check. Revalidate native discovery when releasing against different host versions.
+
+Upstream references: [Claude MCP](https://code.claude.com/docs/en/mcp), [Claude Skills](https://code.claude.com/docs/en/skills), [Claude environment variables](https://code.claude.com/docs/en/env-vars), [Codex MCP](https://developers.openai.com/codex/mcp/), [Codex Skills](https://developers.openai.com/codex/skills), [Codex advanced configuration](https://developers.openai.com/codex/config-advanced/), [OMP MCP configuration](https://github.com/can1357/oh-my-pi/blob/main/docs/mcp-config.md), [OMP Skills](https://github.com/can1357/oh-my-pi/blob/main/docs/skills.md), and [OMP configuration discovery](https://github.com/can1357/oh-my-pi/blob/main/docs/config-usage.md).
 
 ## New project installation
+The following project-scoped path is optional. Use it for team/repository guidance; it is not required after personal setup.
+
 
 Use this procedure when the repository does not contain guidance generated by an earlier sdd-mcp release:
 

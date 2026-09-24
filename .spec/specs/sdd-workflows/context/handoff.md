@@ -1,4 +1,4 @@
-<!-- sdd-context schema=2 phase=implementation source=002d5540b9a1b0a0987168259861c7753bfdeed56364546224a8f2a803ceb09c payload=f0f0d160a3f47604de72b3e2b4a1edab7a162de397f0f101b1b066afe62737a8 -->
+<!-- sdd-context schema=2 phase=implementation source=d0562f884dfeb88b83aa6d7119a9217365939deb582ebcf99ac29ab38ad4e1d8 payload=3e3c9a37fc1fc39158378df7ca8188362f7bc684651403b59eb598cec473253a -->
 # SDD Context: sdd-workflows
 
 ## Workflow State
@@ -10,14 +10,13 @@
 - Test-case review: reviewed
 
 ## Implementation Progress
-- Revision: 51
-- Completed: 13/16
-- Active: 1
+- Revision: 56
+- Completed: 16/16
+- Active: 0
 - Blocked: 0
-- 4.1: in-progress
 
 ## Next Action
-Continue task 4.1 from in-progress.
+Implementation is complete.
 
 ## Source References
 - requirements.md
@@ -80,5 +79,4 @@ Continue task 4.1 from in-progress.
 - **Acceptance Criteria:** 1. Each host uses the state locations specified in FR-3 through FR-5; global setup does not place ownership state, locks, or backups in the active repository.
 - A Skills-only installation commits managed files without runtime verification or runtime rollback and retains any prior registration record in its manifest.
 - Existing project installations retain their default .sdd-mcp state directory, runtime registration, and verification/rollback behavior.
-- ## Constraints
-- |
+- ### FR-8: Preservation and conflict reporting
