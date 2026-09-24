@@ -46,9 +46,10 @@ export class TargetInstallSession {
     profile: InstallProfile,
     components: readonly ComponentType[],
     refreshGenerated = false,
+    private readonly registerRuntime = true,
   ) {
     this.report = { target, installed: [], skipped: [], failed: [], conflicts: [], warnings: [] };
-    writer.beginTarget(target, profile, components, refreshGenerated);
+    writer.beginTarget(target, profile, components, refreshGenerated, registerRuntime);
   }
 
   resolve(configuredPath: string): string {
@@ -129,17 +130,26 @@ export class TargetInstallSession {
     }
   }
 
-  async complete(paths: ResolvedInstallPaths): Promise<TargetInstallReport> {
+  async complete(paths?: ResolvedInstallPaths): Promise<TargetInstallReport> {
     try {
-      this.writer.requireRuntimeRegistration(this.target, paths);
+      if (this.registerRuntime) {
+        if (!paths) throw new Error('Runtime paths are required for registration-enabled sessions');
+        this.writer.requireRuntimeRegistration(this.target, paths);
+      }
       this.report.conflicts.push(...await this.writer.finalizeTarget(this.target));
       const runtime = this.writer.takeRuntimeResult(this.target);
       this.report.installed.push(...runtime.installed);
       this.report.skipped.push(...runtime.skipped);
       this.report.warnings.push(...runtime.warnings);
     } catch (error) {
-      await this.writer.rollbackUncommitted(this.target);
-      this.fail('runtime', 'sdd-mcp', this.resolve(paths.runtimeConfig), error);
+      try {
+        await this.writer.rollbackUncommitted(this.target);
+      } catch (rollbackError) {
+        this.fail('skills', 'rollback', this.projectRoot, rollbackError);
+      }
+      this.report.installed.length = 0;
+      this.fail(this.registerRuntime ? 'runtime' : 'skills', 'sdd-mcp',
+        paths ? this.resolve(paths.runtimeConfig) : this.projectRoot, error);
     }
     return this.report;
   }

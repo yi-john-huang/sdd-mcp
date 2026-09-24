@@ -1,0 +1,478 @@
+{
+  "schema_version": 5,
+  "feature_name": "sdd-workflows",
+  "description": "## Original Description\nProvide one-time local user/profile setup of the SDD workflow runtime and host-native manual Skills for Claude Code, Codex, and Oh My Pi. Extract requirements from the following user-supplied plan; retain project installation, preserve-first ownership, exact-version alignment, and explicit approval gates. This feature is global setup, not a redesign of the workflow phases.\n\n# Global SDD MCP setup\n\n## Context\n\nThe current installer writes an `sdd-mcp` runtime entry into each repository (`.mcp.json`, `.codex/config.toml`, or `.omp/mcp.json`). The requested end state is a one-time user-level setup for Claude Code, Codex, and OMP so the workflow-control runtime and host-native manual Skills are available in every local project, with clear installation and verification instructions. The setup will be delivered through `bootstrap.sh`; Claude Code permissions remain prompt/policy controlled rather than receiving a global allow rule.\n\n## Approach\n\n1. Make a user-scoped runtime bind to the active repository. Add one workspace-root resolver for `SDDToolAdapter`: use a non-empty `CLAUDE_PROJECT_DIR` when Claude Code supplies it, otherwise retain `process.cwd()` for Codex, OMP, and direct stdio launches. Route every workflow, steering, code-analysis, package-inspection, and template handler through that resolved root so a global Claude server never writes `.spec` under the user configuration directory.\n2. Reuse the preserve-first installer without weakening project installs. Add `PreservingWriterOptions { stateDirectory?: string }`; resolve that directory beneath the writer root and use it for the lock, manifest, and backups while leaving the default `.sdd-mcp` behavior unchanged. Add `registerRuntime = true` as the fifth `PreservingWriter.beginTarget(...)` and seventh `TargetInstallSession(...)` parameter; retain it on the session, make `complete(paths?)` require paths only when registration is enabled, and otherwise commit managed files without runtime verification/rollback while retaining any prior registration record. Add `RuntimeRegistrationOptions { configureClaudePermissions?: boolean }` to `registerRuntimeLocked(...)` and `PreservingWriter.installRuntimeRegistration(...)`, defaulting to `true`; global setup passes `false`, so it never creates or changes Claude permission settings.\n3. Add `src/cli/setup-global.ts` with `GlobalSetupCLI.parseArgs`, `GlobalSetupCLI.run`, and `mainGlobalSetup`, then route `sdd-mcp-server setup-global [--target <claude-code|codex|omp>]` through `sdd-entry.js` and `src/cli/sdd-mcp-cli.ts`. No `--target` means all three hosts; reject missing, repeated, unknown, or unsupported arguments before writing. Give the CLI a small injected dependency record for environment/home lookup and the no-shell OMP command runner so path tests never depend on the developer machine. Extract the private package-component lookup from `InstallSkillsCLI` into `resolvePackageComponentPath(componentDir: string)` in `src/cli/utils/find-package-root.ts` and reuse it to build the existing managers. For each target, first call `installRuntimeRegistration` with the runtime writer/state and relative config path from step 4. Only after successful registration, run `TargetInstallSession.copySkills` with only `skills`, `registerRuntime = false`, and the Skills writer/state from step 4; do not call a target adapter that emits root guidance. Register the exact running package version as `npx -y sdd-mcp-server@<version>` under `sdd-mcp`; preserve unrelated config/comments, reject malformed or conflicting same-name entries, continue independent hosts, and set a non-zero exit status if any target has a failure or preserved conflict.\n4. Resolve user locations and separate ownership namespaces explicitly:\n   - Claude Code: define the personal directory as non-empty `CLAUDE_CONFIG_DIR` or `~/.claude`; install Skills under `<personal>/skills` and keep their state under `<personal>/.sdd-mcp/global-skills`. Register runtime in `<personal>/.claude.json` when overridden, otherwise `~/.claude.json`; use `<personal>/.sdd-mcp/global-runtime` for runtime state in both cases.\n   - Codex: install Skills under `~/.agents/skills` with state under `~/.agents/.sdd-mcp/global-skills`; register runtime in `${CODEX_HOME:-~/.codex}/config.toml` with state under `${CODEX_HOME:-~/.codex}/.sdd-mcp/global-runtime`.\n   - OMP: execute `omp config path` with an argument array, no shell, and accept only one absolute active-agent directory; install `<agent-dir>/skills`, register `<agent-dir>/mcp.json`, and use `<agent-dir>/.sdd-mcp/global-skills` plus `<agent-dir>/.sdd-mcp/global-runtime`. If that command is unavailable or invalid, resolve the effective profile as defined `OMP_PROFILE` first, otherwise `PI_PROFILE`; empty, whitespace, or `default` selects the default profile. Use `PI_CODING_AGENT_DIR` only for the default profile, otherwise derive `~/${PI_CONFIG_DIR:-.omp}/profiles/<profile>/agent`; emit the fallback path and reject a profile containing separators, traversal, or control characters.\n   Expand only `~` and `~/...`, canonicalize paths, reject control characters and escape/symlink destinations with the existing containment checks, and never put global ownership/locks/backups in the active repository.\n5. Add root `bootstrap.sh` as the source-checkout wrapper. It is POSIX `sh`, fails clearly when `npx` is unavailable, and executes `npx -y \"${SDD_MCP_PACKAGE:-sdd-mcp-server@latest}\" setup-global \"$@\"`; this avoids `sudo` and a global npm package install while letting release/debug callers pin a package spec. Include the script in `package.json#files`, preserve executable packaging, and document the equivalent cross-platform command `npx -y sdd-mcp-server@latest setup-global` as the primary path for users who do not have the checkout or POSIX `sh`.\n6. Update `README.md`, `docs/INSTALL-GUIDE.md`, and the startup steps in `docs/WORKFLOW.md` to lead with the one-time bootstrap path, list the exact user files above, state that Claude permissions are intentionally unchanged, and show the host checks `claude mcp get sdd-mcp`, `codex mcp get sdd-mcp`, and OMP `/mcp test sdd-mcp` from a directory without a shadowing project entry. Explain that global Skills are local-machine/user-profile assets, Claude cloud/Cowork sessions do not read local personal Skills, OMP named profiles require one setup per profile, and existing project-scoped `sdd-mcp` entries continue to take precedence until users remove them. Keep the existing project installer documented as the repository/team-scoped alternative, not a required follow-up. Add an `Added` entry under `CHANGELOG.md`’s existing `[Unreleased]` section. Link the upstream setup references: Claude Code [MCP](https://code.claude.com/docs/en/mcp) and [Skills](https://code.claude.com/docs/en/skills), Codex [MCP](https://developers.openai.com/codex/mcp/) and [Skills](https://developers.openai.com/codex/skills), and OMP [MCP config](https://github.com/can1357/oh-my-pi/blob/main/docs/mcp-config.md) and [Skills](https://github.com/can1357/oh-my-pi/blob/main/docs/skills.md).\n7. Cover the behavior at its boundaries. Add focused tests for path resolution and target filtering; all-host config/Skill installation into temporary user roots; target-specific Skill rendering; preservation of unrelated JSONC/TOML; exact-version upgrades and idempotent reruns; modified-Skill/conflicting-runtime preservation with non-zero status; Claude permission files remaining untouched; OMP profile/fallback paths; the bootstrap wrapper’s package/argument forwarding; npm package inclusion; and `CLAUDE_PROJECT_DIR` taking precedence only when non-empty.\n\n## Critical files & anchors\n\n- `src/cli/setup-global.ts` — new orchestration boundary for user path resolution, rendered Skill installation, runtime registration, and per-target reporting.\n- `src/cli/utils/preserving-writer.ts` — ownership/rollback logic that must support files-only global passes without changing project-install defaults.\n- `src/cli/tool-support/mcp-registration.ts` — JSONC/TOML merge logic and the Claude permission opt-out.\n- `src/adapters/cli/SDDToolAdapter.ts` — currently binds all workflow state to `process.cwd()`; global Claude scope requires `CLAUDE_PROJECT_DIR`.\n- `bootstrap.sh` — user-facing one-command wrapper; its delegated command and package spec are the installation contract.\n\n## Verification\n\n1. From the repository root, run `npm test -- --runInBand --runTestsByPath src/__tests__/unit/cli/setup-global.test.ts src/__tests__/unit/cli/bootstrap.test.ts src/__tests__/unit/cli/mcp-registration.test.ts src/__tests__/unit/cli/preserving-writer.test.ts src/__tests__/unit/runtime/entrypoints.stdio.test.ts src/__tests__/unit/cli/documentation-consistency.test.ts`. The new cases must prove all three user paths/config shapes, exact target rendering, idempotence, upgrade ownership, conflict preservation, permission non-mutation, bootstrap forwarding, and Claude workspace-root precedence.\n2. Run `npm run build`, then `npm test -- --runInBand --runTestsByPath src/__tests__/unit/cli/compiled-cli.e2e.test.ts src/__tests__/unit/cli/governed-workflow.e2e.test.ts` to prove the new command is reachable from the compiled/package entrypoint and existing project-scoped installation still registers its runtime and renders the same profile.\n3. Pack the built repository to a temporary directory, create each temporary root, and run the real wrapper with isolated user paths: `HOME=<tmp>/home CLAUDE_CONFIG_DIR=<tmp>/claude CODEX_HOME=<tmp>/codex OMP_PROFILE= PI_PROFILE= PI_CODING_AGENT_DIR=<tmp>/omp SDD_MCP_PACKAGE=<absolute-packed-tarball> sh bootstrap.sh`. Expect exit 0; all three rendered `sdd-requirements/SKILL.md` files; Claude `<tmp>/claude/.claude.json`, Codex `<tmp>/codex/config.toml`, and OMP `<tmp>/omp/mcp.json` entries pinned to the packed version; unrelated seeded config bytes retained; and no Claude `settings.json` created or modified. Run the same command again and expect exit 0 with one `sdd-mcp` entry/block per host and no duplicate Skill files.\n4. In a temporary project distinct from every config root, launch the packed stdio runtime with `CLAUDE_PROJECT_DIR=<temporary-project>` and call `sdd-init` for `global-root-smoke`; expect `.spec/specs/global-root-smoke/spec.json` under the temporary project and no `.spec` tree under `HOME` or `CLAUDE_CONFIG_DIR`.\n\n## Assumptions & contingencies\n\n- Global setup means local user scope, not organization-managed configuration or cloud-hosted sessions. Repository-scoped installation remains available for teams that intentionally commit/share target-native assets.\n- `bootstrap.sh` defaults to `sdd-mcp-server@latest`, while the resulting runtime entries pin the resolved package version so runtime code and copied Skills stay aligned; rerunning the wrapper performs the preserve-first upgrade.\n- Claude tool calls follow existing user, project, and managed permission policy. The setup must not add `mcp__sdd-mcp__*` to any allow list.\n- If a same-name runtime entry or managed Skill was changed by the user, preserve it, report the exact path as a conflict, finish independent targets, and exit non-zero. Never overwrite it or add a compatibility alias.\n- If `omp config path` cannot run, use the documented environment/default fallback above. If an existing project-scoped `sdd-mcp` definition shadows the new user entry, document removal of only that project entry; do not scan or mutate repositories from global setup.\n\n\n## Success Criteria\nAll-host setup and identical rerun exit 0 in isolated user roots; three target-rendered sdd-requirements Skills exist; exactly one runtime entry per host pins the package version; unrelated config bytes and Claude permission files remain unchanged; conflicts return nonzero while independent targets complete; CLAUDE_PROJECT_DIR keeps all workflow state in the selected project; focused tests, build, compiled-entrypoint checks, and project-install regressions pass.",
+  "language": "en",
+  "phase": "implementation",
+  "created_at": "2026-09-24T03:19:04.799Z",
+  "updated_at": "2026-09-24T04:31:40.631Z",
+  "approvals": {
+    "requirements": {
+      "generated": true,
+      "approved": true,
+      "revision": 1,
+      "artifact_sha256": "edd1d6b01faf094f6db73c445ecc1ab51407114989c89c2919f5bcf76b2fa64c",
+      "validation": {
+        "status": "passed",
+        "checked_at": "2026-09-24T03:21:37.919Z",
+        "blockers": []
+      }
+    },
+    "design": {
+      "generated": true,
+      "approved": true,
+      "revision": 2,
+      "artifact_sha256": "731c0bde0f701f1ed4ac45399af908d2897707cb88539ce510d629b0cb2b8a0b",
+      "validation": {
+        "status": "passed",
+        "checked_at": "2026-09-24T03:36:07.179Z",
+        "blockers": []
+      }
+    },
+    "tasks": {
+      "generated": true,
+      "approved": true,
+      "revision": 3,
+      "artifact_sha256": "cc163beedbb1e7873e7ea04b52cb1a29a66820517806166df1209b474fa04b70",
+      "validation": {
+        "status": "passed",
+        "checked_at": "2026-09-24T04:14:22.355Z",
+        "blockers": []
+      }
+    }
+  },
+  "workflow_options": {
+    "review_test_cases": true
+  },
+  "checkpoints": {
+    "test_cases": {
+      "required": true,
+      "reviewed": true,
+      "reviewed_at": "2026-09-24T04:16:38.110Z",
+      "reviewed_revision": 3,
+      "reviewed_artifact_sha256": "cc163beedbb1e7873e7ea04b52cb1a29a66820517806166df1209b474fa04b70"
+    }
+  },
+  "implementation": {
+    "revision": 35,
+    "tasks_revision": 3,
+    "legacy_imported": false,
+    "tasks": {
+      "1.1": {
+        "title": "Isolate configurable writer ownership namespaces",
+        "tdd_required": true,
+        "dependencies": [],
+        "status": "completed",
+        "evidence": {
+          "red": {
+            "command": "npm test -- --runInBand --runTestsByPath src/__tests__/unit/cli/preserving-writer.test.ts",
+            "exit_code": 1,
+            "summary": "New custom namespace scenarios fail compilation: PreservingWriter accepts no options argument.",
+            "observed_at": "2026-09-24T04:20:46.025Z"
+          },
+          "green": {
+            "command": "npm test -- --runInBand --runTestsByPath src/__tests__/unit/cli/preserving-writer.test.ts",
+            "exit_code": 0,
+            "summary": "27 tests pass, including custom ownership/lock/backup namespace and unsafe state rejection.",
+            "observed_at": "2026-09-24T04:21:22.616Z"
+          },
+          "verification": {
+            "command": "npm test -- --runInBand --runTestsByPath src/__tests__/unit/cli/preserving-writer.test.ts",
+            "exit_code": 0,
+            "summary": "27 tests pass, including custom ownership/lock/backup namespace and unsafe state rejection.",
+            "observed_at": "2026-09-24T04:21:22.685Z"
+          }
+        },
+        "planned_artifacts": [
+          "src/cli/utils/preserving-writer.ts",
+          "src/__tests__/unit/cli/preserving-writer.test.ts"
+        ],
+        "observed_artifacts": [
+          "src/cli/utils/preserving-writer.ts",
+          "src/__tests__/unit/cli/preserving-writer.test.ts"
+        ]
+      },
+      "1.2": {
+        "title": "Make Claude permission configuration explicitly optional",
+        "tdd_required": true,
+        "dependencies": [
+          "1.1"
+        ],
+        "status": "completed",
+        "evidence": {
+          "red": {
+            "command": "npm test -- --runInBand --runTestsByPath src/__tests__/unit/cli/mcp-registration.test.ts",
+            "exit_code": 1,
+            "summary": "Permission opt-out scenario fails: registration API has no options argument.",
+            "observed_at": "2026-09-24T04:22:36.096Z"
+          },
+          "green": {
+            "command": "npm test -- --runInBand --runTestsByPath src/__tests__/unit/cli/mcp-registration.test.ts src/__tests__/unit/cli/preserving-writer.test.ts",
+            "exit_code": 0,
+            "summary": "35 tests pass; disabled global Claude permissions leave absent/malformed settings untouched and existing project registration remains passing.",
+            "observed_at": "2026-09-24T04:23:14.034Z"
+          },
+          "verification": {
+            "command": "npm test -- --runInBand --runTestsByPath src/__tests__/unit/cli/mcp-registration.test.ts src/__tests__/unit/cli/preserving-writer.test.ts",
+            "exit_code": 0,
+            "summary": "35 tests pass; disabled global Claude permissions leave absent/malformed settings untouched and existing project registration remains passing.",
+            "observed_at": "2026-09-24T04:23:14.073Z"
+          }
+        },
+        "planned_artifacts": [
+          "src/cli/tool-support/mcp-registration.ts",
+          "src/cli/utils/preserving-writer.ts",
+          "src/__tests__/unit/cli/mcp-registration.test.ts",
+          "src/__tests__/unit/cli/preserving-writer.test.ts"
+        ],
+        "observed_artifacts": [
+          "src/cli/tool-support/mcp-registration.ts",
+          "src/cli/utils/preserving-writer.ts",
+          "src/__tests__/unit/cli/mcp-registration.test.ts"
+        ]
+      },
+      "1.3": {
+        "title": "Distinguish runtime ownership refusals with typed errors",
+        "tdd_required": true,
+        "dependencies": [
+          "1.2"
+        ],
+        "status": "completed",
+        "evidence": {
+          "red": {
+            "command": "npm test -- --runInBand --runTestsByPath src/__tests__/unit/cli/mcp-registration.test.ts src/__tests__/unit/runtime/workspace-root.test.ts",
+            "exit_code": 1,
+            "summary": "Typed conflict tests fail because RuntimeRegistrationConflictError is not exported.",
+            "observed_at": "2026-09-24T04:24:23.744Z"
+          },
+          "green": {
+            "command": "npm test -- --runInBand --runTestsByPath src/__tests__/unit/cli/mcp-registration.test.ts src/__tests__/unit/cli/preserving-writer.test.ts",
+            "exit_code": 0,
+            "summary": "38 tests pass; JSONC/Codex ownership refusals expose typed reason/path, malformed config remains operational error, preserved bytes asserted.",
+            "observed_at": "2026-09-24T04:26:27.815Z"
+          },
+          "verification": {
+            "command": "npm test -- --runInBand --runTestsByPath src/__tests__/unit/cli/mcp-registration.test.ts src/__tests__/unit/cli/preserving-writer.test.ts",
+            "exit_code": 0,
+            "summary": "38 tests pass; JSONC/Codex ownership refusals expose typed reason/path, malformed config remains operational error, preserved bytes asserted.",
+            "observed_at": "2026-09-24T04:26:27.857Z"
+          }
+        },
+        "planned_artifacts": [
+          "src/cli/tool-support/mcp-registration.ts",
+          "src/__tests__/unit/cli/mcp-registration.test.ts"
+        ],
+        "observed_artifacts": [
+          "src/cli/tool-support/mcp-registration.ts",
+          "src/__tests__/unit/cli/mcp-registration.test.ts"
+        ]
+      },
+      "1.4": {
+        "title": "Support Skills-only sessions without runtime side effects",
+        "tdd_required": true,
+        "dependencies": [
+          "1.3"
+        ],
+        "status": "completed",
+        "evidence": {
+          "red": {
+            "command": "npm test -- --runInBand --runTestsByPath src/__tests__/unit/cli/target-installers.test.ts",
+            "exit_code": 1,
+            "summary": "Files-only scenarios fail compilation: no registration opt-out and complete requires runtime paths.",
+            "observed_at": "2026-09-24T04:27:36.402Z"
+          },
+          "green": {
+            "command": "npm run build && npm test -- --runInBand --runTestsByPath src/__tests__/unit/cli/target-installers.test.ts src/__tests__/unit/cli/preserving-writer.test.ts src/__tests__/unit/cli/mcp-registration.test.ts src/__tests__/unit/cli/bootstrap.test.ts src/__tests__/unit/cli/install-skills.test.ts",
+            "exit_code": 0,
+            "summary": "Build and 107 tests pass, including complete conflict taxonomy U06-U08, files-only commit/preservation/rollback boundaries and executable wrapper behavior.",
+            "observed_at": "2026-09-24T04:31:40.448Z"
+          },
+          "verification": {
+            "command": "npm run build && npm test -- --runInBand --runTestsByPath src/__tests__/unit/cli/target-installers.test.ts src/__tests__/unit/cli/preserving-writer.test.ts src/__tests__/unit/cli/mcp-registration.test.ts src/__tests__/unit/cli/bootstrap.test.ts src/__tests__/unit/cli/install-skills.test.ts",
+            "exit_code": 0,
+            "summary": "Build and 107 tests pass, including complete conflict taxonomy U06-U08, files-only commit/preservation/rollback boundaries and executable wrapper behavior.",
+            "observed_at": "2026-09-24T04:31:40.491Z"
+          }
+        },
+        "planned_artifacts": [
+          "src/cli/utils/preserving-writer.ts",
+          "src/cli/tool-support/target-installer.ts",
+          "src/__tests__/unit/cli/preserving-writer.test.ts",
+          "src/__tests__/unit/cli/target-installers.test.ts"
+        ],
+        "observed_artifacts": [
+          "src/cli/utils/preserving-writer.ts",
+          "src/cli/tool-support/target-installer.ts",
+          "src/__tests__/unit/cli/target-installers.test.ts"
+        ]
+      },
+      "1.5": {
+        "title": "Share the existing package component resolver",
+        "tdd_required": false,
+        "dependencies": [],
+        "status": "completed",
+        "evidence": {
+          "verification": {
+            "command": "node /Users/john.y.huang/workspace/public/sdd-mcp/dist/cli/install-skills.js --list (cwd=/tmp)",
+            "exit_code": 0,
+            "summary": "Compiled CLI outside checkout lists all 11 packaged Skills and other component inventories. Build and 107 focused tests also pass.",
+            "observed_at": "2026-09-24T04:31:40.528Z"
+          }
+        },
+        "planned_artifacts": [
+          "src/cli/utils/find-package-root.ts",
+          "src/cli/install-skills.ts",
+          "src/__tests__/unit/cli/install-skills.test.ts"
+        ],
+        "observed_artifacts": [
+          "src/cli/utils/find-package-root.ts",
+          "src/cli/install-skills.ts"
+        ]
+      },
+      "2.1": {
+        "title": "Validate command arguments and resolve Claude/Codex locations",
+        "tdd_required": true,
+        "dependencies": [],
+        "status": "completed",
+        "evidence": {
+          "red": {
+            "command": "npm test -- --runInBand --runTestsByPath src/__tests__/unit/cli/setup-global.test.ts",
+            "exit_code": 1,
+            "summary": "New argument/native location tests fail: setup-global module does not exist.",
+            "observed_at": "2026-09-24T04:22:04.950Z"
+          },
+          "green": {
+            "command": "npm test -- --runInBand --runTestsByPath src/__tests__/unit/cli/setup-global.test.ts",
+            "exit_code": 0,
+            "summary": "19 tests pass for strict CLI syntax and Claude/Codex native locations, override rules and unsafe paths.",
+            "observed_at": "2026-09-24T04:23:33.690Z"
+          },
+          "verification": {
+            "command": "npm test -- --runInBand --runTestsByPath src/__tests__/unit/cli/setup-global.test.ts",
+            "exit_code": 0,
+            "summary": "19 tests pass for strict CLI syntax and Claude/Codex native locations, override rules and unsafe paths.",
+            "observed_at": "2026-09-24T04:23:33.729Z"
+          }
+        },
+        "planned_artifacts": [
+          "src/cli/setup-global.ts",
+          "src/__tests__/unit/cli/setup-global.test.ts"
+        ],
+        "observed_artifacts": [
+          "src/cli/setup-global.ts",
+          "src/__tests__/unit/cli/setup-global.test.ts"
+        ]
+      },
+      "2.2": {
+        "title": "Resolve OMP discovery and profile fallback safely",
+        "tdd_required": true,
+        "dependencies": [
+          "2.1"
+        ],
+        "status": "completed",
+        "evidence": {
+          "red": {
+            "command": "npm test -- --runInBand --runTestsByPath src/__tests__/unit/cli/setup-global.test.ts src/__tests__/unit/cli/mcp-registration.test.ts src/__tests__/unit/cli/preserving-writer.test.ts",
+            "exit_code": 1,
+            "summary": "OMP scenarios fail compilation: resolver accepts only Claude/Codex. Other two suites pass.",
+            "observed_at": "2026-09-24T04:25:10.362Z"
+          },
+          "green": {
+            "command": "npm run build && npm test -- --runInBand --runTestsByPath src/__tests__/unit/cli/setup-global.test.ts src/__tests__/unit/runtime/workspace-root.test.ts src/__tests__/unit/runtime/entrypoints.stdio.test.ts",
+            "exit_code": 0,
+            "summary": "Build and 56 tests pass: OMP native discovery/fallback safety and precedence, selected/fallback workspace state, real compiled stdio init/status/context.",
+            "observed_at": "2026-09-24T04:27:36.446Z"
+          },
+          "verification": {
+            "command": "npm run build && npm test -- --runInBand --runTestsByPath src/__tests__/unit/cli/setup-global.test.ts src/__tests__/unit/runtime/workspace-root.test.ts src/__tests__/unit/runtime/entrypoints.stdio.test.ts",
+            "exit_code": 0,
+            "summary": "Build and 56 tests pass: OMP native discovery/fallback safety and precedence, selected/fallback workspace state, real compiled stdio init/status/context.",
+            "observed_at": "2026-09-24T04:27:36.480Z"
+          }
+        },
+        "planned_artifacts": [
+          "src/cli/setup-global.ts",
+          "src/__tests__/unit/cli/setup-global.test.ts"
+        ],
+        "observed_artifacts": [
+          "src/cli/setup-global.ts",
+          "src/__tests__/unit/cli/setup-global.test.ts"
+        ]
+      },
+      "2.3": {
+        "title": "Install selected hosts using existing runtime and Skill writers",
+        "tdd_required": true,
+        "dependencies": [
+          "1.4",
+          "1.5",
+          "2.2"
+        ],
+        "status": "in-progress",
+        "evidence": {},
+        "planned_artifacts": [
+          "src/cli/setup-global.ts",
+          "src/__tests__/unit/cli/setup-global.test.ts"
+        ],
+        "observed_artifacts": []
+      },
+      "2.4": {
+        "title": "Report preserved conflicts separately from operational failures",
+        "tdd_required": true,
+        "dependencies": [
+          "2.3"
+        ],
+        "status": "pending",
+        "evidence": {},
+        "planned_artifacts": [
+          "src/cli/setup-global.ts",
+          "src/__tests__/unit/cli/setup-global.test.ts"
+        ],
+        "observed_artifacts": []
+      },
+      "2.5": {
+        "title": "Preserve upgrade ownership and serialize cross-store installs",
+        "tdd_required": true,
+        "dependencies": [
+          "2.4"
+        ],
+        "status": "pending",
+        "evidence": {},
+        "planned_artifacts": [
+          "src/cli/setup-global.ts",
+          "src/cli/utils/preserving-writer.ts",
+          "src/__tests__/unit/cli/setup-global.test.ts",
+          "src/__tests__/unit/cli/preserving-writer.test.ts"
+        ],
+        "observed_artifacts": []
+      },
+      "3.1": {
+        "title": "Bind every project-sensitive runtime operation to one root",
+        "tdd_required": true,
+        "dependencies": [],
+        "status": "completed",
+        "evidence": {
+          "red": {
+            "command": "npm test -- --runInBand --runTestsByPath src/__tests__/unit/cli/mcp-registration.test.ts src/__tests__/unit/runtime/workspace-root.test.ts",
+            "exit_code": 1,
+            "summary": "Workspace scenarios fail: context reads cwd marker instead of selected root, invalid supplied root silently writes cwd, steering files absent in selected root. Fallback scenarios pass.",
+            "observed_at": "2026-09-24T04:24:23.784Z"
+          },
+          "green": {
+            "command": "npm run build && npm test -- --runInBand --runTestsByPath src/__tests__/unit/cli/setup-global.test.ts src/__tests__/unit/runtime/workspace-root.test.ts src/__tests__/unit/runtime/entrypoints.stdio.test.ts",
+            "exit_code": 0,
+            "summary": "Build and 56 tests pass: OMP native discovery/fallback safety and precedence, selected/fallback workspace state, real compiled stdio init/status/context.",
+            "observed_at": "2026-09-24T04:27:36.515Z"
+          },
+          "verification": {
+            "command": "npm run build && npm test -- --runInBand --runTestsByPath src/__tests__/unit/cli/setup-global.test.ts src/__tests__/unit/runtime/workspace-root.test.ts src/__tests__/unit/runtime/entrypoints.stdio.test.ts",
+            "exit_code": 0,
+            "summary": "Build and 56 tests pass: OMP native discovery/fallback safety and precedence, selected/fallback workspace state, real compiled stdio init/status/context.",
+            "observed_at": "2026-09-24T04:27:36.547Z"
+          }
+        },
+        "planned_artifacts": [
+          "src/adapters/cli/SDDToolAdapter.ts",
+          "src/__tests__/unit/runtime/workspace-root.test.ts",
+          "src/__tests__/unit/runtime/entrypoints.stdio.test.ts"
+        ],
+        "observed_artifacts": [
+          "src/adapters/cli/SDDToolAdapter.ts",
+          "src/__tests__/unit/runtime/workspace-root.test.ts",
+          "src/__tests__/unit/runtime/entrypoints.stdio.test.ts"
+        ]
+      },
+      "3.2": {
+        "title": "Expose global setup through both compiled dispatch boundaries",
+        "tdd_required": true,
+        "dependencies": [
+          "2.5"
+        ],
+        "status": "pending",
+        "evidence": {},
+        "planned_artifacts": [
+          "sdd-entry.js",
+          "src/cli/sdd-mcp-cli.ts",
+          "src/__tests__/unit/cli/compiled-cli.e2e.test.ts"
+        ],
+        "observed_artifacts": []
+      },
+      "3.3": {
+        "title": "Deliver an executable POSIX bootstrap wrapper",
+        "tdd_required": true,
+        "dependencies": [],
+        "status": "completed",
+        "evidence": {
+          "red": {
+            "command": "npm test -- --runInBand --runTestsByPath src/__tests__/unit/cli/bootstrap.test.ts",
+            "exit_code": 1,
+            "summary": "Four actual executable wrapper scenarios fail because bootstrap.sh does not exist.",
+            "observed_at": "2026-09-24T04:30:02.696Z"
+          },
+          "green": {
+            "command": "npm run build && npm test -- --runInBand --runTestsByPath src/__tests__/unit/cli/target-installers.test.ts src/__tests__/unit/cli/preserving-writer.test.ts src/__tests__/unit/cli/mcp-registration.test.ts src/__tests__/unit/cli/bootstrap.test.ts src/__tests__/unit/cli/install-skills.test.ts",
+            "exit_code": 0,
+            "summary": "Build and 107 tests pass, including complete conflict taxonomy U06-U08, files-only commit/preservation/rollback boundaries and executable wrapper behavior.",
+            "observed_at": "2026-09-24T04:31:40.564Z"
+          },
+          "verification": {
+            "command": "npm run build && npm test -- --runInBand --runTestsByPath src/__tests__/unit/cli/target-installers.test.ts src/__tests__/unit/cli/preserving-writer.test.ts src/__tests__/unit/cli/mcp-registration.test.ts src/__tests__/unit/cli/bootstrap.test.ts src/__tests__/unit/cli/install-skills.test.ts",
+            "exit_code": 0,
+            "summary": "Build and 107 tests pass, including complete conflict taxonomy U06-U08, files-only commit/preservation/rollback boundaries and executable wrapper behavior.",
+            "observed_at": "2026-09-24T04:31:40.597Z"
+          }
+        },
+        "planned_artifacts": [
+          "bootstrap.sh",
+          "package.json",
+          "src/__tests__/unit/cli/bootstrap.test.ts"
+        ],
+        "observed_artifacts": [
+          "bootstrap.sh",
+          "package.json",
+          "src/__tests__/unit/cli/bootstrap.test.ts"
+        ]
+      },
+      "4.1": {
+        "title": "Exercise the packed package and verify native host paths",
+        "tdd_required": false,
+        "dependencies": [
+          "3.1",
+          "3.2",
+          "3.3"
+        ],
+        "status": "pending",
+        "evidence": {},
+        "planned_artifacts": [],
+        "observed_artifacts": []
+      },
+      "4.2": {
+        "title": "Publish installation scope and verification documentation",
+        "tdd_required": false,
+        "dependencies": [
+          "4.1"
+        ],
+        "status": "pending",
+        "evidence": {},
+        "planned_artifacts": [
+          "README.md",
+          "docs/INSTALL-GUIDE.md",
+          "docs/WORKFLOW.md",
+          "CHANGELOG.md",
+          "src/__tests__/unit/cli/documentation-consistency.test.ts"
+        ],
+        "observed_artifacts": []
+      },
+      "4.3": {
+        "title": "Verify integrated quality and record release readiness",
+        "tdd_required": false,
+        "dependencies": [
+          "4.2"
+        ],
+        "status": "pending",
+        "evidence": {},
+        "planned_artifacts": [],
+        "observed_artifacts": []
+      }
+    }
+  }
+}

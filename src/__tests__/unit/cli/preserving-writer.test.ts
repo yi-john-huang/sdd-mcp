@@ -15,6 +15,42 @@ describe('PreservingWriter', () => {
 
   afterEach(() => fs.rmSync(root, { recursive: true, force: true }));
 
+  it('keeps ownership, locks, and obsolete backups in a custom namespace', async () => {
+    const stateDirectory = '.sdd-mcp/global-skills';
+    const custom = new PreservingWriter(root, { stateDirectory });
+    const file = path.join(root, 'skills/old/SKILL.md');
+    await custom.withInstallLock(async () => {
+      expect(fs.existsSync(path.join(root, stateDirectory, 'install.lock'))).toBe(true);
+      custom.beginTarget('omp', 'lean', ['skills']);
+      await custom.writeManaged('omp', 'skills', 'old', file, 'original');
+      await custom.finalizeTarget('omp');
+    });
+    const next = new PreservingWriter(root, { stateDirectory });
+    next.beginTarget('omp', 'lean', ['skills']);
+    await next.finalizeTarget('omp');
+    expect(fs.existsSync(file)).toBe(false);
+    expect(fs.existsSync(path.join(root, '.sdd-mcp/install-manifest.json'))).toBe(false);
+    const backups = path.join(root, stateDirectory, 'backups');
+    const [stamp] = fs.readdirSync(backups);
+    expect(fs.readFileSync(path.join(backups, stamp, 'omp/skills/old/SKILL.md'), 'utf8')).toBe('original');
+    const manifest = JSON.parse(fs.readFileSync(path.join(root, stateDirectory, 'install-manifest.json'), 'utf8'));
+    expect(manifest.targets.omp.files).toEqual({});
+  });
+
+  it('rejects unsafe custom state roots without touching their destinations', async () => {
+    for (const stateDirectory of ['.', '', '../outside']) {
+      expect(() => new PreservingWriter(root, { stateDirectory })).toThrow();
+    }
+    const outside = fs.mkdtempSync(path.join(os.tmpdir(), 'sdd-state-outside-'));
+    fs.symlinkSync(outside, path.join(root, 'linked'), 'dir');
+    try {
+      expect(() => new PreservingWriter(root, { stateDirectory: 'linked/state' })).toThrow();
+      expect(fs.readdirSync(outside)).toEqual([]);
+    } finally {
+      fs.rmSync(outside, { recursive: true, force: true });
+    }
+  });
+
   it('creates missing files and preserves existing files', async () => {
     const file = path.join(root, 'nested', 'file.txt');
     await expect(writer.writeIfAbsent(file, 'first')).resolves.toBe('installed');

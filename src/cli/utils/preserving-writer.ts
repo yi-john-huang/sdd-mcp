@@ -16,6 +16,7 @@ import {
 import {
   registerRuntimeLocked,
   type RuntimeRegistrationRecord,
+  type RuntimeRegistrationOptions,
 } from '../tool-support/mcp-registration.js';
 
 export type WriteOutcome = 'installed' | 'skipped';
@@ -85,6 +86,10 @@ export function validateDestinationPath(projectRoot: string, destination: string
   }
 }
 
+export interface PreservingWriterOptions {
+  stateDirectory?: string;
+}
+
 export class PreservingWriter {
   private readonly generated = new Map<InstallTarget, Map<string, ManifestFile>>();
   private readonly profiles = new Map<InstallTarget, InstallProfile>();
@@ -97,33 +102,47 @@ export class PreservingWriter {
     skipped: string[];
     warnings: string[];
   }>();
+  private readonly runtimeEnabled = new Map<InstallTarget, boolean>();
   private activeLeaseAssert?: () => Promise<void>;
   private readonly pendingWrites = new Map<InstallTarget, Map<string, { prior: Buffer | null; next: Buffer | null }>>();
   private readonly committedTargets = new Set<InstallTarget>();
   private readonly preservedModifiedFiles = new Map<InstallTarget, Set<string>>();
   private backupStamp?: string;
 
-  constructor(private readonly projectRoot: string) {}
+  private readonly stateRoot: string;
+
+  constructor(private readonly projectRoot: string, options: PreservingWriterOptions = {}) {
+    const stateDirectory = options.stateDirectory ?? '.sdd-mcp';
+    this.stateRoot = path.resolve(projectRoot, stateDirectory);
+    if (!stateDirectory || /[\u0000-\u001f\u007f]/.test(stateDirectory)
+      || this.stateRoot === path.resolve(projectRoot)) {
+      throw new Error('Unsafe installer state directory');
+    }
+    if (options.stateDirectory !== undefined) this.validateDestination(this.stateRoot);
+  }
 
   beginTarget(
     target: InstallTarget,
     profile: InstallProfile,
     components: readonly ComponentType[],
     refreshGenerated = false,
+    registerRuntime = true,
   ): void {
     this.generated.set(target, new Map());
     this.preservedModifiedFiles.set(target, new Set());
     this.committedTargets.delete(target);
     this.runtimeResults.delete(target);
+    this.runtimePaths.delete(target);
+    this.runtimeEnabled.set(target, registerRuntime);
     this.profiles.set(target, profile);
-    this.selectedComponents.set(target, new Set<ComponentType | 'root'>([...components, 'root']));
+    this.selectedComponents.set(target, new Set<ComponentType | 'root'>(registerRuntime ? [...components, 'root'] : components));
     if (refreshGenerated) this.refreshTargets.add(target);
     else this.refreshTargets.delete(target);
   }
 
   async withInstallLock<T>(action: () => Promise<T>): Promise<T> {
     if (this.activeLeaseAssert) return action();
-    const lockPath = path.join(this.projectRoot, '.sdd-mcp', 'install.lock');
+    const lockPath = path.join(this.stateRoot, 'install.lock');
     this.validateDestination(lockPath);
     await fs.promises.mkdir(path.dirname(lockPath), { recursive: true });
     this.validateDestination(lockPath);
@@ -174,6 +193,11 @@ export class PreservingWriter {
     if (!writes) return;
     const leaseAssert = assertHeld ?? (async () => undefined);
     for (const [filePath, snapshot] of [...writes].reverse()) {
+      // Only restore bytes still owned by this attempt; editor changes survive.
+      if (!buffersEqual(await readOptionalBytes(filePath), snapshot.next)) {
+        writes.delete(filePath);
+        continue;
+      }
       if (snapshot.prior === null) {
         if (snapshot.next !== null) {
           await this.removeBytesCas(filePath, snapshot.next, leaseAssert);
@@ -181,6 +205,7 @@ export class PreservingWriter {
       } else {
         await this.replaceBytesCas(filePath, snapshot.next, snapshot.prior, leaseAssert);
       }
+      writes.delete(filePath);
     }
     this.pendingWrites.delete(target);
   }
@@ -259,6 +284,7 @@ export class PreservingWriter {
   async installRuntimeRegistration(
     target: InstallTarget,
     paths: ResolvedInstallPaths = getTargetPolicy(target).defaultPaths,
+    options: RuntimeRegistrationOptions = {},
   ): Promise<{ installed: string[]; skipped: string[]; warnings: string[] }> {
     return this.withInstallLock(async () => {
       const assertHeld = this.requireActiveLease();
@@ -271,6 +297,7 @@ export class PreservingWriter {
         paths,
         previous?.registrations[0],
         assertHeld,
+        options,
       );
       const latest = manifest;
       latest.targets[target] = {
@@ -368,13 +395,13 @@ export class PreservingWriter {
     }
 
     const runtimePaths = this.runtimePaths.get(target) ?? getTargetPolicy(target).defaultPaths;
-    const runtime = await registerRuntimeLocked(
+    const runtime = this.runtimeEnabled.get(target) !== false ? await registerRuntimeLocked(
       this.projectRoot,
       target,
       runtimePaths,
       previousTarget?.registrations[0],
       assertHeld,
-    );
+    ) : undefined;
     const retainedUnselected = Object.fromEntries(
       Object.entries(previous).filter(([, record]) => !selected.has(record.component)),
     );
@@ -384,36 +411,36 @@ export class PreservingWriter {
       packageVersion: PACKAGE_VERSION,
       rendererVersion: INSTALL_RENDERER_VERSION,
       files: { ...retainedUnselected, ...Object.fromEntries(generated) },
-      registrations: [runtime.registration],
+      registrations: runtime ? [runtime.registration] : previousTarget?.registrations ?? [],
     };
     Object.assign(latest.shared, Object.fromEntries(this.pendingShared));
     const priorManifestBytes = manifestSnapshot.bytes;
     const nextManifestBytes = Buffer.from(`${JSON.stringify(latest, null, 2)}\n`);
     try {
       await this.verifyPendingOwnership(target, generated, assertHeld);
-      await runtime.verify();
+      await runtime?.verify();
       await this.replaceBytesCas(this.manifestPath, priorManifestBytes, nextManifestBytes, assertHeld);
     } catch (error) {
       const currentManifestBytes = await readOptionalBytes(this.manifestPath);
       if (buffersEqual(currentManifestBytes, nextManifestBytes)) {
         this.runtimeResults.set(target, {
-          installed: runtime.installed,
-          skipped: runtime.skipped,
+          installed: runtime?.installed ?? [],
+          skipped: runtime?.skipped ?? [],
           warnings: [`Installation committed, but manifest write reported an error: ${error instanceof Error ? error.message : String(error)}`],
         });
         this.markTargetCommitted(target);
         return conflicts;
       }
       if (buffersEqual(currentManifestBytes, priorManifestBytes)) {
-        await runtime.rollback();
+        await runtime?.rollback();
         throw error;
       }
       this.pendingWrites.delete(target);
       throw new Error('Install manifest changed to unknown bytes; installer partials were preserved');
     }
     this.runtimeResults.set(target, {
-      installed: runtime.installed,
-      skipped: runtime.skipped,
+      installed: runtime?.installed ?? [],
+      skipped: runtime?.skipped ?? [],
       warnings: [],
     });
     this.markTargetCommitted(target);
@@ -500,7 +527,7 @@ export class PreservingWriter {
 
   private async backup(target: InstallTarget, relative: string, source: string): Promise<void> {
     this.backupStamp ??= new Date().toISOString().replace(/[:.]/g, '-');
-    const destination = path.join(this.projectRoot, '.sdd-mcp', 'backups', this.backupStamp, target, relative);
+    const destination = path.join(this.stateRoot, 'backups', this.backupStamp, target, relative);
     this.validateDestination(destination);
     await fs.promises.mkdir(path.dirname(destination), { recursive: true });
     await fs.promises.copyFile(source, destination);
@@ -532,7 +559,7 @@ export class PreservingWriter {
   }
 
   private get manifestPath(): string {
-    return path.join(this.projectRoot, '.sdd-mcp', 'install-manifest.json');
+    return path.join(this.stateRoot, 'install-manifest.json');
   }
 
   private async readManifest(): Promise<InstallManifest> {
