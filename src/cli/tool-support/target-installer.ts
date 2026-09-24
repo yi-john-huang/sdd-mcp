@@ -132,6 +132,11 @@ export class TargetInstallSession {
 
   async complete(paths?: ResolvedInstallPaths): Promise<TargetInstallReport> {
     try {
+      if (!this.registerRuntime && this.report.failed.length > 0) {
+        await this.writer.rollbackUncommitted(this.target);
+        this.report.installed.length = 0;
+        return this.report;
+      }
       if (this.registerRuntime) {
         if (!paths) throw new Error('Runtime paths are required for registration-enabled sessions');
         this.writer.requireRuntimeRegistration(this.target, paths);
@@ -145,11 +150,11 @@ export class TargetInstallSession {
       try {
         await this.writer.rollbackUncommitted(this.target);
       } catch (rollbackError) {
-        this.fail('skills', 'rollback', this.projectRoot, rollbackError);
+        this.fail('skills', 'rollback', this.writer.stateRoot, rollbackError);
       }
       this.report.installed.length = 0;
       this.fail(this.registerRuntime ? 'runtime' : 'skills', 'sdd-mcp',
-        paths ? this.resolve(paths.runtimeConfig) : this.projectRoot, error);
+        paths && this.registerRuntime ? this.resolve(paths.runtimeConfig) : this.writer.stateRoot, error);
     }
     return this.report;
   }

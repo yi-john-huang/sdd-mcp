@@ -48,7 +48,7 @@ export interface GlobalTargetReport extends Omit<TargetInstallReport, 'conflicts
 }
 
 const TARGETS: readonly InstallTarget[] = ['claude-code', 'codex', 'omp'];
-const CONTROL_CHARACTER = /[\u0000-\u001f\u007f]/;
+const CONTROL_CHARACTER = /\p{Cc}/u;
 
 export class GlobalSetupCLI {
   private readonly dependencies: GlobalSetupDependencies;
@@ -101,6 +101,9 @@ export class GlobalSetupCLI {
         if (locations.fallbackNotice) report.warnings.push(locations.fallbackNotice);
         const runtimeWriter = new PreservingWriter(locations.runtimeRoot, { stateDirectory: locations.runtimeStateDirectory });
         await runtimeWriter.withInstallLock(async assertHeld => {
+          destination = runtimeWriter.stateRoot;
+          await runtimeWriter.validateState();
+          destination = path.join(locations.runtimeRoot, locations.runtimeConfig);
           const runtime = await runtimeWriter.installRuntimeRegistration(target, {
             ...getTargetPolicy(target).defaultPaths,
             runtimeConfig: locations.runtimeConfig,
@@ -112,6 +115,7 @@ export class GlobalSetupCLI {
           destination = path.join(locations.skillsRoot, locations.skillsStateDirectory);
           const skillsWriter = new PreservingWriter(locations.skillsRoot, { stateDirectory: locations.skillsStateDirectory });
           const result = await skillsWriter.withInstallLock(async () => {
+            await skillsWriter.validateState();
             const session = new TargetInstallSession(target, locations.skillsRoot, skillsWriter, 'lean', ['skills'], false, false);
             await session.copySkills({ listSkills: async () => skills }, locations.skillsDirectory);
             return session.complete();
@@ -253,11 +257,11 @@ export async function mainGlobalSetup(args = process.argv.slice(3)): Promise<voi
       }
       if (report.conflicts.length) {
         console.log('Preserved conflicts');
-        for (const conflict of report.conflicts) console.log(`  ${conflict.path} (${conflict.reason})`);
+        for (const conflict of report.conflicts) console.log(`  [${conflict.component}] ${conflict.path} (${conflict.reason})`);
       }
       if (report.failed.length) {
         console.error('Failures');
-        for (const failure of report.failed) console.error(`  ${failure.path}: ${failure.error}`);
+        for (const failure of report.failed) console.error(`  [${failure.component}] ${failure.path}: ${failure.error}`);
       }
     }
     process.exitCode = reports.some(report => report.failed.length || report.conflicts.length) ? 1 : 0;

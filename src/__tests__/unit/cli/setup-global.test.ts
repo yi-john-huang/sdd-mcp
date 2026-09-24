@@ -358,7 +358,7 @@ describe('GlobalSetupCLI argument and native location resolution', () => {
     fs.mkdirSync(state, { recursive: true });
     fs.writeFileSync(path.join(state, 'install-manifest.json'), '{ broken state');
     const [report] = await cli.run({ target: 'codex' });
-    expect(report.failed.length).toBeGreaterThan(0);
+    expect(report.failed).toEqual([expect.objectContaining({ component: 'skills', path: state })]);
     expect(report.conflicts).toEqual([]);
     expect(report.installed).toEqual([path.join(home, '.codex/config.toml')]);
     expect(fs.readFileSync(path.join(home, '.codex/config.toml'), 'utf8')).toContain(`sdd-mcp-server@${PACKAGE_VERSION}`);
@@ -396,6 +396,17 @@ describe('GlobalSetupCLI argument and native location resolution', () => {
       output.mockRestore();
       errors.mockRestore();
     }
+  });
+
+  it('rolls back sibling Skills after a file I/O failure while retaining committed runtime', async () => {
+    const badDestination = path.join(home, '.agents/skills/sdd-design/REFERENCE.md');
+    fs.mkdirSync(badDestination, { recursive: true });
+    const [report] = await cli.run({ target: 'codex' });
+    expect(report.failed).toEqual([expect.objectContaining({ component: 'skills', path: badDestination })]);
+    expect(report.installed).toEqual([path.join(home, '.codex/config.toml')]);
+    expect(fs.existsSync(path.join(home, '.agents/skills/sdd-requirements/SKILL.md'))).toBe(false);
+    expect(fs.existsSync(path.join(home, '.agents/.sdd-mcp/global-skills/install-manifest.json'))).toBe(false);
+    expect(fs.statSync(badDestination).isDirectory()).toBe(true);
   });
 
   function versionedCli(version: string): GlobalSetupCLI {

@@ -60,6 +60,17 @@ describe('compiled target-aware CLI journeys', () => {
       expect(fs.existsSync(path.join(home, 'claude'))).toBe(false);
       expect(fs.existsSync(path.join(home, 'omp'))).toBe(false);
       expect(fs.readdirSync(cwd)).toEqual([]);
+      const conflictPath = fs.realpathSync(path.join(home, 'codex/config.toml'));
+      const conflictBytes = fs.readFileSync(conflictPath, 'utf8').replace('"npx"', '"secret-custom-command"');
+      fs.writeFileSync(conflictPath, conflictBytes);
+      const conflict = spawnSync(process.execPath, [path.join(repositoryRoot, script), 'setup-global', '--target', 'codex'], {
+        cwd, env, encoding: 'utf8', timeout: 10_000,
+      });
+      expect(conflict.status).toBe(1);
+      expect(conflict.stdout).toContain('Preserved conflicts');
+      expect(conflict.stdout).toContain(`[runtime] ${conflictPath}`);
+      expect(conflict.stdout + conflict.stderr).not.toContain('secret-custom-command');
+      expect(fs.readFileSync(conflictPath, 'utf8')).toBe(conflictBytes);
     } finally {
       fs.rmSync(temporary, { recursive: true, force: true });
     }

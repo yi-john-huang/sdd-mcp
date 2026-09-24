@@ -109,12 +109,12 @@ export class PreservingWriter {
   private readonly preservedModifiedFiles = new Map<InstallTarget, Set<string>>();
   private backupStamp?: string;
 
-  private readonly stateRoot: string;
+  readonly stateRoot: string;
 
   constructor(private readonly projectRoot: string, options: PreservingWriterOptions = {}) {
     const stateDirectory = options.stateDirectory ?? '.sdd-mcp';
     this.stateRoot = path.resolve(projectRoot, stateDirectory);
-    if (!stateDirectory || /[\u0000-\u001f\u007f]/.test(stateDirectory)
+    if (!stateDirectory || /\p{Cc}/u.test(stateDirectory)
       || this.stateRoot === path.resolve(projectRoot)) {
       throw new Error('Unsafe installer state directory');
     }
@@ -175,6 +175,12 @@ export class PreservingWriter {
       }
       return value as T;
     }
+  }
+
+  async validateState(): Promise<void> {
+    const assertHeld = this.requireActiveLease();
+    await assertHeld();
+    await this.readManifest();
   }
 
   requireRuntimeRegistration(target: InstallTarget, paths: ResolvedInstallPaths): void {
