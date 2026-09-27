@@ -6,33 +6,65 @@ This guide describes v4 execution routes for Claude Code, Codex, and Oh My Pi (O
 
 | Work class | Claude Code | Codex | OMP |
 |---|---|---|---|
-| Requirements, design, review, security | current turn on Opus | at most one custom Sol/xhigh advisor | inline on Sol/medium by default |
-| Implementation, TDD, simple task | current turn on Sonnet | inline on Sol/medium | inline on Sol/medium |
-| Explicit advisor | not needed for model switching | generated custom Sol/xhigh agent | one opt-in `.omp/agents` Sol/xhigh child |
+| Requirements, design, review, security | current turn on configured skill model/effort (default Opus/high) | at most one configured custom advisor; inline parent unchanged | inline on host-selected parent by default |
+| Implementation, TDD, simple task | current turn on configured skill model/effort (default Sonnet/medium) | inline on host-selected parent | inline on host-selected parent |
+| Explicit advisor | generated subagent has configured role model/effort | generated custom agent has configured role model/effort | one opt-in `.omp/agents` child with configured model/thinking |
 | Commit | local/current turn | local/current turn | local/current turn |
 
-OMP does **not** automatically delegate high-level work. Real A/B runs showed that automatic Sol/xhigh child requests increased median cost, so high-level OMP work now remains inline on Sol/medium. Native Sol/xhigh advisors remain available as an explicit user choice only.
+OMP does **not** automatically delegate high-level work. Real A/B runs on a Sol/medium parent showed that automatic Sol/xhigh child requests increased median cost, so high-level OMP work remains inline by default. Generated project advisors remain available as an explicit user choice only.
 
 ## Role routing
 
-The canonical role table still owns native model metadata:
+`ROLE_MODEL_ROUTES` owns the defaults; `--model-roles` overrides selected roles at install time:
 
-| Role | Typical skills | Claude Code | Codex metadata | OMP advisor metadata |
+| Role | Typical skills | Claude Code model / effort | Codex metadata | OMP advisor metadata |
 |---|---|---|---|---|
-| planner | requirements, tasks, steering | `opus` | `gpt-5.6-sol` / `xhigh` | `gpt-5.6-sol` / `xhigh` |
-| architect | design | `opus` | `gpt-5.6-sol` / `xhigh` | `gpt-5.6-sol` / `xhigh` |
-| reviewer | review | `opus` | `gpt-5.6-sol` / `xhigh` | `gpt-5.6-sol` / `xhigh` |
-| security-auditor | security check | `opus` | `gpt-5.6-sol` / `xhigh` | `gpt-5.6-sol` / `xhigh` |
-| implementer | implementation | `sonnet` | `gpt-5.6-sol` / `medium` | parent `gpt-5.6-sol` / `medium` |
-| tdd-guide | test generation | `sonnet` | `gpt-5.6-sol` / `medium` | parent `gpt-5.6-sol` / `medium` |
+| planner | requirements, tasks, steering | `opus` / `high` | `gpt-5.6-sol` / `xhigh` | `gpt-5.6-sol` / `xhigh` |
+| architect | design | `opus` / `high` | `gpt-5.6-sol` / `xhigh` | `gpt-5.6-sol` / `xhigh` |
+| reviewer | review | `opus` / `high` | `gpt-5.6-sol` / `xhigh` | `gpt-5.6-sol` / `xhigh` |
+| security-auditor | security check | `opus` / `high` | `gpt-5.6-sol` / `xhigh` | `gpt-5.6-sol` / `xhigh` |
+| implementer | implementation | `sonnet` / `medium` | `gpt-5.6-sol` / `medium` | generated `gpt-5.6-sol` / `medium` |
+| tdd-guide | test generation | `sonnet` / `medium` | `gpt-5.6-sol` / `medium` | generated `gpt-5.6-sol` / `medium` |
 
 The OMP xhigh values describe installable, opt-in advisor definitions; they are not the automatic execution path. `/sdd-commit`, `$sdd-commit`, and `/skill:sdd-commit` remain local because commit work depends on the current turn’s complete change and verification context.
+
+## Configure installed model routes
+
+Create a YAML file with `modelRoles` entries keyed by **SDD agent role**, then install with `--model-roles models.yaml`:
+
+```yaml
+modelRoles:
+  planner: openai-codex/gpt-6-sol:high
+  architect: openai-codex/gpt-6-sol:high
+  reviewer: openai-codex/gpt-6-sol:xhigh
+  security-auditor: openai-codex/gpt-6-sol:xhigh
+  implementer: openai-codex/gpt-6-luna:max
+  tdd-guide: openai-codex/gpt-6-luna:medium
+```
+
+For a host-specific selection, use a mapping instead of a scalar:
+
+```yaml
+modelRoles:
+  planner:
+    codex: openai-codex/gpt-6-sol:high
+    omp: xai-oauth/grok-4.7:xhigh
+    claudeCode:
+      model: opus
+      effort: high
+```
+
+The scalar selector sets both Codex and OMP agent metadata; Claude Code retains its defaults unless `claudeCode` is set. For Claude Code, use a model name (`claudeCode: sonnet`) or a mapping with `model` and/or `effort`; supported effort values are `low`, `medium`, `high`, `xhigh`, and `max`. Codex agent TOML receives the model name after the provider prefix and `model_reasoning_effort`; OMP agents receive the full provider/model and `thinkingLevel`. Codex and OMP selectors accept `minimal`, `low`, `medium`, `high`, `xhigh`, and `max`. Host/model support is not validated. Use a host mapping rather than a scalar if a model is only available on one host (for example `xai-oauth/grok-4.7:xhigh` on OMP). Unspecified roles and hosts retain the defaults in the table above.
+
+Valid roles: `planner`, `architect`, `reviewer`, `security-auditor`, `implementer`, `tdd-guide`. Duplicate YAML keys, unknown roles, malformed selectors, and unsupported Claude efforts fail before the installer writes files. The path is resolved from the project directory; the file is read but not installed or modified. Supply `--model-roles models.yaml` on every installation/rerun that should use the overrides, including `--all-tools`. Package-owned, unmodified generated files update on rerun; edits to generated output are preserved as conflicts.
+
+The example OMP host roles `default`, `smol`, `slow`, `plan`, `task`, and `advisor` configure the **host**, not SDD agents. This option controls generated SDD skills/agents only. Codex's per-role selectors apply to generated custom agents, not the inline parent; Claude Code's skill model and effort apply for the invoked turn, and its subagent frontmatter applies when that agent is delegated. OMP's generic subagents and interactive parent model require OMP host configuration.
 
 ## Generated native metadata
 
 ### Claude Code
 
-Skills under `.claude/skills/` receive the routed native `model` override. Claude Code applies that override to the current invoked skill turn, so the skill says “execute in this turn” and does not create a redundant specialist. Claude Code 2.1.198 or newer is required for the v4 manual-invocation and path-scoped loading guarantees.
+Skills under `.claude/skills/` receive routed native `model` and `effort` overrides. Claude Code applies those overrides to the current invoked skill turn, so the skill says “execute in this turn” and does not create a redundant specialist. The matching `.claude/agents/*.md` definitions receive the same model and effort for explicit delegation. Claude Code 2.1.198 or newer is required for the v4 manual-invocation and path-scoped loading guarantees.
 
 ### Codex
 
@@ -44,7 +76,7 @@ model_reasoning_effort = "xhigh"
 sandbox_mode = "read-only"
 ```
 
-This selection is instruction-driven host orchestration. It is bounded to one child and carries `specialistDepth: 1`; nested same-phase delegation is prohibited. Implementation and TDD stay in the Sol/medium parent unless genuinely independent slices are dispatched concurrently.
+This selection is instruction-driven host orchestration. It is bounded to one child and carries `specialistDepth: 1`; nested same-phase delegation is prohibited. Implementation and TDD stay in the host-selected parent unless genuinely independent slices are dispatched concurrently. Their generated agent definitions still receive configured role metadata when installed.
 
 ### Oh My Pi
 
@@ -64,13 +96,13 @@ Installation emits the canonical selector without running OMP or resolving an au
 
 1. The user manually invokes the host-native command: `/<name>` in Claude Code, `$<name>` in Codex, or `/skill:<name>` in OMP.
 2. The skill determines its execution class from the central route policy.
-3. Claude runs in the current turn on its native model override.
-4. Codex may request one custom Sol/xhigh advisor for an advisor-class skill.
-5. OMP runs inline on Sol/medium unless the user explicitly requests one installed Sol/xhigh advisor.
+3. Claude runs in the current turn with its installed skill model and effort overrides.
+4. Codex may request one custom advisor with the generated role's model and reasoning effort; this does not switch its parent.
+5. OMP runs inline on the parent unless the user explicitly invokes an installed project advisor, whose model and thinking level come from its generated definition.
 6. The parent integrates a compact result containing decisions, affected artifacts, verification evidence, and unresolved blockers.
 7. Failure to start an allowed advisor is recorded once, then work continues inline.
 
-The repository cannot force a model switch when Codex or an unavailable OMP route cannot honor generated metadata. Claude model overrides and OMP child model/thinking metadata are host-enforced when invoked; Codex child selection and fallback remain instruction-driven. Static configuration cannot inspect the active parent model or prove that a child executed.
+The repository cannot force a model switch when Codex or an unavailable OMP route cannot honor generated metadata. Claude skill model/effort and OMP child model/thinking metadata are host-enforced when invoked; Codex child selection and fallback remain instruction-driven. Static configuration cannot inspect the active parent model or prove that a child executed.
 
 ## Parallel implementation rule
 
@@ -96,13 +128,13 @@ These outcomes are different metrics: static reductions must not be marketed as 
 ## Installation and rerun behavior
 
 ```bash
-npx sdd-mcp-server install --profile full --target claude-code
-npx sdd-mcp-server install --profile full --target codex
-npx sdd-mcp-server install --profile full --target omp
+npx sdd-mcp-server install --profile full --target claude-code --model-roles models.yaml
+npx sdd-mcp-server install --profile full --target codex --model-roles models.yaml
+npx sdd-mcp-server install --target omp --model-roles models.yaml
 ```
 
 OMP lean already includes agents so explicit advisors are available without making them automatic. Generated route files are tracked in `.sdd-mcp/install-manifest.json`; untouched files update automatically and modified files remain user-owned. Use `--refresh-generated` for a backed-up legacy cutover.
 
 ## Source of truth
 
-`ROLE_MODEL_ROUTES` and `SKILL_AGENT_ROUTES` define model metadata and skill-role mapping. Execution classes beside those tables decide inline, optional-advisor, parallel-only, and local behavior. Target renderers may translate the policy into native syntax but may not invent a second route.
+`ROLE_MODEL_ROUTES` and `SKILL_AGENT_ROUTES` define default model metadata and skill-role mapping; `loadModelRoutes` validates and applies optional per-install YAML overrides. Execution classes beside those tables decide inline, optional-advisor, parallel-only, and local behavior. Target renderers translate resolved policy into native syntax but may not invent a second route.

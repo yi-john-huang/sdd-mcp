@@ -15,6 +15,7 @@ import {
   type ResolvedInstallPaths,
   type TargetInstallReport,
 } from '../install-target.js';
+import type { ModelRoutes } from '../model-role-config.js';
 import { PreservingWriter, validateChildName, validateDestinationPath } from '../utils/preserving-writer.js';
 
 export interface TargetSources {
@@ -34,6 +35,7 @@ export interface BaseTargetInstallRequest {
   writer?: PreservingWriter;
   profile?: InstallProfile;
   refreshGenerated?: boolean;
+  modelRoutes?: ModelRoutes;
 }
 
 export class TargetInstallSession {
@@ -90,12 +92,12 @@ export class TargetInstallSession {
     }
   }
 
-  async copySkills(sourceManager: Pick<SkillManager, 'listSkills'>, configuredPath: string): Promise<void> {
+  async copySkills(sourceManager: Pick<SkillManager, 'listSkills'>, configuredPath: string, routes: ModelRoutes = ROLE_MODEL_ROUTES): Promise<void> {
     const destinationRoot = this.resolve(configuredPath);
     for (const skill of await sourceManager.listSkills()) {
       try {
         validateChildName(skill.name);
-        await this.copySkillTree(skill.name, skill.path, path.join(destinationRoot, skill.name), '');
+        await this.copySkillTree(skill.name, skill.path, path.join(destinationRoot, skill.name), '', routes);
         if (this.target === 'codex') {
           await this.write(
             'skills',
@@ -169,7 +171,7 @@ export class TargetInstallSession {
     this.report.failed.push(failure);
   }
 
-  private async copySkillTree(skillName: string, source: string, destination: string, relative: string): Promise<void> {
+  private async copySkillTree(skillName: string, source: string, destination: string, relative: string, routes: ModelRoutes): Promise<void> {
     validateDestinationPath(this.projectRoot, destination);
     const entries = await fs.promises.readdir(source, { withFileTypes: true });
     for (const entry of entries) {
@@ -178,11 +180,11 @@ export class TargetInstallSession {
       const destinationPath = path.join(destination, entry.name);
       const nested = relative ? `${relative}/${entry.name}` : entry.name;
       if (entry.isDirectory()) {
-        await this.copySkillTree(skillName, sourcePath, destinationPath, nested);
+        await this.copySkillTree(skillName, sourcePath, destinationPath, nested, routes);
       } else if (entry.isFile()) {
         const sourceContent = await fs.promises.readFile(sourcePath, 'utf8');
         const content = entry.name === 'SKILL.md'
-          ? renderTargetSkill(this.target, skillName, sourceContent)
+          ? renderTargetSkill(this.target, skillName, sourceContent, routes)
           : sourceContent;
         await this.write('skills', `${skillName}/${nested}`, destinationPath, content);
       }
@@ -229,21 +231,22 @@ export function renderTargetRule(target: InstallTarget, fileName: string, source
   return `${body}\n`;
 }
 
-export function renderTargetSkill(target: InstallTarget, skillName: string, source: string): string {
+export function renderTargetSkill(target: InstallTarget, skillName: string, source: string, routes: ModelRoutes = ROLE_MODEL_ROUTES): string {
   const role = SKILL_AGENT_ROUTES[skillName];
   const extra: string[] = ['disable-model-invocation: true'];
   let execution = '';
   if (role && target === 'claude-code') {
-    extra.push(`model: ${ROLE_MODEL_ROUTES[role].claudeCode.model}`);
+    extra.push(`model: ${routes[role].claudeCode.model}`);
+    extra.push(`effort: ${routes[role].claudeCode.effort}`);
     execution = '\nExecute in this turn; do not spawn a second specialist.\n';
-  } else if (role && target === 'omp' && ROLE_MODEL_ROUTES[role].taskClass === 'advisor') {
+  } else if (role && target === 'omp' && routes[role].taskClass === 'advisor') {
     execution = `\nRun inline by default. The project advisor at .omp/agents/${role}.md is explicit opt-in only; if the user invokes it, allow one specialistDepth: 1 handoff without nesting or retry.\n`;
-  } else if (role && target === 'codex' && ROLE_MODEL_ROUTES[role].taskClass === 'advisor') {
+  } else if (role && target === 'codex' && routes[role].taskClass === 'advisor') {
     execution = `\nRequest the configured ${role} custom agent once with specialistDepth: 1; nested delegation is prohibited. If unavailable, record the fallback and continue inline.\n`;
   }
   const match = source.match(/^---\r?\n([\s\S]*?)\r?\n---\r?\n?([\s\S]*)$/);
   if (!match) return `---\n${extra.join('\n')}\n---\n\n${source.trim()}${execution}\n`;
-  const metadata = match[1].split(/\r?\n/).filter(line => !/^(disable-model-invocation|model):/.test(line));
+  const metadata = match[1].split(/\r?\n/).filter(line => !/^(disable-model-invocation|model|effort):/.test(line));
   return `---\n${metadata.join('\n')}\n${extra.join('\n')}\n---\n\n${match[2].trim()}${execution}\n`;
 }
 

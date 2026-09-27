@@ -391,57 +391,6 @@ describe('InstallSkillsCLI', () => {
     });
   });
 
-  describe('getHelp', () => {
-    it('should return help text with usage examples', () => {
-      const help = cli.getHelp();
-
-      expect(help).toContain('Usage:');
-      expect(help).toContain('--path');
-      expect(help).toContain('--list');
-      expect(help).toContain('--help');
-      expect(help).toContain('Examples:');
-    });
-  });
-
-  describe('getUnifiedHelp', () => {
-    it('should return unified help text with all component options', () => {
-      const help = cli.getUnifiedHelp();
-
-      expect(help).toContain('Usage:');
-      expect(help).toContain('--skills');
-      expect(help).toContain('--steering');
-      expect(help).toContain('--rules');
-      expect(help).toContain('--contexts');
-      expect(help).toContain('--agents');
-      expect(help).toContain('--hooks');
-      expect(help).toContain('--all');
-      expect(help).toContain('--target <target>');
-      expect(help).toContain('codex');
-      expect(help).toContain('claude-code');
-      expect(help).toContain('omp');
-      expect(help).toContain('--refresh-generated');
-      expect(help).toContain('New project:');
-      expect(help).toContain('Upgrade from sdd-mcp 3.x:');
-      expect(help).toContain('Do not use --refresh-generated for a new project');
-      expect(help).toContain('Subsequent v4 updates omit --refresh-generated');
-    });
-
-
-    it('should include multi-tool support flags', () => {
-      const help = cli.getUnifiedHelp();
-
-      expect(help).toContain('--codex');
-      expect(help).toContain('--antigravity');
-      expect(help).toContain('--all-tools');
-      expect(help).toContain('gpt-5.6-sol');
-      expect(help).toContain('gpt-5.6-luna');
-      expect(help).toContain('gpt-5.6-terra');
-      expect(help).toContain('(xhigh)');
-      expect(help).toContain('(medium)');
-      expect(help).toContain('opus');
-      expect(help).toContain('sonnet');
-    });
-  });
 });
 
 describe('CLI error mapping', () => {

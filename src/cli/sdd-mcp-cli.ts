@@ -37,6 +37,7 @@ Options:
 Agent Target:
   --target <target> Choose codex, claude-code, or omp
   --codex           Deprecated alias for --target codex
+  --model-roles <file>  Override installed SDD agent models/efforts from project YAML
 
 Additional Integrations:
   --antigravity     Also create .agent/ symlinks for Google Antigravity
@@ -52,6 +53,7 @@ Examples:
   npx sdd-mcp-server install --profile full      # Prompt for the target agent
   npx sdd-mcp-server install --target codex      # Native Codex install
   npx sdd-mcp-server install --target omp        # Native Oh My Pi install
+  npx sdd-mcp-server install --target codex --profile full --model-roles models.yaml
   npx sdd-mcp-server install --all-tools         # Add optional integrations
   npx sdd-mcp-server install-skills              # Alias for install --skills
   npx sdd-mcp-server install-skills --list       # List available skills

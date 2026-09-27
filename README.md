@@ -68,6 +68,30 @@ After installation, restart or reload the host and accept its project trust prom
 
 A non-interactive install without `--target` retains the compatibility default, `claude-code`, and prints a notice. `--codex` remains a deprecated Codex-only alias. `--all-tools` installs all three native targets plus Antigravity; it does not make Codex artifacts executable by OMP.
 
+### Configure SDD models and efforts
+
+Optionally create `models.yaml` in the project root and pass it on each install:
+
+```yaml
+modelRoles:
+  planner:
+    claudeCode: { model: opus, effort: high }
+    codex: openai-codex/gpt-6-sol:high
+    omp: openai-codex/gpt-6-sol:high
+  implementer:
+    claudeCode: { model: sonnet, effort: medium }
+    codex: openai-codex/gpt-6-luna:max
+    omp: openai-codex/gpt-6-luna:max
+```
+
+```bash
+npx sdd-mcp-server install --profile full --target claude-code --model-roles models.yaml
+npx sdd-mcp-server install --profile full --target codex --model-roles models.yaml
+npx sdd-mcp-server install --target omp --model-roles models.yaml
+```
+
+The six SDD roles are `planner`, `architect`, `reviewer`, `security-auditor`, `implementer`, and `tdd-guide`; omitted roles retain package defaults. Claude Code routes installed skills and subagents by model and effort. Codex routes generated custom agents by model and reasoning effort, but this cannot change the inline parent's model. OMP routes its generated agents, not host-level `default`/`smol`/`slow`/`plan`/`task`/`advisor` roles. `--model-roles` reads project YAML; it does not change host configuration or validate model availability. See [Model Routing](docs/MODEL-ROUTING.md) for selector syntax and host-specific limits.
+
 ## Manual workflow invocation
 
 SDD skills are explicit commands and do not activate implicitly from ordinary prose.
@@ -160,7 +184,7 @@ Three-run fresh-session A/B comparisons used comparable provider-reported median
 
 ## Routing summary
 
-Claude executes a skill in the current turn with its routed Opus or Sonnet model override. Codex may request one generated Sol/xhigh custom advisor for high-level work. OMP runs high-level work inline on the Sol/medium parent by default: real A/B showed automatic Sol/xhigh child requests increased median cost. OMP’s `.omp/agents` Sol/xhigh advisors are explicit opt-in only, allow one child, and cannot nest or retry. Implementation, TDD, and simple tasks remain inline on Sol/medium unless genuinely independent parallel slices justify delegation.
+Claude executes a skill in the current turn with its configured model and effort (default Opus/high for high-level work and Sonnet/medium for implementation/TDD); installed Claude subagents have matching metadata. Codex may request one configured custom advisor for high-level work; its agent metadata does not change the parent turn. OMP runs high-level work inline on the parent by default: real A/B showed automatic child requests increased median cost. OMP’s `.omp/agents` advisors are explicit opt-in only, allow one child, and cannot nest or retry. Implementation, TDD, and simple tasks remain inline unless genuinely independent parallel slices justify delegation.
 
 See [docs/MODEL-ROUTING.md](docs/MODEL-ROUTING.md) for enforcement and fallback boundaries.
 

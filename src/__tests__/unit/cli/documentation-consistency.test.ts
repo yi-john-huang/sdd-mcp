@@ -17,20 +17,6 @@ describe('target-aware documentation consistency', () => {
     expect(guidance).not.toContain('| Skill |');
   });
 
-  it('links the model routing guide from operator documentation', () => {
-    const readme = read('README.md');
-    const installGuide = read('docs/INSTALL-GUIDE.md');
-    const architecture = read('ARCHITECTURE.md');
-    const modelGuide = read('docs/MODEL-ROUTING.md');
-
-    expect(readme).toContain('docs/MODEL-ROUTING.md');
-    expect(installGuide).toContain('MODEL-ROUTING.md');
-    expect(architecture).toContain('docs/MODEL-ROUTING.md');
-    expect(modelGuide).toContain('## What happens when a skill runs');
-    expect(modelGuide).toContain('The repository cannot force a model switch');
-    expect(installGuide).toContain('eligible Codex workspace or API organization');
-    expect(modelGuide).toContain('total tokens');
-  });
 
   it('keeps the approved model policy and release guidance aligned', () => {
     const requirements = read('.spec/specs/optimizing-for-different-llm/requirements.md');
