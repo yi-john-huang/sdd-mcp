@@ -5,6 +5,10 @@ import { installClaudeCodeTarget } from '../../../cli/tool-support/claude-code';
 import { installCodexTarget } from '../../../cli/tool-support/codex';
 import { installOmpTarget } from '../../../cli/tool-support/omp';
 import { getTargetPolicy } from '../../../cli/install-target';
+import { TargetInstallSession } from '../../../cli/tool-support/target-installer';
+import { PreservingWriter } from '../../../cli/utils/preserving-writer';
+
+const packageVersion = JSON.parse(fs.readFileSync(path.resolve(process.cwd(), 'package.json'), 'utf8')).version;
 
 function sourceFile(root: string, relative: string, content: string): string {
   const filePath = path.join(root, relative);
@@ -75,6 +79,79 @@ describe('target-specific installers', () => {
     fs.rmSync(sourceRoot, { recursive: true, force: true });
   });
 
+  it('reports a controlled missing-path error for registration-enabled sessions', async () => {
+    const session = new TargetInstallSession('omp', root, new PreservingWriter(root), 'lean', ['skills']);
+    const report = await session.complete();
+    expect(report.failed).toHaveLength(1);
+    expect(fs.existsSync(path.join(root, '.omp/mcp.json'))).toBe(false);
+    expect(fs.existsSync(path.join(root, '.sdd-mcp/install-manifest.json'))).toBe(false);
+  });
+
+  it('preserves user-edited Skills during files-only reruns', async () => {
+    const sources = makeSources(sourceRoot);
+    const first = new TargetInstallSession('omp', root, new PreservingWriter(root), 'lean', ['skills'], false, false);
+    await first.copySkills(sources.skillManager, 'skills');
+    await first.complete();
+    const file = path.join(root, 'skills/sdd-design/SKILL.md');
+    fs.writeFileSync(file, '# User edit');
+    const second = new TargetInstallSession('omp', root, new PreservingWriter(root), 'lean', ['skills'], false, false);
+    await second.copySkills(sources.skillManager, 'skills');
+    const report = await second.complete();
+    expect(report.conflicts).toEqual(expect.arrayContaining([expect.objectContaining({ path: file, reason: 'modified' })]));
+    expect(fs.readFileSync(file, 'utf8')).toBe('# User edit');
+  });
+
+  it('preserves unknown concurrent Skills bytes when files-only commit fails', async () => {
+    const session = new TargetInstallSession('omp', root, new PreservingWriter(root), 'lean', ['skills'], false, false);
+    await session.copySkills(makeSources(sourceRoot).skillManager, 'skills');
+    const file = path.join(root, 'skills/sdd-design/SKILL.md');
+    fs.writeFileSync(file, '# Concurrent edit');
+    const report = await session.complete();
+    expect(report.failed).toHaveLength(1);
+    expect(report.installed).toEqual([]);
+    expect(fs.readFileSync(file, 'utf8')).toBe('# Concurrent edit');
+    expect(fs.existsSync(path.join(root, 'skills/sdd-design/references/example.md'))).toBe(false);
+  });
+
+  it('commits Skills-only output without inspecting runtime configuration', async () => {
+    const config = sourceFile(root, '.omp/mcp.json', '{ malformed runtime');
+    const session = new TargetInstallSession('omp', root, new PreservingWriter(root), 'lean', ['skills'], false, false);
+    await session.copySkills(makeSources(sourceRoot).skillManager, 'skills');
+    const report = await session.complete();
+    expect(report.failed).toEqual([]);
+    expect(fs.readFileSync(path.join(root, 'skills/sdd-design/SKILL.md'), 'utf8')).toContain('disable-model-invocation: true');
+    expect(fs.readFileSync(config, 'utf8')).toBe('{ malformed runtime');
+    expect(fs.existsSync(path.join(root, 'AGENTS.md'))).toBe(false);
+  });
+
+  it('preserves existing root and runtime ownership in a files-only session', async () => {
+    const writer = new PreservingWriter(root);
+    const initial = new TargetInstallSession('omp', root, writer, 'lean', ['skills']);
+    await initial.write('root', 'AGENTS.md', path.join(root, 'AGENTS.md'), '# Owned root');
+    await initial.complete(getTargetPolicy('omp').defaultPaths);
+    const manifestPath = path.join(root, '.sdd-mcp/install-manifest.json');
+    const before = JSON.parse(fs.readFileSync(manifestPath, 'utf8'));
+    const session = new TargetInstallSession('omp', root, writer, 'lean', ['skills'], false, false);
+    await session.copySkills(makeSources(sourceRoot).skillManager, 'skills');
+    expect((await session.complete()).failed).toEqual([]);
+    const after = JSON.parse(fs.readFileSync(manifestPath, 'utf8'));
+    expect(fs.readFileSync(path.join(root, 'AGENTS.md'), 'utf8')).toBe('# Owned root');
+    expect(after.targets.omp.registrations).toEqual(before.targets.omp.registrations);
+    expect(after.targets.omp.files['AGENTS.md']).toEqual(before.targets.omp.files['AGENTS.md']);
+  });
+
+  it('rolls back uncommitted Skills without reporting them installed', async () => {
+    const writer = new PreservingWriter(root);
+    const session = new TargetInstallSession('omp', root, writer, 'lean', ['skills'], false, false);
+    await session.copySkills(makeSources(sourceRoot).skillManager, 'skills');
+    sourceFile(root, '.sdd-mcp/install-manifest.json', '{ invalid manifest');
+    const report = await session.complete();
+    expect(report.failed).toHaveLength(1);
+    expect(report.installed).toEqual([]);
+    expect(fs.existsSync(path.join(root, 'skills/sdd-design/SKILL.md'))).toBe(false);
+    expect(fs.existsSync(path.join(root, '.omp/mcp.json'))).toBe(false);
+  });
+
   it('installs only native Claude Code artifacts and renders model aliases', async () => {
     const report = await installClaudeCodeTarget({
       projectRoot: root,
@@ -99,7 +176,7 @@ describe('target-specific installers', () => {
     expect(fs.readFileSync(path.join(root, '.claude/agents/implementer.md'), 'utf8')).toContain('model: sonnet');
     expect(fs.existsSync(path.join(root, 'CLAUDE.md'))).toBe(true);
     expect(JSON.parse(fs.readFileSync(path.join(root, '.mcp.json'), 'utf8')).mcpServers['sdd-mcp'])
-      .toEqual({ type: 'stdio', command: 'npx', args: ['-y', 'sdd-mcp-server@5.0.0'] });
+      .toEqual({ type: 'stdio', command: 'npx', args: ['-y', `sdd-mcp-server@${packageVersion}`] });
     expect(JSON.parse(fs.readFileSync(path.join(root, '.claude/settings.json'), 'utf8')).permissions.allow)
       .toContain('mcp__sdd-mcp__*');
     expect(fs.existsSync(path.join(root, '.codex'))).toBe(false);
@@ -160,7 +237,7 @@ describe('target-specific installers', () => {
     expect(fs.existsSync(path.join(root, '.agents/skills/sdd-design/references/example.md'))).toBe(true);
     expect(Buffer.byteLength(fs.readFileSync(path.join(root, 'AGENTS.md')))).toBeLessThanOrEqual(2000);
     expect(fs.readFileSync(path.join(root, '.codex/config.toml'), 'utf8'))
-      .toContain('sdd-mcp-server@5.0.0');
+      .toContain(`sdd-mcp-server@${packageVersion}`);
     expect(fs.existsSync(path.join(root, '.claude'))).toBe(false);
     expect(fs.existsSync(path.join(root, 'CLAUDE.md'))).toBe(false);
   });
@@ -294,7 +371,7 @@ describe('target-specific installers', () => {
     expect(guidance).toContain('- Agents: `.omp/agents/`');
     expect(guidance).not.toContain('- Rules:');
     expect(JSON.parse(fs.readFileSync(path.join(root, '.omp/mcp.json'), 'utf8')).mcpServers['sdd-mcp'])
-      .toEqual({ type: 'stdio', command: 'npx', args: ['-y', 'sdd-mcp-server@5.0.0'] });
+      .toEqual({ type: 'stdio', command: 'npx', args: ['-y', `sdd-mcp-server@${packageVersion}`] });
   });
 
   it('renders native OMP full output without hooks or spawn capability', async () => {

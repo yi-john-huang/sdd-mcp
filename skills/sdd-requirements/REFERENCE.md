@@ -14,6 +14,8 @@ IF handoff publication fails after approval THEN the service SHALL retain the ap
 
 ## Exact Document Shape
 
+Metadata values may begin on the same line as their bold label or on the following lines. Multiline values continue until the next metadata label or section heading. Keep the labels exactly as shown, include `SHALL` in the EARS specification, and use a numbered list for acceptance criteria.
+
 ```markdown
 # Requirements: Feature
 

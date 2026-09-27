@@ -5,7 +5,7 @@
 
 A Model Context Protocol server and target-native installer for governed Spec-Driven Development (SDD) in Claude Code, Codex, and Oh My Pi (OMP).
 
-> **v5.0.0** — Skill-governed Formal SDD, durable revision-bound approvals and task progress, hidden MCP runtime registration, and managed target-native installation.
+> **v5.0.1** — Fixes validation of multiline requirement metadata, including numbered acceptance criteria beneath their label. Includes the v5 Skill-governed workflow, durable approvals and task progress, and managed target-native installation.
 
 ## Why sdd-mcp?
 
@@ -14,6 +14,35 @@ Skills own the requirements, design, task-planning, and TDD method plus the user
 ```text
 User -> Skill -> MCP -> .spec
 ```
+
+## One-time personal setup
+
+Install the runtime and manual Skills for Claude Code, Codex, and OMP once per local user/profile, from any directory:
+
+```bash
+npx -y sdd-mcp-server@latest setup-global
+# Optional: configure only one host
+npx -y sdd-mcp-server@latest setup-global --target codex
+
+# Equivalent POSIX wrapper from a source checkout
+./bootstrap.sh
+```
+
+The wrapper requires Node.js/npm (`npx`), not `sudo` or a global npm install. `SDD_MCP_PACKAGE` can select a version or an explicit npm file spec, for example `SDD_MCP_PACKAGE=file:/absolute/package.tgz ./bootstrap.sh`. For a local archive without the wrapper, use `npx -y file:/absolute/package.tgz setup-global`; npm 11.12.1 treats a bare absolute archive path as an executable instead.
+
+| Host | Personal runtime configuration | Personal Skills |
+|---|---|---|
+| Claude Code | `~/.claude.json`; with nonempty `CLAUDE_CONFIG_DIR`: `<CLAUDE_CONFIG_DIR>/.claude.json` | `~/.claude/skills/` or `<CLAUDE_CONFIG_DIR>/skills/` |
+| Codex | `~/.codex/config.toml` or `<CODEX_HOME>/config.toml` | `~/.agents/skills/` (not relocated by `CODEX_HOME`) |
+| OMP | `<omp config path>/mcp.json` | `<omp config path>/skills/` |
+
+OMP defaults to `~/.omp/agent`; named profiles need their own setup. [The installation guide](docs/INSTALL-GUIDE.md#one-time-personal-setup) details discovery, environment fallback, separate ownership stores, and safe upgrades.
+
+Global setup changes **no Claude permission file** and installs no root guidance, agents, rules, hooks, steering, or repository files. These are local-machine assets, not Claude cloud/Cowork Skills. Reload the host and accept its normal trust/permission prompts.
+
+From a directory without a shadowing project registration, verify `claude mcp get sdd-mcp`, `codex mcp get sdd-mcp`, or OMP `/mcp test sdd-mcp`. Existing project-scoped `sdd-mcp` entries still take precedence; remove only that project entry yourself if you want the personal runtime. Skill precedence is separate and host-specific. Global setup never scans or migrates repositories.
+
+The repository installer below remains an **optional team/project-scoped alternative**, not a required follow-up.
 
 ## New project installation
 
@@ -25,12 +54,12 @@ Use this path when the repository has never had sdd-mcp-generated guidance.
 
 ```bash
 # Recommended explicit lean installation
-npx sdd-mcp-server@5.0.0 install --profile lean --target claude-code
-npx sdd-mcp-server@5.0.0 install --profile lean --target codex
-npx sdd-mcp-server@5.0.0 install --profile lean --target omp
+npx sdd-mcp-server@5.0.1 install --profile lean --target claude-code
+npx sdd-mcp-server@5.0.1 install --profile lean --target codex
+npx sdd-mcp-server@5.0.1 install --profile lean --target omp
 
 # Interactive full installation: choose Claude Code, Codex, or OMP
-npx sdd-mcp-server@5.0.0 install --profile full
+npx sdd-mcp-server@5.0.1 install --profile full
 ```
 
 Do not use `--refresh-generated` for a new project. A normal installation records package ownership in `.sdd-mcp/install-manifest.json` and registers the hidden project runtime.
@@ -38,6 +67,30 @@ Do not use `--refresh-generated` for a new project. A normal installation record
 After installation, restart or reload the host and accept its project trust prompt. Then invoke the native requirements Skill with a feature name and goal; the Skill initializes or resumes durable state automatically.
 
 A non-interactive install without `--target` retains the compatibility default, `claude-code`, and prints a notice. `--codex` remains a deprecated Codex-only alias. `--all-tools` installs all three native targets plus Antigravity; it does not make Codex artifacts executable by OMP.
+
+### Configure SDD models and efforts
+
+Optionally create `models.yaml` in the project root and pass it on each install:
+
+```yaml
+modelRoles:
+  planner:
+    claudeCode: { model: opus, effort: high }
+    codex: openai-codex/gpt-6-sol:high
+    omp: openai-codex/gpt-6-sol:high
+  implementer:
+    claudeCode: { model: sonnet, effort: medium }
+    codex: openai-codex/gpt-6-luna:max
+    omp: openai-codex/gpt-6-luna:max
+```
+
+```bash
+npx sdd-mcp-server install --profile full --target claude-code --model-roles models.yaml
+npx sdd-mcp-server install --profile full --target codex --model-roles models.yaml
+npx sdd-mcp-server install --target omp --model-roles models.yaml
+```
+
+The six SDD roles are `planner`, `architect`, `reviewer`, `security-auditor`, `implementer`, and `tdd-guide`; omitted roles retain package defaults. Claude Code routes installed skills and subagents by model and effort. Codex routes generated custom agents by model and reasoning effort, but this cannot change the inline parent's model. OMP routes its generated agents, not host-level `default`/`smol`/`slow`/`plan`/`task`/`advisor` roles. `--model-roles` reads project YAML; it does not change host configuration or validate model availability. See [Model Routing](docs/MODEL-ROUTING.md) for selector syntax and host-specific limits.
 
 ## Manual workflow invocation
 
@@ -75,7 +128,7 @@ Use this path when the project already contains generated sdd-mcp files from an 
 
 ```bash
 # Replace <target> with claude-code, codex, or omp
-npx sdd-mcp-server@5.0.0 install \
+npx sdd-mcp-server@5.0.1 install \
   --profile full \
   --target <target> \
   --refresh-generated
@@ -131,7 +184,7 @@ Three-run fresh-session A/B comparisons used comparable provider-reported median
 
 ## Routing summary
 
-Claude executes a skill in the current turn with its routed Opus or Sonnet model override. Codex may request one generated Sol/xhigh custom advisor for high-level work. OMP runs high-level work inline on the Sol/medium parent by default: real A/B showed automatic Sol/xhigh child requests increased median cost. OMP’s `.omp/agents` Sol/xhigh advisors are explicit opt-in only, allow one child, and cannot nest or retry. Implementation, TDD, and simple tasks remain inline on Sol/medium unless genuinely independent parallel slices justify delegation.
+Claude executes a skill in the current turn with its configured model and effort (default Opus/high for high-level work and Sonnet/medium for implementation/TDD); installed Claude subagents have matching metadata. Codex may request one configured custom advisor for high-level work; its agent metadata does not change the parent turn. OMP runs high-level work inline on the parent by default: real A/B showed automatic child requests increased median cost. OMP’s `.omp/agents` advisors are explicit opt-in only, allow one child, and cannot nest or retry. Implementation, TDD, and simple tasks remain inline unless genuinely independent parallel slices justify delegation.
 
 See [docs/MODEL-ROUTING.md](docs/MODEL-ROUTING.md) for enforcement and fallback boundaries.
 

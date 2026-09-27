@@ -9,9 +9,10 @@ import { ContextManager } from '../contexts/ContextManager.js';
 import { AgentManager } from '../agents/AgentManager.js';
 import { HookLoader } from '../hooks/HookLoader.js';
 import { createAntigravitySymlinks } from './tool-support/antigravity.js';
-import { getDistCliDir } from './utils/find-package-root.js';
+import { resolvePackageComponentPath } from './utils/find-package-root.js';
 import {
   CliUsageError,
+  ROLE_MODEL_ROUTES,
   InstallCancelledError,
   getTargetPolicy,
   isInstallTarget,
@@ -28,6 +29,7 @@ import { installCodexTarget } from './tool-support/codex.js';
 import { installOmpTarget } from './tool-support/omp.js';
 import { updateGeneratedIgnores } from './utils/gitignore-manager.js';
 import { PreservingWriter } from './utils/preserving-writer.js';
+import { loadModelRoutes } from './model-role-config.js';
 
 /**
  * Component types that can be installed
@@ -82,6 +84,8 @@ export interface CLIOptions {
   installProfile: InstallProfile;
   /** Back up and replace package-owned generated files. */
   refreshGenerated?: boolean;
+  /** YAML role override file, resolved relative to the project directory. */
+  modelRolesPath?: string;
 }
 
 /**
@@ -103,12 +107,12 @@ export class InstallSkillsCLI {
    */
   constructor(skillsPath?: string, steeringPath?: string, promptIO?: TargetPromptIO) {
     // If no path provided, determine from package location
-    const resolvedSkillsPath = skillsPath || this.getDefaultPath('skills');
-    const resolvedSteeringPath = steeringPath || this.getDefaultPath('steering');
-    const resolvedRulesPath = this.getDefaultPath('rules');
-    const resolvedContextsPath = this.getDefaultPath('contexts');
-    const resolvedAgentsPath = this.getDefaultPath('agents');
-    const resolvedHooksPath = this.getDefaultPath('hooks');
+    const resolvedSkillsPath = skillsPath || resolvePackageComponentPath('skills');
+    const resolvedSteeringPath = steeringPath || resolvePackageComponentPath('steering');
+    const resolvedRulesPath = resolvePackageComponentPath('rules');
+    const resolvedContextsPath = resolvePackageComponentPath('contexts');
+    const resolvedAgentsPath = resolvePackageComponentPath('agents');
+    const resolvedHooksPath = resolvePackageComponentPath('hooks');
 
     this.skillManager = new SkillManager(resolvedSkillsPath);
     this.rulesManager = new RulesManager(resolvedRulesPath);
@@ -117,45 +121,6 @@ export class InstallSkillsCLI {
     this.hookLoader = new HookLoader(resolvedHooksPath);
     this.steeringPath = resolvedSteeringPath;
     this.promptIO = promptIO ?? createProcessTargetPromptIO();
-  }
-
-  /**
-   * Get the default path for a component type based on package location
-   * @param componentDir - The component directory name (skills, steering, rules, etc.)
-   */
-  private getDefaultPath(componentDir: string): string {
-    const dirname = getDistCliDir();
-    // Try multiple paths and return the first one that exists
-    const possiblePaths = [
-      // Relative to this file (dist/cli/install-skills.js -> componentDir/)
-      path.resolve(dirname, `../../${componentDir}`),
-      // Alternative: one level up
-      path.resolve(dirname, `../${componentDir}`),
-      // From package root when installed globally or via npx
-      path.resolve(dirname, `../../../${componentDir}`),
-      // From current working directory
-      path.resolve(process.cwd(), `node_modules/sdd-mcp-server/${componentDir}`),
-      path.resolve(process.cwd(), componentDir),
-    ];
-
-    // Debug output when DEBUG env is set
-    if (process.env.DEBUG) {
-      console.error(`[DEBUG] getDistCliDir() = ${dirname}`);
-      console.error(`[DEBUG] Looking for ${componentDir}:`);
-      for (const p of possiblePaths) {
-        console.error(`  ${fs.existsSync(p) ? '✓' : '✗'} ${p}`);
-      }
-    }
-
-    // Return the first path that exists
-    for (const p of possiblePaths) {
-      if (fs.existsSync(p)) {
-        return p;
-      }
-    }
-
-    // Fallback to first path (will error in manager if not found)
-    return possiblePaths[0];
   }
 
   /**
@@ -215,6 +180,9 @@ export class InstallSkillsCLI {
         case '--hooks-path':
           options.hooksPath = requireOptionValue(args, ++i, '--hooks-path');
           options.pathOverrides!.hooks = options.hooksPath;
+          break;
+        case '--model-roles':
+          options.modelRolesPath = requireOptionValue(args, ++i, '--model-roles');
           break;
         case '--target': {
           const target = requireOptionValue(args, ++i, '--target');
@@ -328,6 +296,9 @@ export class InstallSkillsCLI {
       ? ['claude-code', 'codex', 'omp']
       : [resolvedTarget.target];
     const projectRoot = process.cwd();
+    const modelRoutes = options.modelRolesPath
+      ? loadModelRoutes(path.resolve(projectRoot, options.modelRolesPath))
+      : undefined;
     const sources = {
       skillManager: this.skillManager,
       rulesManager: this.rulesManager,
@@ -361,6 +332,7 @@ export class InstallSkillsCLI {
         sources,
         profile: options.installProfile,
         refreshGenerated: options.refreshGenerated,
+        modelRoutes,
       };
       const report = target === 'codex'
         ? await installCodexTarget(request)
@@ -388,7 +360,7 @@ export class InstallSkillsCLI {
         });
       }
       if (target === 'omp') {
-        console.log('  omp model availability: not verified (optional: omp models find gpt-5.6-sol)');
+        console.log(`  omp model availability: not verified (optional: omp models find ${(modelRoutes ?? ROLE_MODEL_ROUTES).planner.omp.model})`);
       }
     }
 
@@ -590,22 +562,18 @@ Usage: npx sdd-mcp-server install-skills [options]
 
 Options:
   --path <dir>   Target directory for skills (default: .claude/skills)
+  --model-roles <file>  Override SDD skill model and effort from project YAML
   --list, -l     List available skills without installing
   --help, -h     Show this help message
 
 Examples:
   npx sdd-mcp-server install-skills              # Install to .claude/skills
+  npx sdd-mcp-server install-skills --model-roles models.yaml
   npx sdd-mcp-server install-skills --path ./    # Install to current directory
   npx sdd-mcp-server install-skills --list       # List available skills
 
-Skills will be installed to your project's .claude/skills directory.
-After installation, you can use them in Claude Code with:
-  /sdd-requirements <feature-name>
-  /sdd-design <feature-name>
-  /sdd-tasks <feature-name>
-  /sdd-implement <feature-name>
-  /sdd-steering
-  /sdd-commit
+Skills are installed for the selected target. Invoke /<name> in Claude Code,
+$<name> in Codex, or /skill:<name> in OMP (for example, sdd-requirements).
 `;
   }
 
@@ -634,6 +602,7 @@ Component Options (install specific types):
   --profile <profile>   Install profile when no component flags are provided:
                         lean (default) or full
   --refresh-generated  One-time legacy upgrade: back up and rebuild selected generated files
+  --model-roles <file>  Per-role YAML model/effort overrides (project-relative)
 
 Path Options (customize installation targets):
   --path <dir>          Override the selected target's skills path
@@ -657,16 +626,17 @@ Guidance:
     npx sdd-mcp-server install --profile lean --target <target>
     Do not use --refresh-generated for a new project.
 
-  Upgrade from sdd-mcp 3.x:
+  Upgrade from sdd-mcp 3.x or 4.x:
     npx sdd-mcp-server install --profile full --target <target> --refresh-generated
     Review .sdd-mcp/backups/ and reported conflicts before removing old files.
-    Subsequent v4 updates omit --refresh-generated.
+    Subsequent v5 updates omit --refresh-generated.
 
 Other examples:
   npx sdd-mcp-server install --skills --rules     # Install selected components
   npx sdd-mcp-server install --list               # List available components
   npx sdd-mcp-server install --profile full       # Prompt for Codex, Claude Code, or OMP
   npx sdd-mcp-server install --all-tools           # All native targets + Antigravity
+  npx sdd-mcp-server install --profile full --target codex --model-roles models.yaml
 
 Component Types:
   Skills    - Workflow guidance for SDD phases (/sdd-requirements, /sdd-design, etc.)
@@ -676,20 +646,17 @@ Component Types:
   Agents    - Specialized AI personas (planner, architect, reviewer)
   Hooks     - Event-driven automation (pre-tool-use, post-tool-use, etc.)
 
-After installation, use skills in the selected agent:
-  /sdd-requirements <feature-name>
-  /sdd-design <feature-name>
-  /sdd-tasks <feature-name>
-  /sdd-implement <feature-name>
-  /sdd-review [file-path]
-  /sdd-security-check [scope]
-  /sdd-test-gen [file-path]
+After installation, invoke the selected host's skills:
+  Claude Code: /sdd-requirements <feature-name>
+  Codex: $sdd-requirements <feature-name>
+  OMP: /skill:sdd-requirements <feature-name>
+  Continue with sdd-design, sdd-tasks, and sdd-implement after each approval.
 
-Model Routing:
-  Codex high-level roles: gpt-5.6-sol (xhigh); default implementation/TDD: gpt-5.6-sol (medium)
-  Codex supported models: gpt-5.6-sol, gpt-5.6-luna, gpt-5.6-terra
-  Claude Code high-level roles: opus; implementation/TDD: sonnet
-  Oh My Pi high-level roles: gpt-5.6-sol (xhigh); implementation/TDD: gpt-5.6-sol (medium)
+Model Routing (defaults; override generated SDD roles with --model-roles):
+  Codex custom agents: gpt-5.6-sol (xhigh advisor, medium implementation/TDD)
+  Claude Code skills and agents: opus/high advisor, sonnet/medium implementation/TDD
+  OMP project agents: gpt-5.6-sol (xhigh advisor, medium implementation/TDD)
+  Inline Codex/OMP parent and generic host agents are not reconfigured.
 `;
   }
 }

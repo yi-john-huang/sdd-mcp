@@ -2,6 +2,7 @@ import {
   ROLE_MODEL_ROUTES,
   type AgentRole,
 } from '../install-target.js';
+import type { ModelRoutes } from '../model-role-config.js';
 
 export interface SourceAgent {
   name: string;
@@ -31,16 +32,16 @@ export function parseSourceAgent(content: string): SourceAgent {
   };
 }
 
-export function renderClaudeCodeAgent(agent: SourceAgent): string {
-  const route = ROLE_MODEL_ROUTES[agent.role];
+export function renderClaudeCodeAgent(agent: SourceAgent, routes: ModelRoutes = ROLE_MODEL_ROUTES): string {
+  const route = routes[agent.role];
   const readOnly = route.taskClass === 'advisor';
   const tools = readOnly ? 'Read, Grep, Glob' : 'Read, Grep, Glob, Edit, Write, Bash';
   const maxTurns = readOnly ? 12 : 24;
-  return `---\nname: ${agent.name}\ndescription: ${agent.description}\nrole: ${agent.role}\nexpertise: ${agent.expertise}\nmodel: ${route.claudeCode.model}\ntools: ${tools}\nmaxTurns: ${maxTurns}\n---\n\n${agent.instructions}\n`;
+  return `---\nname: ${agent.name}\ndescription: ${agent.description}\nrole: ${agent.role}\nexpertise: ${agent.expertise}\nmodel: ${route.claudeCode.model}\neffort: ${route.claudeCode.effort}\ntools: ${tools}\nmaxTurns: ${maxTurns}\n---\n\n${agent.instructions}\n`;
 }
 
-export function renderCodexAgent(agent: SourceAgent): string {
-  const roleRoute = ROLE_MODEL_ROUTES[agent.role];
+export function renderCodexAgent(agent: SourceAgent, routes: ModelRoutes = ROLE_MODEL_ROUTES): string {
+  const roleRoute = routes[agent.role];
   const route = roleRoute.codex;
   const readOnly = roleRoute.taskClass === 'advisor';
   const instructions = `${agent.instructions}\n\nDo not delegate or spawn another agent. Return only decisions, affected artifacts, verification evidence, and unresolved blockers; at most 2,048 estimated tokens.`;
@@ -56,9 +57,9 @@ export function renderCodexAgent(agent: SourceAgent): string {
   ].join('\n');
 }
 
-export function renderOmpAgent(agent: SourceAgent): string {
-  const route = ROLE_MODEL_ROUTES[agent.role].omp;
-  const readOnly = ROLE_MODEL_ROUTES[agent.role].taskClass === 'advisor';
+export function renderOmpAgent(agent: SourceAgent, routes: ModelRoutes = ROLE_MODEL_ROUTES): string {
+  const route = routes[agent.role].omp;
+  const readOnly = routes[agent.role].taskClass === 'advisor';
   const tools = readOnly
     ? ['read', 'grep', 'glob']
     : ['read', 'grep', 'glob', 'edit', 'write', 'bash'];

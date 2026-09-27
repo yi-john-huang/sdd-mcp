@@ -110,14 +110,14 @@ All SDD skills are manual-only and use progressive loading. Invocation is `/<nam
 
 ## Model routing boundary
 
-Route tables and execution classes are centralized beside target resolution. See [docs/MODEL-ROUTING.md](docs/MODEL-ROUTING.md).
+`ROLE_MODEL_ROUTES` and `SKILL_AGENT_ROUTES` own defaults. At installation, `loadModelRoutes` validates optional `--model-roles <file>` YAML once and passes the resolved SDD role table to skill and agent renderers. Host-global settings and the persistent parent-session model are unchanged; Claude's skill override applies only for the invoked turn. See [docs/MODEL-ROUTING.md](docs/MODEL-ROUTING.md).
 
-- Claude applies Opus/Sonnet to the current invoked skill turn and does not create a redundant specialist.
-- Codex high-level skills may request one custom Sol/xhigh advisor; this remains instruction-driven host orchestration.
-- OMP performs high-level work inline on Sol/medium by default. `.omp/agents` Sol/xhigh advisors are explicit opt-in, one child maximum, with no spawn capability, retry, or nesting.
-- Implementation, TDD, and simple tasks run inline on Sol/medium unless at least two truly independent slices run concurrently.
+- Claude installs native skill `model`/`effort` overrides for the invoked turn and corresponding subagent frontmatter; it does not create a redundant specialist.
+- Codex generated custom agent TOML receives per-role `model`/`model_reasoning_effort`. High-level skills may request one advisor, but selection remains instruction-driven and cannot change an inline parent.
+- OMP performs high-level work inline on the parent by default. `.omp/agents` advisors are explicit opt-in, one child maximum, with no spawn capability, retry, or nesting. Their model/thinking fields are generated from the resolved role route.
+- Implementation, TDD, and simple tasks run inline unless at least two truly independent slices run concurrently.
 
-This inline-default OMP policy follows real A/B evidence: automatic Sol/xhigh child requests increased median cost. Static route metadata cannot inspect the active parent model or guarantee a Codex spawn. The repository cannot force a model switch when a host cannot apply the requested route.
+This inline-default OMP policy follows real A/B evidence: automatic high-effort child requests increased median cost. Static route metadata cannot inspect the active parent model or guarantee a Codex spawn. Model availability and effort support are host/provider-dependent and are not checked during installation.
 
 ## Measurement model
 

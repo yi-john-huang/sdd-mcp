@@ -31,7 +31,7 @@ async function installClaudeCodeTargetLocked(request: ClaudeCodeInstallRequest &
   const selected = new Set(request.components);
 
   if (selected.has('skills')) {
-    await session.copySkills(request.sources.skillManager, request.paths.skills);
+    await session.copySkills(request.sources.skillManager, request.paths.skills, request.modelRoutes);
   }
   if (selected.has('steering')) {
     await session.copySteering(request.sources.steeringSource, request.paths.steering);
@@ -59,7 +59,7 @@ async function installClaudeCodeTargetLocked(request: ClaudeCodeInstallRequest &
       try {
         validateChildName(descriptor.name);
         const source = await fs.promises.readFile(descriptor.path, 'utf8');
-        const rendered = renderClaudeCodeAgent(parseSourceAgent(source));
+        const rendered = renderClaudeCodeAgent(parseSourceAgent(source), request.modelRoutes);
         await session.write('agents', descriptor.name, destination, rendered);
       } catch (error) {
         session.fail('agents', descriptor.name, destination, error);

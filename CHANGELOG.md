@@ -7,6 +7,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+- Report the runtime lock path when personal setup cannot acquire its install lock, rather than attributing the failure to an untouched host configuration file.
+- Recheck installer backup containment after creating its parent directory, refusing a symlinked path before copying managed content.
+
+### Added
+- One-time `setup-global` installation of personal MCP runtime registrations and rendered manual Skills for Claude Code, Codex, and OMP, with native environment/profile discovery, separate ownership stores, preserved conflicts, and serialized upgrades.
+- Executable `bootstrap.sh` wrapper and native `npx` setup entrypoint; global setup leaves Claude permission settings and repositories untouched.
+- Consistent project workspace selection through nonempty `CLAUDE_PROJECT_DIR`, with working-directory fallback for other runtime launches.
+- `install --model-roles <file>` accepts validated YAML overrides for SDD agent models and effort levels in generated Codex and OMP agents and in Claude Code skills and subagents.
+## [5.0.1] - 2026-09-18
+
+### Fixed
+- Accept requirement metadata values on lines following their labels, including the documented numbered list beneath `**Acceptance Criteria:**`. Valid multiline requirements no longer fail with `MissingMetadata` or `AcceptanceCriteriaMissing` ([#50](https://github.com/yi-john-huang/sdd-mcp/pull/50), thanks to @jakehsiaos).
+
+### Documentation
+- Clarified inline and multiline requirement metadata formatting and updated installation examples to 5.0.1.
+
 ## [5.0.0] - 2026-07-25
 
 ### Added

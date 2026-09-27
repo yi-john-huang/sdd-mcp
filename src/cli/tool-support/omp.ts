@@ -33,7 +33,7 @@ async function installOmpTargetLocked(request: OmpInstallRequest & { writer: Pre
   );
   const selected = new Set(request.components);
 
-  if (selected.has('skills')) await session.copySkills(request.sources.skillManager, request.paths.skills);
+  if (selected.has('skills')) await session.copySkills(request.sources.skillManager, request.paths.skills, request.modelRoutes);
   if (selected.has('steering')) await session.copySteering(request.sources.steeringSource, request.paths.steering);
   if (selected.has('rules')) {
     await copyFlatComponents(session, 'rules', request.paths.rules, await request.sources.rulesManager.listComponents());
@@ -48,7 +48,7 @@ async function installOmpTargetLocked(request: OmpInstallRequest & { writer: Pre
       try {
         validateChildName(descriptor.name);
         const source = await fs.promises.readFile(descriptor.path, 'utf8');
-        await session.write('agents', descriptor.name, destination, renderOmpAgent(parseSourceAgent(source)));
+        await session.write('agents', descriptor.name, destination, renderOmpAgent(parseSourceAgent(source), request.modelRoutes));
       } catch (error) {
         session.fail('agents', descriptor.name, destination, error);
       }

@@ -4,7 +4,7 @@ SDD-MCP uses one durable workflow rendered for Claude Code, Codex, and Oh My Pi 
 
 ## Start in the host
 
-1. Install the target-native profile.
+1. Run `npx -y sdd-mcp-server@latest setup-global` once per local user/OMP profile, or `./bootstrap.sh` from a POSIX source checkout. Optionally select one host with `--target claude-code`, `--target codex`, or `--target omp`. A repository/team-scoped `install` is an alternative, not a required second step.
 2. Reload or restart the host and accept project trust. Claude organization/project `ask` or `deny` rules can still take precedence.
 3. Invoke the native Skill:
 
@@ -14,6 +14,12 @@ SDD-MCP uses one durable workflow rendered for Claude Code, Codex, and Oh My Pi 
 | Formal SDD | `/sdd-requirements <feature>` | `$sdd-requirements <feature>` | `/skill:sdd-requirements <feature>` |
 
 Continue Formal SDD with the same host prefix for `sdd-design`, `sdd-tasks`, and `sdd-implement`. Do not call backend tools or paste workflow JSON; each Skill restores durable state and approved compact context.
+
+Personal runtime files are `~/.claude.json` (or `<CLAUDE_CONFIG_DIR>/.claude.json`), `~/.codex/config.toml` (or `<CODEX_HOME>/config.toml`), and `<omp config path>/mcp.json`. Personal Skills live in `~/.claude/skills/` (or `<CLAUDE_CONFIG_DIR>/skills/`), `~/.agents/skills/`, and `<omp config path>/skills/`; OMP defaults to `~/.omp/agent` and needs one setup per named profile. Global setup leaves Claude permissions unchanged and installs no repository guidance or agents. It is local-machine/profile scope, not Claude cloud/Cowork Skill distribution.
+
+Verify `claude mcp get sdd-mcp`, `codex mcp get sdd-mcp`, or OMP `/mcp test sdd-mcp` outside a shadowing project configuration. Existing project runtime entries win; remove only the project's same-name entry yourself when choosing personal scope. Skill-name precedence is a separate host rule. See the [installation guide](INSTALL-GUIDE.md#one-time-personal-setup) for exact overrides, OMP fallback, ownership, and safe reruns.
+
+The runtime resolves project operations from nonempty `CLAUDE_PROJECT_DIR`, otherwise its working directory. Specifications and approvals remain in that project's `.spec`; personal setup does not create workflow state in the user configuration directory.
 
 ## Formal phase flow
 
@@ -34,6 +40,8 @@ The Skill-governed journey is:
 
 Only an unambiguous affirmative response inside the active phase Skill can approve that exact revision. Host permission is not approval. Invoking a later Skill early presents the persisted blocker and makes no file change.
 
+Requirement metadata supports both inline values and values on lines below their labels. In particular, `**Acceptance Criteria:**` may be followed by a numbered list on subsequent lines; this documented shape is accepted starting in 5.0.1. See the [Requirements Reference](../skills/sdd-requirements/REFERENCE.md) for the complete document shape.
+
 ## Durable authority and continuation
 
 `.spec/specs/<feature>/spec.json` is the sole workflow authority. Phase Markdown is human-readable governed input, while `context/handoff.md` is a bounded rebuildable cache. Skills load approved context by default. A failed or unapproved draft is loaded only explicitly in full mode for revision; it never leaks into later approved context.
@@ -51,7 +59,7 @@ Durable status determines the next action across sessions: submit or revise a ph
 
 Target renderers add native invocation and model metadata only; they do not duplicate this choreography.
 
-## Target-native guidance flow
+## Optional project-native guidance flow
 
 ```mermaid
 flowchart LR
@@ -76,15 +84,17 @@ Claude Code and Codex may install only their supported lifecycle/hook integratio
 
 ### Claude Code
 
-The invoked skill applies its routed model in the current turn: Opus for high-level work and Sonnet for implementation/TDD. It does not spawn a second specialist merely to change models.
+The invoked skill applies its resolved model and effort in the current turn (default Opus/high for high-level work, Sonnet/medium for implementation/TDD). Installed `.claude/agents` subagents receive the same per-role metadata. The skill does not spawn a specialist merely to change models.
 
 ### Codex
 
-Implementation/TDD runs on Sol/medium. A high-level skill may request one generated Sol/xhigh custom advisor. The child cannot nest, and unavailable delegation records a single fallback before inline continuation. The repository cannot force a model switch when the host does not honor the request.
+Implementation/TDD runs inline on the parent; generated agent definitions default to Sol/medium but do not switch that parent. A high-level skill may request one generated custom advisor (default Sol/xhigh). The child cannot nest, and unavailable delegation records a single fallback before inline continuation. The repository cannot force a model switch when the host does not honor the request.
 
 ### Oh My Pi
 
-OMP runs high-level work inline on the Sol/medium parent by default. Automatic Sol/xhigh children are intentionally disabled because real A/B runs increased median cost. A user may explicitly opt into one native `.omp/agents` Sol/xhigh advisor; that child has no spawn capability and no nesting or retry path. Implementation, TDD, and simple tasks also remain inline unless at least two independent slices are truly dispatched concurrently.
+OMP runs high-level work inline on the parent by default. Automatic high-effort children are intentionally disabled because real A/B runs increased median cost. A user may explicitly opt into one generated `.omp/agents` advisor with its configured model and thinking level; that child has no spawn capability and no nesting or retry path. Implementation, TDD, and simple tasks also remain inline unless at least two independent slices are truly dispatched concurrently.
+
+Pass `--model-roles <file>` at install time to override SDD role models and efforts per host; the installer validates the YAML before writing and leaves the host's parent model and generic agents unchanged. See [MODEL-ROUTING.md](MODEL-ROUTING.md#configure-installed-model-routes) for the six role keys, selector syntax, and the Claude/Codex/OMP execution boundaries.
 
 ## Installation and migration flow
 

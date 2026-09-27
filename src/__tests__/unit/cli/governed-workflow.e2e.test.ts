@@ -42,7 +42,8 @@ describe('packed Skill-governed workflow distribution', () => {
       expect(skill).toContain('explicit');
       const runtime = readFileSync(path.join(project, runtimePath), 'utf8');
       expect(runtime).toContain('sdd-mcp');
-      expect(runtime).toContain('sdd-mcp-server@5.0.0');
+      const packageVersion = JSON.parse(readFileSync(path.join(packageRoot, 'package.json'), 'utf8')).version;
+      expect(runtime).toContain(`sdd-mcp-server@${packageVersion}`);
     } finally {
       rmSync(project, { recursive: true, force: true });
     }

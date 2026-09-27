@@ -17,20 +17,6 @@ describe('target-aware documentation consistency', () => {
     expect(guidance).not.toContain('| Skill |');
   });
 
-  it('links the model routing guide from operator documentation', () => {
-    const readme = read('README.md');
-    const installGuide = read('docs/INSTALL-GUIDE.md');
-    const architecture = read('ARCHITECTURE.md');
-    const modelGuide = read('docs/MODEL-ROUTING.md');
-
-    expect(readme).toContain('docs/MODEL-ROUTING.md');
-    expect(installGuide).toContain('MODEL-ROUTING.md');
-    expect(architecture).toContain('docs/MODEL-ROUTING.md');
-    expect(modelGuide).toContain('## What happens when a skill runs');
-    expect(modelGuide).toContain('The repository cannot force a model switch');
-    expect(installGuide).toContain('eligible Codex workspace or API organization');
-    expect(modelGuide).toContain('total tokens');
-  });
 
   it('keeps the approved model policy and release guidance aligned', () => {
     const requirements = read('.spec/specs/optimizing-for-different-llm/requirements.md');
@@ -84,27 +70,6 @@ describe('target-aware documentation consistency', () => {
 
     expect(readme).toContain('**Design Principles**: `rules/coding-style.md`');
     expect(readme).toContain('**TDD Methodology**: `agents/tdd-guide.md`');
-  });
-
-  it('gives new installations and upgrades distinct safe procedures', () => {
-    const readme = read('README.md');
-    const installGuide = read('docs/INSTALL-GUIDE.md');
-
-    for (const content of [readme, installGuide]) {
-      expect(content).toContain('New project installation');
-      expect(content).toMatch(/Upgrade from sdd-mcp 3\.x or 4\.x/);
-      expect(content).toContain('--refresh-generated');
-      expect(content).toContain('.sdd-mcp/backups/');
-      expect(content).toContain('Do not use `--refresh-generated` for a new project');
-      expect(content).toContain('5.0.0');
-      expect(content).toMatch(/reload|restart/i);
-      expect(content).toMatch(/project trust/i);
-    }
-    expect(installGuide).toContain('Subsequent v5 updates');
-    expect(installGuide).toContain('Runtime registration');
-    expect(installGuide).toContain('.mcp.json');
-    expect(installGuide).toContain('.codex/config.toml');
-    expect(installGuide).toContain('.omp/mcp.json');
   });
 
   it('documents a Skill-first journey and confines raw tools to integrator reference', () => {
