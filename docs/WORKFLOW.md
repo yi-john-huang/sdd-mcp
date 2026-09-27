@@ -78,15 +78,17 @@ Claude Code and Codex may install only their supported lifecycle/hook integratio
 
 ### Claude Code
 
-The invoked skill applies its routed model in the current turn: Opus for high-level work and Sonnet for implementation/TDD. It does not spawn a second specialist merely to change models.
+The invoked skill applies its resolved model and effort in the current turn (default Opus/high for high-level work, Sonnet/medium for implementation/TDD). Installed `.claude/agents` subagents receive the same per-role metadata. The skill does not spawn a specialist merely to change models.
 
 ### Codex
 
-Implementation/TDD runs on Sol/medium. A high-level skill may request one generated Sol/xhigh custom advisor. The child cannot nest, and unavailable delegation records a single fallback before inline continuation. The repository cannot force a model switch when the host does not honor the request.
+Implementation/TDD runs inline on the parent; generated agent definitions default to Sol/medium but do not switch that parent. A high-level skill may request one generated custom advisor (default Sol/xhigh). The child cannot nest, and unavailable delegation records a single fallback before inline continuation. The repository cannot force a model switch when the host does not honor the request.
 
 ### Oh My Pi
 
-OMP runs high-level work inline on the Sol/medium parent by default. Automatic Sol/xhigh children are intentionally disabled because real A/B runs increased median cost. A user may explicitly opt into one native `.omp/agents` Sol/xhigh advisor; that child has no spawn capability and no nesting or retry path. Implementation, TDD, and simple tasks also remain inline unless at least two independent slices are truly dispatched concurrently.
+OMP runs high-level work inline on the parent by default. Automatic high-effort children are intentionally disabled because real A/B runs increased median cost. A user may explicitly opt into one generated `.omp/agents` advisor with its configured model and thinking level; that child has no spawn capability and no nesting or retry path. Implementation, TDD, and simple tasks also remain inline unless at least two independent slices are truly dispatched concurrently.
+
+Pass `--model-roles <file>` at install time to override SDD role models and efforts per host; the installer validates the YAML before writing and leaves the host's parent model and generic agents unchanged. See [MODEL-ROUTING.md](MODEL-ROUTING.md#configure-installed-model-routes) for the six role keys, selector syntax, and the Claude/Codex/OMP execution boundaries.
 
 ## Installation and migration flow
 

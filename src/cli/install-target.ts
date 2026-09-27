@@ -118,7 +118,7 @@ function route(
   return {
     taskClass,
     codex: { model, reasoningEffort },
-    claudeCode: { model: claudeModel },
+    claudeCode: { model: claudeModel, effort: taskClass === 'advisor' ? 'high' : 'medium' },
     omp: { model, thinkingLevel: reasoningEffort },
   } as const;
 }

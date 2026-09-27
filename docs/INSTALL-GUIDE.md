@@ -63,6 +63,31 @@ npx sdd-mcp-server install --list
 
 `--all` selects every component supported by the chosen target. `install-skills` is an alias for the unified target-aware installer with `--skills`; it uses the same target resolution and recursive renderer.
 
+## Configuring model routes
+
+Pass a project YAML file on each install when the package defaults do not match available models. For example:
+
+```yaml
+modelRoles:
+  planner:
+    claudeCode: { model: opus, effort: high }
+    codex: openai-codex/gpt-6-sol:high
+    omp: xai-oauth/grok-4.7:xhigh
+  reviewer:
+    claudeCode: { effort: low }
+  implementer: openai-codex/gpt-6-luna:max
+```
+
+```bash
+npx sdd-mcp-server install --profile full --target claude-code --model-roles models.yaml
+npx sdd-mcp-server install --profile full --target codex --model-roles models.yaml
+npx sdd-mcp-server install --target omp --model-roles models.yaml
+```
+
+The path is relative to the project root; the installer reads but does not copy or modify the YAML. Valid SDD keys are `planner`, `architect`, `reviewer`, `security-auditor`, `implementer`, and `tdd-guide`. A scalar `provider/model:effort` sets **both Codex and OMP** agents, not Claude Code; use a host mapping when providers differ. `claudeCode` accepts a model name or a `{ model, effort }` mapping with either field optional. Codex/OMP selector efforts: `minimal`, `low`, `medium`, `high`, `xhigh`, `max`; Claude efforts: `low`, `medium`, `high`, `xhigh`, `max`. Unknown roles, duplicate keys, or invalid selectors fail before installation writes. Unspecified roles/hosts use the default route; `--all-tools` uses the same overrides for all targets.
+
+Claude Code lean installs skills with native current-turn model/effort overrides; full (or `--agents`) also installs matching subagents. Codex lean installs skills but **not** agent TOML; use full or `--agents` to install custom agents with model and reasoning effort. OMP lean includes agents. Reinstall with the file after changing overrides: package-owned, unmodified generated files update; user-modified files stay untouched and are reported as conflicts. This option never configures generic host subagents or the interactive parent session. OMP's `default`/`smol`/`slow`/`plan`/`task`/`advisor` roles belong to OMP host settings, not this SDD role map.
+
 ## Generated files
 
 | Component | Claude Code | Codex | OMP |
@@ -159,11 +184,11 @@ For an update from 5.0.0 to 5.0.1, use the profile and target already installed,
 
 ## Model routing and availability
 
-- Claude Code uses current-turn native model overrides: Opus for high-level skills and Sonnet for implementation/TDD.
-- Codex can request one generated `gpt-5.6-sol`/`xhigh` custom advisor for high-level work; implementation/TDD uses Sol/medium.
-- OMP uses Sol/medium inline by default, including high-level work. Native `.omp/agents` Sol/xhigh advisors are explicit opt-in, limited to one non-nesting, non-retrying child.
+- Claude Code uses native model **and effort** overrides for the invoked skill turn and installed project subagents. Defaults: Opus/high for high-level roles, Sonnet/medium for implementation/TDD.
+- Codex generated custom agents carry model and `model_reasoning_effort` (default Sol/xhigh for advisors, Sol/medium for implementation/TDD). An advisor-class skill may request one child; inline parent turns are not switched by this option.
+- OMP uses the parent model inline by default, including high-level work. Generated `.omp/agents` carry configured model/`thinkingLevel`; advisor use is explicit opt-in and limited to one non-nesting, non-retrying child.
 
-The installer emits canonical selectors but does not grant access. GPT-5.6 availability depends on an **eligible Codex workspace or API organization**. OMP prints model availability as “not verified”; optionally run `omp models find gpt-5.6-sol` after installation. See [MODEL-ROUTING.md](MODEL-ROUTING.md).
+The installer emits selectors but does not grant access or verify host/model/effort support. Availability depends on the configured provider and account; the OMP install reports model availability as “not verified” and offers an optional `omp models find <provider/model>` diagnostic. See [MODEL-ROUTING.md](MODEL-ROUTING.md).
 
 ## Package context reporter
 

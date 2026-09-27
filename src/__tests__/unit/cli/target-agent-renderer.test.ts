@@ -21,6 +21,7 @@ describe('target agent rendering', () => {
   it('renders Claude Code metadata with opus for high-level roles', () => {
     const rendered = renderClaudeCodeAgent(parseSourceAgent(PLANNER));
     expect(rendered).toContain('model: opus');
+    expect(rendered).toContain('effort: high');
     expect(rendered).toContain('role: planner');
     expect(rendered).toContain('# Planner');
   });
@@ -28,6 +29,7 @@ describe('target agent rendering', () => {
   it('renders Claude Code sonnet for implementation roles', () => {
     const source = PLANNER.replaceAll('planner', 'implementer');
     expect(renderClaudeCodeAgent(parseSourceAgent(source))).toContain('model: sonnet');
+    expect(renderClaudeCodeAgent(parseSourceAgent(source))).toContain('effort: medium');
   });
 
   it('renders Codex TOML with Sol xhigh for high-level roles', () => {
