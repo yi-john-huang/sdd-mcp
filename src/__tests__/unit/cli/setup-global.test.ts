@@ -343,6 +343,18 @@ describe('GlobalSetupCLI argument and native location resolution', () => {
     expect(fs.existsSync(path.join(home, '.omp/agent/skills/sdd-design/SKILL.md'))).toBe(true);
   });
 
+  it('reports the runtime lock path when acquisition fails before registration', async () => {
+    const lock = path.join(home, '.codex/.sdd-mcp/global-runtime/install.lock');
+    fs.mkdirSync(lock, { recursive: true });
+
+    const [report] = await cli.run({ target: 'codex' });
+
+    expect(report.failed).toEqual([expect.objectContaining({ component: 'runtime', path: lock })]);
+    expect(report.installed).toEqual([]);
+    expect(fs.existsSync(path.join(home, '.codex/config.toml'))).toBe(false);
+    expect(fs.existsSync(path.join(home, '.agents/skills'))).toBe(false);
+  });
+
   it('separates malformed runtime failures and continues independent hosts', async () => {
     fs.writeFileSync(path.join(home, '.claude.json'), '{ private malformed content');
     const reports = await cli.run({});

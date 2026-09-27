@@ -7,6 +7,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+- Report the runtime lock path when personal setup cannot acquire its install lock, rather than attributing the failure to an untouched host configuration file.
+
 ### Added
 - One-time `setup-global` installation of personal MCP runtime registrations and rendered manual Skills for Claude Code, Codex, and OMP, with native environment/profile discovery, separate ownership stores, preserved conflicts, and serialized upgrades.
 - Executable `bootstrap.sh` wrapper and native `npx` setup entrypoint; global setup leaves Claude permission settings and repositories untouched.

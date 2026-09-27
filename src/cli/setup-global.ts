@@ -97,9 +97,10 @@ export class GlobalSetupCLI {
       let component: 'runtime' | 'skills' = 'runtime';
       try {
         const locations = await this.resolveLocations(target);
-        destination = path.join(locations.runtimeRoot, locations.runtimeConfig);
+        destination = path.join(locations.runtimeRoot, locations.runtimeStateDirectory);
         if (locations.fallbackNotice) report.warnings.push(locations.fallbackNotice);
         const runtimeWriter = new PreservingWriter(locations.runtimeRoot, { stateDirectory: locations.runtimeStateDirectory });
+        destination = path.join(runtimeWriter.stateRoot, 'install.lock');
         await runtimeWriter.withInstallLock(async assertHeld => {
           destination = runtimeWriter.stateRoot;
           await runtimeWriter.validateState();
