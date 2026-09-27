@@ -16,6 +16,19 @@ export interface RuntimeRegistrationRecord {
   permissionSemanticSha256?: string;
 }
 
+export type RuntimeConflictReason = 'unmanaged-entry' | 'modified-entry' | 'unowned-region';
+
+export class RuntimeRegistrationConflictError extends Error {
+  constructor(readonly configPath: string, readonly reason: RuntimeConflictReason) {
+    super(`Preserved runtime registration conflict (${reason}): ${configPath}`);
+    this.name = 'RuntimeRegistrationConflictError';
+  }
+}
+
+export interface RuntimeRegistrationOptions {
+  configureClaudePermissions?: boolean;
+}
+
 export interface RuntimeRegistrationResult {
   registration: RuntimeRegistrationRecord;
   installed: string[];
@@ -47,6 +60,7 @@ export async function registerRuntimeLocked(
   paths: ResolvedInstallPaths,
   previous?: RuntimeRegistrationRecord,
   assertHeld: () => Promise<void> = async () => undefined,
+  options: RuntimeRegistrationOptions = {},
 ): Promise<RuntimeRegistrationResult> {
   const configPath = path.resolve(projectRoot, paths.runtimeConfig);
   validateDestinationPath(projectRoot, configPath);
@@ -59,12 +73,12 @@ export async function registerRuntimeLocked(
   let managedRegionSha256: string | undefined;
 
   if (target === 'codex') {
-    const prepared = prepareCodex(configPrior, previous);
+    const prepared = prepareCodex(configPrior, configPath, previous);
     configNext = prepared.bytes;
     entrySemanticSha256 = prepared.semanticHash;
     managedRegionSha256 = prepared.regionHash;
   } else {
-    const prepared = prepareJsonc(configPrior, target, previous);
+    const prepared = prepareJsonc(configPrior, target, configPath, previous);
     configNext = prepared.bytes;
     entrySemanticSha256 = prepared.semanticHash;
   }
@@ -73,7 +87,7 @@ export async function registerRuntimeLocked(
   let permissionSemanticSha256: string | undefined;
   let permissionPrior: Buffer | null = null;
   let permissionNext: Buffer | null = null;
-  if (target === 'claude-code') {
+  if (target === 'claude-code' && options.configureClaudePermissions !== false) {
     permissionPath = path.resolve(projectRoot, paths.runtimePermissionConfig!);
     validateDestinationPath(projectRoot, permissionPath);
     permissionPrior = await readOptional(permissionPath);
@@ -155,7 +169,7 @@ function uniqueJsoncProperty(node: JsoncNode | undefined, key: string, context: 
   return matches[0]?.children?.[1];
 }
 
-function prepareJsonc(prior: Buffer | null, target: 'claude-code' | 'omp', previous?: RuntimeRegistrationRecord) {
+function prepareJsonc(prior: Buffer | null, target: 'claude-code' | 'omp', configPath: string, previous?: RuntimeRegistrationRecord) {
   const source = prior?.toString('utf8') ?? '{}\n';
   const errors: ParseError[] = [];
   const parsed = parseJsonc(source, errors, { allowTrailingComma: true }) as Record<string, unknown> | undefined;
@@ -174,7 +188,7 @@ function prepareJsonc(prior: Buffer | null, target: 'claude-code' | 'omp', previ
   const existing = servers && typeof servers === 'object' && !Array.isArray(servers)
     ? (servers as Record<string, unknown>)[SERVER_NAME]
     : undefined;
-  assertOwnedOrDesired(existing, desired, previous?.entrySemanticSha256, 'runtime server');
+  assertOwnedOrDesired(existing, desired, previous?.entrySemanticSha256, configPath);
   const edits = modify(source, ['mcpServers', SERVER_NAME], desired, {
     formattingOptions: { insertSpaces: true, tabSize: 2, eol: source.includes('\r\n') ? '\r\n' : '\n' },
   });
@@ -206,7 +220,7 @@ function prepareClaudePermissions(prior: Buffer | null) {
   return { bytes: Buffer.from(applyEdits(source, edits)), semanticHash: semanticHash(desiredRule) };
 }
 
-function prepareCodex(prior: Buffer | null, previous?: RuntimeRegistrationRecord) {
+function prepareCodex(prior: Buffer | null, configPath: string, previous?: RuntimeRegistrationRecord) {
   const source = prior?.toString('utf8') ?? '';
   let parsed: Record<string, unknown>;
   try { parsed = parseToml(source) as Record<string, unknown>; } catch { throw new Error('Malformed TOML runtime config'); }
@@ -227,8 +241,7 @@ function prepareCodex(prior: Buffer | null, previous?: RuntimeRegistrationRecord
   const block = `${START_MARKER}\n[mcp_servers.'sdd-mcp']\ncommand = "npx"\nargs = ["-y", "sdd-mcp-server@${PACKAGE_VERSION}"]\nrequired = true\ndefault_tools_approval_mode = "auto"\nstartup_timeout_sec = 30\n${END_MARKER}\n`;
   if (starts.length === 0) {
     if (existing !== undefined) {
-      if (semanticHash(existing) !== semanticHash(desiredEntry)) throw new Error('Unmanaged sdd-mcp runtime server already exists');
-      throw new Error('Exact Codex runtime entry lacks managed markers');
+      throw new RuntimeRegistrationConflictError(configPath, 'unmanaged-entry');
     }
   } else {
     const currentRegion = Buffer.from(lines.slice(starts[0], ends[0] + 1).join(''));
@@ -239,14 +252,14 @@ function prepareCodex(prior: Buffer | null, previous?: RuntimeRegistrationRecord
         || existing === undefined
         || semanticHash(existing) !== previous.entrySemanticSha256
       ) {
-        throw new Error('Managed Codex runtime region was modified');
+        throw new RuntimeRegistrationConflictError(configPath, 'modified-entry');
       }
     } else if (
       currentRegionHash !== sha256(Buffer.from(block))
       || existing === undefined
       || semanticHash(existing) !== semanticHash(desiredEntry)
     ) {
-      throw new Error('Unowned Codex runtime region differs from the desired entry');
+      throw new RuntimeRegistrationConflictError(configPath, 'unowned-region');
     }
   }
   const next = starts.length === 1
@@ -256,11 +269,11 @@ function prepareCodex(prior: Buffer | null, previous?: RuntimeRegistrationRecord
   return { bytes: Buffer.from(next), semanticHash: semanticHash(desiredEntry), regionHash: sha256(Buffer.from(block)) };
 }
 
-function assertOwnedOrDesired(existing: unknown, desired: unknown, ownedHash: string | undefined, label: string): void {
+function assertOwnedOrDesired(existing: unknown, desired: unknown, ownedHash: string | undefined, configPath: string): void {
   if (existing === undefined) return;
   const existingHash = semanticHash(existing);
   if (existingHash === semanticHash(desired) || existingHash === ownedHash) return;
-  throw new Error(`Conflicting unmanaged ${label} named ${SERVER_NAME}`);
+  throw new RuntimeRegistrationConflictError(configPath, ownedHash ? 'modified-entry' : 'unmanaged-entry');
 }
 
 async function replaceCas(file: string, prior: Buffer | null, next: Buffer, assertHeld: () => Promise<void>): Promise<void> {

@@ -15,6 +15,35 @@ Skills own the requirements, design, task-planning, and TDD method plus the user
 User -> Skill -> MCP -> .spec
 ```
 
+## One-time personal setup
+
+Install the runtime and manual Skills for Claude Code, Codex, and OMP once per local user/profile, from any directory:
+
+```bash
+npx -y sdd-mcp-server@latest setup-global
+# Optional: configure only one host
+npx -y sdd-mcp-server@latest setup-global --target codex
+
+# Equivalent POSIX wrapper from a source checkout
+./bootstrap.sh
+```
+
+The wrapper requires Node.js/npm (`npx`), not `sudo` or a global npm install. `SDD_MCP_PACKAGE` can select a version or an explicit npm file spec, for example `SDD_MCP_PACKAGE=file:/absolute/package.tgz ./bootstrap.sh`. For a local archive without the wrapper, use `npx -y file:/absolute/package.tgz setup-global`; npm 11.12.1 treats a bare absolute archive path as an executable instead.
+
+| Host | Personal runtime configuration | Personal Skills |
+|---|---|---|
+| Claude Code | `~/.claude.json`; with nonempty `CLAUDE_CONFIG_DIR`: `<CLAUDE_CONFIG_DIR>/.claude.json` | `~/.claude/skills/` or `<CLAUDE_CONFIG_DIR>/skills/` |
+| Codex | `~/.codex/config.toml` or `<CODEX_HOME>/config.toml` | `~/.agents/skills/` (not relocated by `CODEX_HOME`) |
+| OMP | `<omp config path>/mcp.json` | `<omp config path>/skills/` |
+
+OMP defaults to `~/.omp/agent`; named profiles need their own setup. [The installation guide](docs/INSTALL-GUIDE.md#one-time-personal-setup) details discovery, environment fallback, separate ownership stores, and safe upgrades.
+
+Global setup changes **no Claude permission file** and installs no root guidance, agents, rules, hooks, steering, or repository files. These are local-machine assets, not Claude cloud/Cowork Skills. Reload the host and accept its normal trust/permission prompts.
+
+From a directory without a shadowing project registration, verify `claude mcp get sdd-mcp`, `codex mcp get sdd-mcp`, or OMP `/mcp test sdd-mcp`. Existing project-scoped `sdd-mcp` entries still take precedence; remove only that project entry yourself if you want the personal runtime. Skill precedence is separate and host-specific. Global setup never scans or migrates repositories.
+
+The repository installer below remains an **optional team/project-scoped alternative**, not a required follow-up.
+
 ## New project installation
 
 Use this path when the repository has never had sdd-mcp-generated guidance.

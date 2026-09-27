@@ -1,4 +1,5 @@
 // Adapter layer for integrating SDD tools with MCP protocol
+import path from "node:path";
 
 import { injectable, inject } from "inversify";
 import { Tool } from "@modelcontextprotocol/sdk/types.js";
@@ -46,6 +47,10 @@ export class SDDToolAdapter {
     @inject(TYPES.LoggerPort) private readonly logger: LoggerPort,
   ) { }
 
+  private resolveWorkspaceRoot(): string {
+    return path.resolve(process.env.CLAUDE_PROJECT_DIR || process.cwd());
+  }
+
   getSDDTools(): SDDToolHandler[] {
     const handlers: Record<SDDToolName, (args: Record<string, unknown>) => Promise<unknown>> = {
       "sdd-init": this.handleProjectInit.bind(this),
@@ -76,20 +81,21 @@ export class SDDToolAdapter {
 
   private async handleProjectInit(args: Record<string, unknown>): Promise<unknown> {
     const featureName = this.requireFeatureName(args.featureName);
+    const projectRoot = this.resolveWorkspaceRoot();
     const description = args.description;
     if (typeof description !== "string") {
       throw new Error("Invalid argument: description must be a string");
     }
     const clarificationAnswers = args.clarificationAnswers;
     if (!clarificationAnswers) {
-      const result = await this.clarificationService.analyzeDescription(description, process.cwd());
+      const result = await this.clarificationService.analyzeDescription(description, projectRoot);
       if (result.needsClarification && result.questions) {
         return { status: "clarification-required", featureName, questions: result.questions };
       }
     }
     let enrichedDescription = description;
     if (clarificationAnswers && typeof clarificationAnswers === "object") {
-      const result = await this.clarificationService.analyzeDescription(description, process.cwd());
+      const result = await this.clarificationService.analyzeDescription(description, projectRoot);
       if (result.questions) {
         const validation = this.clarificationService.validateAnswers(
           result.questions,
@@ -106,7 +112,7 @@ export class SDDToolAdapter {
       }
     }
     await this.workflowEngineService.initializeFeature({
-      projectRoot: process.cwd(),
+      projectRoot,
       featureName,
       description: enrichedDescription,
       language: (args.language as "en" | "ja" | "zh-TW" | undefined) ?? "en",
@@ -117,7 +123,7 @@ export class SDDToolAdapter {
 
   private async requireFeatureProject(featureName: unknown): Promise<Project> {
     return this.workflowEngineService.loadProject({
-      projectRoot: process.cwd(),
+      projectRoot: this.resolveWorkspaceRoot(),
       featureName: this.requireFeatureName(featureName),
     });
   }
@@ -133,14 +139,15 @@ export class SDDToolAdapter {
     args: Record<string, unknown>,
   ): Promise<unknown> {
     const { featureName } = args;
+    const projectRoot = this.resolveWorkspaceRoot();
     if (featureName === undefined) {
       const features = await this.workflowEngineService.listFeatureStatuses({
-        projectRoot: process.cwd(),
+        projectRoot,
       });
       return { features };
     }
     return this.workflowEngineService.getFeatureStatus({
-      projectRoot: process.cwd(),
+      projectRoot,
       featureName: this.requireFeatureName(featureName),
     });
   }
@@ -161,8 +168,9 @@ export class SDDToolAdapter {
     args: Record<string, unknown>,
     phase: "requirements" | "design" | "tasks",
   ): Promise<unknown> {
+    const projectRoot = this.resolveWorkspaceRoot();
     return this.workflowEngineService.submitPhaseArtifact({
-      projectRoot: process.cwd(),
+      projectRoot,
       featureName: this.requireFeatureName(args.featureName),
       phase,
       content: args.content as string,
@@ -173,8 +181,9 @@ export class SDDToolAdapter {
   }
 
   private async handleImplement(args: Record<string, unknown>): Promise<unknown> {
+    const projectRoot = this.resolveWorkspaceRoot();
     return this.workflowEngineService.beginImplementation({
-      projectRoot: process.cwd(),
+      projectRoot,
       featureName: this.requireFeatureName(args.featureName),
     });
   }
@@ -185,8 +194,9 @@ export class SDDToolAdapter {
     if (!["requirements", "design", "tasks"].includes(phase as string)) {
       throw new Error("Invalid argument: phase must be requirements, design, or tasks");
     }
+    const projectRoot = this.resolveWorkspaceRoot();
     return this.workflowEngineService.approve({
-      projectRoot: process.cwd(),
+      projectRoot,
       featureName,
       phase: phase as "requirements" | "design" | "tasks",
       expectedRevision: args.expectedRevision as number,
@@ -198,8 +208,9 @@ export class SDDToolAdapter {
     args: Record<string, unknown>,
   ): Promise<unknown> {
     const featureName = this.requireFeatureName(args.featureName);
+    const projectRoot = this.resolveWorkspaceRoot();
     return this.workflowEngineService.reviewTestCases({
-      projectRoot: process.cwd(),
+      projectRoot,
       featureName,
       expectedTasksRevision: args.expectedTasksRevision as number,
       expectedArtifactSha256: args.expectedArtifactSha256 as string,
@@ -234,8 +245,9 @@ export class SDDToolAdapter {
       ifNoneMatch,
       includeUnapproved,
     } = args;
+    const projectRoot = this.resolveWorkspaceRoot();
     return this.workflowEngineService.loadFeatureContext({
-      projectRoot: process.cwd(),
+      projectRoot,
       featureName,
       mode: mode as ContextLoadMode | undefined,
       phase: phase as "requirements" | "design" | "tasks" | "implementation" | undefined,
@@ -275,8 +287,9 @@ export class SDDToolAdapter {
   }
 
   private async handleValidateDesign(args: Record<string, unknown>): Promise<unknown> {
+    const projectRoot = this.resolveWorkspaceRoot();
     return this.workflowEngineService.validateDesignArtifact({
-      projectRoot: process.cwd(),
+      projectRoot,
       featureName: this.requireFeatureName(args.featureName),
     });
   }
@@ -290,8 +303,9 @@ export class SDDToolAdapter {
   }
 
   private async handleSpecImplementation(args: Record<string, unknown>): Promise<unknown> {
+    const projectRoot = this.resolveWorkspaceRoot();
     return this.workflowEngineService.recordTaskProgress({
-      projectRoot: process.cwd(),
+      projectRoot,
       featureName: this.requireFeatureName(args.featureName),
       taskNumber: args.taskNumber as string,
       action: args.action as "start" | "record-red" | "record-green" | "complete" | "block",
@@ -305,7 +319,7 @@ export class SDDToolAdapter {
 
   private async handleSteering(args: Record<string, unknown>): Promise<string> {
     const { updateMode = "update" } = args;
-    const projectPath = process.cwd();
+    const projectPath = this.resolveWorkspaceRoot();
 
     try {
       // Analyze the project
@@ -313,9 +327,9 @@ export class SDDToolAdapter {
         await this.codebaseAnalysisService.analyzeCodebase(projectPath);
 
       // Generate steering documents based on project analysis
-      const productContent = await this.generateProductSteering(analysis);
-      const techContent = await this.generateTechSteering(analysis);
-      const structureContent = await this.generateStructureSteering(analysis);
+      const productContent = await this.generateProductSteering(analysis, projectPath);
+      const techContent = await this.generateTechSteering(analysis, projectPath);
+      const structureContent = await this.generateStructureSteering(analysis, projectPath);
 
       // Create steering documents
       await this.steeringService.createSteeringDocument(projectPath, {
@@ -397,7 +411,7 @@ Choose Codex or Claude Code interactively, or pass \`--target\` explicitly in au
     args: Record<string, unknown>,
   ): Promise<string> {
     const { fileName, topic, inclusionMode, filePattern } = args;
-    const projectPath = process.cwd();
+    const projectPath = this.resolveWorkspaceRoot();
 
     if (
       typeof fileName !== "string" ||
@@ -449,13 +463,13 @@ Generated on: ${new Date().toISOString()}
     return `Custom steering document "${fileName}" created successfully with ${inclusionMode} inclusion mode.`;
   }
 
-  private async generateProductSteering(analysis: any): Promise<string> {
+  private async generateProductSteering(analysis: any, projectPath: string): Promise<string> {
     // Try to read package.json for project info
     let packageJson: any = {};
     try {
       const fs = await import("fs");
       const path = await import("path");
-      const packagePath = path.join(process.cwd(), "package.json");
+      const packagePath = path.join(projectPath, "package.json");
       if (fs.existsSync(packagePath)) {
         const packageContent = fs.readFileSync(packagePath, "utf8");
         packageJson = JSON.parse(packageContent);
@@ -484,13 +498,13 @@ ${this.generateValueProposition(packageJson, analysis)}
 ${this.generateTargetUsers(packageJson)}`;
   }
 
-  private async generateTechSteering(analysis: any): Promise<string> {
+  private async generateTechSteering(analysis: any, projectPath: string): Promise<string> {
     // Try to read package.json for project info
     let packageJson: any = {};
     try {
       const fs = await import("fs");
       const path = await import("path");
-      const packagePath = path.join(process.cwd(), "package.json");
+      const packagePath = path.join(projectPath, "package.json");
       if (fs.existsSync(packagePath)) {
         const packageContent = fs.readFileSync(packagePath, "utf8");
         packageJson = JSON.parse(packageContent);
@@ -512,17 +526,17 @@ ${this.generateTechStack(packageJson, analysis)}
 ${this.generateDependencyList(packageJson)}
 
 ## Architecture Patterns
-${this.generateArchitecturePatterns(analysis)}
+${this.generateArchitecturePatterns(analysis, projectPath)}
 
 ## Quality Standards
 ${this.generateQualityStandards(packageJson)}`;
   }
 
-  private async generateStructureSteering(analysis: any): Promise<string> {
+  private async generateStructureSteering(analysis: any, projectPath: string): Promise<string> {
     return `# Project Structure
 
 ## Directory Organization
-${this.generateDirectoryStructure(analysis)}
+${this.generateDirectoryStructure(analysis, projectPath)}
 
 ## File Naming Conventions
 ${this.generateNamingConventions(analysis)}
@@ -531,7 +545,7 @@ ${this.generateNamingConventions(analysis)}
 ${this.generateModuleOrganization(analysis)}
 
 ## Development Workflow
-${this.generateWorkflow(analysis)}`;
+${this.generateWorkflow(analysis, projectPath)}`;
   }
 
   private extractFeatures(packageJson: any, analysis: any): string[] {
@@ -632,13 +646,12 @@ ${this.generateWorkflow(analysis)}`;
     return list || "Dependencies to be analyzed";
   }
 
-  private generateArchitecturePatterns(analysis: any): string {
+  private generateArchitecturePatterns(analysis: any, projectPath: string): string {
     const patterns: string[] = [];
 
     // Try to analyze directory structure from filesystem
     try {
       const fs = require("fs");
-      const projectPath = process.cwd();
       const items = fs.readdirSync(projectPath, { withFileTypes: true });
       const directories = items
         .filter((item: any) => item.isDirectory())
@@ -672,11 +685,10 @@ ${this.generateWorkflow(analysis)}`;
       : "- Quality standards to be defined";
   }
 
-  private generateDirectoryStructure(analysis: any): string {
+  private generateDirectoryStructure(analysis: any, projectPath: string): string {
     // Try to get directory structure from filesystem
     try {
       const fs = require("fs");
-      const projectPath = process.cwd();
       const items = fs.readdirSync(projectPath, { withFileTypes: true });
       const directories = items
         .filter(
@@ -708,13 +720,13 @@ ${this.generateWorkflow(analysis)}`;
 - Keep dependencies flowing inward`;
   }
 
-  private generateWorkflow(analysis: any): string {
+  private generateWorkflow(analysis: any, projectPath: string): string {
     // Try to read package.json for scripts
     let packageJson: any = {};
     try {
       const fs = require("fs");
       const path = require("path");
-      const packagePath = path.join(process.cwd(), "package.json");
+      const packagePath = path.join(projectPath, "package.json");
       if (fs.existsSync(packagePath)) {
         const packageContent = fs.readFileSync(packagePath, "utf8");
         packageJson = JSON.parse(packageContent);

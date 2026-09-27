@@ -15,6 +15,74 @@ describe('PreservingWriter', () => {
 
   afterEach(() => fs.rmSync(root, { recursive: true, force: true }));
 
+  it('keeps ownership, locks, and obsolete backups in a custom namespace', async () => {
+    const stateDirectory = '.sdd-mcp/global-skills';
+    const custom = new PreservingWriter(root, { stateDirectory });
+    const file = path.join(root, 'skills/old/SKILL.md');
+    await custom.withInstallLock(async () => {
+      expect(fs.existsSync(path.join(root, stateDirectory, 'install.lock'))).toBe(true);
+      custom.beginTarget('omp', 'lean', ['skills']);
+      await custom.writeManaged('omp', 'skills', 'old', file, 'original');
+      await custom.finalizeTarget('omp');
+    });
+    const next = new PreservingWriter(root, { stateDirectory });
+    next.beginTarget('omp', 'lean', ['skills']);
+    await next.finalizeTarget('omp');
+    expect(fs.existsSync(file)).toBe(false);
+    expect(fs.existsSync(path.join(root, '.sdd-mcp/install-manifest.json'))).toBe(false);
+    const backups = path.join(root, stateDirectory, 'backups');
+    const [stamp] = fs.readdirSync(backups);
+    expect(fs.readFileSync(path.join(backups, stamp, 'omp/skills/old/SKILL.md'), 'utf8')).toBe('original');
+    const manifest = JSON.parse(fs.readFileSync(path.join(root, stateDirectory, 'install-manifest.json'), 'utf8'));
+    expect(manifest.targets.omp.files).toEqual({});
+  });
+
+  it('rejects a backup parent replaced by an external symlink after mkdir', async () => {
+    const file = path.join(root, 'skills', 'old', 'SKILL.md');
+    writer.beginTarget('omp', 'lean', ['skills'], false, false);
+    await writer.writeManaged('omp', 'skills', 'old', file, 'managed');
+    await writer.finalizeTarget('omp');
+
+    const outside = fs.mkdtempSync(path.join(os.tmpdir(), 'sdd-backup-outside-'));
+    const sentinel = path.join(outside, 'SKILL.md');
+    fs.writeFileSync(sentinel, 'outside');
+    const backupParent = path.join(root, '.sdd-mcp', 'backups');
+    const mkdir = fs.promises.mkdir.bind(fs.promises);
+    const mkdirSpy = jest.spyOn(fs.promises, 'mkdir').mockImplementation(async (directory, options) => {
+      const result = await mkdir(directory, options);
+      if (String(directory).startsWith(`${backupParent}${path.sep}`)
+        && String(directory).endsWith(path.join('omp', 'skills', 'old'))) {
+        fs.rmdirSync(String(directory));
+        fs.symlinkSync(outside, String(directory), 'dir');
+      }
+      return result;
+    });
+    try {
+      const upgrade = new PreservingWriter(root);
+      upgrade.beginTarget('omp', 'lean', ['skills'], false, false);
+      await expect(upgrade.finalizeTarget('omp')).rejects.toThrow('traverses symlink');
+      expect(fs.readFileSync(sentinel, 'utf8')).toBe('outside');
+      expect(fs.readFileSync(file, 'utf8')).toBe('managed');
+    } finally {
+      mkdirSpy.mockRestore();
+      fs.rmSync(outside, { recursive: true, force: true });
+    }
+  });
+
+  it('rejects unsafe custom state roots without touching their destinations', async () => {
+    for (const stateDirectory of ['.', '', '../outside']) {
+      expect(() => new PreservingWriter(root, { stateDirectory })).toThrow();
+    }
+    const outside = fs.mkdtempSync(path.join(os.tmpdir(), 'sdd-state-outside-'));
+    fs.symlinkSync(outside, path.join(root, 'linked'), 'dir');
+    try {
+      expect(() => new PreservingWriter(root, { stateDirectory: 'linked/state' })).toThrow();
+      expect(fs.readdirSync(outside)).toEqual([]);
+    } finally {
+      fs.rmSync(outside, { recursive: true, force: true });
+    }
+  });
+
   it('creates missing files and preserves existing files', async () => {
     const file = path.join(root, 'nested', 'file.txt');
     await expect(writer.writeIfAbsent(file, 'first')).resolves.toBe('installed');

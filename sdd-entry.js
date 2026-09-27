@@ -3,7 +3,7 @@
  * Unified entry point for sdd-mcp-server
  *
  * Handles both:
- * - CLI commands (install, install-skills, migrate-kiro)
+ * - CLI commands (setup-global, install, install-skills, migrations)
  * - MCP server mode (default)
  *
  * Usage:
@@ -12,7 +12,7 @@
  *   npx sdd-mcp-server                     # MCP: Start MCP server
  */
 
-const CLI_COMMANDS = ['install', 'install-skills', 'migrate-kiro', 'migrate-steering'];
+const CLI_COMMANDS = ['setup-global', 'install', 'install-skills', 'migrate-kiro', 'migrate-steering'];
 const args = process.argv.slice(2);
 const command = args[0];
 
