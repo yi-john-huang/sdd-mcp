@@ -4,7 +4,7 @@ import * as path from 'path';
 import { parse as parseJsonc } from 'jsonc-parser';
 import { parse as parseToml } from 'smol-toml';
 import { getTargetPolicy } from '../../../cli/install-target';
-import { registerRuntimeLocked } from '../../../cli/tool-support/mcp-registration';
+import { registerRuntimeLocked, RuntimeRegistrationConflictError } from '../../../cli/tool-support/mcp-registration';
 
 const packageVersion = JSON.parse(fs.readFileSync(path.resolve(process.cwd(), 'package.json'), 'utf8')).version;
 
@@ -16,6 +16,22 @@ describe('MCP runtime registration', () => {
   });
 
   afterEach(() => fs.rmSync(root, { recursive: true, force: true }));
+
+  it('leaves absent and malformed Claude permissions untouched when disabled', async () => {
+    const paths = getTargetPolicy('claude-code').defaultPaths;
+    const settings = path.join(root, paths.runtimePermissionConfig!);
+    const options = { configureClaudePermissions: false };
+    const first = await registerRuntimeLocked(root, 'claude-code', paths, undefined, undefined, options);
+    expect(fs.existsSync(settings)).toBe(false);
+    expect(first.registration.permissionPath).toBeUndefined();
+    await first.verify();
+    fs.mkdirSync(path.dirname(settings), { recursive: true });
+    fs.writeFileSync(settings, '{ user settings are not parseable');
+    const second = await registerRuntimeLocked(root, 'claude-code', paths, first.registration, undefined, options);
+    await second.verify();
+    expect(fs.readFileSync(settings, 'utf8')).toBe('{ user settings are not parseable');
+    expect(parseJsonc(fs.readFileSync(path.join(root, paths.runtimeConfig), 'utf8')).mcpServers['sdd-mcp'].command).toBe('npx');
+  });
 
   it('merges Claude JSONC server and permission allow without changing user policy', async () => {
     fs.mkdirSync(path.join(root, '.claude'), { recursive: true });
@@ -45,7 +61,7 @@ describe('MCP runtime registration', () => {
     fs.writeFileSync(config, prior);
 
     await expect(registerRuntimeLocked(root, 'omp', getTargetPolicy('omp').defaultPaths))
-      .rejects.toThrow('Conflicting unmanaged runtime server');
+      .rejects.toMatchObject({ configPath: config, reason: 'unmanaged-entry' });
     expect(fs.readFileSync(config, 'utf8')).toBe(prior);
   });
 
@@ -114,7 +130,8 @@ describe('MCP runtime registration', () => {
 
     const unmanaged = '[mcp_servers."sdd-mcp"]\ncommand = "custom"\n';
     fs.writeFileSync(config, unmanaged);
-    await expect(registerRuntimeLocked(root, 'codex', getTargetPolicy('codex').defaultPaths)).rejects.toThrow('Unmanaged sdd-mcp');
+    await expect(registerRuntimeLocked(root, 'codex', getTargetPolicy('codex').defaultPaths))
+      .rejects.toMatchObject({ configPath: config, reason: 'unmanaged-entry' });
     expect(fs.readFileSync(config, 'utf8')).toBe(unmanaged);
   });
   it('does not adopt a complete but unowned Codex marker region with different bytes', async () => {
@@ -130,8 +147,85 @@ describe('MCP runtime registration', () => {
     fs.writeFileSync(config, unowned);
 
     await expect(registerRuntimeLocked(root, 'codex', getTargetPolicy('codex').defaultPaths))
-      .rejects.toThrow('Unowned Codex runtime region differs');
+      .rejects.toMatchObject({ configPath: config, reason: 'unowned-region' });
     expect(fs.readFileSync(config, 'utf8')).toBe(unowned);
+  });
+
+  it.each(['omp', 'codex'] as const)('classifies modified owned %s entries without writing', async target => {
+    const paths = getTargetPolicy(target).defaultPaths;
+    const config = path.join(root, paths.runtimeConfig);
+    const initial = await registerRuntimeLocked(root, target, paths);
+    const edited = fs.readFileSync(config, 'utf8').replace('npx', 'custom');
+    fs.writeFileSync(config, edited);
+    await expect(registerRuntimeLocked(root, target, paths, initial.registration))
+      .rejects.toMatchObject({ configPath: config, reason: 'modified-entry' });
+    expect(fs.readFileSync(config, 'utf8')).toBe(edited);
+  });
+
+  it('keeps malformed configuration failures distinct from ownership conflicts', async () => {
+    const paths = getTargetPolicy('omp').defaultPaths;
+    const config = path.join(root, paths.runtimeConfig);
+    fs.mkdirSync(path.dirname(config), { recursive: true });
+    fs.writeFileSync(config, '{');
+    const error = await registerRuntimeLocked(root, 'omp', paths).catch(error => error);
+    expect(error).toBeInstanceOf(Error);
+    expect(error).not.toBeInstanceOf(RuntimeRegistrationConflictError);
+    expect(fs.readFileSync(config, 'utf8')).toBe('{');
+  });
+
+  it.each(['omp', 'codex'] as const)('exposes a typed refusal for unmanaged and modified %s entries', async target => {
+    const paths = getTargetPolicy(target).defaultPaths;
+    const config = path.join(root, paths.runtimeConfig);
+    const installed = await registerRuntimeLocked(root, target, paths);
+    const owned = fs.readFileSync(config, 'utf8');
+    const edited = owned.replace('npx', 'custom');
+    fs.writeFileSync(config, edited);
+    await expect(registerRuntimeLocked(root, target, paths, installed.registration))
+      .rejects.toBeInstanceOf(RuntimeRegistrationConflictError);
+    await expect(registerRuntimeLocked(root, target, paths))
+      .rejects.toBeInstanceOf(RuntimeRegistrationConflictError);
+    expect(fs.readFileSync(config, 'utf8')).toBe(edited);
+    if (target === 'codex') {
+      const unmarked = owned.split('\n').filter(line => !line.startsWith('#')).join('\n');
+      fs.writeFileSync(config, unmarked);
+      const error = await registerRuntimeLocked(root, target, paths).catch(error => error);
+      expect(error).toBeInstanceOf(RuntimeRegistrationConflictError);
+      expect(error.reason).toBe('unmanaged-entry');
+      expect(fs.readFileSync(config, 'utf8')).toBe(unmarked);
+    }
+  });
+
+  it.each([
+    ['omp', '{"mcpServers":{},"mcpServers":{}}'],
+    ['codex', '[broken'],
+    ['codex', '# >>> sdd-mcp managed runtime\n'],
+    ['codex', '# >>> sdd-mcp managed runtime\n# <<< sdd-mcp managed runtime\n# >>> sdd-mcp managed runtime\n# <<< sdd-mcp managed runtime\n'],
+  ] as const)('keeps structural %s failures out of the conflict taxonomy', async (target, prior) => {
+    const paths = getTargetPolicy(target).defaultPaths;
+    const config = path.join(root, paths.runtimeConfig);
+    fs.mkdirSync(path.dirname(config), { recursive: true });
+    fs.writeFileSync(config, prior);
+    const error = await registerRuntimeLocked(root, target, paths).catch(error => error);
+    expect(error).toBeInstanceOf(Error);
+    expect(error).not.toBeInstanceOf(RuntimeRegistrationConflictError);
+    expect(fs.readFileSync(config, 'utf8')).toBe(prior);
+  });
+
+  it('distinguishes I/O and concurrent commit failures from ownership refusals', async () => {
+    const paths = getTargetPolicy('omp').defaultPaths;
+    const config = path.join(root, paths.runtimeConfig);
+    fs.mkdirSync(config, { recursive: true });
+    const ioError = await registerRuntimeLocked(root, 'omp', paths).catch(error => error);
+    expect(ioError).toMatchObject({ code: 'EISDIR' });
+    expect(ioError).not.toBeInstanceOf(RuntimeRegistrationConflictError);
+    fs.rmdirSync(config);
+    const editorBytes = '{"editor":true}';
+    const registration = await registerRuntimeLocked(root, 'omp', paths);
+    fs.writeFileSync(config, editorBytes);
+    const error = await registration.verify().catch(error => error);
+    expect(error).toBeInstanceOf(Error);
+    expect(error).not.toBeInstanceOf(RuntimeRegistrationConflictError);
+    expect(fs.readFileSync(config, 'utf8')).toBe(editorBytes);
   });
 
 });

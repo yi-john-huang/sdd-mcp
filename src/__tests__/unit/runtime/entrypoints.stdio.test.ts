@@ -76,10 +76,14 @@ async function callTool(
   cwd: string,
   name: string,
   args: Record<string, unknown>,
+  claudeProjectDir?: string | null,
 ): Promise<JsonRpcResponse> {
+  const environment: NodeJS.ProcessEnv = { ...process.env, MCP_MODE: '1', FORCE_COLOR: '0' };
+  if (claudeProjectDir === null) delete environment.CLAUDE_PROJECT_DIR;
+  else if (claudeProjectDir !== undefined) environment.CLAUDE_PROJECT_DIR = claudeProjectDir;
   const child = spawn(process.execPath, [path.join(repositoryRoot, entrypoint)], {
     cwd,
-    env: { ...process.env, MCP_MODE: '1', FORCE_COLOR: '0' },
+    env: environment,
     stdio: ['pipe', 'pipe', 'pipe'],
   });
   const callRequests = [
@@ -131,6 +135,89 @@ describe.each(['sdd-entry.js', 'mcp-server.js'])('%s stdio runtime', (entrypoint
       },
     });
     expect(byName['sdd-spec-impl']).toHaveProperty('allOf');
+  });
+});
+
+describe('compiled stdio workspace selection', () => {
+  const completeDescription = [
+    'The goal is to solve misplaced project workflow state for developers and users.',
+    'This feature provides project-specific specification storage and supports context retrieval.',
+    'Success criteria measure that 100% of state and context remain in the selected project.',
+  ].join(' ');
+
+  it('initializes, reports, and loads context from CLAUDE_PROJECT_DIR instead of cwd', async () => {
+    const temporaryRoot = await mkdtemp(path.join(os.tmpdir(), 'sdd-stdio-workspace-'));
+    const configRoot = path.join(temporaryRoot, 'config');
+    const projectRoot = path.join(temporaryRoot, 'project');
+    await Promise.all([
+      mkdir(configRoot, { recursive: true }),
+      mkdir(projectRoot, { recursive: true }),
+    ]);
+
+    try {
+      const initializedResponse = await callTool('sdd-entry.js', configRoot, 'sdd-init', {
+        featureName: 'global-root-smoke',
+        description: completeDescription,
+      }, projectRoot);
+      expect(JSON.parse(initializedResponse.result?.content?.[0]?.text ?? '{}')).toMatchObject({
+        status: 'initialized',
+        featureName: 'global-root-smoke',
+      });
+
+      const statusResponse = await callTool(
+        'sdd-entry.js',
+        configRoot,
+        'sdd-status',
+        { featureName: 'global-root-smoke' },
+        projectRoot,
+      );
+      expect(JSON.parse(statusResponse.result?.content?.[0]?.text ?? '{}')).toMatchObject({
+        featureName: 'global-root-smoke',
+        currentPhase: 'init',
+      });
+
+      const contextResponse = await callTool(
+        'sdd-entry.js',
+        configRoot,
+        'sdd-context-load',
+        { featureName: 'global-root-smoke' },
+        projectRoot,
+      );
+      expect(JSON.parse(contextResponse.result?.content?.[0]?.text ?? '{}').content)
+        .toContain('# SDD Context: global-root-smoke');
+      await expect(readFile(
+        path.join(projectRoot, '.spec', 'specs', 'global-root-smoke', 'spec.json'),
+        'utf8',
+      )).resolves.toContain(completeDescription);
+      await expect(readFile(path.join(configRoot, '.spec', 'specs', 'global-root-smoke', 'spec.json'), 'utf8'))
+        .rejects.toMatchObject({ code: 'ENOENT' });
+    } finally {
+      await rm(temporaryRoot, { recursive: true, force: true });
+    }
+  });
+
+  it.each([
+    ['absent', null],
+    ['empty', ''],
+  ])('uses the process cwd when CLAUDE_PROJECT_DIR is %s', async (_label, projectDirectory) => {
+    const workingRoot = await mkdtemp(path.join(os.tmpdir(), 'sdd-stdio-cwd-'));
+    const selectedFeature = `cwd-${_label}`;
+    try {
+      const response = await callTool('sdd-entry.js', workingRoot, 'sdd-init', {
+        featureName: selectedFeature,
+        description: completeDescription,
+      }, projectDirectory);
+      expect(JSON.parse(response.result?.content?.[0]?.text ?? '{}')).toMatchObject({
+        status: 'initialized',
+        featureName: selectedFeature,
+      });
+      await expect(readFile(
+        path.join(workingRoot, '.spec', 'specs', selectedFeature, 'spec.json'),
+        'utf8',
+      )).resolves.toContain(completeDescription);
+    } finally {
+      await rm(workingRoot, { recursive: true, force: true });
+    }
   });
 });
 

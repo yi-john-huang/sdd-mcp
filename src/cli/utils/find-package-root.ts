@@ -57,6 +57,46 @@ export function getDistCliDir(): string {
 }
 
 /**
+ * Get the default path for a component type based on package location.
+ *
+ * @param componentDir - The component directory name (skills, steering, rules, etc.)
+ */
+export function resolvePackageComponentPath(componentDir: string): string {
+  const dirname = getDistCliDir();
+  // Try multiple paths and return the first one that exists
+  const possiblePaths = [
+    // Relative to dist/cli/install-skills.js
+    path.resolve(dirname, `../../${componentDir}`),
+    // Alternative: one level up
+    path.resolve(dirname, `../${componentDir}`),
+    // From package root when installed globally or via npx
+    path.resolve(dirname, `../../../${componentDir}`),
+    // From current working directory
+    path.resolve(process.cwd(), `node_modules/sdd-mcp-server/${componentDir}`),
+    path.resolve(process.cwd(), componentDir),
+  ];
+
+  // Debug output when DEBUG env is set
+  if (process.env.DEBUG) {
+    console.error(`[DEBUG] getDistCliDir() = ${dirname}`);
+    console.error(`[DEBUG] Looking for ${componentDir}:`);
+    for (const p of possiblePaths) {
+      console.error(`  ${fs.existsSync(p) ? '✓' : '✗'} ${p}`);
+    }
+  }
+
+  // Return the first path that exists
+  for (const p of possiblePaths) {
+    if (fs.existsSync(p)) {
+      return p;
+    }
+  }
+
+  // Fallback to first path (will error in manager if not found)
+  return possiblePaths[0];
+}
+
+/**
  * Find a template file by name within the sdd-mcp-server package.
  *
  * @returns Absolute path to the template, or null if not found.

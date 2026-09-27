@@ -4,7 +4,7 @@ SDD-MCP uses one durable workflow rendered for Claude Code, Codex, and Oh My Pi 
 
 ## Start in the host
 
-1. Install the target-native profile.
+1. Run `npx -y sdd-mcp-server@latest setup-global` once per local user/OMP profile, or `./bootstrap.sh` from a POSIX source checkout. Optionally select one host with `--target claude-code`, `--target codex`, or `--target omp`. A repository/team-scoped `install` is an alternative, not a required second step.
 2. Reload or restart the host and accept project trust. Claude organization/project `ask` or `deny` rules can still take precedence.
 3. Invoke the native Skill:
 
@@ -14,6 +14,12 @@ SDD-MCP uses one durable workflow rendered for Claude Code, Codex, and Oh My Pi 
 | Formal SDD | `/sdd-requirements <feature>` | `$sdd-requirements <feature>` | `/skill:sdd-requirements <feature>` |
 
 Continue Formal SDD with the same host prefix for `sdd-design`, `sdd-tasks`, and `sdd-implement`. Do not call backend tools or paste workflow JSON; each Skill restores durable state and approved compact context.
+
+Personal runtime files are `~/.claude.json` (or `<CLAUDE_CONFIG_DIR>/.claude.json`), `~/.codex/config.toml` (or `<CODEX_HOME>/config.toml`), and `<omp config path>/mcp.json`. Personal Skills live in `~/.claude/skills/` (or `<CLAUDE_CONFIG_DIR>/skills/`), `~/.agents/skills/`, and `<omp config path>/skills/`; OMP defaults to `~/.omp/agent` and needs one setup per named profile. Global setup leaves Claude permissions unchanged and installs no repository guidance or agents. It is local-machine/profile scope, not Claude cloud/Cowork Skill distribution.
+
+Verify `claude mcp get sdd-mcp`, `codex mcp get sdd-mcp`, or OMP `/mcp test sdd-mcp` outside a shadowing project configuration. Existing project runtime entries win; remove only the project's same-name entry yourself when choosing personal scope. Skill-name precedence is a separate host rule. See the [installation guide](INSTALL-GUIDE.md#one-time-personal-setup) for exact overrides, OMP fallback, ownership, and safe reruns.
+
+The runtime resolves project operations from nonempty `CLAUDE_PROJECT_DIR`, otherwise its working directory. Specifications and approvals remain in that project's `.spec`; personal setup does not create workflow state in the user configuration directory.
 
 ## Formal phase flow
 
@@ -53,7 +59,7 @@ Durable status determines the next action across sessions: submit or revise a ph
 
 Target renderers add native invocation and model metadata only; they do not duplicate this choreography.
 
-## Target-native guidance flow
+## Optional project-native guidance flow
 
 ```mermaid
 flowchart LR

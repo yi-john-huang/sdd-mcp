@@ -33,6 +33,49 @@ describe('compiled target-aware CLI journeys', () => {
 
   afterAll(() => fs.rmSync(preloadRoot, { recursive: true, force: true }));
 
+  it.each(['sdd-entry.js', 'dist/cli/sdd-mcp-cli.js'])('dispatches isolated global setup through %s', script => {
+    const temporary = fs.mkdtempSync(path.join(os.tmpdir(), 'sdd-global-dispatch-'));
+    const cwd = path.join(temporary, 'project');
+    const home = path.join(temporary, 'home');
+    fs.mkdirSync(cwd);
+    fs.mkdirSync(home);
+    const env = {
+      ...process.env, HOME: home, USERPROFILE: home,
+      CLAUDE_CONFIG_DIR: path.join(home, 'claude'),
+      CODEX_HOME: path.join(home, 'codex'),
+      PI_CODING_AGENT_DIR: path.join(home, 'omp'),
+    };
+    try {
+      const invalid = spawnSync(process.execPath, [path.join(repositoryRoot, script), 'setup-global', '--all-tools'], {
+        cwd, env, encoding: 'utf8', timeout: 10_000,
+      });
+      expect(invalid.status).toBe(1);
+      expect(fs.readdirSync(home)).toEqual([]);
+      const result = spawnSync(process.execPath, [path.join(repositoryRoot, script), 'setup-global', '--target', 'codex'], {
+        cwd, env, encoding: 'utf8', timeout: 10_000,
+      });
+      expect(result.status).toBe(0);
+      expect(fs.existsSync(path.join(home, 'codex/config.toml'))).toBe(true);
+      expect(fs.existsSync(path.join(home, '.agents/skills/sdd-requirements/SKILL.md'))).toBe(true);
+      expect(fs.existsSync(path.join(home, 'claude'))).toBe(false);
+      expect(fs.existsSync(path.join(home, 'omp'))).toBe(false);
+      expect(fs.readdirSync(cwd)).toEqual([]);
+      const conflictPath = fs.realpathSync(path.join(home, 'codex/config.toml'));
+      const conflictBytes = fs.readFileSync(conflictPath, 'utf8').replace('"npx"', '"secret-custom-command"');
+      fs.writeFileSync(conflictPath, conflictBytes);
+      const conflict = spawnSync(process.execPath, [path.join(repositoryRoot, script), 'setup-global', '--target', 'codex'], {
+        cwd, env, encoding: 'utf8', timeout: 10_000,
+      });
+      expect(conflict.status).toBe(1);
+      expect(conflict.stdout).toContain('Preserved conflicts');
+      expect(conflict.stdout).toContain(`[runtime] ${conflictPath}`);
+      expect(conflict.stdout + conflict.stderr).not.toContain('secret-custom-command');
+      expect(fs.readFileSync(conflictPath, 'utf8')).toBe(conflictBytes);
+    } finally {
+      fs.rmSync(temporary, { recursive: true, force: true });
+    }
+  });
+
   it.each([
     ['codex', '.codex/agents/planner.toml', 'CLAUDE.md'],
     ['claude-code', '.claude/agents/planner.md', 'AGENTS.md'],

@@ -17,6 +17,7 @@ import {
 } from './install-skills.js';
 import { main as migrateKiroMain } from './migrate-kiro.js';
 import { main as migrateSteeringMain } from './migrate-steering.js';
+import { mainGlobalSetup } from './setup-global.js';
 
 const HELP = `
 SDD MCP CLI
@@ -24,6 +25,7 @@ SDD MCP CLI
 Usage: npx sdd-mcp-server <command> [options]
 
 Commands:
+  setup-global      Install personal runtime and Skills for all three hosts
   install           Install target-native SDD components (recommended)
   install-skills    Alias for target-aware install --skills
   migrate-kiro      Migrate .kiro directory to .spec (v2.1.0+)
@@ -41,6 +43,8 @@ Additional Integrations:
   --all-tools       Install Claude Code, Codex, OMP, and Antigravity
 
 Examples:
+  npx sdd-mcp-server setup-global                # User-level runtime and Skills
+  npx sdd-mcp-server setup-global --target codex # One host only
   npx sdd-mcp-server install                     # Lean target-native install
   npx sdd-mcp-server install --skills            # Install skills only
   npx sdd-mcp-server install --steering          # Install steering only
@@ -69,6 +73,10 @@ async function main() {
   }
 
   switch (command) {
+    case 'setup-global':
+      await mainGlobalSetup(args.slice(1));
+      break;
+
     case 'install':
       // Unified target-aware component installer
       process.argv = [process.argv[0], process.argv[1], ...args.slice(1)];
