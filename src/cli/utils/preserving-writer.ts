@@ -536,6 +536,7 @@ export class PreservingWriter {
     const destination = path.join(this.stateRoot, 'backups', this.backupStamp, target, relative);
     this.validateDestination(destination);
     await fs.promises.mkdir(path.dirname(destination), { recursive: true });
+    this.validateDestination(destination);
     await fs.promises.copyFile(source, destination);
   }
 

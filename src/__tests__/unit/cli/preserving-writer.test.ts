@@ -37,6 +37,38 @@ describe('PreservingWriter', () => {
     expect(manifest.targets.omp.files).toEqual({});
   });
 
+  it('rejects a backup parent replaced by an external symlink after mkdir', async () => {
+    const file = path.join(root, 'skills', 'old', 'SKILL.md');
+    writer.beginTarget('omp', 'lean', ['skills'], false, false);
+    await writer.writeManaged('omp', 'skills', 'old', file, 'managed');
+    await writer.finalizeTarget('omp');
+
+    const outside = fs.mkdtempSync(path.join(os.tmpdir(), 'sdd-backup-outside-'));
+    const sentinel = path.join(outside, 'SKILL.md');
+    fs.writeFileSync(sentinel, 'outside');
+    const backupParent = path.join(root, '.sdd-mcp', 'backups');
+    const mkdir = fs.promises.mkdir.bind(fs.promises);
+    const mkdirSpy = jest.spyOn(fs.promises, 'mkdir').mockImplementation(async (directory, options) => {
+      const result = await mkdir(directory, options);
+      if (String(directory).startsWith(`${backupParent}${path.sep}`)
+        && String(directory).endsWith(path.join('omp', 'skills', 'old'))) {
+        fs.rmdirSync(String(directory));
+        fs.symlinkSync(outside, String(directory), 'dir');
+      }
+      return result;
+    });
+    try {
+      const upgrade = new PreservingWriter(root);
+      upgrade.beginTarget('omp', 'lean', ['skills'], false, false);
+      await expect(upgrade.finalizeTarget('omp')).rejects.toThrow('traverses symlink');
+      expect(fs.readFileSync(sentinel, 'utf8')).toBe('outside');
+      expect(fs.readFileSync(file, 'utf8')).toBe('managed');
+    } finally {
+      mkdirSpy.mockRestore();
+      fs.rmSync(outside, { recursive: true, force: true });
+    }
+  });
+
   it('rejects unsafe custom state roots without touching their destinations', async () => {
     for (const stateDirectory of ['.', '', '../outside']) {
       expect(() => new PreservingWriter(root, { stateDirectory })).toThrow();
