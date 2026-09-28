@@ -7,8 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [5.1.1] - 2026-09-28
+
 ### Documentation
-- Document the source-checkout `npx` failure and local CLI workaround; published `5.1.0` installs from other projects are unaffected.
+- Document the source-checkout `npx` failure and local CLI workaround; published installs from other projects are unaffected.
 
 ## [5.1.0] - 2026-09-27
 

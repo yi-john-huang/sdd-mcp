@@ -69,9 +69,9 @@ For local release testing, use an absolute npm **file spec**, not a bare archive
 ```bash
 npm run build
 npm pack --pack-destination /absolute/temp
-SDD_MCP_PACKAGE=file:/absolute/temp/sdd-mcp-server-5.1.0.tgz ./bootstrap.sh
+SDD_MCP_PACKAGE=file:/absolute/temp/sdd-mcp-server-5.1.1.tgz ./bootstrap.sh
 # Independent cross-platform path, without the wrapper:
-npx -y file:/absolute/temp/sdd-mcp-server-5.1.0.tgz setup-global
+npx -y file:/absolute/temp/sdd-mcp-server-5.1.1.tgz setup-global
 ```
 
 Use fresh, distinct temporary home/config/project directories for each path; pass `HOME`, `CLAUDE_CONFIG_DIR`, `CODEX_HOME`, and the OMP profile/agent settings to the child process. Control `omp` discovery on `PATH` so an unrelated installed host cannot select real user state. Rerun both commands, check pinned entries/rendered references and unchanged Claude settings, then exercise conflicts and Skills failures. Native npm 11.12.1 attempts to execute a bare `/absolute/package.tgz` (exit 126); the explicit `file:` syntax is the verified package-resolution path.
@@ -190,7 +190,7 @@ Manual skill syntax is `/skill:<name>` in OMP, `/<name>` in Claude Code, and `$<
 
 ### Published-host smoke
 
-This smoke requires `sdd-mcp-server@5.1.0` to be published or otherwise resolvable by `npx`; repository CI cannot substitute a real host trust prompt. In a clean temporary repository, run `npx sdd-mcp-server@5.1.0 install --profile lean --target <claude-code|codex|omp>`, reload the selected host, and accept project trust once. Invoke only the host-native requirements Skill shown above, approve the artifact explicitly, restart the host, then invoke only its design Skill. Verify that `.spec/specs/<feature>/spec.json` retains the requirements revision, hash, and approval, that `requirements.md` contains the Skill-produced content, and that `context/handoff.md` is repairable without any user-facing raw MCP instruction.
+This smoke requires `sdd-mcp-server@5.1.1` to be published or otherwise resolvable by `npx`; repository CI cannot substitute a real host trust prompt. In a clean temporary repository, run `npx sdd-mcp-server@5.1.1 install --profile lean --target <claude-code|codex|omp>`, reload the selected host, and accept project trust once. Invoke only the host-native requirements Skill shown above, approve the artifact explicitly, restart the host, then invoke only its design Skill. Verify that `.spec/specs/<feature>/spec.json` retains the requirements revision, hash, and approval, that `requirements.md` contains the Skill-produced content, and that `context/handoff.md` is repairable without any user-facing raw MCP instruction.
 
 ## Managed ownership and reruns
 
@@ -227,7 +227,7 @@ Do not select a target merely because its files already exist: select the host t
 
 ```bash
 # Replace <target> with claude-code, codex, or omp
-npx sdd-mcp-server@5.1.0 install \
+npx sdd-mcp-server@5.1.1 install \
   --profile full \
   --target <target> \
   --refresh-generated
@@ -257,7 +257,7 @@ The refresh rebuilds only the selected package-owned set and removes recognized 
 After the one-time migration, rerun the same target and profile without `--refresh-generated`:
 
 ```bash
-npx sdd-mcp-server@5.1.0 install --profile full --target <target>
+npx sdd-mcp-server@5.1.1 install --profile full --target <target>
 ```
 
 The ownership manifest then upgrades unchanged package files automatically and continues to preserve modified files.
@@ -265,6 +265,8 @@ The ownership manifest then upgrades unchanged package files automatically and c
 For an update from 5.0.0 to 5.0.1, use the profile and target already installed, review any conflicts, and reload or restart the host so its registered runtime uses 5.0.1. No specification migration is required. Requirements that were rejected because `**Acceptance Criteria:**` was followed by a numbered list on separate lines can be resubmitted through the requirements Skill without rewriting that format.
 
 For an update from 5.0.1 to 5.1.0, rerun the project installer with the same target/profile to upgrade unmodified managed assets and the pinned runtime entry. To choose custom SDD role models, pass `--model-roles models.yaml` on every project install and rerun; otherwise the existing defaults apply. Personal setup is a separate, optional user/profile scope: run `npx -y sdd-mcp-server@5.1.0 setup-global` once per chosen host or profile, then reload and accept host trust. It does not migrate project entries or change Claude permissions. No specification migration is required.
+
+For an update from 5.1.0 to 5.1.1, rerun the same project installer from the destination project's root, or use the built local entrypoint inside this package's source checkout. This release changes documentation and package version only; no specification migration is required.
 
 ## Model routing and availability
 
