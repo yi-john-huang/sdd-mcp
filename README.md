@@ -5,7 +5,7 @@
 
 A Model Context Protocol server and target-native installer for governed Spec-Driven Development (SDD) in Claude Code, Codex, and Oh My Pi (OMP).
 
-> **v5.1.0** — Adds one-time personal setup for Claude Code, Codex, and OMP, plus project-scoped SDD model/effort overrides. Keeps the v5 Skill-governed workflow, durable approvals, and preserve-first target-native installation.
+> **v5.1.1** — Documents the source-checkout installer invocation. The v5.1.0 personal setup, project-scoped SDD model/effort overrides, and preserve-first target-native installation remain unchanged.
 
 ## Why sdd-mcp?
 
@@ -46,7 +46,7 @@ The repository installer below remains an **optional team/project-scoped alterna
 
 ## New project installation
 
-Use this path when the repository has never had sdd-mcp-generated guidance.
+Use this path when the repository has never had sdd-mcp-generated guidance. The `npx` commands below run from the **destination project's root**, not from this `sdd-mcp-server` source checkout; use the checkout commands below instead if installing into this repository.
 
 1. Open a terminal at the project root.
 2. Choose the host that will execute the workflow.
@@ -54,12 +54,22 @@ Use this path when the repository has never had sdd-mcp-generated guidance.
 
 ```bash
 # Recommended explicit lean installation
-npx sdd-mcp-server@5.1.0 install --profile lean --target claude-code
-npx sdd-mcp-server@5.1.0 install --profile lean --target codex
-npx sdd-mcp-server@5.1.0 install --profile lean --target omp
+npx sdd-mcp-server@5.1.1 install --profile lean --target claude-code
+npx sdd-mcp-server@5.1.1 install --profile lean --target codex
+npx sdd-mcp-server@5.1.1 install --profile lean --target omp
 
 # Interactive full installation: choose Claude Code, Codex, or OMP
-npx sdd-mcp-server@5.1.0 install --profile full
+npx sdd-mcp-server@5.1.1 install --profile full
+```
+
+In this package's source checkout, the pinned `npx` command can fail with `sh: sdd-mcp-server: command not found`. The published executable was verified from a separate project, so use the local entrypoint when installing into the checkout. Build it once from the checkout root:
+
+```bash
+npm install
+npm run build
+node ./sdd-entry.js install --profile lean --target omp
+# Or, for interactive full installation:
+node ./sdd-entry.js install --profile full
 ```
 
 Do not use `--refresh-generated` for a new project. A normal installation records package ownership in `.sdd-mcp/install-manifest.json` and registers the hidden project runtime.
@@ -128,7 +138,7 @@ Use this path when the project already contains generated sdd-mcp files from an 
 
 ```bash
 # Replace <target> with claude-code, codex, or omp
-npx sdd-mcp-server@5.1.0 install \
+npx sdd-mcp-server@5.1.1 install \
   --profile full \
   --target <target> \
   --refresh-generated
