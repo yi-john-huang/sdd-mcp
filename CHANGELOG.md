@@ -7,6 +7,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Documentation
+- Document that project `install` in the source checkout hides personal `sdd-mcp`, and that the pinned `npx` runtime fails there with `sdd-mcp-server: command not found` until the local bin shim exists.
+
 ## [5.1.1] - 2026-09-28
 
 ### Documentation
