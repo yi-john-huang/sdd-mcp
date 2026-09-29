@@ -19,17 +19,17 @@ export function buildCompactRootGuidance(
   const heading = preamble?.split(/\r?\n/).find(line => line.trim())?.trim();
   const routing = target === 'omp'
     ? [
-      'High-level work runs inline on Sol/medium by default. Project Sol/xhigh advisors are explicit opt-in.',
-      'When explicitly invoked, use one advisor without nested delegation; on failure, record one fallback and continue inline without retrying.',
+      'Invoked SDD skills run inline with the model and thinking level selected by .omp/extensions/sdd-skill-routing.js.',
+      'Project advisors are explicit opt-in only; use one without nested delegation or retry, and continue inline if unavailable.',
     ]
     : target === 'claude-code'
       ? [
-        'High-level planning, architecture, review, and security execute in the current turn on Opus.',
-        'Implementation and TDD execute in the current turn on Sonnet; do not spawn a redundant specialist.',
+        'High-level planning, architecture, review, and security execute in the current turn on their configured skill model/effort.',
+        'Implementation and TDD use their configured skill model/effort; do not spawn a redundant specialist.',
       ]
       : [
-        'High-level planning, architecture, review, and security may use one configured Sol/xhigh custom agent.',
-        'Implementation and TDD run inline on Sol/medium; on advisor failure, record one fallback and continue inline without retrying.',
+        'High-level planning, architecture, review, and security may use one custom agent with its configured route.',
+        'Implementation and TDD run inline on the host-selected parent; generated agents use their configured routes. On advisor failure, record one fallback and continue inline without retrying.',
       ];
   const lines = [
     heading || `# SDD guidance for ${target}`,

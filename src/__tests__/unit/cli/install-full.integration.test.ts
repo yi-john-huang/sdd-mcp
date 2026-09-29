@@ -31,8 +31,8 @@ describe('full-profile target journeys', () => {
   });
 
   it.each([
-    ['codex' as const, '.codex/agents/planner.toml', 'gpt-5.6-sol', '.claude', 'CLAUDE.md'],
-    ['claude-code' as const, '.claude/agents/planner.md', 'model: opus', '.codex', 'AGENTS.md'],
+    ['codex' as const, '.codex/agents/planner.toml', 'gpt-6-sol', '.claude', 'CLAUDE.md'],
+    ['claude-code' as const, '.claude/agents/planner.md', 'model: claude-opus-5-5', '.codex', 'AGENTS.md'],
   ])('installs a complete %s-native tree', async (
     target,
     agentPath,
@@ -103,11 +103,11 @@ describe('full-profile target journeys', () => {
     expect(fs.readFileSync(path.join(outputRoot, '.claude/skills/sdd-requirements/SKILL.md'), 'utf8')).toContain('model: sonnet');
     expect(fs.readFileSync(path.join(outputRoot, '.claude/agents/planner.md'), 'utf8')).toContain('effort: xhigh');
     expect(fs.readFileSync(path.join(outputRoot, '.claude/skills/sdd-requirements/SKILL.md'), 'utf8')).toContain('effort: xhigh');
-    expect(fs.readFileSync(path.join(outputRoot, '.claude/agents/reviewer.md'), 'utf8')).toContain('model: opus\neffort: low');
+    expect(fs.readFileSync(path.join(outputRoot, '.claude/agents/reviewer.md'), 'utf8')).toContain('model: claude-opus-5-5\neffort: low');
     expect(fs.readFileSync(path.join(outputRoot, '.claude/skills/sdd-review/SKILL.md'), 'utf8'))
       .toContain('effort: low');
     expect(fs.readFileSync(path.join(outputRoot, '.claude/agents/implementer.md'), 'utf8'))
-      .toContain('model: sonnet\neffort: medium');
+      .toContain('model: claude-sonnet-5-5\neffort: medium');
     expect(process.exitCode).toBeUndefined();
   });
 

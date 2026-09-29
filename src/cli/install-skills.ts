@@ -653,10 +653,10 @@ After installation, invoke the selected host's skills:
   Continue with sdd-design, sdd-tasks, and sdd-implement after each approval.
 
 Model Routing (defaults; override generated SDD roles with --model-roles):
-  Codex custom agents: gpt-5.6-sol (xhigh advisor, medium implementation/TDD)
-  Claude Code skills and agents: opus/high advisor, sonnet/medium implementation/TDD
-  OMP project agents: gpt-5.6-sol (xhigh advisor, medium implementation/TDD)
-  Inline Codex/OMP parent and generic host agents are not reconfigured.
+  Codex custom agents: gpt-6-sol/xhigh advisors, gpt-6-luna/medium implementation/TDD
+  Claude Code skills and agents: claude-opus-5-5/high advisors, claude-sonnet-5-5/medium implementation/TDD
+  OMP invoked skills and opt-in project agents: openai-codex/gpt-6-sol/xhigh advisors, openai-codex/gpt-6-luna/medium implementation/TDD
+  Inline Codex and generic host agents are not reconfigured; OMP skills require the installed extension.
 `;
   }
 }

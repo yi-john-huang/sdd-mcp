@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+- Default role routes now pin Claude Code skills/agents to `claude-opus-5-5`/high for advisory work and `claude-sonnet-5-5`/medium for implementation/TDD; Codex and OMP use GPT-6 Sol/xhigh and GPT-6 Luna/medium respectively.
+
+### Fixed
+- Route invoked OMP SDD skills through a project extension that applies their configured model and thinking level for the turn and restores the prior session route afterward; Claude Code continues to use native skill model/effort frontmatter.
+
 ### Documentation
 - Document that project `install` in the source checkout hides personal `sdd-mcp`, and that the pinned `npx` runtime fails there with `sdd-mcp-server: command not found` until the local bin shim exists.
 

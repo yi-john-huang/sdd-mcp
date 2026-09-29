@@ -159,7 +159,7 @@ Pass a project YAML file on each install when the package defaults do not match 
 ```yaml
 modelRoles:
   planner:
-    claudeCode: { model: opus, effort: high }
+    claudeCode: { model: claude-opus-5-5, effort: high }
     codex: openai-codex/gpt-6-sol:high
     omp: xai-oauth/grok-4.7:xhigh
   reviewer:
@@ -277,9 +277,9 @@ For an update from 5.1.0 to 5.1.1, rerun the same project installer from the des
 
 ## Model routing and availability
 
-- Claude Code uses native model **and effort** overrides for the invoked skill turn and installed project subagents. Defaults: Opus/high for high-level roles, Sonnet/medium for implementation/TDD.
-- Codex generated custom agents carry model and `model_reasoning_effort` (default Sol/xhigh for advisors, Sol/medium for implementation/TDD). An advisor-class skill may request one child; inline parent turns are not switched by this option.
-- OMP uses the parent model inline by default, including high-level work. Generated `.omp/agents` carry configured model/`thinkingLevel`; advisor use is explicit opt-in and limited to one non-nesting, non-retrying child.
+- Claude Code uses native model **and effort** overrides for the invoked skill turn and installed project subagents. Defaults: `claude-opus-5-5`/high for high-level roles, `claude-sonnet-5-5`/medium for implementation/TDD.
+- Codex generated custom agents carry model and `model_reasoning_effort` (default `gpt-6-sol`/xhigh for advisors, `gpt-6-luna`/medium for implementation/TDD). An advisor-class skill may request one child; inline parent turns are not switched by this option.
+- OMP installs `.omp/extensions/sdd-skill-routing.js` alongside skills. On `/skill:<name>`, it applies the role's configured model/`thinkingLevel` (default `openai-codex/gpt-6-sol`/xhigh or `openai-codex/gpt-6-luna`/medium) to the parent for that turn, then restores the previous route. An unavailable model aborts the invocation rather than silently using a different model. Enable project extensions and restart OMP after installation. Generated `.omp/agents` keep explicit opt-in advisor routes.
 
 The installer emits selectors but does not grant access or verify host/model/effort support. Availability depends on the configured provider and account; the OMP install reports model availability as “not verified” and offers an optional `omp models find <provider/model>` diagnostic. See [MODEL-ROUTING.md](MODEL-ROUTING.md).
 

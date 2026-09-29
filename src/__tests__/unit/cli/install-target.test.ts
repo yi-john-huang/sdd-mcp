@@ -32,47 +32,21 @@ describe('install target policy', () => {
     });
   });
 
-  it('uses sol medium as the default and sol xhigh for high-level roles', () => {
-    expect(DEFAULT_CODEX_MODEL).toBe('gpt-5.6-sol');
-    expect(ROLE_MODEL_ROUTES.planner.codex).toEqual({
-      model: 'gpt-5.6-sol',
-      reasoningEffort: 'xhigh',
-    });
-    expect(ROLE_MODEL_ROUTES.architect.codex).toEqual({
-      model: 'gpt-5.6-sol',
-      reasoningEffort: 'xhigh',
-    });
-    expect(ROLE_MODEL_ROUTES.reviewer.codex).toEqual({
-      model: 'gpt-5.6-sol',
-      reasoningEffort: 'xhigh',
-    });
-    expect(ROLE_MODEL_ROUTES['security-auditor'].codex).toEqual({
-      model: 'gpt-5.6-sol',
-      reasoningEffort: 'xhigh',
-    });
-    expect(ROLE_MODEL_ROUTES.implementer.codex).toEqual({
-      model: 'gpt-5.6-sol',
-      reasoningEffort: 'medium',
-    });
-    expect(ROLE_MODEL_ROUTES['tdd-guide'].codex).toEqual({
-      model: 'gpt-5.6-sol',
-      reasoningEffort: 'medium',
-    });
-    expect(ROLE_MODEL_ROUTES.reviewer.claudeCode.model).toBe('opus');
-    expect(ROLE_MODEL_ROUTES['tdd-guide'].claudeCode.model).toBe('sonnet');
-    expect(ROLE_MODEL_ROUTES.planner.omp).toEqual({
-      model: 'gpt-5.6-sol',
-      thinkingLevel: 'xhigh',
-    });
-    expect(ROLE_MODEL_ROUTES.implementer.omp.thinkingLevel).toBe('medium');
-    expect(ROLE_MODEL_ROUTES.planner.taskClass).toBe('advisor');
-    expect(ROLE_MODEL_ROUTES.implementer.taskClass).toBe('implementation');
-    expect(SUPPORTED_CODEX_MODELS).toEqual([
-      'gpt-5.6-sol',
-      'gpt-5.6-terra',
-      'gpt-5.6-luna',
-    ]);
-    expect(JSON.stringify(ROLE_MODEL_ROUTES)).not.toContain('gpt-5.6-terra');
+  it('routes high-level work to Opus 5.5 and Sol 6, implementation to Sonnet 5.5 and Luna 6', () => {
+    expect(DEFAULT_CODEX_MODEL).toBe('gpt-6-luna');
+    for (const role of ['planner', 'architect', 'reviewer', 'security-auditor'] as const) {
+      expect(ROLE_MODEL_ROUTES[role].codex).toEqual({ model: 'gpt-6-sol', reasoningEffort: 'xhigh' });
+      expect(ROLE_MODEL_ROUTES[role].claudeCode).toEqual({ model: 'claude-opus-5-5', effort: 'high' });
+      expect(ROLE_MODEL_ROUTES[role].omp).toEqual({ model: 'openai-codex/gpt-6-sol', thinkingLevel: 'xhigh' });
+      expect(ROLE_MODEL_ROUTES[role].taskClass).toBe('advisor');
+    }
+    for (const role of ['implementer', 'tdd-guide'] as const) {
+      expect(ROLE_MODEL_ROUTES[role].codex).toEqual({ model: 'gpt-6-luna', reasoningEffort: 'medium' });
+      expect(ROLE_MODEL_ROUTES[role].claudeCode).toEqual({ model: 'claude-sonnet-5-5', effort: 'medium' });
+      expect(ROLE_MODEL_ROUTES[role].omp).toEqual({ model: 'openai-codex/gpt-6-luna', thinkingLevel: 'medium' });
+      expect(ROLE_MODEL_ROUTES[role].taskClass).toBe('implementation');
+    }
+    expect(SUPPORTED_CODEX_MODELS).toEqual(['gpt-6-sol', 'gpt-6-luna']);
   });
 
   it('defines phase skill delegation routes', () => {

@@ -98,11 +98,11 @@ Optionally create `models.yaml` in the project root and pass it on each install:
 ```yaml
 modelRoles:
   planner:
-    claudeCode: { model: opus, effort: high }
+    claudeCode: { model: claude-opus-5-5, effort: high }
     codex: openai-codex/gpt-6-sol:high
     omp: openai-codex/gpt-6-sol:high
   implementer:
-    claudeCode: { model: sonnet, effort: medium }
+    claudeCode: { model: claude-sonnet-5-5, effort: medium }
     codex: openai-codex/gpt-6-luna:max
     omp: openai-codex/gpt-6-luna:max
 ```
@@ -207,7 +207,7 @@ Three-run fresh-session A/B comparisons used comparable provider-reported median
 
 ## Routing summary
 
-Claude executes a skill in the current turn with its configured model and effort (default Opus/high for high-level work and Sonnet/medium for implementation/TDD); installed Claude subagents have matching metadata. Codex may request one configured custom advisor for high-level work; its agent metadata does not change the parent turn. OMP runs high-level work inline on the parent by default: real A/B showed automatic child requests increased median cost. OMP’s `.omp/agents` advisors are explicit opt-in only, allow one child, and cannot nest or retry. Implementation, TDD, and simple tasks remain inline unless genuinely independent parallel slices justify delegation.
+Claude executes a skill in the current turn with its configured model and effort (default Claude Opus 5.5/high for high-level work and Claude Sonnet 5.5/medium for implementation/TDD); installed Claude subagents have matching metadata. Codex may request one configured GPT-6 Sol/xhigh custom advisor for high-level work; its agent metadata does not change the parent turn. OMP executes invoked SDD skills inline, with the installed `.omp/extensions/sdd-skill-routing.js` switching the parent to the configured model/thinking level (GPT-6 Sol/xhigh for high-level work, GPT-6 Luna/medium for implementation/TDD) for the turn and restoring it afterward. OMP’s `.omp/agents` advisors remain explicit opt-in only, allow one child, and cannot nest or retry. Implementation, TDD, and simple tasks remain inline unless genuinely independent parallel slices justify delegation.
 
 See [docs/MODEL-ROUTING.md](docs/MODEL-ROUTING.md) for enforcement and fallback boundaries.
 

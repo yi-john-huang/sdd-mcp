@@ -4,6 +4,7 @@ import { CliUsageError } from '../install-target.js';
 import { PreservingWriter, validateChildName } from '../utils/preserving-writer.js';
 import { buildCompactRootGuidance } from './root-guidance.js';
 import { parseSourceAgent, renderOmpAgent } from './target-agent-renderer.js';
+import { renderOmpSkillRouting } from './omp-skill-routing.js';
 import {
   copyFlatComponents,
   TargetInstallSession,
@@ -33,7 +34,15 @@ async function installOmpTargetLocked(request: OmpInstallRequest & { writer: Pre
   );
   const selected = new Set(request.components);
 
-  if (selected.has('skills')) await session.copySkills(request.sources.skillManager, request.paths.skills, request.modelRoutes);
+  if (selected.has('skills')) {
+    await session.copySkills(request.sources.skillManager, request.paths.skills, request.modelRoutes);
+    await session.write(
+      'skills',
+      'sdd-skill-routing',
+      session.resolve('.omp/extensions/sdd-skill-routing.js'),
+      renderOmpSkillRouting(request.modelRoutes),
+    );
+  }
   if (selected.has('steering')) await session.copySteering(request.sources.steeringSource, request.paths.steering);
   if (selected.has('rules')) {
     await copyFlatComponents(session, 'rules', request.paths.rules, await request.sources.rulesManager.listComponents());

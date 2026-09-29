@@ -152,7 +152,7 @@ describe('target-specific installers', () => {
     expect(fs.existsSync(path.join(root, '.omp/mcp.json'))).toBe(false);
   });
 
-  it('installs only native Claude Code artifacts and renders model aliases', async () => {
+  it('installs only native Claude Code artifacts and renders pinned models', async () => {
     const report = await installClaudeCodeTarget({
       projectRoot: root,
       paths: getTargetPolicy('claude-code').defaultPaths,
@@ -166,14 +166,14 @@ describe('target-specific installers', () => {
     expect(fs.existsSync(path.join(root, '.claude/rules/security.md'))).toBe(true);
     const claudeSkill = fs.readFileSync(path.join(root, '.claude/skills/sdd-design/SKILL.md'), 'utf8');
     expect(claudeSkill).toContain('disable-model-invocation: true');
-    expect(claudeSkill).toContain('model: opus');
+    expect(claudeSkill).toContain('model: claude-opus-5-5');
     expect(claudeSkill).toContain('do not spawn a second specialist');
     expect(fs.readFileSync(path.join(root, '.claude/rules/security.md'), 'utf8')).toContain('paths:');
     expect(fs.existsSync(path.join(root, '.claude/skills/sdd-design/references/example.md'))).toBe(true);
     expect(fs.existsSync(path.join(root, '.claude/contexts/review.md'))).toBe(true);
     expect(fs.existsSync(path.join(root, '.claude/hooks/session-start/load-context.md'))).toBe(true);
-    expect(fs.readFileSync(path.join(root, '.claude/agents/planner.md'), 'utf8')).toContain('model: opus');
-    expect(fs.readFileSync(path.join(root, '.claude/agents/implementer.md'), 'utf8')).toContain('model: sonnet');
+    expect(fs.readFileSync(path.join(root, '.claude/agents/planner.md'), 'utf8')).toContain('model: claude-opus-5-5');
+    expect(fs.readFileSync(path.join(root, '.claude/agents/implementer.md'), 'utf8')).toContain('model: claude-sonnet-5-5');
     expect(fs.existsSync(path.join(root, 'CLAUDE.md'))).toBe(true);
     expect(JSON.parse(fs.readFileSync(path.join(root, '.mcp.json'), 'utf8')).mcpServers['sdd-mcp'])
       .toEqual({ type: 'stdio', command: 'npx', args: ['-y', `sdd-mcp-server@${packageVersion}`] });
@@ -222,9 +222,9 @@ describe('target-specific installers', () => {
     expect(fs.existsSync(path.join(root, '.agents/skills/sdd-design/SKILL.md'))).toBe(true);
     expect(fs.existsSync(path.join(root, '.codex/guidance/rules/security.md'))).toBe(true);
     expect(fs.existsSync(path.join(root, '.codex/guidance/contexts/review.md'))).toBe(true);
-    expect(fs.readFileSync(path.join(root, '.codex/agents/planner.toml'), 'utf8')).toContain('model = "gpt-5.6-sol"');
+    expect(fs.readFileSync(path.join(root, '.codex/agents/planner.toml'), 'utf8')).toContain('model = "gpt-6-sol"');
     expect(fs.readFileSync(path.join(root, '.codex/agents/planner.toml'), 'utf8')).toContain('model_reasoning_effort = "xhigh"');
-    expect(fs.readFileSync(path.join(root, '.codex/agents/implementer.toml'), 'utf8')).toContain('model = "gpt-5.6-sol"');
+    expect(fs.readFileSync(path.join(root, '.codex/agents/implementer.toml'), 'utf8')).toContain('model = "gpt-6-luna"');
     expect(fs.readFileSync(path.join(root, '.codex/agents/implementer.toml'), 'utf8')).toContain('model_reasoning_effort = "medium"');
     expect(JSON.parse(fs.readFileSync(path.join(root, '.codex/hooks.json'), 'utf8'))).toHaveProperty('hooks.SessionStart');
     expect(fs.existsSync(path.join(root, '.codex/hooks/sdd-hook-runner.mjs'))).toBe(true);
@@ -394,7 +394,7 @@ describe('target-specific installers', () => {
     expect(designSkill).not.toContain('Delegate once');
     expect(fs.existsSync(path.join(root, '.omp/skills/sdd-design/references/example.md'))).toBe(true);
     const planner = fs.readFileSync(path.join(root, '.omp/agents/planner.md'), 'utf8');
-    expect(planner).toContain('model: gpt-5.6-sol');
+    expect(planner).toContain('model: openai-codex/gpt-6-sol');
     expect(planner).toContain('thinkingLevel: xhigh');
     expect(planner).not.toMatch(/^\s*- task$/m);
     expect(planner).not.toContain('spawns:');

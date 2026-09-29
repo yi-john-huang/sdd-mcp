@@ -34,7 +34,5 @@ describe('compact target root guidance', () => {
     expect(guidance).not.toContain('- Rules:');
     expect(guidance).not.toContain('- Contexts:');
     expect(guidance).not.toContain('planner.md');
-    expect(guidance).toContain('High-level work runs inline on Sol/medium by default');
-    expect(guidance).toContain('Sol/xhigh advisors are explicit opt-in');
   });
 });

@@ -93,33 +93,32 @@ export class InstallCancelledError extends Error {
 }
 
 export const SUPPORTED_CODEX_MODELS = [
-  'gpt-5.6-sol',
-  'gpt-5.6-terra',
-  'gpt-5.6-luna',
+  'gpt-6-sol',
+  'gpt-6-luna',
 ] as const;
 
-export const DEFAULT_CODEX_MODEL = 'gpt-5.6-sol' as const;
+export const DEFAULT_CODEX_MODEL = 'gpt-6-luna' as const;
 
 export const ROLE_MODEL_ROUTES = {
-  planner: route('advisor', 'gpt-5.6-sol', 'xhigh', 'opus'),
-  architect: route('advisor', 'gpt-5.6-sol', 'xhigh', 'opus'),
-  reviewer: route('advisor', 'gpt-5.6-sol', 'xhigh', 'opus'),
-  'security-auditor': route('advisor', 'gpt-5.6-sol', 'xhigh', 'opus'),
-  implementer: route('implementation', DEFAULT_CODEX_MODEL, 'medium', 'sonnet'),
-  'tdd-guide': route('implementation', DEFAULT_CODEX_MODEL, 'medium', 'sonnet'),
+  planner: route('advisor', 'gpt-6-sol', 'xhigh', 'claude-opus-5-5'),
+  architect: route('advisor', 'gpt-6-sol', 'xhigh', 'claude-opus-5-5'),
+  reviewer: route('advisor', 'gpt-6-sol', 'xhigh', 'claude-opus-5-5'),
+  'security-auditor': route('advisor', 'gpt-6-sol', 'xhigh', 'claude-opus-5-5'),
+  implementer: route('implementation', DEFAULT_CODEX_MODEL, 'medium', 'claude-sonnet-5-5'),
+  'tdd-guide': route('implementation', DEFAULT_CODEX_MODEL, 'medium', 'claude-sonnet-5-5'),
 } as const;
 
 function route(
   taskClass: 'advisor' | 'implementation' | 'local',
   model: typeof SUPPORTED_CODEX_MODELS[number],
   reasoningEffort: 'xhigh' | 'medium',
-  claudeModel: 'opus' | 'sonnet',
+  claudeModel: 'claude-opus-5-5' | 'claude-sonnet-5-5',
 ) {
   return {
     taskClass,
     codex: { model, reasoningEffort },
     claudeCode: { model: claudeModel, effort: taskClass === 'advisor' ? 'high' : 'medium' },
-    omp: { model, thinkingLevel: reasoningEffort },
+    omp: { model: `openai-codex/${model}`, thinkingLevel: reasoningEffort },
   } as const;
 }
 

@@ -20,7 +20,7 @@ Plan "carefully" across lines.
 describe('target agent rendering', () => {
   it('renders Claude Code metadata with opus for high-level roles', () => {
     const rendered = renderClaudeCodeAgent(parseSourceAgent(PLANNER));
-    expect(rendered).toContain('model: opus');
+    expect(rendered).toContain('model: claude-opus-5-5');
     expect(rendered).toContain('effort: high');
     expect(rendered).toContain('role: planner');
     expect(rendered).toContain('# Planner');
@@ -28,28 +28,28 @@ describe('target agent rendering', () => {
 
   it('renders Claude Code sonnet for implementation roles', () => {
     const source = PLANNER.replaceAll('planner', 'implementer');
-    expect(renderClaudeCodeAgent(parseSourceAgent(source))).toContain('model: sonnet');
+    expect(renderClaudeCodeAgent(parseSourceAgent(source))).toContain('model: claude-sonnet-5-5');
     expect(renderClaudeCodeAgent(parseSourceAgent(source))).toContain('effort: medium');
   });
 
   it('renders Codex TOML with Sol xhigh for high-level roles', () => {
     const rendered = renderCodexAgent(parseSourceAgent(PLANNER));
-    expect(rendered).toContain('model = "gpt-5.6-sol"');
+    expect(rendered).toContain('model = "gpt-6-sol"');
     expect(rendered).toContain('model_reasoning_effort = "xhigh"');
     expect(rendered).toContain('developer_instructions = ');
     expect(rendered).toContain('\\"carefully\\"');
   });
 
-  it('renders Codex Sol medium for implementation roles', () => {
+  it('renders Codex Luna medium for implementation roles', () => {
     const source = PLANNER.replaceAll('planner', 'implementer');
     const rendered = renderCodexAgent(parseSourceAgent(source));
-    expect(rendered).toContain('model = "gpt-5.6-sol"');
+    expect(rendered).toContain('model = "gpt-6-luna"');
     expect(rendered).toContain('model_reasoning_effort = "medium"');
   });
 
   it('renders OMP native route metadata without spawn tools', () => {
     const rendered = renderOmpAgent(parseSourceAgent(PLANNER));
-    expect(rendered).toContain('model: gpt-5.6-sol');
+    expect(rendered).toContain('model: openai-codex/gpt-6-sol');
     expect(rendered).toContain('thinkingLevel: xhigh');
     expect(rendered).toContain('maxTurns: 12');
     expect(rendered).not.toMatch(/^\s*- task$/m);
