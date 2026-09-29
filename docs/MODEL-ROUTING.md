@@ -64,7 +64,7 @@ The example OMP host roles `default`, `smol`, `slow`, `plan`, `task`, and `advis
 
 ### Claude Code
 
-Skills under `.claude/skills/` receive routed native `model` and `effort` overrides. Claude Code applies those overrides to the current invoked skill turn, so the skill says “execute in this turn” and does not create a redundant specialist. The matching `.claude/agents/*.md` definitions receive the same model and effort for explicit delegation. Claude Code 2.1.198 or newer is required for the v4 manual-invocation and path-scoped loading guarantees.
+Skills under `.claude/skills/` receive routed native `model` and `effort` overrides. Claude Code applies those overrides to the current invoked skill turn, so the skill says “execute in this turn” and does not create a redundant specialist. The matching `.claude/agents/*.md` definitions receive the same model and effort for explicit delegation. Claude Code 2.1.198 or newer supports the v4 manual-invocation and path-scoped loading guarantees, but the pinned defaults require **2.1.284 or newer** for Sonnet 5.5 (Opus 5.5 requires 2.1.280). Older versions cannot run both default routes; update Claude Code or override the models at install time. See [Claude Code model requirements](https://code.claude.com/docs/en/model-config#available-models).
 
 ### Codex
 
