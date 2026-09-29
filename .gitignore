@@ -76,3 +76,9 @@ temp/
 
 # Claude Code local settings
 .claude/settings.local.json
+
+# BEGIN sdd-mcp generated agent files
+.claude/
+.omp/
+.sdd-mcp/
+# END sdd-mcp generated agent files
