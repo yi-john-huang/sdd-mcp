@@ -40,13 +40,26 @@ OMP defaults to `~/.omp/agent`; named profiles need their own setup. [The instal
 
 Global setup changes **no Claude permission file** and installs no root guidance, agents, rules, hooks, steering, or repository files. These are local-machine assets, not Claude cloud/Cowork Skills. Reload the host and accept its normal trust/permission prompts.
 
-From a directory without a shadowing project registration, verify `claude mcp get sdd-mcp`, `codex mcp get sdd-mcp`, or OMP `/mcp test sdd-mcp`. Existing project-scoped `sdd-mcp` entries still take precedence; remove only that project entry yourself if you want the personal runtime. Skill precedence is separate and host-specific. Global setup never scans or migrates repositories.
+From a directory that is not this package checkout and has no shadowing project registration, verify `claude mcp get sdd-mcp`, `codex mcp get sdd-mcp`, or OMP `/mcp test sdd-mcp`. Two local conditions make that check fail even after a successful `setup-global`:
 
-The repository installer below remains an **optional team/project-scoped alternative**, not a required follow-up.
+- A project `install` in this checkout writes `.mcp.json`, `.codex/config.toml`, or `.omp/mcp.json`. Those same-name entries hide the personal runtime. Remove only the project's `sdd-mcp` entry; setup does not do that.
+- While the host's working directory is this checkout, the pinned `npx -y sdd-mcp-server@<version>` command exits with `sh: sdd-mcp-server: command not found` before the handshake. npm resolves the package name to this tree, and `npm install` does not put this package's own bin on `PATH`. After `npm install && npm run build`, link it once:
+
+```bash
+mkdir -p node_modules/.bin
+printf '%s\n' '#!/bin/sh' 'cd "$(dirname "$0")/../.." && exec node ./sdd-entry.js "$@"' > node_modules/.bin/sdd-mcp-server
+chmod +x node_modules/.bin/sdd-mcp-server
+```
+
+Reload the host after that link. Any other project directory can use the published command without it. An older user server named `sdd` is not this entry; remove it with `claude mcp remove sdd -s user` if Claude reports `ENOENT` for a bare `sdd-mcp-server` executable.
+
+Existing project-scoped `sdd-mcp` entries still take precedence; remove only that project entry yourself if you want the personal runtime. Skill precedence is separate and host-specific. Global setup never scans or migrates repositories.
+
+The repository installer below remains an **optional team/project-scoped alternative**, not a required follow-up. Do not run it in this checkout when the goal is personal scope.
 
 ## New project installation
 
-Use this path when the repository has never had sdd-mcp-generated guidance. The `npx` commands below run from the **destination project's root**, not from this `sdd-mcp-server` source checkout; use the checkout commands below instead if installing into this repository.
+Use this path when the repository has never had sdd-mcp-generated guidance. The `npx` commands below run from the **destination project's root**, not from this `sdd-mcp-server` source checkout. Running them here, or running the local `install` entrypoint here, registers a project server that hides personal setup.
 
 1. Open a terminal at the project root.
 2. Choose the host that will execute the workflow.
@@ -62,7 +75,7 @@ npx sdd-mcp-server@5.1.1 install --profile lean --target omp
 npx sdd-mcp-server@5.1.1 install --profile full
 ```
 
-In this package's source checkout, the pinned `npx` command can fail with `sh: sdd-mcp-server: command not found`. The published executable was verified from a separate project, so use the local entrypoint when installing into the checkout. Build it once from the checkout root:
+Use the local entrypoint only when this checkout itself is the intended project install. It does not repair personal runtime connection. Build once, then install explicitly:
 
 ```bash
 npm install
@@ -72,7 +85,7 @@ node ./sdd-entry.js install --profile lean --target omp
 node ./sdd-entry.js install --profile full
 ```
 
-Do not use `--refresh-generated` for a new project. A normal installation records package ownership in `.sdd-mcp/install-manifest.json` and registers the hidden project runtime.
+Do not use `--refresh-generated` for a new project. A normal installation records package ownership in `.sdd-mcp/install-manifest.json` and registers the project runtime. That registration is what a host in this directory will prefer over `setup-global`.
 
 After installation, restart or reload the host and accept its project trust prompt. Then invoke the native requirements Skill with a feature name and goal; the Skill initializes or resumes durable state automatically.
 
