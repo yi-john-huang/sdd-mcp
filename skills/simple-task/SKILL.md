@@ -20,11 +20,13 @@ Use this route for a bounded bug fix, refactor, or enhancement with clear accept
 6. Check boundaries, error propagation, compatibility, authorization, input validation, injection, secret handling, and sensitive logs where relevant.
 7. Review all affected callers and artifacts. Never discard unrelated work or claim unobserved checks.
 
-If the work genuinely decomposes into at least two independent slices, they may run concurrently; otherwise keep it in the parent.
+## Execution Mode
+
+Work inline in the current turn. Only when project agents are installed and at least two independent slices exist, ask once per session, in the user's language, "inline or project agent for this run?" and reuse the answer; never ask again or per phase. Agent mode: one `specialistDepth: 1` handoff per slice, no nesting or retry; on failure record one fallback and finish in the parent. Never split work to justify agents.
 
 ## Output
 
-Report changed paths, behavior protected, failing and passing focused test evidence, security considerations, and unresolved blockers.
+Report changed paths, behavior protected, failing and passing focused test evidence, security considerations, and unresolved blockers. Execution report: mode (inline|project-agent; asked|reused|not offered), agents started and whether parallel, configured model/effort per agent (never claim unobserved values), and any fallback to the parent.
 
 ## Optional Reference
 

@@ -6,7 +6,11 @@ disable-model-invocation: true
 
 # SDD Implementation
 
-Work inline in the current turn. Do not create a serial implementation specialist. Delegate only when at least two genuinely independent slices can run concurrently. Backend lifecycle calls are internal; never ask the user to operate raw MCP tools.
+Work inline in the current turn. Backend lifecycle calls are internal; never ask the user to operate raw MCP tools.
+
+## Execution Mode
+
+Never create a serial specialist or split work to justify agents. Only when project agents are installed and at least two independent, dependency-ready slices can run concurrently, ask once per session, in the user's language, "inline or project agent for this run?" and reuse the answer; never ask again or per phase. Agent mode: one `specialistDepth: 1` handoff per slice, no nesting or retry; on failure record one fallback and finish that slice in the parent.
 
 ## Restore Durable Progress
 
@@ -38,7 +42,7 @@ For `not-applicable` TDD tasks, start, implement, verify, then complete with zer
 
 ## Output
 
-Report persisted task numbers/states, observed affected artifacts, RED/GREEN/final verification evidence, security decisions, next action, and blockers. Do not expose backend JSON or present raw MCP operations as user steps.
+Report persisted task numbers/states, observed affected artifacts, RED/GREEN/final verification evidence, security decisions, next action, and blockers. Do not expose backend JSON or present raw MCP operations as user steps. Execution report: mode (inline|project-agent; asked|reused|not offered), agents started and whether parallel, configured model/effort per agent (never claim unobserved values), and any fallback to the parent.
 
 ## Optional Reference
 

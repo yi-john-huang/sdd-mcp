@@ -37,7 +37,7 @@ Target renderers provide the `architect` route. When a native advisor is require
 
 ## Output
 
-Return the canonical saved path, traceable decisions, concise validation evidence, the approval question or persisted approval, and durable blockers. Do not present raw MCP operations as next steps.
+Return the canonical saved path, traceable decisions, concise validation evidence, the approval question or persisted approval, and durable blockers. Do not present raw MCP operations as next steps. Execution report: mode (inline|project-agent; asked|reused|not offered), agents started and whether parallel, configured model/effort per agent (never claim unobserved values), and any fallback to the parent.
 
 ## Optional Reference
 

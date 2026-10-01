@@ -5,7 +5,7 @@
 
 A Model Context Protocol server and target-native installer for governed Spec-Driven Development (SDD) in Claude Code, Codex, and Oh My Pi (OMP).
 
-> **v5.2.0** — Routes invoked OMP SDD skills to their configured model/thinking level and pins Claude Code defaults to Opus/Sonnet 5.5, Codex/OMP defaults to GPT-6 Sol/Luna. Claude Code requires 2.1.284+ for both pinned defaults.
+> **v5.3.0** — Review, security, and multi-slice implementation skills ask once per session whether to run inline or use project agents, and every skill reports agents, parallelism, configured model/effort, and fallbacks. Installed guidance forbids commit/PR attribution lines. Claude Code requires 2.1.284+ for the pinned 5.5 defaults.
 
 ## Why sdd-mcp?
 
@@ -67,12 +67,12 @@ Use this path when the repository has never had sdd-mcp-generated guidance. The 
 
 ```bash
 # Recommended explicit lean installation
-npx sdd-mcp-server@5.2.0 install --profile lean --target claude-code
-npx sdd-mcp-server@5.2.0 install --profile lean --target codex
-npx sdd-mcp-server@5.2.0 install --profile lean --target omp
+npx sdd-mcp-server@5.3.0 install --profile lean --target claude-code
+npx sdd-mcp-server@5.3.0 install --profile lean --target codex
+npx sdd-mcp-server@5.3.0 install --profile lean --target omp
 
 # Interactive full installation: choose Claude Code, Codex, or OMP
-npx sdd-mcp-server@5.2.0 install --profile full
+npx sdd-mcp-server@5.3.0 install --profile full
 ```
 
 Use the local entrypoint only when this checkout itself is the intended project install. It does not repair personal runtime connection. Build once, then install explicitly:
@@ -139,6 +139,8 @@ Approvals and optional test-case review are explicit questions inside the releva
 
 Claude Code and Codex lean profiles install skills, steering, and their supported hook guidance. OMP lean installs skills, steering, and agents. Full profiles add rules, contexts, and agents as supported by each host. OMP does not install Markdown as an executable hook; `--target omp --hooks` fails with an explanation.
 
+**Project agents and execution mode.** Whether a skill can use project agents depends on the profile. With no agents installed (Claude Code/Codex `lean`) every skill runs inline and does not ask. With agents installed (`full`; OMP always), `sdd-review`, `sdd-security-check`, and any run with at least two independent implementation slices ask once per session: inline or project agent. Planning skills (requirements, design, tasks, steering) never ask. Every skill reports the mode, agents started, parallelism, configured model/effort, and fallbacks; see [Model Routing](docs/MODEL-ROUTING.md#execution-mode-and-reporting) to verify on each host. SDD agents are subagents, not the Claude Code `/advisor` tool.
+
 See [Installation Guide](docs/INSTALL-GUIDE.md) and [Model Routing](docs/MODEL-ROUTING.md).
 
 ## Upgrade from sdd-mcp 3.x or 4.x
@@ -151,7 +153,7 @@ Use this path when the project already contains generated sdd-mcp files from an 
 
 ```bash
 # Replace <target> with claude-code, codex, or omp
-npx sdd-mcp-server@5.2.0 install \
+npx sdd-mcp-server@5.3.0 install \
   --profile full \
   --target <target> \
   --refresh-generated
@@ -207,7 +209,7 @@ Three-run fresh-session A/B comparisons used comparable provider-reported median
 
 ## Routing summary
 
-Claude executes a skill in the current turn with its configured model and effort (default Claude Opus 5.5/high for high-level work and Claude Sonnet 5.5/medium for implementation/TDD); installed Claude subagents have matching metadata. Codex may request one configured GPT-6 Sol/xhigh custom advisor for high-level work; its agent metadata does not change the parent turn. OMP executes invoked SDD skills inline, with the installed `.omp/extensions/sdd-skill-routing.js` switching the parent to the configured model/thinking level (GPT-6 Sol/xhigh for high-level work, GPT-6 Luna/medium for implementation/TDD) for the turn and restoring it afterward. OMP’s `.omp/agents` advisors remain explicit opt-in only, allow one child, and cannot nest or retry. Implementation, TDD, and simple tasks remain inline unless genuinely independent parallel slices justify delegation.
+Claude executes a skill in the current turn with its configured model and effort (default Claude Opus 5.5/high for high-level work and Claude Sonnet 5.5/medium for implementation/TDD); installed Claude subagents have matching metadata. Codex runs inline by default and may use one configured GPT-6 Sol/xhigh custom agent for review and security after the user chooses it once per session; its agent metadata does not change the parent turn. OMP executes invoked SDD skills inline, with the installed `.omp/extensions/sdd-skill-routing.js` switching the parent to the configured model/thinking level (GPT-6 Sol/xhigh for high-level work, GPT-6 Luna/medium for implementation/TDD) for the turn and restoring it afterward. OMP’s `.omp/agents` advisors remain explicit opt-in only, allow one child, and cannot nest or retry. Implementation, TDD, and simple tasks remain inline unless genuinely independent parallel slices justify delegation.
 
 See [docs/MODEL-ROUTING.md](docs/MODEL-ROUTING.md) for enforcement and fallback boundaries.
 

@@ -5,7 +5,7 @@ import { installClaudeCodeTarget } from '../../../cli/tool-support/claude-code';
 import { installCodexTarget } from '../../../cli/tool-support/codex';
 import { installOmpTarget } from '../../../cli/tool-support/omp';
 import { getTargetPolicy } from '../../../cli/install-target';
-import { TargetInstallSession } from '../../../cli/tool-support/target-installer';
+import { TargetInstallSession, renderTargetSkill } from '../../../cli/tool-support/target-installer';
 import { PreservingWriter } from '../../../cli/utils/preserving-writer';
 
 const packageVersion = JSON.parse(fs.readFileSync(path.resolve(process.cwd(), 'package.json'), 'utf8')).version;
@@ -233,7 +233,12 @@ describe('target-specific installers', () => {
     expect(fs.readFileSync(path.join(root, '.agents/skills/sdd-design/agents/openai.yaml'), 'utf8'))
       .toContain('allow_implicit_invocation: false');
     expect(fs.readFileSync(path.join(root, '.agents/skills/sdd-design/SKILL.md'), 'utf8'))
-      .toContain('Request the configured architect custom agent once');
+      .toContain('do not request a custom agent');
+    const codexGuidance = fs.readFileSync(path.join(root, 'AGENTS.md'), 'utf8');
+    expect(codexGuidance).toContain('Planning, architecture, implementation, and TDD run inline');
+    expect(codexGuidance).toContain('Review and security run inline unless the user chooses one project agent');
+    expect(codexGuidance).not.toMatch(/planning, architecture, review, and security may use one custom agent/i);
+    expect(renderTargetSkill('codex', 'sdd-review', '---\nname: sdd-review\n---\n# Review')).toContain('ask once per session');
     expect(fs.existsSync(path.join(root, '.agents/skills/sdd-design/references/example.md'))).toBe(true);
     expect(Buffer.byteLength(fs.readFileSync(path.join(root, 'AGENTS.md')))).toBeLessThanOrEqual(2000);
     expect(fs.readFileSync(path.join(root, '.codex/config.toml'), 'utf8'))

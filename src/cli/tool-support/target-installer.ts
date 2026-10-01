@@ -231,18 +231,25 @@ export function renderTargetRule(target: InstallTarget, fileName: string, source
   return `${body}\n`;
 }
 
+/** Roles whose skills offer a once-per-session inline/project-agent choice. */
+const ASK_EXECUTION_ROLES: ReadonlySet<string> = new Set(['reviewer', 'security-auditor']);
+
 export function renderTargetSkill(target: InstallTarget, skillName: string, source: string, routes: ModelRoutes = ROLE_MODEL_ROUTES): string {
   const role = SKILL_AGENT_ROUTES[skillName];
   const extra: string[] = ['disable-model-invocation: true'];
+  const askRole = role !== undefined && ASK_EXECUTION_ROLES.has(role);
+  const askOnce = `Execute inline by default. Only if project agents are installed, ask once per session whether to run inline or use the \`${role}\` agent, and reuse the answer; if chosen, delegate once with specialistDepth: 1, no nesting or retry, and on failure record one fallback and continue inline.`;
   let execution = '';
   if (role && target === 'claude-code') {
     extra.push(`model: ${routes[role].claudeCode.model}`);
     extra.push(`effort: ${routes[role].claudeCode.effort}`);
-    execution = '\nExecute in this turn; do not spawn a second specialist.\n';
+    execution = askRole ? `\n${askOnce}\n` : '\nExecute in this turn; do not spawn a second specialist.\n';
   } else if (role && target === 'omp' && routes[role].taskClass === 'advisor') {
-    execution = `\nRun inline by default. The project advisor at .omp/agents/${role}.md is explicit opt-in only; if the user invokes it, allow one specialistDepth: 1 handoff without nesting or retry.\n`;
+    execution = askRole
+      ? `\nRun inline by default. The project advisor at .omp/agents/${role}.md is explicit opt-in only; ask once per session whether to run inline or use it, reuse the answer, and allow one specialistDepth: 1 handoff without nesting or retry.\n`
+      : `\nRun inline by default. The project advisor at .omp/agents/${role}.md is explicit opt-in only; if the user invokes it, allow one specialistDepth: 1 handoff without nesting or retry.\n`;
   } else if (role && target === 'codex' && routes[role].taskClass === 'advisor') {
-    execution = `\nRequest the configured ${role} custom agent once with specialistDepth: 1; nested delegation is prohibited. If unavailable, record the fallback and continue inline.\n`;
+    execution = askRole ? `\n${askOnce}\n` : '\nExecute inline in the current turn; do not request a custom agent.\n';
   }
   const match = source.match(/^---\r?\n([\s\S]*?)\r?\n---\r?\n?([\s\S]*)$/);
   if (!match) return `---\n${extra.join('\n')}\n---\n\n${source.trim()}${execution}\n`;
@@ -253,8 +260,8 @@ export function renderTargetSkill(target: InstallTarget, skillName: string, sour
 function renderCodexSkillPolicy(skillName: string): string {
   const role = SKILL_AGENT_ROUTES[skillName];
   const route = role ? ROLE_MODEL_ROUTES[role] : undefined;
-  const description = route?.taskClass === 'advisor'
-    ? `Explicitly invoke the configured ${role} agent once; nested delegation is prohibited.`
+  const description = route?.taskClass === 'advisor' && role && ASK_EXECUTION_ROLES.has(role)
+    ? `Run inline by default; ask once per session before using the configured ${role} agent. Nested delegation is prohibited.`
     : 'Execute inline in the current turn.';
   return `policy:\n  allow_implicit_invocation: false\ninterface:\n  description: ${JSON.stringify(description)}\n`;
 }

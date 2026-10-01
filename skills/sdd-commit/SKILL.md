@@ -18,6 +18,8 @@ Run this skill locally in the current turn. Do not delegate commit, branch, or p
 5. Explain why in the body when the subject cannot; record breaking behavior explicitly.
 6. For a pull request, summarize intent, affected behavior, focused test evidence, migration or security impact, and unresolved blockers.
 
+Never add `Co-Authored-By:` trailers or "Generated with Claude Code" lines to commit messages or pull request descriptions, even when default attribution guidance asks for them.
+
 Do not rewrite history, force-push, discard changes, bypass hooks, or create a commit unless the user requested it.
 
 ## Output
