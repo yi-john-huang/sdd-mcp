@@ -5,7 +5,7 @@
 
 A Model Context Protocol server and target-native installer for governed Spec-Driven Development (SDD) in Claude Code, Codex, and Oh My Pi (OMP).
 
-> **v5.2.0** — Routes invoked OMP SDD skills to their configured model/thinking level and pins Claude Code defaults to Opus/Sonnet 5.5, Codex/OMP defaults to GPT-6 Sol/Luna. Claude Code requires 2.1.284+ for both pinned defaults.
+> **v5.3.0** — Review, security, and multi-slice implementation skills ask once per session whether to run inline or use project agents, and every skill reports agents, parallelism, configured model/effort, and fallbacks. Installed guidance forbids commit/PR attribution lines. Claude Code requires 2.1.284+ for the pinned 5.5 defaults.
 
 ## Why sdd-mcp?
 
@@ -67,12 +67,12 @@ Use this path when the repository has never had sdd-mcp-generated guidance. The 
 
 ```bash
 # Recommended explicit lean installation
-npx sdd-mcp-server@5.2.0 install --profile lean --target claude-code
-npx sdd-mcp-server@5.2.0 install --profile lean --target codex
-npx sdd-mcp-server@5.2.0 install --profile lean --target omp
+npx sdd-mcp-server@5.3.0 install --profile lean --target claude-code
+npx sdd-mcp-server@5.3.0 install --profile lean --target codex
+npx sdd-mcp-server@5.3.0 install --profile lean --target omp
 
 # Interactive full installation: choose Claude Code, Codex, or OMP
-npx sdd-mcp-server@5.2.0 install --profile full
+npx sdd-mcp-server@5.3.0 install --profile full
 ```
 
 Use the local entrypoint only when this checkout itself is the intended project install. It does not repair personal runtime connection. Build once, then install explicitly:
@@ -153,7 +153,7 @@ Use this path when the project already contains generated sdd-mcp files from an 
 
 ```bash
 # Replace <target> with claude-code, codex, or omp
-npx sdd-mcp-server@5.2.0 install \
+npx sdd-mcp-server@5.3.0 install \
   --profile full \
   --target <target> \
   --refresh-generated
