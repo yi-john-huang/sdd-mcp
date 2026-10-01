@@ -40,7 +40,7 @@ Target renderers provide the `planner` route. When a native advisor is required,
 
 ## Output
 
-Return the canonical saved path, traceability, saved checkpoint choice, concise validation evidence, the current human decision, and durable blockers. Do not present raw MCP operations as next steps.
+Return the canonical saved path, traceability, saved checkpoint choice, concise validation evidence, the current human decision, and durable blockers. Do not present raw MCP operations as next steps. Execution report: mode (inline|project-agent; asked|reused|not offered), agents started and whether parallel, configured model/effort per agent (never claim unobserved values), and any fallback to the parent.
 
 ## Optional Reference
 

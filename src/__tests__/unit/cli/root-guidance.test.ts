@@ -19,6 +19,9 @@ describe('compact target root guidance', () => {
     expect(guidance).toContain('reload or restart the host');
     expect(guidance).toContain('accept project trust');
     expect(guidance).toContain('automatically restore durable workflow state and approved compact context');
+    expect(guidance).toContain('## Commits and pull requests');
+    expect(guidance).toContain('Do not add `Co-Authored-By:` trailers');
+    expect(guidance).toContain('"Generated with Claude Code"');
     expect(guidance).not.toContain('deliberately long template body');
     expect(guidance).not.toContain('| Description |');
     expect(guidance).not.toContain('sdd-context-load');

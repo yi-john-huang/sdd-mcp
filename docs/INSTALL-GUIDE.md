@@ -76,9 +76,9 @@ For local release testing, use an absolute npm **file spec**, not a bare archive
 ```bash
 npm run build
 npm pack --pack-destination /absolute/temp
-SDD_MCP_PACKAGE=file:/absolute/temp/sdd-mcp-server-5.2.0.tgz ./bootstrap.sh
+SDD_MCP_PACKAGE=file:/absolute/temp/sdd-mcp-server-5.3.0.tgz ./bootstrap.sh
 # Independent cross-platform path, without the wrapper:
-npx -y file:/absolute/temp/sdd-mcp-server-5.2.0.tgz setup-global
+npx -y file:/absolute/temp/sdd-mcp-server-5.3.0.tgz setup-global
 ```
 
 Use fresh, distinct temporary home/config/project directories for each path; pass `HOME`, `CLAUDE_CONFIG_DIR`, `CODEX_HOME`, and the OMP profile/agent settings to the child process. Control `omp` discovery on `PATH` so an unrelated installed host cannot select real user state. Rerun both commands, check pinned entries/rendered references and unchanged Claude settings, then exercise conflicts and Skills failures. Native npm 11.12.1 attempts to execute a bare `/absolute/package.tgz` (exit 126); the explicit `file:` syntax is the verified package-resolution path.
@@ -197,7 +197,7 @@ Manual skill syntax is `/skill:<name>` in OMP, `/<name>` in Claude Code, and `$<
 
 ### Published-host smoke
 
-This smoke requires `sdd-mcp-server@5.2.0` to be published or otherwise resolvable by `npx`; repository CI cannot substitute a real host trust prompt. In a clean temporary repository, run `npx sdd-mcp-server@5.2.0 install --profile lean --target <claude-code|codex|omp>`, reload the selected host, and accept project trust once. Invoke only the host-native requirements Skill shown above, approve the artifact explicitly, restart the host, then invoke only its design Skill. Verify that `.spec/specs/<feature>/spec.json` retains the requirements revision, hash, and approval, that `requirements.md` contains the Skill-produced content, and that `context/handoff.md` is repairable without any user-facing raw MCP instruction.
+This smoke requires `sdd-mcp-server@5.3.0` to be published or otherwise resolvable by `npx`; repository CI cannot substitute a real host trust prompt. In a clean temporary repository, run `npx sdd-mcp-server@5.3.0 install --profile lean --target <claude-code|codex|omp>`, reload the selected host, and accept project trust once. Invoke only the host-native requirements Skill shown above, approve the artifact explicitly, restart the host, then invoke only its design Skill. Verify that `.spec/specs/<feature>/spec.json` retains the requirements revision, hash, and approval, that `requirements.md` contains the Skill-produced content, and that `context/handoff.md` is repairable without any user-facing raw MCP instruction.
 
 ## Managed ownership and reruns
 
@@ -234,7 +234,7 @@ Do not select a target merely because its files already exist: select the host t
 
 ```bash
 # Replace <target> with claude-code, codex, or omp
-npx sdd-mcp-server@5.2.0 install \
+npx sdd-mcp-server@5.3.0 install \
   --profile full \
   --target <target> \
   --refresh-generated
@@ -264,7 +264,7 @@ The refresh rebuilds only the selected package-owned set and removes recognized 
 After the one-time migration, rerun the same target and profile without `--refresh-generated`:
 
 ```bash
-npx sdd-mcp-server@5.2.0 install --profile full --target <target>
+npx sdd-mcp-server@5.3.0 install --profile full --target <target>
 ```
 
 The ownership manifest then upgrades unchanged package files automatically and continues to preserve modified files.
@@ -277,10 +277,12 @@ For an update from 5.1.0 to 5.1.1, rerun the same project installer from the des
 
 For an update from 5.1.1 to 5.2.0, rerun the project installer for each selected target so unchanged managed skills, OMP's model-routing extension, and the pinned MCP runtime upgrade together. Restart the host. Claude Code needs version 2.1.284 or newer for the pinned Sonnet 5.5 default; override the role model on older hosts. Personal `setup-global` installations must also be rerun separately to update their pinned runtime.
 
+For an update from 5.2.0 to 5.3.0, rerun the project installer for each selected target so the regenerated skills and root guidance (`CLAUDE.md`/`AGENTS.md`) pick up the once-per-session execution-mode choice, the execution report, and the commit/PR attribution rule. Codex planning skills now run inline instead of requesting a custom agent. No specification migration is required.
+
 ## Model routing and availability
 
 - Claude Code uses native model **and effort** overrides for the invoked skill turn and installed project subagents. Defaults: `claude-opus-5-5`/high for high-level roles, `claude-sonnet-5-5`/medium for implementation/TDD.
-- Codex generated custom agents carry model and `model_reasoning_effort` (default `gpt-6-sol`/xhigh for advisors, `gpt-6-luna`/medium for implementation/TDD). An advisor-class skill may request one child; inline parent turns are not switched by this option.
+- Codex generated custom agents carry model and `model_reasoning_effort` (default `gpt-6-sol`/xhigh for advisors, `gpt-6-luna`/medium for implementation/TDD). Review and security skills may use one child after the user chooses it once per session; inline parent turns are not switched by this option.
 - OMP installs `.omp/extensions/sdd-skill-routing.js` alongside skills. On `/skill:<name>`, it applies the role's configured model/`thinkingLevel` (default `openai-codex/gpt-6-sol`/xhigh or `openai-codex/gpt-6-luna`/medium) to the parent for that turn, then restores the previous route. An unavailable model aborts the invocation rather than silently using a different model. Enable project extensions and restart OMP after installation. Generated `.omp/agents` keep explicit opt-in advisor routes.
 
 The installer emits selectors but does not grant access or verify host/model/effort support. Availability depends on the configured provider and account; the OMP install reports model availability as “not verified” and offers an optional `omp models find <provider/model>` diagnostic. See [MODEL-ROUTING.md](MODEL-ROUTING.md).

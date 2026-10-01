@@ -6,7 +6,11 @@ disable-model-invocation: true
 
 # Test Generation
 
-Work inline in the current turn; do not create a serial TDD specialist.
+Work inline in the current turn.
+
+## Execution Mode
+
+Never create a serial specialist or split work to justify agents. Only when project agents are installed and at least two independent slices exist, ask once per session, in the user's language, "inline or project agent for this run?" and reuse the answer; never ask again or per phase. Agent mode: one `specialistDepth: 1` handoff per slice, no nesting or retry; on failure record one fallback and finish in the parent.
 
 ## Required Workflow
 
@@ -22,7 +26,7 @@ Use focused test commands during the cycle. Broader verification belongs after t
 
 ## Output
 
-Report tests added or changed, contracts protected, the expected failing-test evidence, focused passing-test evidence, affected artifacts, and unresolved blockers.
+Report tests added or changed, contracts protected, the expected failing-test evidence, focused passing-test evidence, affected artifacts, and unresolved blockers. Execution report: mode (inline|project-agent; asked|reused|not offered), agents started and whether parallel, configured model/effort per agent (never claim unobserved values), and any fallback to the parent.
 
 ## Optional Reference
 

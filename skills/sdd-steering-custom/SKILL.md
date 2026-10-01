@@ -24,7 +24,7 @@ Target renderers provide the `planner` route. When a native advisor is required,
 
 ## Output
 
-Return the contained path, inclusion mode/globs, evidence used, validation results, preserved user content, and blockers.
+Return the contained path, inclusion mode/globs, evidence used, validation results, preserved user content, and blockers. Execution report: mode (inline|project-agent; asked|reused|not offered), agents started and whether parallel, configured model/effort per agent (never claim unobserved values), and any fallback to the parent.
 
 ## Optional Reference
 

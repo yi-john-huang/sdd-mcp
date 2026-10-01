@@ -88,7 +88,7 @@ The invoked skill applies its resolved model and effort in the current turn (def
 
 ### Codex
 
-Implementation/TDD runs inline on the parent; generated agent definitions default to `gpt-6-luna`/medium but do not switch that parent. A high-level skill may request one generated custom advisor (default `gpt-6-sol`/xhigh). The child cannot nest, and unavailable delegation records a single fallback before inline continuation. The repository cannot force a model switch when the host does not honor the request.
+Implementation/TDD runs inline on the parent; generated agent definitions default to `gpt-6-luna`/medium but do not switch that parent. Review and security skills may use one generated custom agent (default `gpt-6-sol`/xhigh) after the user chooses it once per session. The child cannot nest, and unavailable delegation records a single fallback before inline continuation. The repository cannot force a model switch when the host does not honor the request.
 
 ### Oh My Pi
 
