@@ -6,7 +6,7 @@ This guide describes v4 execution routes for Claude Code, Codex, and Oh My Pi (O
 
 | Work class | Claude Code | Codex | OMP |
 |---|---|---|---|
-| Requirements, design, review, security | current turn on configured skill model/effort (default Claude Opus 5.5/high) | at most one configured custom advisor; inline parent unchanged | current invoked skill turn on configured model/thinking via project extension |
+| Requirements, design, review, security | current turn on configured skill model/effort (default Claude Opus 5.5/high) | inline; review/security may use one configured custom agent after a once-per-session choice; parent unchanged | current invoked skill turn on configured model/thinking via project extension |
 | Implementation, TDD, simple task | current turn on configured skill model/effort (default Claude Sonnet 5.5/medium) | inline on host-selected parent | current invoked skill turn on configured model/thinking via project extension |
 | Explicit advisor | generated subagent has configured role model/effort | generated custom agent has configured role model/effort | one opt-in `.omp/agents` child with configured model/thinking |
 | Commit | local/current turn | local/current turn | local/current turn |
@@ -68,7 +68,7 @@ Skills under `.claude/skills/` receive routed native `model` and `effort` overri
 
 ### Codex
 
-Codex manual-only skills live under `.agents/skills/` and include `agents/openai.yaml` with implicit invocation disabled. Advisor-class skills can request one custom agent from `.codex/agents/*.toml`:
+Codex manual-only skills live under `.agents/skills/` and include `agents/openai.yaml` with implicit invocation disabled. Review and security skills can use one custom agent from `.codex/agents/*.toml` after the user chooses it:
 
 ```toml
 model = "gpt-6-sol"
@@ -120,9 +120,12 @@ SDD "advisors" are project subagents under `.claude/agents`, `.codex/agents`, or
 
 The answer is reused for the rest of the conversation and is not persisted in `spec.json`; a new session asks again. Without installed agents (Claude Code/Codex `lean`) nothing is asked and work stays inline.
 
-Each executing skill ends with an execution report: mode (inline or project-agent; asked, reused, or not offered), agents started and whether they ran in parallel, configured model/effort per agent, and any fallback to the parent. Model/effort are configured values; a skill cannot observe effort.
+Each executing skill ends with an execution report: mode (inline or project-agent; asked, reused, or not offered), agents started and whether they ran in parallel, configured model/effort per agent, and any fallback to the parent. Model/effort in the report are configured values unless the host exposes them; a skill cannot observe the effective effort.
 
-To verify independently: use `/agents` to see loaded agents, `/usage` for per-model usage, and the session transcript (`~/.claude/projects/<project>/*.jsonl`) for each assistant message's `model`; delegated work appears as sidechain entries.
+To verify independently:
+
+- **Claude Code** (v2.1.242 or later): run `/tasks` to see running subagents with their model and, when the agent or skill sets `effort`, the effort level. Press Enter on a row to open its transcript. Subagent transcripts are stored at `~/.claude/projects/{project}/{sessionId}/subagents/agent-{agentId}.jsonl` (removed after `cleanupPeriodDays`, 30 days by default); the main session transcript records the parent's per-message `model`. `/usage` shows per-model usage. To keep a record, add `SubagentStart`/`SubagentStop` hooks in `settings.json`. As of v2.1.198 `/agents` no longer lists live subagents; inspect `.claude/agents/` directly.
+- **Codex and OMP**: rely on the skill's execution report and the host's own session tooling. This repository does not document a host command that proves a child ran, and static configuration cannot inspect the active parent model.
 
 ## Parallel implementation rule
 

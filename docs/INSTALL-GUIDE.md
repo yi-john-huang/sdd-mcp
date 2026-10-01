@@ -280,7 +280,7 @@ For an update from 5.1.1 to 5.2.0, rerun the project installer for each selected
 ## Model routing and availability
 
 - Claude Code uses native model **and effort** overrides for the invoked skill turn and installed project subagents. Defaults: `claude-opus-5-5`/high for high-level roles, `claude-sonnet-5-5`/medium for implementation/TDD.
-- Codex generated custom agents carry model and `model_reasoning_effort` (default `gpt-6-sol`/xhigh for advisors, `gpt-6-luna`/medium for implementation/TDD). An advisor-class skill may request one child; inline parent turns are not switched by this option.
+- Codex generated custom agents carry model and `model_reasoning_effort` (default `gpt-6-sol`/xhigh for advisors, `gpt-6-luna`/medium for implementation/TDD). Review and security skills may use one child after the user chooses it once per session; inline parent turns are not switched by this option.
 - OMP installs `.omp/extensions/sdd-skill-routing.js` alongside skills. On `/skill:<name>`, it applies the role's configured model/`thinkingLevel` (default `openai-codex/gpt-6-sol`/xhigh or `openai-codex/gpt-6-luna`/medium) to the parent for that turn, then restores the previous route. An unavailable model aborts the invocation rather than silently using a different model. Enable project extensions and restart OMP after installation. Generated `.omp/agents` keep explicit opt-in advisor routes.
 
 The installer emits selectors but does not grant access or verify host/model/effort support. Availability depends on the configured provider and account; the OMP install reports model availability as “not verified” and offers an optional `omp models find <provider/model>` diagnostic. See [MODEL-ROUTING.md](MODEL-ROUTING.md).

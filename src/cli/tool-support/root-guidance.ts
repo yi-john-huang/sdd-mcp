@@ -24,12 +24,12 @@ export function buildCompactRootGuidance(
     ]
     : target === 'claude-code'
       ? [
-        'High-level planning, architecture, review, and security execute in the current turn on their configured skill model/effort.',
-        'Implementation and TDD use their configured skill model/effort; do not spawn a redundant specialist.',
+        'Planning, architecture, review, and security execute in the current turn on their configured skill model/effort.',
+        'Implementation and TDD use their configured skill model/effort; do not spawn a redundant specialist unless the user chooses a project agent.',
       ]
       : [
-        'High-level planning, architecture, review, and security may use one custom agent with its configured route.',
-        'Implementation and TDD run inline on the host-selected parent; generated agents use their configured routes. On advisor failure, record one fallback and continue inline without retrying.',
+        'Planning, architecture, implementation, and TDD run inline on the host-selected parent.',
+        'Review and security run inline unless the user chooses one project agent, which uses its configured route. On agent failure, record one fallback and continue inline without retrying.',
       ];
   const lines = [
     heading || `# SDD guidance for ${target}`,
