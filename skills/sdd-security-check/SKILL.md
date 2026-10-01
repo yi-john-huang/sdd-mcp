@@ -20,11 +20,11 @@ Do not make destructive probes, contact external systems, or claim exploitabilit
 
 ## Specialist Delegation
 
-Target renderers provide the `security-auditor` route. When a native advisor is required, dispatch exactly one compact handoff with `specialistDepth: 1`; include only threat context, relevant diff, security requirements, and scan evidence. The specialist must not delegate again. Keep the handoff and returned summary at or below 2,048 estimated tokens. If the advisor or routed model is unavailable, record one fallback and continue in the parent without retrying or selecting a generic child. Where a native per-turn model override applies, execute in this turn.
+Target renderers provide the `security-auditor` route. Default is inline. Only when project agents are installed, ask once per session, in the user's language, "inline or project agent for this run?" and reuse the answer; never ask again or per phase. In agent mode, dispatch exactly one compact handoff with `specialistDepth: 1`; include only threat context, relevant diff, security requirements, and scan evidence. The specialist must not delegate again. Keep the handoff and returned summary at or below 2,048 estimated tokens. If the agent or routed model is unavailable, record one fallback and continue in the parent without retrying or selecting a generic child.
 
 ## Output
 
-Return findings ordered critical/high/medium/low, each with evidence, impact, remediation, and verification. Then list checked areas, unresolved blockers, and residual risk.
+Return findings ordered critical/high/medium/low, each with evidence, impact, remediation, and verification. Then list checked areas, unresolved blockers, and residual risk. Execution report: mode (inline|project-agent; asked|reused|not offered), agents started and whether parallel, configured model/effort per agent (never claim unobserved values), and any fallback to the parent.
 
 ## Optional Reference
 

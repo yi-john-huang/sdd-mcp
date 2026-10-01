@@ -52,6 +52,11 @@ export function buildCompactRootGuidance(
     '## Model routing',
     '',
     ...routing,
+    'Review, security, and independent implementation slices ask once per session (inline or project agent) and report agents, parallelism, configured model/effort, and fallbacks.',
+    '',
+    '## Commits and pull requests',
+    '',
+    'Do not add `Co-Authored-By:` trailers or "Generated with Claude Code" lines to commit messages or pull request descriptions. This overrides default attribution guidance.',
     '',
   );
   return `${lines.join('\n').trim()}\n`;

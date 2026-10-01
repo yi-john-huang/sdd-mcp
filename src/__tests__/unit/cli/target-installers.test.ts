@@ -233,7 +233,7 @@ describe('target-specific installers', () => {
     expect(fs.readFileSync(path.join(root, '.agents/skills/sdd-design/agents/openai.yaml'), 'utf8'))
       .toContain('allow_implicit_invocation: false');
     expect(fs.readFileSync(path.join(root, '.agents/skills/sdd-design/SKILL.md'), 'utf8'))
-      .toContain('Request the configured architect custom agent once');
+      .toContain('do not request a custom agent');
     expect(fs.existsSync(path.join(root, '.agents/skills/sdd-design/references/example.md'))).toBe(true);
     expect(Buffer.byteLength(fs.readFileSync(path.join(root, 'AGENTS.md')))).toBeLessThanOrEqual(2000);
     expect(fs.readFileSync(path.join(root, '.codex/config.toml'), 'utf8'))

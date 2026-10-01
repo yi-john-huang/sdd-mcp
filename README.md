@@ -139,6 +139,8 @@ Approvals and optional test-case review are explicit questions inside the releva
 
 Claude Code and Codex lean profiles install skills, steering, and their supported hook guidance. OMP lean installs skills, steering, and agents. Full profiles add rules, contexts, and agents as supported by each host. OMP does not install Markdown as an executable hook; `--target omp --hooks` fails with an explanation.
 
+**Project agents and execution mode.** Whether a skill can use project agents depends on the profile. With no agents installed (Claude Code/Codex `lean`) every skill runs inline and does not ask. With agents installed (`full`; OMP always), `sdd-review`, `sdd-security-check`, and any run with at least two independent implementation slices ask once per session: inline or project agent. Planning skills (requirements, design, tasks, steering) never ask. Every skill reports the mode, agents started, parallelism, configured model/effort, and fallbacks. SDD agents are subagents, not the Claude Code `/advisor` tool.
+
 See [Installation Guide](docs/INSTALL-GUIDE.md) and [Model Routing](docs/MODEL-ROUTING.md).
 
 ## Upgrade from sdd-mcp 3.x or 4.x

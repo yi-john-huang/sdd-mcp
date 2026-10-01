@@ -5,6 +5,13 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Changed
+- Review, security-check, and multi-slice implementation skills ask once per session whether to run inline or use project agents (only when agents are installed); planning skills never ask and Codex planning skills no longer auto-delegate.
+- Executing skills now report mode, agents started, parallelism, configured model/effort, and fallbacks; README and Model Routing document profile-to-agent availability and how to verify.
+- Installed root guidance (`CLAUDE.md`/`AGENTS.md`) and the `sdd-commit` skill now forbid `Co-Authored-By:` trailers and "Generated with Claude Code" lines in commits and pull requests.
+
 ## [5.2.0] - 2026-09-29
 
 ### Changed
