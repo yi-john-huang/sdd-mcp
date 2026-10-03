@@ -320,6 +320,20 @@ describe('GlobalSetupCLI argument and native location resolution', () => {
     expect(fs.readFileSync(path.join(home, '.agents/skills/sdd-requirements/agents/openai.yaml'), 'utf8')).toContain('allow_implicit_invocation: false');
   });
 
+  it.each(['claude-code', 'codex', 'omp'] as const)('writes output-clarity-ladder to the personal %s skill directory', async target => {
+    const reports = await cli.run({ target });
+    expect(reports[0].failed).toEqual([]);
+    const locations = await cli.resolveLocations(target);
+    const installed = path.join(locations.skillsRoot, locations.skillsDirectory, 'output-clarity-ladder');
+    for (const file of ['SKILL.md', 'references/ja.md', 'references/zh-TW.md']) {
+      expect(fs.existsSync(path.join(installed, file))).toBe(true);
+    }
+    for (const reference of ['ja.md', 'zh-TW.md']) {
+      expect(fs.readFileSync(path.join(installed, 'references', reference)))
+        .toEqual(fs.readFileSync(path.resolve('skills/output-clarity-ladder/references', reference)));
+    }
+  });
+
   it('installs only the selected host without OMP discovery', async () => {
     const reports = await cli.run({ target: 'codex' });
     expect(reports.map(report => report.target)).toEqual(['codex']);

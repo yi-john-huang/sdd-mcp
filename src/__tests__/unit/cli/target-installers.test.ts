@@ -9,6 +9,7 @@ import { installOmpTarget } from '../../../cli/tool-support/omp';
 import { getTargetPolicy, MODEL_INVOCABLE_SKILLS, SKILL_AGENT_ROUTES } from '../../../cli/install-target';
 import { TargetInstallSession, renderTargetSkill, renderCodexSkillPolicy } from '../../../cli/tool-support/target-installer';
 import { PreservingWriter } from '../../../cli/utils/preserving-writer';
+import { SkillManager } from '../../../skills/SkillManager';
 
 const packageVersion = JSON.parse(fs.readFileSync(path.resolve(process.cwd(), 'package.json'), 'utf8')).version;
 
@@ -482,5 +483,77 @@ describe('model-invocable output-clarity-ladder rendering', () => {
     }
     expect(Object.keys(actual)).toHaveLength(44);
     expect(actual).toEqual(baseline);
+  });
+});
+
+describe('output-clarity-ladder skill installation', () => {
+  const ladderFiles = ['SKILL.md', 'references/ja.md', 'references/zh-TW.md'];
+  const sourceDir = path.resolve(process.cwd(), 'skills/output-clarity-ladder');
+  let root: string;
+
+  beforeEach(() => { root = fs.mkdtempSync(path.join(os.tmpdir(), 'sdd-ladder-output-')); });
+  afterEach(() => fs.rmSync(root, { recursive: true, force: true }));
+
+  const installers = {
+    'claude-code': (sources: any) => installClaudeCodeTarget({
+      projectRoot: root,
+      paths: getTargetPolicy('claude-code').defaultPaths,
+      components: ['skills'],
+      sources,
+      rootGuidanceContent: '# Claude guidance\n',
+    }),
+    codex: (sources: any) => installCodexTarget({
+      projectRoot: root,
+      paths: getTargetPolicy('codex').defaultPaths,
+      components: ['skills'],
+      sources,
+      rootGuidancePreamble: '# Codex guidance\n\n',
+      hookRunnerContent: '',
+    }),
+    omp: (sources: any) => installOmpTarget({
+      projectRoot: root,
+      paths: getTargetPolicy('omp').defaultPaths,
+      components: ['skills'],
+      sources,
+      profile: 'lean',
+    }),
+  } as const;
+  const skillRoots = { 'claude-code': '.claude/skills', codex: '.agents/skills', omp: '.omp/skills' } as const;
+  const realSources = () => ({ skillManager: new SkillManager(path.resolve(process.cwd(), 'skills')) } as any);
+
+  it.each(['claude-code', 'codex', 'omp'] as const)('writes the skill, references, and policy on %s', async target => {
+    const report = await installers[target](realSources());
+    expect(report.failed).toEqual([]);
+    const installed = path.join(root, skillRoots[target], 'output-clarity-ladder');
+    for (const file of ladderFiles) expect(fs.existsSync(path.join(installed, file))).toBe(true);
+    for (const reference of ['ja.md', 'zh-TW.md']) {
+      expect(fs.readFileSync(path.join(installed, 'references', reference)))
+        .toEqual(fs.readFileSync(path.join(sourceDir, 'references', reference)));
+    }
+    const policy = path.join(installed, 'agents/openai.yaml');
+    if (target === 'codex') {
+      expect(fs.readFileSync(policy, 'utf8')).toContain('allow_implicit_invocation: true');
+    } else {
+      expect(fs.existsSync(policy)).toBe(false);
+      expect(fs.readFileSync(path.join(installed, 'SKILL.md'), 'utf8')).not.toContain('disable-model-invocation');
+    }
+  });
+
+  it.each(['claude-code', 'codex', 'omp'] as const)('lists the files as written, then unchanged on %s rerun', async target => {
+    const prefix = `${skillRoots[target]}/output-clarity-ladder/`;
+    const expected = [...ladderFiles.map(file => prefix + file), ...(target === 'codex' ? [prefix + 'agents/openai.yaml'] : [])];
+    const first = await installers[target](realSources());
+    expect(first.installed).toEqual(expect.arrayContaining(expected));
+    const absolute = expected.map(file => path.join(root, file));
+    const before = absolute.map(file => ({ bytes: fs.readFileSync(file), mtime: fs.statSync(file).mtimeMs }));
+    await new Promise(resolve => setTimeout(resolve, 20));
+    const second = await installers[target](realSources());
+    expect(second.failed).toEqual([]);
+    expect(second.installed).toEqual(expect.not.arrayContaining(expected));
+    expect(second.skipped).toEqual(expect.arrayContaining(expected));
+    absolute.forEach((file, index) => {
+      expect(fs.readFileSync(file)).toEqual(before[index].bytes);
+      expect(fs.statSync(file).mtimeMs).toBe(before[index].mtime);
+    });
   });
 });
