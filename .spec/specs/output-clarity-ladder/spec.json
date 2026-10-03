@@ -5,7 +5,7 @@
   "language": "en",
   "phase": "implementation",
   "created_at": "2026-10-03T16:51:24.988Z",
-  "updated_at": "2026-10-03T17:15:31.716Z",
+  "updated_at": "2026-10-03T17:18:57.173Z",
   "approvals": {
     "requirements": {
       "generated": true,
@@ -51,7 +51,7 @@
     }
   },
   "implementation": {
-    "revision": 0,
+    "revision": 24,
     "tasks_revision": 1,
     "legacy_imported": false,
     "tasks": {
@@ -59,13 +59,35 @@
         "title": "English output-clarity-ladder skill",
         "tdd_required": true,
         "dependencies": [],
-        "status": "pending",
-        "evidence": {},
+        "status": "completed",
+        "evidence": {
+          "red": {
+            "command": "npx jest src/__tests__/unit/cli/canonical-assets.test.ts",
+            "exit_code": 1,
+            "summary": "2 failed, 6 passed: ENOENT for skills/output-clarity-ladder/SKILL.md (reproduced in a clean worktree at the spec commit with only the new test added).",
+            "observed_at": "2026-10-03T17:17:43.336Z"
+          },
+          "green": {
+            "command": "npx jest src/__tests__/unit/cli/canonical-assets.test.ts",
+            "exit_code": 0,
+            "summary": "8 passed: SKILL.md content, order, video rules, honesty, 2208 bytes <= 4096; existing manual-only tests unchanged and passing.",
+            "observed_at": "2026-10-03T17:17:46.424Z"
+          },
+          "verification": {
+            "command": "npx jest src/__tests__/unit/cli/canonical-assets.test.ts",
+            "exit_code": 0,
+            "summary": "8 of 8 passed; content reviewed against the source document.",
+            "observed_at": "2026-10-03T17:17:49.821Z"
+          }
+        },
         "planned_artifacts": [
           "skills/output-clarity-ladder/SKILL.md",
           "src/__tests__/unit/cli/canonical-assets.test.ts"
         ],
-        "observed_artifacts": []
+        "observed_artifacts": [
+          "skills/output-clarity-ladder/SKILL.md",
+          "src/__tests__/unit/cli/canonical-assets.test.ts"
+        ]
       },
       "1.2": {
         "title": "Japanese and Traditional Chinese references",
@@ -73,29 +95,77 @@
         "dependencies": [
           "1.1"
         ],
-        "status": "pending",
-        "evidence": {},
+        "status": "completed",
+        "evidence": {
+          "red": {
+            "command": "npx jest src/__tests__/unit/cli/canonical-assets.test.ts",
+            "exit_code": 1,
+            "summary": "Languages test failed: no '## Languages' section and no reference files (reproduced in clean worktree with SKILL.md minus Languages section).",
+            "observed_at": "2026-10-03T17:17:55.412Z"
+          },
+          "green": {
+            "command": "npx jest src/__tests__/unit/cli/canonical-assets.test.ts",
+            "exit_code": 0,
+            "summary": "8 passed: ja.md (kana, 1982 bytes) and zh-TW.md (Traditional chars, 1488 bytes) cover all rules with non-conformance statement; Languages section links both.",
+            "observed_at": "2026-10-03T17:17:59.612Z"
+          },
+          "verification": {
+            "command": "npx jest src/__tests__/unit/cli/canonical-assets.test.ts",
+            "exit_code": 0,
+            "summary": "8 of 8 passed; reference files reviewed for coverage and non-conformance statement.",
+            "observed_at": "2026-10-03T17:18:07.903Z"
+          }
+        },
         "planned_artifacts": [
           "skills/output-clarity-ladder/references/ja.md",
           "skills/output-clarity-ladder/references/zh-TW.md",
           "skills/output-clarity-ladder/SKILL.md",
           "src/__tests__/unit/cli/canonical-assets.test.ts"
         ],
-        "observed_artifacts": []
+        "observed_artifacts": [
+          "skills/output-clarity-ladder/references/ja.md",
+          "skills/output-clarity-ladder/references/zh-TW.md",
+          "skills/output-clarity-ladder/SKILL.md",
+          "src/__tests__/unit/cli/canonical-assets.test.ts"
+        ]
       },
       "2.1": {
         "title": "Model-invocation exception without an agent route",
         "tdd_required": true,
         "dependencies": [],
-        "status": "pending",
-        "evidence": {},
+        "status": "completed",
+        "evidence": {
+          "red": {
+            "command": "npx jest src/__tests__/unit/cli/target-installers.test.ts",
+            "exit_code": 1,
+            "summary": "TS2305: install-target has no exported member MODEL_INVOCABLE_SKILLS (reproduced in clean worktree at spec commit with new tests).",
+            "observed_at": "2026-10-03T17:18:31.760Z"
+          },
+          "green": {
+            "command": "npx jest src/__tests__/unit/cli/",
+            "exit_code": 0,
+            "summary": "20 suites, 296 tests passed: exception renders model-invocable on all targets, no route/model/effort text, 11 workflow skills byte-identical to 44-hash pre-change baseline; tsc --noEmit exit 0.",
+            "observed_at": "2026-10-03T17:18:33.704Z"
+          },
+          "verification": {
+            "command": "npx jest src/__tests__/unit/cli/ && npx tsc --noEmit -p .",
+            "exit_code": 0,
+            "summary": "296 tests passed; typecheck clean; diff reviewed.",
+            "observed_at": "2026-10-03T17:18:35.744Z"
+          }
+        },
         "planned_artifacts": [
           "src/cli/install-target.ts",
           "src/cli/tool-support/target-installer.ts",
           "src/__tests__/unit/cli/target-installers.test.ts",
           "src/__tests__/unit/cli/install-target.test.ts"
         ],
-        "observed_artifacts": []
+        "observed_artifacts": [
+          "src/cli/install-target.ts",
+          "src/cli/tool-support/target-installer.ts",
+          "src/__tests__/unit/cli/target-installers.test.ts",
+          "src/__tests__/unit/cli/fixtures/workflow-skill-render-baseline.json"
+        ]
       },
       "2.2": {
         "title": "Install and setup-global write the skill on all targets",
@@ -116,41 +186,111 @@
         "title": "Root guidance sentence",
         "tdd_required": true,
         "dependencies": [],
-        "status": "pending",
-        "evidence": {},
+        "status": "completed",
+        "evidence": {
+          "red": {
+            "command": "npx jest src/__tests__/unit/cli/root-guidance.test.ts",
+            "exit_code": 1,
+            "summary": "3 failed, 4 passed: root guidance for claude-code, codex, omp lacks the output-clarity-ladder sentence (clean worktree).",
+            "observed_at": "2026-10-03T17:18:38.992Z"
+          },
+          "green": {
+            "command": "npx jest src/__tests__/unit/cli/",
+            "exit_code": 0,
+            "summary": "296 passed: sentence appears exactly once under Workflow for all 3 targets, no ASD-STE100 in root guidance; templates updated to 'manual-only workflow Skills'.",
+            "observed_at": "2026-10-03T17:18:40.835Z"
+          },
+          "verification": {
+            "command": "npx jest src/__tests__/unit/cli/ && npx tsc --noEmit -p .",
+            "exit_code": 0,
+            "summary": "296 tests passed; typecheck clean; one-line diff in root-guidance.ts reviewed.",
+            "observed_at": "2026-10-03T17:18:42.837Z"
+          }
+        },
         "planned_artifacts": [
           "src/cli/tool-support/root-guidance.ts",
           "templates/CLAUDE.md",
           "templates/codex-AGENTS.md",
           "src/__tests__/unit/cli/root-guidance.test.ts"
         ],
-        "observed_artifacts": []
+        "observed_artifacts": [
+          "src/cli/tool-support/root-guidance.ts",
+          "templates/CLAUDE.md",
+          "templates/codex-AGENTS.md",
+          "src/__tests__/unit/cli/root-guidance.test.ts"
+        ]
       },
       "3.1": {
         "title": "Clarity bound checker",
         "tdd_required": true,
         "dependencies": [],
-        "status": "pending",
-        "evidence": {},
+        "status": "completed",
+        "evidence": {
+          "red": {
+            "command": "npx jest src/__tests__/unit/workflow/message-clarity.test.ts",
+            "exit_code": 1,
+            "summary": "TS2307: cannot find module ../../helpers/message-clarity (clean worktree).",
+            "observed_at": "2026-10-03T17:18:46.070Z"
+          },
+          "green": {
+            "command": "npx jest src/__tests__/unit/workflow/message-clarity.test.ts src/__tests__/unit/workflow/message-contract.test.ts",
+            "exit_code": 0,
+            "summary": "2 suites, 14 tests passed: sentence split keeps spec.json/FR-1.2/5.0.1 whole; 25 words pass, 26 fail, 3 sentences fail, empty fails with reason.",
+            "observed_at": "2026-10-03T17:18:48.114Z"
+          },
+          "verification": {
+            "command": "npx jest src/__tests__/unit/workflow/message-clarity.test.ts",
+            "exit_code": 0,
+            "summary": "Clarity helper tests pass; helper code reviewed.",
+            "observed_at": "2026-10-03T17:18:49.869Z"
+          }
+        },
         "planned_artifacts": [
           "src/__tests__/helpers/message-clarity.ts",
           "src/__tests__/unit/workflow/message-clarity.test.ts"
         ],
-        "observed_artifacts": []
+        "observed_artifacts": [
+          "src/__tests__/helpers/message-clarity.ts",
+          "src/__tests__/unit/workflow/message-clarity.test.ts"
+        ]
       },
       "3.2": {
         "title": "Message extractor, baseline, and contract test",
         "tdd_required": true,
         "dependencies": [],
-        "status": "pending",
-        "evidence": {},
+        "status": "completed",
+        "evidence": {
+          "red": {
+            "command": "npx jest src/__tests__/unit/workflow/message-contract.test.ts",
+            "exit_code": 1,
+            "summary": "TS2307: cannot find baseline JSON and ../../helpers/message-extractor (clean worktree).",
+            "observed_at": "2026-10-03T17:18:52.936Z"
+          },
+          "green": {
+            "command": "npx jest src/__tests__/unit/workflow/message-clarity.test.ts src/__tests__/unit/workflow/message-contract.test.ts",
+            "exit_code": 0,
+            "summary": "14 passed: extractor finds 29/134/1/1 messages; baseline from unmodified source; contract passes; synthetic removed code and dropped number fail comparison.",
+            "observed_at": "2026-10-03T17:18:54.987Z"
+          },
+          "verification": {
+            "command": "npx jest src/__tests__/unit/workflow/message-contract.test.ts && npx tsc --noEmit -p .",
+            "exit_code": 0,
+            "summary": "Contract test passes; typecheck clean; service sources untouched before baseline.",
+            "observed_at": "2026-10-03T17:18:57.173Z"
+          }
+        },
         "planned_artifacts": [
           "src/__tests__/helpers/message-extractor.ts",
           "src/__tests__/fixtures/message-contract-baseline.json",
           "src/__tests__/unit/workflow/message-contract.test.ts",
           "scripts/generate-message-baseline.ts"
         ],
-        "observed_artifacts": []
+        "observed_artifacts": [
+          "src/__tests__/helpers/message-extractor.ts",
+          "src/__tests__/fixtures/message-contract-baseline.json",
+          "src/__tests__/unit/workflow/message-contract.test.ts",
+          "scripts/generate-message-baseline.ts"
+        ]
       },
       "3.3": {
         "title": "Rewrite validation blocker messages",
