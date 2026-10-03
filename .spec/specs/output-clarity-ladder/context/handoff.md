@@ -1,4 +1,4 @@
-<!-- sdd-context schema=2 phase=implementation source=6885bb206f0283c8fc3743a9b06727574f92ba430f3cd8ae577d2a65caea8841 payload=79642800d702ff3f7a40a78b8c33cdcab57e9c3cfe92fb2e17d9c76dfa2dcc28 -->
+<!-- sdd-context schema=2 phase=implementation source=5caaca2fcfb955192ae2a90dd669cd008afe79ec9c1bda8127f4026c9cbd2010 payload=32c35b15c377139ec28e44c9df4cf41c5de65f53a7f0d61038767beab18d0d9d -->
 # SDD Context: output-clarity-ladder
 
 ## Workflow State
@@ -10,13 +10,13 @@
 - Test-case review: not required
 
 ## Implementation Progress
-- Revision: 24
-- Completed: 6/12
+- Revision: 42
+- Completed: 11/12
 - Active: 0
 - Blocked: 0
 
 ## Next Action
-Select a ready task: 2.2, 3.3, 3.4, 3.5, 4.1.
+Start task 5.1.
 
 ## Source References
 - requirements.md
@@ -100,5 +100,5 @@ Select a ready task: 2.2, 3.3, 3.4, 3.5, 4.1.
 - A rerun with no source change reports the skill as unchanged and makes no file change.
 - ### FR-7: Root guidance pointer
 - **Objective:** Tell each host that the ladder applies to explanation replies.
-- ### FR-8: Validation blocker messages
+- The sentence does not copy the ladder rules into root guidance.
 - |---|---|

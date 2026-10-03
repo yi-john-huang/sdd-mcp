@@ -68,7 +68,7 @@ Skills under `.claude/skills/` receive routed native `model` and `effort` overri
 
 ### Codex
 
-Codex manual-only skills live under `.agents/skills/` and include `agents/openai.yaml` with implicit invocation disabled. Review and security skills can use one custom agent from `.codex/agents/*.toml` after the user chooses it:
+Codex skills live under `.agents/skills/` and include `agents/openai.yaml`. Workflow skills disable implicit invocation. `output-clarity-ladder` is the only skill that allows it, and it has no model route. Review and security skills can use one custom agent from `.codex/agents/*.toml` after the user chooses it:
 
 ```toml
 model = "gpt-6-sol"
