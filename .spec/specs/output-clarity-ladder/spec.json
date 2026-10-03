@@ -1,0 +1,244 @@
+{
+  "schema_version": 5,
+  "feature_name": "output-clarity-ladder",
+  "description": "## Original Description\nAdd a canonical \"output-clarity-ladder\" skill to sdd-mcp-server, based on the user's Output Clarity Ladder document. The skill makes explanation, summary, and teaching replies easier for people to check. It writes about 80% of the way to ASD-STE100 Simplified Technical English by default, and moves up a ladder (diagram, self-contained HTML page, explainer video) only when the next format makes the same facts easier to understand. Requested artifacts (email, resume, code), one-line statuses, and yes/no answers keep their requested form. The skill must render for Claude Code, Codex, and OMP. Unlike the manual-only SDD workflow skills, it must be model-invocable so it applies automatically, and root guidance must point to it.\n\n## Core Features (What)\n1) Canonical skills/output-clarity-ladder skill with the four-step ladder and the 80% ASD-STE100 writing rules; 2) rendered for Claude Code, Codex, and OMP; 3) model-invocable as an explicit exception to manual-only workflow skill rendering; 4) root guidance for each target points to it; 5) tests cover rendering, invocation policy, and skill size. Video or narration generation tooling and API key storage; an automated ASD-STE100 approved-word checker or dictionary.",
+  "language": "en",
+  "phase": "implementation",
+  "created_at": "2026-10-03T16:51:24.988Z",
+  "updated_at": "2026-10-03T17:15:31.716Z",
+  "approvals": {
+    "requirements": {
+      "generated": true,
+      "approved": true,
+      "revision": 1,
+      "artifact_sha256": "03a0f62725f8b4d1204b9d25e68bb2e3b561482bfeb5d00ab1f1d65df12d9428",
+      "validation": {
+        "status": "passed",
+        "checked_at": "2026-10-03T16:53:40.692Z",
+        "blockers": []
+      }
+    },
+    "design": {
+      "generated": true,
+      "approved": true,
+      "revision": 1,
+      "artifact_sha256": "6e19246bfb88b086768176c04552ce78cbd0fab304ebbf4bf18f691376aafe70",
+      "validation": {
+        "status": "passed",
+        "checked_at": "2026-10-03T17:03:20.810Z",
+        "blockers": []
+      }
+    },
+    "tasks": {
+      "generated": true,
+      "approved": true,
+      "revision": 1,
+      "artifact_sha256": "b4b7aecde19a95a6d7662462c2334940f8677d7ac15cc84bcc5557b365432744",
+      "validation": {
+        "status": "passed",
+        "checked_at": "2026-10-03T17:12:57.928Z",
+        "blockers": []
+      }
+    }
+  },
+  "workflow_options": {
+    "review_test_cases": false
+  },
+  "checkpoints": {
+    "test_cases": {
+      "required": false,
+      "reviewed": false
+    }
+  },
+  "implementation": {
+    "revision": 0,
+    "tasks_revision": 1,
+    "legacy_imported": false,
+    "tasks": {
+      "1.1": {
+        "title": "English output-clarity-ladder skill",
+        "tdd_required": true,
+        "dependencies": [],
+        "status": "pending",
+        "evidence": {},
+        "planned_artifacts": [
+          "skills/output-clarity-ladder/SKILL.md",
+          "src/__tests__/unit/cli/canonical-assets.test.ts"
+        ],
+        "observed_artifacts": []
+      },
+      "1.2": {
+        "title": "Japanese and Traditional Chinese references",
+        "tdd_required": true,
+        "dependencies": [
+          "1.1"
+        ],
+        "status": "pending",
+        "evidence": {},
+        "planned_artifacts": [
+          "skills/output-clarity-ladder/references/ja.md",
+          "skills/output-clarity-ladder/references/zh-TW.md",
+          "skills/output-clarity-ladder/SKILL.md",
+          "src/__tests__/unit/cli/canonical-assets.test.ts"
+        ],
+        "observed_artifacts": []
+      },
+      "2.1": {
+        "title": "Model-invocation exception without an agent route",
+        "tdd_required": true,
+        "dependencies": [],
+        "status": "pending",
+        "evidence": {},
+        "planned_artifacts": [
+          "src/cli/install-target.ts",
+          "src/cli/tool-support/target-installer.ts",
+          "src/__tests__/unit/cli/target-installers.test.ts",
+          "src/__tests__/unit/cli/install-target.test.ts"
+        ],
+        "observed_artifacts": []
+      },
+      "2.2": {
+        "title": "Install and setup-global write the skill on all targets",
+        "tdd_required": true,
+        "dependencies": [
+          "1.2",
+          "2.1"
+        ],
+        "status": "pending",
+        "evidence": {},
+        "planned_artifacts": [
+          "src/__tests__/unit/cli/target-installers.test.ts",
+          "src/__tests__/unit/cli/setup-global.test.ts"
+        ],
+        "observed_artifacts": []
+      },
+      "2.3": {
+        "title": "Root guidance sentence",
+        "tdd_required": true,
+        "dependencies": [],
+        "status": "pending",
+        "evidence": {},
+        "planned_artifacts": [
+          "src/cli/tool-support/root-guidance.ts",
+          "templates/CLAUDE.md",
+          "templates/codex-AGENTS.md",
+          "src/__tests__/unit/cli/root-guidance.test.ts"
+        ],
+        "observed_artifacts": []
+      },
+      "3.1": {
+        "title": "Clarity bound checker",
+        "tdd_required": true,
+        "dependencies": [],
+        "status": "pending",
+        "evidence": {},
+        "planned_artifacts": [
+          "src/__tests__/helpers/message-clarity.ts",
+          "src/__tests__/unit/workflow/message-clarity.test.ts"
+        ],
+        "observed_artifacts": []
+      },
+      "3.2": {
+        "title": "Message extractor, baseline, and contract test",
+        "tdd_required": true,
+        "dependencies": [],
+        "status": "pending",
+        "evidence": {},
+        "planned_artifacts": [
+          "src/__tests__/helpers/message-extractor.ts",
+          "src/__tests__/fixtures/message-contract-baseline.json",
+          "src/__tests__/unit/workflow/message-contract.test.ts",
+          "scripts/generate-message-baseline.ts"
+        ],
+        "observed_artifacts": []
+      },
+      "3.3": {
+        "title": "Rewrite validation blocker messages",
+        "tdd_required": true,
+        "dependencies": [
+          "3.1",
+          "3.2"
+        ],
+        "status": "pending",
+        "evidence": {},
+        "planned_artifacts": [
+          "src/application/services/WorkflowValidationService.ts",
+          "src/__tests__/unit/workflow/message-clarity-bounds.test.ts",
+          "src/__tests__/unit/workflow"
+        ],
+        "observed_artifacts": []
+      },
+      "3.4": {
+        "title": "Rewrite WorkflowEngineService error messages",
+        "tdd_required": true,
+        "dependencies": [
+          "3.1",
+          "3.2"
+        ],
+        "status": "pending",
+        "evidence": {},
+        "planned_artifacts": [
+          "src/application/services/WorkflowEngineService.ts",
+          "src/__tests__/unit/workflow/message-clarity-bounds.test.ts",
+          "src/__tests__/unit/workflow"
+        ],
+        "observed_artifacts": []
+      },
+      "3.5": {
+        "title": "Rewrite adapter and registry error messages",
+        "tdd_required": true,
+        "dependencies": [
+          "3.1",
+          "3.2"
+        ],
+        "status": "pending",
+        "evidence": {},
+        "planned_artifacts": [
+          "src/adapters/cli/SDDToolAdapter.ts",
+          "src/infrastructure/mcp/ToolRegistry.ts",
+          "src/__tests__/unit/workflow/message-clarity-bounds.test.ts",
+          "src/__tests__/unit"
+        ],
+        "observed_artifacts": []
+      },
+      "4.1": {
+        "title": "Document the skill and correct manual-only statements",
+        "tdd_required": false,
+        "dependencies": [
+          "1.2",
+          "2.1"
+        ],
+        "status": "pending",
+        "evidence": {},
+        "planned_artifacts": [
+          "docs/WORKFLOW.md",
+          "README.md",
+          "docs/INSTALL-GUIDE.md",
+          "docs/MODEL-ROUTING.md"
+        ],
+        "observed_artifacts": []
+      },
+      "5.1": {
+        "title": "Full build, suite, and per-target install check",
+        "tdd_required": false,
+        "dependencies": [
+          "1.1",
+          "1.2",
+          "2.1",
+          "2.2",
+          "2.3",
+          "3.1",
+          "3.2",
+          "3.3",
+          "3.4",
+          "3.5",
+          "4.1"
+        ],
+        "status": "pending",
+        "evidence": {},
+        "planned_artifacts": [],
+        "observed_artifacts": []
+      }
+    }
+  }
+}
