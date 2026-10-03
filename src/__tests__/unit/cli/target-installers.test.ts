@@ -1,11 +1,13 @@
 import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
+import * as crypto from 'crypto';
+import { renderOmpSkillRouting } from '../../../cli/tool-support/omp-skill-routing';
 import { installClaudeCodeTarget } from '../../../cli/tool-support/claude-code';
 import { installCodexTarget } from '../../../cli/tool-support/codex';
 import { installOmpTarget } from '../../../cli/tool-support/omp';
-import { getTargetPolicy } from '../../../cli/install-target';
-import { TargetInstallSession, renderTargetSkill } from '../../../cli/tool-support/target-installer';
+import { getTargetPolicy, MODEL_INVOCABLE_SKILLS, SKILL_AGENT_ROUTES } from '../../../cli/install-target';
+import { TargetInstallSession, renderTargetSkill, renderCodexSkillPolicy } from '../../../cli/tool-support/target-installer';
 import { PreservingWriter } from '../../../cli/utils/preserving-writer';
 
 const packageVersion = JSON.parse(fs.readFileSync(path.resolve(process.cwd(), 'package.json'), 'utf8')).version;
@@ -440,4 +442,45 @@ describe('target-specific installers', () => {
     expect(fs.existsSync(path.join(root, '.omp/AGENTS.md'))).toBe(false);
   });
 
+});
+
+describe('model-invocable output-clarity-ladder rendering', () => {
+  const source = '---\nname: output-clarity-ladder\ndescription: Clarity\ndisable-model-invocation: true\n---\n\n# Ladder';
+
+  it.each(['claude-code', 'omp', 'codex'] as const)('does not disable model invocation on %s and adds no routing text', target => {
+    const rendered = renderTargetSkill(target, 'output-clarity-ladder', source);
+    expect(rendered).not.toContain('disable-model-invocation');
+    expect(rendered).not.toMatch(/^(model|effort):/m);
+    expect(rendered).not.toMatch(/ask once|specialistDepth|Execute (inline|in this turn)|Run inline/);
+    expect(rendered).toContain('name: output-clarity-ladder');
+  });
+
+  it('allows implicit Codex invocation with an explanation-focused description', () => {
+    const policy = renderCodexSkillPolicy('output-clarity-ladder');
+    expect(policy).toContain('allow_implicit_invocation: true');
+    expect(policy).toContain('"Apply automatically to explanation, summary, and teaching replies."');
+    expect(renderCodexSkillPolicy('sdd-design')).toContain('allow_implicit_invocation: false');
+  });
+
+  it('keeps the model-invocable set disjoint from agent routes and OMP routing', () => {
+    expect([...MODEL_INVOCABLE_SKILLS]).toEqual(['output-clarity-ladder']);
+    for (const name of MODEL_INVOCABLE_SKILLS) expect(Object.keys(SKILL_AGENT_ROUTES)).not.toContain(name);
+    expect(renderOmpSkillRouting()).not.toContain('output-clarity-ladder');
+  });
+
+  it('renders the 11 workflow skills byte-identically to the pre-change baseline', () => {
+    const baseline: Record<string, string> = JSON.parse(
+      fs.readFileSync(path.join(__dirname, 'fixtures', 'workflow-skill-render-baseline.json'), 'utf8'),
+    );
+    const hash = (value: string) => crypto.createHash('sha256').update(value).digest('hex');
+    const actual: Record<string, string> = {};
+    for (const name of fs.readdirSync(path.resolve(process.cwd(), 'skills'))) {
+      if (name === 'output-clarity-ladder') continue;
+      const src = fs.readFileSync(path.resolve(process.cwd(), 'skills', name, 'SKILL.md'), 'utf8');
+      for (const target of ['claude-code', 'omp', 'codex'] as const) actual[`${name}:${target}`] = hash(renderTargetSkill(target, name, src));
+      actual[`${name}:codex-policy`] = hash(renderCodexSkillPolicy(name));
+    }
+    expect(Object.keys(actual)).toHaveLength(44);
+    expect(actual).toEqual(baseline);
+  });
 });
