@@ -223,4 +223,17 @@ describe('modelInvocableSkills', () => {
       expect(utf8Bytes(content)).toBeLessThanOrEqual(4_096);
     }
   });
+
+  it('never claims certification or conformance in any skill file without a negation', () => {
+    const skillDir = path.join(skillRoot, 'output-clarity-ladder');
+    const files = ['SKILL.md', 'references/ja.md', 'references/zh-TW.md'];
+    for (const file of files) {
+      const content = fs.readFileSync(path.join(skillDir, file), 'utf8');
+      for (const sentence of content.split(/(?<=[.!?。])\s*/)) {
+        if (/certified|conformant|認証|認證/i.test(sentence)) {
+          expect(`${file}: ${sentence}`).toMatch(/\b(not|no|never)\b|ない|ません|不|沒有/i);
+        }
+      }
+    }
+  });
 });
