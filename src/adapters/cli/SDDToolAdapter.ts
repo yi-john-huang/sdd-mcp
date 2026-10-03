@@ -102,7 +102,7 @@ export class SDDToolAdapter {
           clarificationAnswers as ClarificationAnswers,
         );
         if (!validation.valid) {
-          throw new GovernanceError('InvalidParams', `Missing required answers: ${validation.missingRequired.join(", ")}`);
+          throw new GovernanceError('InvalidParams', `Required clarification answers are missing: ${validation.missingRequired.join(", ")}. Answer each listed question, then initialize the feature again.`);
         }
         enrichedDescription = this.clarificationService.synthesizeDescription(
           description,

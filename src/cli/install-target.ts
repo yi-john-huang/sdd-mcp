@@ -135,6 +135,9 @@ export const SKILL_AGENT_ROUTES: Readonly<Record<string, AgentRole>> = {
   'sdd-security-check': 'security-auditor',
 };
 
+/** Skills the model may invoke automatically; every other skill is manual-only. */
+export const MODEL_INVOCABLE_SKILLS: ReadonlySet<string> = new Set(['output-clarity-ladder']);
+
 const TARGET_POLICIES: Readonly<Record<InstallTarget, TargetPolicy>> = {
   'claude-code': {
     target: 'claude-code',

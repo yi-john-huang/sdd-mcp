@@ -39,3 +39,14 @@ describe('compact target root guidance', () => {
     expect(guidance).not.toContain('planner.md');
   });
 });
+
+describe('output-clarity-ladder root guidance line', () => {
+  const line = 'The `output-clarity-ladder` skill applies automatically to explanation, summary, and teaching replies; it is the only model-invocable skill.';
+  it.each(['claude-code', 'codex', 'omp'] as const)('adds exactly one line under Workflow for %s', target => {
+    const guidance = buildCompactRootGuidance(target, getTargetPolicy(target).defaultPaths, new Set<ComponentType>(['skills']));
+    const workflow = guidance.split('## Workflow')[1].split('\n## ')[0];
+    expect(workflow.split('\n').filter(l => l === line)).toHaveLength(1);
+    expect(guidance.split(line)).toHaveLength(2);
+    expect(guidance).not.toContain('ASD-STE100');
+  });
+});

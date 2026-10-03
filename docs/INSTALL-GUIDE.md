@@ -45,7 +45,7 @@ An unsafe path returned by successful discovery fails; it is not replaced by a g
 
 ### Scope, preservation, and verification
 
-Personal setup installs only the runtime and target-rendered, manual-only Skills with supporting references and Codex explicit-invocation policy. It creates no `CLAUDE.md`, `AGENTS.md`, agents, rules, contexts, hooks, steering, `.gitignore`, or project installation files. It neither creates nor changes **any Claude permission settings**, even if an existing settings file is malformed. Existing user/project/managed permission policy continues to apply.
+Personal setup installs only the runtime and target-rendered Skills with supporting references and Codex invocation policy. The workflow Skills are manual-only; `output-clarity-ladder` is the only model-invocable Skill. It creates no `CLAUDE.md`, `AGENTS.md`, agents, rules, contexts, hooks, steering, `.gitignore`, or project installation files. It neither creates nor changes **any Claude permission settings**, even if an existing settings file is malformed. Existing user/project/managed permission policy continues to apply.
 
 These Skills are local-machine/user-profile assets. Claude cloud/Cowork sessions do not read these local personal Skills. Reload/restart the host and accept its normal trust and tool permission prompts.
 
@@ -193,7 +193,7 @@ The installer merges only its `sdd-mcp` entry and preserves unrelated config, co
 
 After reload/trust, use `/sdd-requirements <feature>` in Claude Code, `$sdd-requirements <feature>` in Codex, or `/skill:sdd-requirements <feature>` in OMP. Continue with the native design, tasks, and implement Skills after each explicit human gate. End users do not call MCP tools or paste workflow JSON.
 
-Manual skill syntax is `/skill:<name>` in OMP, `/<name>` in Claude Code, and `$<name>` in Codex. All SDD skills are manual-only; prose does not activate them implicitly.
+Manual skill syntax is `/skill:<name>` in OMP, `/<name>` in Claude Code, and `$<name>` in Codex. All SDD workflow skills are manual-only; prose does not activate them implicitly. The only exception is `output-clarity-ladder`, which the model applies to explanation, summary, and teaching replies.
 
 ### Published-host smoke
 

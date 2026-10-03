@@ -148,3 +148,92 @@ describe('canonical progressive assets', () => {
     expect(commitReference).toMatch(/pull request/i);
   });
 });
+
+describe('modelInvocableSkills', () => {
+  const skillPath = 'skills/output-clarity-ladder/SKILL.md';
+
+  it('ships output-clarity-ladder as a bounded model-invocable English skill', () => {
+    const content = read(skillPath);
+    const description = content.match(/^description:\s*(.+)$/m)?.[1] ?? '';
+
+    expect(content).toMatch(/^name:\s*output-clarity-ladder$/m);
+    expect(description).toMatch(/explanation/i);
+    expect(description).toMatch(/summary/i);
+    expect(description).toMatch(/teaching/i);
+    expect(content).not.toMatch(/disable-model-invocation/);
+
+    expect(content).toMatch(/one-line status/i);
+    expect(content).toMatch(/yes or no/i);
+    expect(content).toMatch(/draft the user asked to word/i);
+
+    const writing = content.slice(content.indexOf('## 1. Writing (default)'), content.indexOf('## 2. Diagram'));
+    expect((writing.match(/^- /gm) ?? []).length).toBe(6);
+
+    const headings = ['## 1. Writing (default)', '## 2. Diagram', '## 3. Web page', '## 4. Explainer video', '## Order'];
+    const positions = headings.map(heading => content.indexOf(heading));
+    for (const position of positions) expect(position).toBeGreaterThanOrEqual(0);
+    expect([...positions].sort((a, b) => a - b)).toEqual(positions);
+
+    expect(content).toMatch(/Do not make a video for a routine reply/);
+    expect(content).toMatch(/key the user already stored, or a free local option/);
+    expect(content).toMatch(/Never ask them to paste a secret into chat/);
+    expect(content).toMatch(/Do not replace a requested artifact/);
+    expect(content).toContain('no approved-word check');
+
+    for (const sentence of content.split(/(?<=[.!?])\s+/)) {
+      if (/certified|conformant/i.test(sentence)) expect(sentence).toMatch(/\b(not|no|never)\b/i);
+    }
+    expect(utf8Bytes(content)).toBeLessThanOrEqual(4_096);
+  });
+
+  it('links Japanese and Traditional Chinese references from a Languages section', () => {
+    const skill = read(skillPath);
+    const languages = skill.slice(skill.indexOf('## Languages'));
+    expect(skill).toMatch(/^## Languages$/m);
+    expect(languages).toMatch(/\[[^\]]+\]\(references\/ja\.md\)/);
+    expect(languages).toMatch(/\[[^\]]+\]\(references\/zh-TW\.md\)/);
+    expect(languages).toMatch(/Japanese/);
+    expect(languages).toMatch(/Traditional Chinese/);
+    expect(languages).toMatch(/Simplified Chinese/);
+    expect(languages).toMatch(/English rules/);
+    expect(languages).toMatch(/user's language/);
+    expect(utf8Bytes(skill)).toBeLessThanOrEqual(4_096);
+
+    const skillDir = path.join(skillRoot, 'output-clarity-ladder');
+    const cases: Array<[string, RegExp, string[]]> = [
+      ['references/ja.md', /[\u3040-\u30ff]/, ['## 1.', '## 2.', '## 3.', '## 4.']],
+      ['references/zh-TW.md', /[體說]/, ['## 1.', '## 2.', '## 3.', '## 4.']],
+    ];
+    for (const [reference, script, steps] of cases) {
+      const resolved = path.resolve(skillDir, reference);
+      expect(resolved.startsWith(`${skillDir}${path.sep}`)).toBe(true);
+      const content = read(`skills/output-clarity-ladder/${reference}`);
+      expect(content).toMatch(script);
+      expect(content).toMatch(/ASD-STE100/);
+      expect(content).toMatch(/is not ASD-STE100 conformant/);
+      expect(content).toMatch(/## Order/);
+      const positions = steps.map(step => content.indexOf(step));
+      for (const position of positions) expect(position).toBeGreaterThanOrEqual(0);
+      expect([...positions].sort((a, b) => a - b)).toEqual(positions);
+      expect(content.indexOf('## Order')).toBeGreaterThan(positions[3]);
+      const writing = content.slice(positions[0], positions[1]);
+      expect((writing.match(/^- /gm) ?? []).length).toBeGreaterThanOrEqual(6);
+      expect(content).toMatch(/video|動画|影片/);
+      expect(content).toMatch(/secret|シークレット|秘密|密鑰|機密/);
+      expect(utf8Bytes(content)).toBeLessThanOrEqual(4_096);
+    }
+  });
+
+  it('never claims certification or conformance in any skill file without a negation', () => {
+    const skillDir = path.join(skillRoot, 'output-clarity-ladder');
+    const files = ['SKILL.md', 'references/ja.md', 'references/zh-TW.md'];
+    for (const file of files) {
+      const content = fs.readFileSync(path.join(skillDir, file), 'utf8');
+      for (const sentence of content.split(/(?<=[.!?。])\s*/)) {
+        if (/certified|conformant|認証|認證/i.test(sentence)) {
+          expect(`${file}: ${sentence}`).toMatch(/\b(not|no|never)\b|ない|ません|不|沒有/i);
+        }
+      }
+    }
+  });
+});

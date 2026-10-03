@@ -38,6 +38,7 @@ export function buildCompactRootGuidance(
     '',
     `After installation, reload or restart the host and accept project trust. Use \`${invocation}simple-task <description>\` for small changes. For formal work, invoke \`${invocation}sdd-requirements <feature-name>\`, then \`${invocation}sdd-design\`, \`${invocation}sdd-tasks\`, and \`${invocation}sdd-implement\` after each explicit approval.`,
     'Skills automatically restore durable workflow state and approved compact context; users do not call MCP tools or paste workflow JSON.',
+    'The `output-clarity-ladder` skill applies automatically to explanation, summary, and teaching replies; it is the only model-invocable skill.',
     '',
   ];
   if (selected.size > 0) {

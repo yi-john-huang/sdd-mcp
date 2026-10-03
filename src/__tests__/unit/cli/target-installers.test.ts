@@ -1,12 +1,15 @@
 import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
+import * as crypto from 'crypto';
+import { renderOmpSkillRouting } from '../../../cli/tool-support/omp-skill-routing';
 import { installClaudeCodeTarget } from '../../../cli/tool-support/claude-code';
 import { installCodexTarget } from '../../../cli/tool-support/codex';
 import { installOmpTarget } from '../../../cli/tool-support/omp';
-import { getTargetPolicy } from '../../../cli/install-target';
-import { TargetInstallSession, renderTargetSkill } from '../../../cli/tool-support/target-installer';
+import { getTargetPolicy, MODEL_INVOCABLE_SKILLS, SKILL_AGENT_ROUTES } from '../../../cli/install-target';
+import { TargetInstallSession, renderTargetSkill, renderCodexSkillPolicy } from '../../../cli/tool-support/target-installer';
 import { PreservingWriter } from '../../../cli/utils/preserving-writer';
+import { SkillManager } from '../../../skills/SkillManager';
 
 const packageVersion = JSON.parse(fs.readFileSync(path.resolve(process.cwd(), 'package.json'), 'utf8')).version;
 
@@ -440,4 +443,117 @@ describe('target-specific installers', () => {
     expect(fs.existsSync(path.join(root, '.omp/AGENTS.md'))).toBe(false);
   });
 
+});
+
+describe('model-invocable output-clarity-ladder rendering', () => {
+  const source = '---\nname: output-clarity-ladder\ndescription: Clarity\ndisable-model-invocation: true\n---\n\n# Ladder';
+
+  it.each(['claude-code', 'omp', 'codex'] as const)('does not disable model invocation on %s and adds no routing text', target => {
+    const rendered = renderTargetSkill(target, 'output-clarity-ladder', source);
+    expect(rendered).not.toContain('disable-model-invocation');
+    expect(rendered).not.toMatch(/^(model|effort):/m);
+    expect(rendered).not.toMatch(/ask once|specialistDepth|Execute (inline|in this turn)|Run inline/);
+    expect(rendered).toContain('name: output-clarity-ladder');
+  });
+
+  it('allows implicit Codex invocation with an explanation-focused description', () => {
+    const policy = renderCodexSkillPolicy('output-clarity-ladder');
+    expect(policy).toContain('allow_implicit_invocation: true');
+    expect(policy).toContain('"Apply automatically to explanation, summary, and teaching replies."');
+    expect(renderCodexSkillPolicy('sdd-design')).toContain('allow_implicit_invocation: false');
+  });
+
+  it('keeps the model-invocable set disjoint from agent routes and OMP routing', () => {
+    expect([...MODEL_INVOCABLE_SKILLS]).toEqual(['output-clarity-ladder']);
+    for (const name of MODEL_INVOCABLE_SKILLS) expect(Object.keys(SKILL_AGENT_ROUTES)).not.toContain(name);
+    expect(renderOmpSkillRouting()).not.toContain('output-clarity-ladder');
+  });
+
+  it('renders the 11 workflow skills byte-identically to the pre-change baseline', () => {
+    const baseline: Record<string, string> = JSON.parse(
+      fs.readFileSync(path.join(__dirname, 'fixtures', 'workflow-skill-render-baseline.json'), 'utf8'),
+    );
+    const hash = (value: string) => crypto.createHash('sha256').update(value).digest('hex');
+    const actual: Record<string, string> = {};
+    for (const name of fs.readdirSync(path.resolve(process.cwd(), 'skills'))) {
+      if (name === 'output-clarity-ladder') continue;
+      const src = fs.readFileSync(path.resolve(process.cwd(), 'skills', name, 'SKILL.md'), 'utf8');
+      for (const target of ['claude-code', 'omp', 'codex'] as const) actual[`${name}:${target}`] = hash(renderTargetSkill(target, name, src));
+      actual[`${name}:codex-policy`] = hash(renderCodexSkillPolicy(name));
+    }
+    expect(Object.keys(actual)).toHaveLength(44);
+    expect(actual).toEqual(baseline);
+  });
+});
+
+describe('output-clarity-ladder skill installation', () => {
+  const ladderFiles = ['SKILL.md', 'references/ja.md', 'references/zh-TW.md'];
+  const sourceDir = path.resolve(process.cwd(), 'skills/output-clarity-ladder');
+  let root: string;
+
+  beforeEach(() => { root = fs.mkdtempSync(path.join(os.tmpdir(), 'sdd-ladder-output-')); });
+  afterEach(() => fs.rmSync(root, { recursive: true, force: true }));
+
+  const installers = {
+    'claude-code': (sources: any) => installClaudeCodeTarget({
+      projectRoot: root,
+      paths: getTargetPolicy('claude-code').defaultPaths,
+      components: ['skills'],
+      sources,
+      rootGuidanceContent: '# Claude guidance\n',
+    }),
+    codex: (sources: any) => installCodexTarget({
+      projectRoot: root,
+      paths: getTargetPolicy('codex').defaultPaths,
+      components: ['skills'],
+      sources,
+      rootGuidancePreamble: '# Codex guidance\n\n',
+      hookRunnerContent: '',
+    }),
+    omp: (sources: any) => installOmpTarget({
+      projectRoot: root,
+      paths: getTargetPolicy('omp').defaultPaths,
+      components: ['skills'],
+      sources,
+      profile: 'lean',
+    }),
+  } as const;
+  const skillRoots = { 'claude-code': '.claude/skills', codex: '.agents/skills', omp: '.omp/skills' } as const;
+  const realSources = () => ({ skillManager: new SkillManager(path.resolve(process.cwd(), 'skills')) } as any);
+
+  it.each(['claude-code', 'codex', 'omp'] as const)('writes the skill, references, and policy on %s', async target => {
+    const report = await installers[target](realSources());
+    expect(report.failed).toEqual([]);
+    const installed = path.join(root, skillRoots[target], 'output-clarity-ladder');
+    for (const file of ladderFiles) expect(fs.existsSync(path.join(installed, file))).toBe(true);
+    for (const reference of ['ja.md', 'zh-TW.md']) {
+      expect(fs.readFileSync(path.join(installed, 'references', reference)))
+        .toEqual(fs.readFileSync(path.join(sourceDir, 'references', reference)));
+    }
+    const policy = path.join(installed, 'agents/openai.yaml');
+    if (target === 'codex') {
+      expect(fs.readFileSync(policy, 'utf8')).toContain('allow_implicit_invocation: true');
+    } else {
+      expect(fs.existsSync(policy)).toBe(false);
+      expect(fs.readFileSync(path.join(installed, 'SKILL.md'), 'utf8')).not.toContain('disable-model-invocation');
+    }
+  });
+
+  it.each(['claude-code', 'codex', 'omp'] as const)('lists the files as written, then unchanged on %s rerun', async target => {
+    const prefix = `${skillRoots[target]}/output-clarity-ladder/`;
+    const expected = [...ladderFiles.map(file => prefix + file), ...(target === 'codex' ? [prefix + 'agents/openai.yaml'] : [])];
+    const first = await installers[target](realSources());
+    expect(first.installed).toEqual(expect.arrayContaining(expected));
+    const absolute = expected.map(file => path.join(root, file));
+    const before = absolute.map(file => ({ bytes: fs.readFileSync(file), mtime: fs.statSync(file).mtimeMs }));
+    await new Promise(resolve => setTimeout(resolve, 20));
+    const second = await installers[target](realSources());
+    expect(second.failed).toEqual([]);
+    expect(second.installed).toEqual(expect.not.arrayContaining(expected));
+    expect(second.skipped).toEqual(expect.arrayContaining(expected));
+    absolute.forEach((file, index) => {
+      expect(fs.readFileSync(file)).toEqual(before[index].bytes);
+      expect(fs.statSync(file).mtimeMs).toBe(before[index].mtime);
+    });
+  });
 });

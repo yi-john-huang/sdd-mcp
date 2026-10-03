@@ -7,6 +7,7 @@ import type { AgentManager } from '../../agents/AgentManager.js';
 import type { HookLoader } from '../../hooks/HookLoader.js';
 import {
   ROLE_MODEL_ROUTES,
+  MODEL_INVOCABLE_SKILLS,
   SKILL_AGENT_ROUTES,
   type ComponentType,
   type InstallFailure,
@@ -236,7 +237,7 @@ const ASK_EXECUTION_ROLES: ReadonlySet<string> = new Set(['reviewer', 'security-
 
 export function renderTargetSkill(target: InstallTarget, skillName: string, source: string, routes: ModelRoutes = ROLE_MODEL_ROUTES): string {
   const role = SKILL_AGENT_ROUTES[skillName];
-  const extra: string[] = ['disable-model-invocation: true'];
+  const extra: string[] = MODEL_INVOCABLE_SKILLS.has(skillName) ? [] : ['disable-model-invocation: true'];
   const askRole = role !== undefined && ASK_EXECUTION_ROLES.has(role);
   const askOnce = `Execute inline by default. Only if project agents are installed, ask once per session whether to run inline or use the \`${role}\` agent, and reuse the answer; if chosen, delegate once with specialistDepth: 1, no nesting or retry, and on failure record one fallback and continue inline.`;
   let execution = '';
@@ -252,12 +253,16 @@ export function renderTargetSkill(target: InstallTarget, skillName: string, sour
     execution = askRole ? `\n${askOnce}\n` : '\nExecute inline in the current turn; do not request a custom agent.\n';
   }
   const match = source.match(/^---\r?\n([\s\S]*?)\r?\n---\r?\n?([\s\S]*)$/);
-  if (!match) return `---\n${extra.join('\n')}\n---\n\n${source.trim()}${execution}\n`;
+  const frontmatter = (lines: string[]) => lines.length > 0 ? `---\n${lines.join('\n')}\n---` : '---\n---';
+  if (!match) return `${frontmatter(extra)}\n\n${source.trim()}${execution}\n`;
   const metadata = match[1].split(/\r?\n/).filter(line => !/^(disable-model-invocation|model|effort):/.test(line));
-  return `---\n${metadata.join('\n')}\n${extra.join('\n')}\n---\n\n${match[2].trim()}${execution}\n`;
+  return `${frontmatter([...metadata, ...extra])}\n\n${match[2].trim()}${execution}\n`;
 }
 
-function renderCodexSkillPolicy(skillName: string): string {
+export function renderCodexSkillPolicy(skillName: string): string {
+  if (MODEL_INVOCABLE_SKILLS.has(skillName)) {
+    return `policy:\n  allow_implicit_invocation: true\ninterface:\n  description: ${JSON.stringify('Apply automatically to explanation, summary, and teaching replies.')}\n`;
+  }
   const role = SKILL_AGENT_ROUTES[skillName];
   const route = role ? ROLE_MODEL_ROUTES[role] : undefined;
   const description = route?.taskClass === 'advisor' && role && ASK_EXECUTION_ROLES.has(role)

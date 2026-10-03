@@ -1,0 +1,126 @@
+{
+  "files": {
+    "src/adapters/cli/SDDToolAdapter.ts": {
+      "codes": [
+        "InvalidParams"
+      ],
+      "numbers": {
+        "InvalidParams": []
+      }
+    },
+    "src/application/services/WorkflowEngineService.ts": {
+      "codes": [
+        "ArtifactDrift",
+        "InvalidParams",
+        "LegacyStateConflict",
+        "LegacyTaskConflict",
+        "PhaseNotApproved",
+        "PhaseValidationFailed",
+        "RecoveryConflict",
+        "RevisionConflict",
+        "StateInvariantViolation",
+        "TaskDependencyIncomplete",
+        "TaskTransitionInvalid"
+      ],
+      "numbers": {
+        "ArtifactDrift": [],
+        "InvalidParams": [
+          "1",
+          "1",
+          "1048576",
+          "2000",
+          "20000"
+        ],
+        "LegacyStateConflict": [
+          "5"
+        ],
+        "LegacyTaskConflict": [
+          "1000",
+          "5"
+        ],
+        "PhaseNotApproved": [],
+        "PhaseValidationFailed": [],
+        "RecoveryConflict": [
+          "5"
+        ],
+        "RevisionConflict": [],
+        "StateInvariantViolation": [
+          "5",
+          "5",
+          "5"
+        ],
+        "TaskDependencyIncomplete": [],
+        "TaskTransitionInvalid": []
+      }
+    },
+    "src/application/services/WorkflowValidationService.ts": {
+      "codes": [
+        "AcceptanceCriteriaMissing",
+        "CoverageMissing",
+        "DependencyCycle",
+        "DesignDecisionMissing",
+        "DuplicateId",
+        "DuplicateListItem",
+        "DuplicateMetadata",
+        "EarsShallMissing",
+        "EmptyContent",
+        "FunctionalRequirementMissing",
+        "InvalidArtifactPath",
+        "InvalidListValue",
+        "InvalidTaskId",
+        "InvalidTaskTitle",
+        "InvalidTdd",
+        "ListTooLong",
+        "MissingHeading",
+        "MissingMetadata",
+        "RequirementsMissing",
+        "TaskLimitExceeded",
+        "TaskMissing",
+        "UnknownCoverageId",
+        "UnknownDependency"
+      ],
+      "numbers": {
+        "AcceptanceCriteriaMissing": [],
+        "CoverageMissing": [],
+        "DependencyCycle": [],
+        "DesignDecisionMissing": [],
+        "DuplicateId": [],
+        "DuplicateListItem": [],
+        "DuplicateMetadata": [],
+        "EarsShallMissing": [],
+        "EmptyContent": [],
+        "FunctionalRequirementMissing": [],
+        "InvalidArtifactPath": [],
+        "InvalidListValue": [],
+        "InvalidTaskId": [
+          "50"
+        ],
+        "InvalidTaskTitle": [
+          "500"
+        ],
+        "InvalidTdd": [],
+        "ListTooLong": [
+          "100",
+          "100"
+        ],
+        "MissingHeading": [],
+        "MissingMetadata": [],
+        "RequirementsMissing": [],
+        "TaskLimitExceeded": [
+          "1000"
+        ],
+        "TaskMissing": [],
+        "UnknownCoverageId": [],
+        "UnknownDependency": []
+      }
+    },
+    "src/infrastructure/mcp/ToolRegistry.ts": {
+      "codes": [
+        "InvalidParams"
+      ],
+      "numbers": {
+        "InvalidParams": []
+      }
+    }
+  }
+}

@@ -1,6 +1,6 @@
 # SDD-MCP Workflow
 
-SDD-MCP uses one durable workflow rendered for Claude Code, Codex, and Oh My Pi (OMP). Users operate manual-only phase Skills; the registered MCP runtime remains behind the Skill boundary.
+SDD-MCP uses one durable workflow rendered for Claude Code, Codex, and Oh My Pi (OMP). Users operate manual-only workflow Skills; the registered MCP runtime remains behind the Skill boundary.
 
 ## Start in the host
 
@@ -58,6 +58,17 @@ Durable status determines the next action across sessions: submit or revise a ph
 | `.spec` | Durable workflow record and readable artifacts |
 
 Target renderers add native invocation and model metadata only; they do not duplicate this choreography.
+
+## Output clarity skill
+
+`output-clarity-ladder` is the only model-invocable skill. The model applies it to explanation, summary, and teaching replies. The user does not type a command. It has no agent route, so it always runs in the current reply.
+
+- **Writing (default):** about 80% of the way to ASD-STE100. One idea per sentence, a named actor, one word for one thing, and every number and condition kept.
+- **Ladder:** writing, then a diagram, then a self-contained HTML page, then an explainer video. The model moves up only when the next format makes the same facts easier to understand. A requested artifact, such as an email or code, keeps its form.
+- **Languages:** English rules in `SKILL.md`. Japanese (`ja`) and Traditional Chinese (`zh-TW`) guidance in `references/`. Any other language uses the English rules, and the reply uses the user's language.
+- **Limits:** there is no approved-word check, and output is not ASD-STE100 conformant. The skill never asks the user to paste a secret into chat.
+
+MCP runtime blockers and errors follow the same writing rules: at most 2 sentences, at most 25 words per sentence, and a next action when the user can act. Error codes do not change.
 
 ## Optional project-native guidance flow
 

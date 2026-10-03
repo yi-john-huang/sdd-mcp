@@ -117,12 +117,15 @@ The six SDD roles are `planner`, `architect`, `reviewer`, `security-auditor`, `i
 
 ## Manual workflow invocation
 
-SDD skills are explicit commands and do not activate implicitly from ordinary prose.
+SDD workflow skills are explicit commands and do not activate implicitly from ordinary prose. The one exception is `output-clarity-ladder`, which the model applies on its own (see the last row).
 
 | Path | Claude Code | Codex | Oh My Pi |
 |---|---|---|---|
 | Small task | `/simple-task` | `$simple-task` | `/skill:simple-task` |
 | Formal SDD | `/sdd-requirements` → `/sdd-design` → `/sdd-tasks` → `/sdd-implement` | `$sdd-requirements` → `$sdd-design` → `$sdd-tasks` → `$sdd-implement` | `/skill:sdd-requirements` → `/skill:sdd-design` → `/skill:sdd-tasks` → `/skill:sdd-implement` |
+| Clearer replies (automatic) | `/output-clarity-ladder` | `$output-clarity-ladder` | `/skill:output-clarity-ladder` |
+
+`output-clarity-ladder` makes explanation, summary, and teaching replies easier to check. It writes about 80% of the way to ASD-STE100 and uses a diagram, HTML page, or video only when that format is easier to understand. It ships English rules plus Japanese (`ja`) and Traditional Chinese (`zh-TW`) guidance. It does not check an approved-word list, and it does not make output ASD-STE100 conformant.
 
 Approvals and optional test-case review are explicit questions inside the relevant Skill flow. Status, context, validation, persistence, and progress recording happen internally.
 
