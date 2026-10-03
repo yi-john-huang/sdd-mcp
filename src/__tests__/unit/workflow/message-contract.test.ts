@@ -54,6 +54,16 @@ describe('message contract', () => {
       ]);
     });
 
+    it('extracts the message a caller passes to readRequired', () => {
+      const entries = extractMessagesFromSource(
+        'synthetic.ts',
+        "class S { async f() { await this.readRequired(p, `${phase}.md is missing`); } }",
+      );
+      expect(entries.map((e) => [e.code, e.message, e.literal])).toEqual([
+        ['StateInvariantViolation', 'X.md is missing', true],
+      ]);
+    });
+
     it('throws naming an unparsable or empty file', () => {
       expect(() => extractMessagesFromSource('empty.ts', 'const a = 1;')).toThrow(/empty\.ts/);
     });

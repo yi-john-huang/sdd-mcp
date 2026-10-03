@@ -3,16 +3,18 @@ import { MESSAGE_FILES, extractMessages, type ExtractedMessage } from '../../hel
 
 const BOUNDS = { maxSentences: 2, maxWords: 25 };
 
-/** Non-literal messages that forward text built elsewhere. Matched by file and code, not line. */
-const FORWARDED: ReadonlyArray<{ file: string; code: string; reason: string }> = [
+/** Non-literal messages that forward text built elsewhere. Matched by file, code, and exact count, not line. */
+const FORWARDED: ReadonlyArray<{ file: string; code: string; count: number; reason: string }> = [
   {
     file: 'src/application/services/WorkflowEngineService.ts',
     code: 'StateInvariantViolation',
+    count: 1,
     reason: 'readRequired forwards a caller-supplied literal message',
   },
   {
     file: 'src/infrastructure/mcp/ToolRegistry.ts',
     code: 'InvalidParams',
+    count: 1,
     reason: 'forwards the schema validator error text',
   },
 ];
@@ -66,6 +68,14 @@ describe.each(MESSAGE_FILES)('message clarity bounds: %s', (file) => {
     expect(missing).toEqual([]);
   });
 
+  it('never advises deleting an artifact, journal, or file', () => {
+    const destructive = messages
+      .filter((entry) => splitSentences(entry.message).some((sentence) =>
+        /^(Remove|Delete)\b.*\b(artifact|journal|file)\b/i.test(sentence)))
+      .map(describeMessage);
+    expect(destructive).toEqual([]);
+  });
+
   it('never names a host-specific command prefix', () => {
     const failures = messages
       .filter((entry) => /(^|\s)(\/skill:|\$sdd-|\/sdd-)/.test(entry.message))
@@ -73,17 +83,13 @@ describe.each(MESSAGE_FILES)('message clarity bounds: %s', (file) => {
     expect(failures).toEqual([]);
   });
 
-  it('allows a non-literal message only when it is a listed forward', () => {
-    const unlisted = messages
-      .filter((entry) => !entry.literal)
-      .filter((entry) => !FORWARDED.some((allowed) => allowed.file === file && allowed.code === entry.code))
-      .map(describeMessage);
-    expect(unlisted).toEqual([]);
-  });
-
-  it('keeps every listed forward present in source', () => {
-    for (const allowed of FORWARDED.filter((entry) => entry.file === file)) {
-      expect(messages.some((entry) => !entry.literal && entry.code === allowed.code)).toBe(true);
+  it('allows exactly the listed number of non-literal messages per code', () => {
+    const counts = new Map<string, number>();
+    for (const entry of messages.filter((candidate) => !candidate.literal)) {
+      const code = entry.code ?? '<dynamic>';
+      counts.set(code, (counts.get(code) ?? 0) + 1);
     }
+    const allowed = new Map(FORWARDED.filter((entry) => entry.file === file).map((entry) => [entry.code, entry.count]));
+    expect(Object.fromEntries(counts)).toEqual(Object.fromEntries(allowed));
   });
 });

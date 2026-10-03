@@ -11,6 +11,9 @@ export const MESSAGE_FILES = [
 
 export const DYNAMIC_CODE = '<dynamic>';
 
+/** readRequired(path, message) throws this code with the caller's message. */
+const READ_REQUIRED_CODE = 'StateInvariantViolation';
+
 export interface ExtractedMessage {
   file: string;
   code: string | null;
@@ -54,9 +57,13 @@ export function extractMessagesFromSource(file: string, text: string): Extracted
       ts.isCallExpression(node) && ts.isIdentifier(node.expression) && node.expression.text === 'blocker';
     const isGov =
       ts.isNewExpression(node) && ts.isIdentifier(node.expression) && node.expression.text === 'GovernanceError';
-    if ((isBlocker || isGov) && (node.arguments?.length ?? 0) >= 2) {
+    const isReadRequired =
+      ts.isCallExpression(node) &&
+      ts.isPropertyAccessExpression(node.expression) &&
+      node.expression.name.text === 'readRequired';
+    if ((isBlocker || isGov || isReadRequired) && (node.arguments?.length ?? 0) >= 2) {
       const [codeArg, msgArg] = node.arguments!;
-      const code = literalText(codeArg);
+      const code = isReadRequired ? READ_REQUIRED_CODE : literalText(codeArg);
       const message = literalText(msgArg);
       out.push({
         file,

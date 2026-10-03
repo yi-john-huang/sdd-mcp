@@ -906,7 +906,7 @@ export class WorkflowEngineService {
       if (!approvals[phase].generated && !approvals[phase].approved) continue;
       for (const prior of PHASES.slice(0, index)) {
         if (!approvals[prior].approved) {
-          throw new GovernanceError('LegacyStateConflict', `${phase} exists before ${prior} approval. Remove the ${phase} artifact or approve ${prior}.`);
+          throw new GovernanceError('LegacyStateConflict', `${phase} exists before ${prior} approval. Approve ${prior} first, or move the ${phase} artifact out of the feature folder.`);
         }
       }
     }
