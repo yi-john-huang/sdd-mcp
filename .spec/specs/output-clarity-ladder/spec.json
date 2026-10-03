@@ -3,9 +3,9 @@
   "feature_name": "output-clarity-ladder",
   "description": "## Original Description\nAdd a canonical \"output-clarity-ladder\" skill to sdd-mcp-server, based on the user's Output Clarity Ladder document. The skill makes explanation, summary, and teaching replies easier for people to check. It writes about 80% of the way to ASD-STE100 Simplified Technical English by default, and moves up a ladder (diagram, self-contained HTML page, explainer video) only when the next format makes the same facts easier to understand. Requested artifacts (email, resume, code), one-line statuses, and yes/no answers keep their requested form. The skill must render for Claude Code, Codex, and OMP. Unlike the manual-only SDD workflow skills, it must be model-invocable so it applies automatically, and root guidance must point to it.\n\n## Core Features (What)\n1) Canonical skills/output-clarity-ladder skill with the four-step ladder and the 80% ASD-STE100 writing rules; 2) rendered for Claude Code, Codex, and OMP; 3) model-invocable as an explicit exception to manual-only workflow skill rendering; 4) root guidance for each target points to it; 5) tests cover rendering, invocation policy, and skill size. Video or narration generation tooling and API key storage; an automated ASD-STE100 approved-word checker or dictionary.",
   "language": "en",
-  "phase": "implementation",
+  "phase": "implementation-completed",
   "created_at": "2026-10-03T16:51:24.988Z",
-  "updated_at": "2026-10-03T17:23:24.666Z",
+  "updated_at": "2026-10-03T17:24:08.182Z",
   "approvals": {
     "requirements": {
       "generated": true,
@@ -51,7 +51,7 @@
     }
   },
   "implementation": {
-    "revision": 42,
+    "revision": 44,
     "tasks_revision": 1,
     "legacy_imported": false,
     "tasks": {
@@ -472,10 +472,19 @@
           "3.5",
           "4.1"
         ],
-        "status": "pending",
-        "evidence": {},
+        "status": "completed",
+        "evidence": {
+          "verification": {
+            "command": "npm run build && npm test && node sdd-entry.js install --target {claude-code,codex,omp} (temp projects)",
+            "exit_code": 0,
+            "summary": "Build exit 0; 673 tests passed; installs exit 0 on all 3 targets: skill model-invocable (no disable flag; Codex allow_implicit true), references byte-identical, root guidance names skill once, all workflow skills still manual-only; WorkflowErrors.ts unchanged.",
+            "observed_at": "2026-10-03T17:24:08.182Z"
+          }
+        },
         "planned_artifacts": [],
-        "observed_artifacts": []
+        "observed_artifacts": [
+          "src/__tests__/unit/workflow/message-clarity-bounds.test.ts"
+        ]
       }
     }
   }
