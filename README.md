@@ -5,11 +5,11 @@
 
 A Model Context Protocol server and target-native installer for governed Spec-Driven Development (SDD) in Claude Code, Codex, and Oh My Pi (OMP).
 
-> **v5.3.0** — Review, security, and multi-slice implementation skills ask once per session whether to run inline or use project agents, and every skill reports agents, parallelism, configured model/effort, and fallbacks. Installed guidance forbids commit/PR attribution lines. Claude Code requires 2.1.284+ for the pinned 5.5 defaults.
+> **v5.3.0** — Review, security, and multi-slice implementation skills ask once per session whether to run inline or use project agents. Every skill reports agents, parallelism, configured model/effort, and fallbacks. Installed guidance forbids commit/PR attribution lines. Claude Code requires 2.1.284+ for the pinned 5.5 defaults.
 
 ## Why sdd-mcp?
 
-Skills own the requirements, design, task-planning, and TDD method plus the user conversation. The MCP runtime stays behind the Skill boundary and owns feature identity, canonical artifact writes, deterministic validation, revision-bound approvals, optional test review, implementation progress, and restart-safe context.
+Skills own the requirements, design, task-planning, and TDD method. Skills also own the user conversation. The MCP runtime stays behind the Skill boundary. The runtime owns feature identity, canonical artifact writes, deterministic validation, revision-bound approvals, optional test review, implementation progress, and restart-safe context.
 
 ```text
 User -> Skill -> MCP -> .spec
@@ -113,7 +113,7 @@ npx sdd-mcp-server install --profile full --target codex --model-roles models.ya
 npx sdd-mcp-server install --target omp --model-roles models.yaml
 ```
 
-The six SDD roles are `planner`, `architect`, `reviewer`, `security-auditor`, `implementer`, and `tdd-guide`; omitted roles retain package defaults. Claude Code routes installed skills and subagents by model and effort. Codex routes generated custom agents by model and reasoning effort, but this cannot change the inline parent's model. OMP routes its generated agents, not host-level `default`/`smol`/`slow`/`plan`/`task`/`advisor` roles. `--model-roles` reads project YAML; it does not change host configuration or validate model availability. See [Model Routing](docs/MODEL-ROUTING.md) for selector syntax and host-specific limits.
+The six SDD roles are `planner`, `architect`, `reviewer`, `security-auditor`, `implementer`, and `tdd-guide`. Omitted roles keep the package defaults. Claude Code routes installed skills and subagents by model and effort. Codex routes generated custom agents by model and reasoning effort. This cannot change the model of the inline parent. OMP routes its generated agents, not host-level `default`/`smol`/`slow`/`plan`/`task`/`advisor` roles. `--model-roles` reads project YAML. It does not change host configuration, and it does not validate model availability. See [Model Routing](docs/MODEL-ROUTING.md) for selector syntax and host-specific limits.
 
 ## Manual workflow invocation
 
@@ -142,7 +142,7 @@ Approvals and optional test-case review are explicit questions inside the releva
 
 Claude Code and Codex lean profiles install skills, steering, and their supported hook guidance. OMP lean installs skills, steering, and agents. Full profiles add rules, contexts, and agents as supported by each host. OMP does not install Markdown as an executable hook; `--target omp --hooks` fails with an explanation.
 
-**Project agents and execution mode.** Whether a skill can use project agents depends on the profile. With no agents installed (Claude Code/Codex `lean`) every skill runs inline and does not ask. With agents installed (`full`; OMP always), `sdd-review`, `sdd-security-check`, and any run with at least two independent implementation slices ask once per session: inline or project agent. Planning skills (requirements, design, tasks, steering) never ask. Every skill reports the mode, agents started, parallelism, configured model/effort, and fallbacks; see [Model Routing](docs/MODEL-ROUTING.md#execution-mode-and-reporting) to verify on each host. SDD agents are subagents, not the Claude Code `/advisor` tool.
+**Project agents and execution mode.** Whether a skill can use project agents depends on the profile. With no agents installed (Claude Code/Codex `lean`), every skill runs inline and does not ask. With agents installed (`full`; OMP always), these skills ask once per session, inline or project agent: `sdd-review`, `sdd-security-check`, and any run with at least two independent implementation slices. Planning skills (requirements, design, tasks, steering) never ask. Every skill reports the mode, agents started, parallelism, configured model/effort, and fallbacks. To verify on each host, see [Model Routing](docs/MODEL-ROUTING.md#execution-mode-and-reporting). SDD agents are subagents, not the Claude Code `/advisor` tool.
 
 See [Installation Guide](docs/INSTALL-GUIDE.md) and [Model Routing](docs/MODEL-ROUTING.md).
 
@@ -192,7 +192,7 @@ Feature-scoped tools use `featureName`; v5 payloads bind phase mutations and app
 
 ## Integrator/runtime reference: compact continuation
 
-The runtime's context API defaults to bounded approved context and supports exact-response ETags. Phase Skills manage fingerprints and draft opt-in internally. Integrators that call the protocol directly must preserve the returned fingerprint for `ifNoneMatch`, request unapproved source only explicitly in full mode, and treat `.spec/specs/<feature>/spec.json` as workflow authority. Compact, standard, and full default bounds are 2,048, 4,096, and 16,384 `estimatedTokens`; full mode never silently truncates raw documents.
+The runtime's context API defaults to bounded approved context and supports exact-response ETags. Phase Skills manage fingerprints and draft opt-in internally. Integrators that call the protocol directly must follow three rules. Preserve the returned fingerprint for `ifNoneMatch`. Request unapproved source only explicitly in full mode. Treat `.spec/specs/<feature>/spec.json` as workflow authority. Compact, standard, and full default bounds are 2,048, 4,096, and 16,384 `estimatedTokens`. Full mode never silently truncates raw documents.
 
 ## Context and usage measurement
 
@@ -212,7 +212,13 @@ Three-run fresh-session A/B comparisons used comparable provider-reported median
 
 ## Routing summary
 
-Claude executes a skill in the current turn with its configured model and effort (default Claude Opus 5.5/high for high-level work and Claude Sonnet 5.5/medium for implementation/TDD); installed Claude subagents have matching metadata. Codex runs inline by default and may use one configured GPT-6 Sol/xhigh custom agent for review and security after the user chooses it once per session; its agent metadata does not change the parent turn. OMP executes invoked SDD skills inline, with the installed `.omp/extensions/sdd-skill-routing.js` switching the parent to the configured model/thinking level (GPT-6 Sol/xhigh for high-level work, GPT-6 Luna/medium for implementation/TDD) for the turn and restoring it afterward. OMP’s `.omp/agents` advisors remain explicit opt-in only, allow one child, and cannot nest or retry. Implementation, TDD, and simple tasks remain inline unless genuinely independent parallel slices justify delegation.
+Claude executes a skill in the current turn with its configured model and effort. The defaults are Claude Opus 5.5/high for high-level work and Claude Sonnet 5.5/medium for implementation/TDD. Installed Claude subagents have matching metadata.
+
+Codex runs inline by default. It may use one configured GPT-6 Sol/xhigh custom agent for review and security, after the user chooses it once per session. Its agent metadata does not change the parent turn.
+
+OMP executes invoked SDD skills inline. The installed `.omp/extensions/sdd-skill-routing.js` switches the parent to the configured model/thinking level for the turn, then restores it afterward. The defaults are GPT-6 Sol/xhigh for high-level work and GPT-6 Luna/medium for implementation/TDD. OMP’s `.omp/agents` advisors remain explicit opt-in only. They allow one child, and they cannot nest or retry.
+
+Implementation, TDD, and simple tasks remain inline unless genuinely independent parallel slices justify delegation.
 
 See [docs/MODEL-ROUTING.md](docs/MODEL-ROUTING.md) for enforcement and fallback boundaries.
 
