@@ -15,6 +15,53 @@ Skills own the requirements, design, task-planning, and TDD method. Skills also 
 User -> Skill -> MCP -> .spec
 ```
 
+## Is sdd-mcp the right fit?
+
+No workflow tool is best for every team. Each one makes a different trade-off between control, speed, and reach. Pick the option that matches your situation.
+
+### When sdd-mcp fits
+
+Use sdd-mcp when most of these statements are true:
+
+- You need a record of what a person approved. The runtime binds each approval to an exact revision and artifact hash.
+- You want the tool, not only the prompt, to block a skipped phase. A later phase Skill stops when the earlier phase is not approved.
+- Work spans several sessions or people. Durable state in `.spec/specs/<feature>/spec.json` lets any session resume the same feature.
+- You want requirements in EARS form, design decisions, and tasks to trace to each other, and you want that checked.
+- Your team uses Claude Code, Codex, or OMP. sdd-mcp supports only these three hosts.
+
+### When another option fits better
+
+- **You want to move fast on a small change.** Formal phases add questions and approvals. Use `simple-task` here, or a lighter tool.
+- **You use a host that sdd-mcp does not support,** for example Cursor or GitHub Copilot. Superpowers and OpenSpec support many more hosts.
+- **You want to edit any artifact at any time.** sdd-mcp blocks drift from an approved artifact on purpose. OpenSpec is designed for free iteration.
+- **You want the agent to follow a method on its own,** without commands. Superpowers skills activate automatically. sdd-mcp workflow skills run only when you invoke them.
+
+### Comparison with Superpowers and OpenSpec
+
+This table uses each project's own README as of October 2026. Check the linked projects for current details.
+
+| | sdd-mcp | [Superpowers](https://github.com/obra/superpowers) | [OpenSpec](https://github.com/Fission-AI/OpenSpec) |
+|---|---|---|---|
+| Core idea | Governed phases with a state runtime | A development method built from composable skills | Lightweight specs organized as changes |
+| Hosts | Claude Code, Codex, OMP | 18+ coding agents | 30+ AI tools |
+| How it starts | You invoke a phase Skill | Skills activate automatically before a task | You run slash commands such as `/opsx:propose` |
+| Phase gates | Enforced by the MCP runtime | Approval asked in the conversation | None by design ("no rigid phase gates") |
+| Approval record | Revision and hash in `spec.json` | Not described as a stored record | No approval record in the core workflow |
+| Artifacts | `requirements.md`, `design.md`, `tasks.md` per feature | Design document and implementation plan | `proposal.md`, delta specs, `design.md`, `tasks.md` per change, then archive |
+| Implementation method | Test-first tasks with recorded RED and GREEN evidence | TDD, git worktrees, subagent per task with review | `/opsx:apply` works through tasks |
+| Extra moving parts | MCP server plus installed Skills | Plugin or skill install | CLI plus generated commands |
+| License | MIT | MIT | MIT |
+
+### Trade-offs
+
+| Choice | What you gain | What you pay |
+|---|---|---|
+| sdd-mcp | Enforced gates, an auditable approval record, and resumable state | More ceremony, an MCP runtime to install, and only three hosts |
+| Superpowers | A strong default method that the agent applies without commands, on many hosts | Gates live in the conversation, so nothing outside the agent enforces them |
+| OpenSpec | Low ceremony, free iteration, change history through archive, and many hosts | Alignment depends on team discipline, because no tool blocks a skipped step |
+
+A short rule: choose sdd-mcp when a missed approval costs more than the extra steps. Choose a lighter tool when speed of iteration matters more than proof of approval.
+
 ## One-time personal setup
 
 Install the runtime and manual Skills for Claude Code, Codex, and OMP once per local user/profile, from any directory:
