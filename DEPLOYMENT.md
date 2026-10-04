@@ -1,6 +1,6 @@
 # MCP SDD Server Deployment Guide
 
-This document provides comprehensive instructions for deploying the MCP SDD Server in various environments.
+This document explains how to deploy the MCP SDD Server in various environments.
 
 ## Quick Start
 
@@ -540,4 +540,4 @@ docker-compose up -d --no-deps --remove-orphans
 curl http://localhost:3000/health
 ```
 
-For additional support and advanced configurations, consult the main documentation or contact the development team.
+For more help or advanced configurations, read the main documentation or contact the development team.

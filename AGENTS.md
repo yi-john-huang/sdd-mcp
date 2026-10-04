@@ -19,9 +19,15 @@ This repository develops `sdd-mcp-server`, a spec-driven workflow for Claude Cod
 
 ## Model routing
 
-Planning, architecture, review, and security run inline on Sol/medium by default in OMP; project Sol/xhigh advisors are explicit opt-in. Claude uses current-turn Opus/Sonnet routing, while Codex may use one configured Sol/xhigh custom agent for review and security after a once-per-session choice. Review, security, and independent implementation slices ask once per session (inline or project agent) only when agents are installed, and every skill reports agents started, parallelism, configured model/effort, and fallbacks.
+Planning, architecture, review, and security run inline on Sol/medium by default in OMP. Project Sol/xhigh advisors are explicit opt-in.
 
-Run implementation, TDD, simple tasks, and commits in the parent unless at least two genuinely independent implementation slices can run concurrently. If an advisor is explicitly invoked, allow one specialist without nesting; on model, auth, or agent failure, record one fallback and continue in the parent without retrying.
+Claude uses current-turn Opus/Sonnet routing. Codex may use one configured Sol/xhigh custom agent for review and security, after the user chooses once per session.
+
+Review, security, and independent implementation slices ask once per session (inline or project agent). They ask only when agents are installed. Every skill reports agents started, parallelism, configured model/effort, and fallbacks.
+
+Run implementation, TDD, simple tasks, and commits in the parent. Use agents only when at least two genuinely independent implementation slices can run concurrently.
+
+If an advisor is explicitly invoked, allow one specialist without nesting. On model, auth, or agent failure, record one fallback and continue in the parent without retrying.
 
 ## Commits and pull requests
 
