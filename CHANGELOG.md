@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [5.4.0] - 2026-10-04
+
 ### Added
 - Add the `output-clarity-ladder` skill. It applies to explanation, summary, and teaching replies. It writes about 80% of the way to ASD-STE100. It moves to a diagram, HTML page, or explainer video only when that format makes the same facts easier to understand.
 - Ship Japanese (`references/ja.md`) and Traditional Chinese (`references/zh-TW.md`) guidance with the skill. Other languages use the English rules.

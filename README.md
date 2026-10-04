@@ -125,12 +125,12 @@ Use this path when the repository has never had sdd-mcp-generated guidance. The 
 
 ```bash
 # Recommended explicit lean installation
-npx sdd-mcp-server@5.3.0 install --profile lean --target claude-code
-npx sdd-mcp-server@5.3.0 install --profile lean --target codex
-npx sdd-mcp-server@5.3.0 install --profile lean --target omp
+npx sdd-mcp-server@5.4.0 install --profile lean --target claude-code
+npx sdd-mcp-server@5.4.0 install --profile lean --target codex
+npx sdd-mcp-server@5.4.0 install --profile lean --target omp
 
 # Interactive full installation: choose Claude Code, Codex, or OMP
-npx sdd-mcp-server@5.3.0 install --profile full
+npx sdd-mcp-server@5.4.0 install --profile full
 ```
 
 Use the local entrypoint only when this checkout itself is the intended project install. It does not repair personal runtime connection. Build once, then install explicitly:
@@ -214,7 +214,7 @@ Use this path when the project already contains generated sdd-mcp files from an 
 
 ```bash
 # Replace <target> with claude-code, codex, or omp
-npx sdd-mcp-server@5.3.0 install \
+npx sdd-mcp-server@5.4.0 install \
   --profile full \
   --target <target> \
   --refresh-generated
