@@ -28,11 +28,13 @@ jobs:
             exit 1
           fi
 
+      # Keep the release token out of .git/config while repository scripts run.
+      # Only the final push step receives it.
       - uses: actions/checkout@v4
         with:
           ref: develop
           fetch-depth: 0
-          token: ${{ secrets.RELEASE_TOKEN }}
+          persist-credentials: false
 
       - uses: actions/setup-node@v4
         with:
@@ -57,6 +59,7 @@ jobs:
       - name: Commit and push to develop
         env:
           NEXT: ${{ steps.plan.outputs.next }}
+          RELEASE_TOKEN: ${{ secrets.RELEASE_TOKEN }}
         run: |
           if git diff --quiet; then
             echo "develop already holds $NEXT."
@@ -64,7 +67,7 @@ jobs:
             git config user.name "github-actions[bot]"
             git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
             git commit -am "chore(release): prepare $NEXT"
-            git push origin HEAD:develop
+            git push "https://x-access-token:${RELEASE_TOKEN}@github.com/${GITHUB_REPOSITORY}.git" HEAD:develop
           fi
 
       - name: Summary

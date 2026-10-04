@@ -71,7 +71,7 @@ scripts/setup-release.sh
 
 ### 1. Release token for the bump commit
 
-`develop` is protected, so the default Actions token cannot push to it. Admins bypass that protection, so a token from an admin account can.
+`develop` is protected, so the default Actions token cannot push to it. Branch protection does not apply to admins today (`enforce_admins` is off). So a token from an admin account should be able to push. The first release pull request confirms it. If you later turn on "Do not allow bypassing the above settings", this push stops working.
 
 1. Create a fine-grained personal access token from an admin account of this repository.
 2. Limit it to the `yi-john-huang/sdd-mcp` repository.
@@ -98,7 +98,8 @@ Create the labels `release:patch`, `release:minor`, and `release:major` in the r
 | Symptom | Cause | Fix |
 |---|---|---|
 | Prepare fails with "Add the RELEASE_TOKEN secret" | The secret is missing | Do setup step 1 |
-| Prepare fails on `git push` | The token is expired, or its account is not an admin | Create a new token from an admin account |
+| Prepare fails on `git push` with an authentication error | The token is expired or revoked | Create a new token and run `scripts/setup-release.sh` again |
+| Prepare fails on `git push` with a protected-branch error | The token's account is not an admin, the token lacks Contents: Read and write, or admins can no longer bypass protection on `develop` | Use an admin account's token with Contents: Read and write. Check that "Do not allow bypassing the above settings" is off for `develop` |
 | Publish fails with a 404 or an OIDC error | Trusted publishing is not configured for `release-publish.yml` | Do setup step 2, then rerun the job |
 | Publish says "Nothing to release" | `package.json` holds a version that is already tagged and published | Open the release pull request from `develop` so that the prepare job runs |
 
