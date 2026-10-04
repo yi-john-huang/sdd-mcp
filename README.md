@@ -298,4 +298,6 @@ npm run build
 npm test
 ```
 
+Releases are automated. A merge from `develop` to `master` bumps the version, tags it, and publishes it to npm. See [docs/RELEASING.md](docs/RELEASING.md).
+
 MIT licensed. See [CHANGELOG.md](CHANGELOG.md) for release history.

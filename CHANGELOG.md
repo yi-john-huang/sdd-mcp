@@ -16,6 +16,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Root guidance and the `CLAUDE.md` and `AGENTS.md` templates name the skill in one sentence.
 - Validation blockers and recoverable runtime errors state the fact, then the next action. Each message has at most 2 sentences and at most 25 words per sentence. Error codes, blocker references, and numeric limits do not change.
 
+### Build
+- Add GitHub Actions CI for pull requests and pushes to `develop`.
+- Automate releases. A `develop` to `master` pull request commits the next version, chosen from Conventional Commits or a `release:*` label. The merge publishes to npm with trusted publishing and creates the tag and GitHub Release. See `docs/RELEASING.md`.
+
 ### Documentation
 - Rewrite the README, `AGENTS.md`, `ARCHITECTURE.md`, `DEPLOYMENT.md`, and the guides in `docs/` to follow the skill's writing rules. Headings, commands, links, and numbers stay the same.
 
