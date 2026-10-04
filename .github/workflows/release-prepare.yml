@@ -1,0 +1,81 @@
+name: Release prepare
+
+# When a develop -> master pull request opens or changes, commit the next version to develop.
+# The merge then carries the bump to master, where release-publish.yml tags and publishes it.
+on:
+  pull_request:
+    branches: [master]
+    types: [opened, reopened, synchronize, labeled, unlabeled]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release-prepare
+  cancel-in-progress: false
+
+jobs:
+  bump:
+    if: github.event.pull_request.head.ref == 'develop' && github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-latest
+    steps:
+      - name: Require the release token
+        env:
+          RELEASE_TOKEN: ${{ secrets.RELEASE_TOKEN }}
+        run: |
+          if [ -z "$RELEASE_TOKEN" ]; then
+            echo "::error::Add the RELEASE_TOKEN secret (see docs/RELEASING.md). develop is protected, so the default token cannot push the version bump."
+            exit 1
+          fi
+
+      - uses: actions/checkout@v4
+        with:
+          ref: develop
+          fetch-depth: 0
+          token: ${{ secrets.RELEASE_TOKEN }}
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+
+      - name: Plan the version
+        id: plan
+        env:
+          LABELS: ${{ join(github.event.pull_request.labels.*.name, ',') }}
+        run: node scripts/release.mjs plan --labels "$LABELS" | tee -a "$GITHUB_OUTPUT"
+
+      - name: Apply the version
+        env:
+          NEXT: ${{ steps.plan.outputs.next }}
+        run: |
+          if ! printf '%s' "$NEXT" | grep -Eq '^[0-9]+\.[0-9]+\.[0-9]+$'; then
+            echo "::error::Planned version '$NEXT' is not X.Y.Z"
+            exit 1
+          fi
+          node scripts/release.mjs apply --to "$NEXT"
+
+      - name: Commit and push to develop
+        env:
+          NEXT: ${{ steps.plan.outputs.next }}
+        run: |
+          if git diff --quiet; then
+            echo "develop already holds $NEXT."
+          else
+            git config user.name "github-actions[bot]"
+            git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+            git commit -am "chore(release): prepare $NEXT"
+            git push origin HEAD:develop
+          fi
+
+      - name: Summary
+        env:
+          RELEASED: ${{ steps.plan.outputs.released }}
+          BUMP: ${{ steps.plan.outputs.bump }}
+          NEXT: ${{ steps.plan.outputs.next }}
+        run: |
+          {
+            echo "### Release plan"
+            echo "- Released: \`$RELEASED\`"
+            echo "- Bump: \`$BUMP\` (override with a release:patch, release:minor, or release:major label)"
+            echo "- Next: \`$NEXT\`"
+          } >> "$GITHUB_STEP_SUMMARY"
