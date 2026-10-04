@@ -19,22 +19,33 @@ User -> Skill -> MCP -> .spec
 
 No workflow tool is best for every team. Each one makes a different trade-off between control, speed, and reach. Pick the option that matches your situation.
 
-### When sdd-mcp fits
+### Which option fits
 
-Use sdd-mcp when most of these statements are true:
+Answer these questions in order. Each path ends at one option.
 
-- You need a record of what a person approved. The runtime binds each approval to an exact revision and artifact hash.
-- You want the tool, not only the prompt, to block a skipped phase. A later phase Skill stops when the earlier phase is not approved.
-- Work spans several sessions or people. Durable state in `.spec/specs/<feature>/spec.json` lets any session resume the same feature.
-- You want requirements in EARS form, design decisions, and tasks to trace to each other, and you want that checked.
-- Your team uses Claude Code, Codex, or OMP. sdd-mcp supports only these three hosts.
+```mermaid
+flowchart TD
+    A[New piece of work] --> B{Small, clear change?}
+    B -->|Yes| S[sdd-mcp simple-task<br/>or any light tool]
+    B -->|No| C{Host is Claude Code,<br/>Codex, or OMP?}
+    C -->|No| D{Want the agent to apply<br/>a method automatically?}
+    D -->|Yes| SP[Superpowers]
+    D -->|No| OS[OpenSpec]
+    C -->|Yes| E{Does a missed approval<br/>cost more than extra steps?}
+    E -->|Yes| SDD[sdd-mcp formal workflow]
+    E -->|No| F{Want free iteration on<br/>any artifact at any time?}
+    F -->|Yes| OS
+    F -->|No| SP
+```
 
-### When another option fits better
+On the sdd-mcp path, you also get these properties:
 
-- **You want to move fast on a small change.** Formal phases add questions and approvals. Use `simple-task` here, or a lighter tool.
-- **You use a host that sdd-mcp does not support,** for example Cursor or GitHub Copilot. Superpowers and OpenSpec support many more hosts.
-- **You want to edit any artifact at any time.** sdd-mcp blocks drift from an approved artifact on purpose. OpenSpec is designed for free iteration.
-- **You want the agent to follow a method on its own,** without commands. Superpowers skills activate automatically. sdd-mcp workflow skills run only when you invoke them.
+- The runtime binds each approval to an exact revision and artifact hash.
+- A later phase Skill stops when the earlier phase is not approved.
+- Durable state in `.spec/specs/<feature>/spec.json` lets any session or person resume the same feature.
+- Validation checks that EARS requirements, design decisions, and tasks trace to each other.
+
+sdd-mcp does not support other hosts, for example Cursor or GitHub Copilot. Superpowers and OpenSpec support many more hosts.
 
 ### Comparison with Superpowers and OpenSpec
 
