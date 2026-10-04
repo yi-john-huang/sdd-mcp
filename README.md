@@ -5,7 +5,7 @@
 
 A Model Context Protocol server and target-native installer for governed Spec-Driven Development (SDD) in Claude Code, Codex, and Oh My Pi (OMP).
 
-> **v5.3.0** — Review, security, and multi-slice implementation skills ask once per session whether to run inline or use project agents. Every skill reports agents, parallelism, configured model/effort, and fallbacks. Installed guidance forbids commit/PR attribution lines. Claude Code requires 2.1.284+ for the pinned 5.5 defaults.
+> **v5.4.0** — The new `output-clarity-ladder` skill makes explanation, summary, and teaching replies easier to check. It is the only skill the model applies without a command, and it ships English, Japanese, and Traditional Chinese guidance. Runtime blockers and errors now state the next action. Releases are automated: a merge to `master` publishes to npm with provenance. Claude Code requires 2.1.284+ for the pinned 5.5 defaults.
 
 ## Why sdd-mcp?
 
