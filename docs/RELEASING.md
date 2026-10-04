@@ -49,9 +49,25 @@ The script does not write release prose. Update these parts by hand when a relea
 
 Write changelog entries under `[Unreleased]` as you merge work to `develop`. The GitHub Release uses that section as its notes.
 
+## Credentials
+
+| Credential | Service | Used for | Setup |
+|---|---|---|---|
+| `RELEASE_TOKEN` secret | GitHub | `release-prepare.yml` pushes the bump commit to the protected `develop` branch. Nothing else uses it. | You create it once (step 1) |
+| `GITHUB_TOKEN` | GitHub | `release-publish.yml` creates the tag and the GitHub Release | None. Actions provides it on each run |
+| None | npm | `release-publish.yml` publishes the package | None. Trusted publishing uses a short-lived OIDC credential (step 2) |
+
+No npm token exists anywhere in this pipeline.
+
 ## One-time setup
 
 Do these steps once. Without them, the release jobs fail with an error that names the missing part.
+
+The script `scripts/setup-release.sh` guides you through steps 1 to 3. It checks that you are a repository admin. It reads the token from a hidden prompt, checks it, and stores it as the secret. It creates the labels. Then it prints the values for step 2.
+
+```bash
+scripts/setup-release.sh
+```
 
 ### 1. Release token for the bump commit
 
