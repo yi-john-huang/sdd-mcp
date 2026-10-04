@@ -5,6 +5,26 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+## [5.4.0] - 2026-10-04
+
+### Added
+- Add the `output-clarity-ladder` skill. It applies to explanation, summary, and teaching replies. It writes about 80% of the way to ASD-STE100. It moves to a diagram, HTML page, or explainer video only when that format makes the same facts easier to understand.
+- Ship Japanese (`references/ja.md`) and Traditional Chinese (`references/zh-TW.md`) guidance with the skill. Other languages use the English rules.
+
+### Changed
+- `output-clarity-ladder` is the only model-invocable skill. Claude Code and OMP render it without `disable-model-invocation`. Codex renders `allow_implicit_invocation: true`. All workflow skills stay manual-only.
+- Root guidance and the `CLAUDE.md` and `AGENTS.md` templates name the skill in one sentence.
+- Validation blockers and recoverable runtime errors state the fact, then the next action. Each message has at most 2 sentences and at most 25 words per sentence. Error codes, blocker references, and numeric limits do not change.
+
+### Build
+- Add GitHub Actions CI for pull requests and pushes to `develop`.
+- Automate releases. A `develop` to `master` pull request commits the next version, chosen from Conventional Commits or a `release:*` label. The merge publishes to npm with trusted publishing and creates the tag and GitHub Release. See `docs/RELEASING.md`.
+
+### Documentation
+- Rewrite the README, `AGENTS.md`, `ARCHITECTURE.md`, `DEPLOYMENT.md`, and the guides in `docs/` to follow the skill's writing rules. Headings, commands, links, and numbers stay the same.
+
 ## [5.3.0] - 2026-10-02
 
 ### Changed

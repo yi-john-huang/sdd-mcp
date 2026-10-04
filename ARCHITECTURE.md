@@ -5,7 +5,7 @@
 
 ## Overview
 
-SDD-MCP combines one packaged MCP runtime with target-native, progressively loaded guidance for Claude Code, Codex, and Oh My Pi (OMP). Durable workflow state lives under `.spec/specs/<featureName>/`; generated host guidance is not the authority.
+SDD-MCP combines one packaged MCP runtime with target-native, progressively loaded guidance for Claude Code, Codex, and Oh My Pi (OMP). Durable workflow state lives under `.spec/specs/<featureName>/`. Generated host guidance is not the authority.
 
 ```mermaid
 graph TB
@@ -23,23 +23,23 @@ graph TB
 The package separates four concerns:
 
 1. **MCP tools** perform stateful operations and validation.
-2. **Skills** carry concise, manual-only workflow instructions.
-3. **Application services** enforce approval, checkpoint, path, and context invariants.
-4. **Target renderers** translate canonical assets and role routes into host-native files.
+2. **Skills** carry short, manual-only workflow instructions.
+3. **Application services** enforce the rules for approval, checkpoint, path, and context.
+4. **Target renderers** turn canonical assets and role routes into host-native files.
 
 ## Layered architecture
 
-- **Presentation** (`src/index.ts`, `src/infrastructure/mcp/`, `src/adapters/cli/`): validates public schemas, injects the workspace root, and formats MCP responses.
+- **Presentation** (`src/index.ts`, `src/infrastructure/mcp/`, `src/adapters/cli/`): validates public schemas, adds the workspace root, and formats MCP responses.
 - **Application** (`src/application/services/`): coordinates workflow transitions, context selection, project initialization, templates, steering, and quality checks.
 - **Domain** (`src/domain/`): workflow entities, value objects, ports, and errors.
 - **Infrastructure** (`src/infrastructure/`): filesystem, persistence, MCP transport, template, validation, and atomic-write adapters.
 - **Installer** (`src/cli/`): target resolution, recursive rendering, managed ownership, backups, and root guidance.
 
-Both `sdd-entry.js` and the documented `mcp-server.js` launcher call the compiled TypeScript runtime; neither maintains a second handler implementation.
+Both `sdd-entry.js` and the documented `mcp-server.js` launcher call the compiled TypeScript runtime. Neither launcher keeps a second handler implementation.
 
 ## Canonical MCP surface
 
-v4 exposes exactly 16 tools through every runtime surface:
+v4 exposes exactly 16 tools on every runtime surface:
 
 | Workflow | Context and status | Validation and project guidance |
 |---|---|---|
@@ -50,28 +50,28 @@ v4 exposes exactly 16 tools through every runtime surface:
 | `sdd-implement` |  | `sdd-validate-design` |
 | `sdd-spec-impl` |  | `sdd-validate-gap` |
 
-Every existing-feature operation uses `featureName`. The server supplies the validated project root internally; public `projectId` locators no longer exist. `sdd-status` may omit `featureName` to list contained specs. `sdd-list-skills` was removed because native hosts discover skills and the installer already provides `--list`.
+Every operation on an existing feature uses `featureName`. The server supplies the validated project root internally. Public `projectId` locators no longer exist. `sdd-status` may omit `featureName` to list the specs it contains. The project removed `sdd-list-skills`. Native hosts discover skills, and the installer already provides `--list`.
 
-One `SpecPathResolver` applies child-name validation, canonical `realpath` containment, and symlink-escape rejection. Disk `spec.json` is durable authority, so approval and test-case review continue to work after an MCP restart.
+One `SpecPathResolver` validates child names, checks canonical `realpath` containment, and rejects symlink escapes. The `spec.json` file on disk is the durable authority. Approval and test-case review therefore keep working after an MCP restart.
 
 ## Workflow engine
 
-The ordered phases are requirements → design → tasks → implementation. `WorkflowEngineService` serializes transitions per feature and re-reads state after acquiring the feature lock.
+The ordered phases are requirements → design → tasks → implementation. `WorkflowEngineService` serializes transitions for each feature. It re-reads state after it acquires the feature lock.
 
-Approval invariants include:
+Approval invariants include these rules:
 
-- the requested document must exist;
-- prior phases must be approved;
-- tasks approval honors the optional test-case review checkpoint;
-- `spec.json` is atomically committed before the derived handoff is published;
-- a post-commit handoff failure returns an approved transition with `pending-regeneration`, never stale content;
-- repeated approval is idempotent and repairs only a missing or stale cache.
+- The requested document must exist.
+- Prior phases must be approved.
+- Tasks approval follows the optional test-case review checkpoint.
+- The service commits `spec.json` atomically before it publishes the derived handoff.
+- If the handoff fails after the commit, the service returns an approved transition with `pending-regeneration`. It never returns stale content.
+- Repeated approval is idempotent. It repairs only a missing or stale cache.
 
-Rollback is an internal disk-addressable service operation. It atomically resets affected approvals and invalidates the rebuildable handoff cache; v4 does not expose a public rollback tool.
+Rollback is an internal, disk-addressable service operation. It atomically resets the affected approvals and invalidates the rebuildable handoff cache. v4 does not expose a public rollback tool.
 
 ## Phase-aware context
 
-`ContextCompactionService` accepts an internal request containing `projectRoot` and public options centered on `featureName`. It derives the latest approved phase unless a phase is requested explicitly. Draft/future artifacts are excluded from compact and standard context; full mode can include an explicitly requested draft only with `includeUnapproved: true`.
+`ContextCompactionService` accepts an internal request that contains `projectRoot` and public options based on `featureName`. It derives the latest approved phase unless the caller requests a phase explicitly. Compact and standard context exclude draft and future artifacts. Full mode includes an explicitly requested draft only with `includeUnapproved: true`.
 
 Default bounds are:
 
@@ -81,14 +81,14 @@ Default bounds are:
 | standard | 4,096 `estimatedTokens` | broader approved context |
 | full | 16,384 `estimatedTokens` | selected raw documents; never silently truncated |
 
-`estimatedTokens` is deterministic `ceil(characters / 4)`, not a provider tokenizer count. A request below the mandatory envelope fails with a typed budget error. Full overflow also fails instead of truncating.
+`estimatedTokens` is the deterministic value `ceil(characters / 4)`. It is not a provider tokenizer count. A request below the mandatory envelope fails with a typed budget error. A full-mode overflow also fails. It does not truncate.
 
-Two hashes have distinct roles:
+Two hashes have different roles:
 
-- `sourceFingerprint` hashes normalized workflow state, selected source names and bytes, and the handoff schema;
-- `fingerprint` additionally hashes mode, budget, inclusion options, and selection algorithm and acts as the exact-response ETag.
+- `sourceFingerprint` hashes the normalized workflow state, the names and bytes of the selected sources, and the handoff schema.
+- `fingerprint` also hashes the mode, the budget, the inclusion options, and the selection algorithm. It acts as the exact-response ETag.
 
-A request whose `ifNoneMatch` equals `fingerprint` returns `cacheStatus: not-modified` without `content`. Only the canonical default compact payload is persisted at `.spec/specs/<featureName>/context/handoff.md`; standard, full, and custom-budget responses are deterministic, on-demand results. There are no duplicate phase handoff files.
+A request whose `ifNoneMatch` equals `fingerprint` returns `cacheStatus: not-modified` without `content`. The service saves only the canonical default compact payload, at `.spec/specs/<featureName>/context/handoff.md`. Standard, full, and custom-budget responses are deterministic results that the service builds on demand. There are no duplicate phase handoff files.
 
 ## Target installation architecture
 
@@ -100,24 +100,24 @@ The resolver chooses one of three targets before writing:
 | Codex | `AGENTS.md` | `.agents/skills` | `.codex/guidance/rules` | `.codex/agents` | `.codex/guidance/contexts` |
 | OMP | `.omp/AGENTS.md` | `.omp/skills` | `.omp/rules` | `.omp/agents` | `.omp/contexts` |
 
-Lean/full selection is target-aware. OMP lean includes skills, steering, and agents; full adds rules and contexts. Claude Code and Codex retain their supported hook components. OMP Markdown is guidance only and is never described or installed as an executable native hook.
+Lean and full selection depend on the target. OMP lean includes skills, steering, and agents. OMP full adds rules and contexts. Claude Code and Codex keep their supported hook components. OMP Markdown is guidance only. The project never describes or installs it as an executable native hook.
 
-All SDD skills are manual-only and use progressive loading. Invocation is `/<name>` for Claude Code, `$<name>` for Codex, and `/skill:<name>` for OMP. Claude rules have native `paths`; OMP rules use bounded metadata plus `globs` and `alwaysApply: false`; Codex uses compact guidance pointers.
+All SDD skills are manual-only and use progressive loading. The user invokes a skill with `/<name>` in Claude Code, `$<name>` in Codex, and `/skill:<name>` in OMP. Claude rules have native `paths`. OMP rules use bounded metadata plus `globs` and `alwaysApply: false`. Codex uses compact guidance pointers.
 
 ### Managed ownership
 
-`.sdd-mcp/install-manifest.json` records hashes by target. Unchanged generated outputs upgrade automatically, modified outputs remain untouched, and obsolete unchanged assets are backed up before removal. `--refresh-generated` backs selected assets up under `.sdd-mcp/backups/<timestamp>/<target>/` and then rebuilds only the recognized package-owned set. Shared mutable steering remains user-owned.
+`.sdd-mcp/install-manifest.json` records hashes for each target. The installer upgrades unchanged generated outputs automatically. It leaves modified outputs untouched. It backs up obsolete unchanged assets before it removes them. `--refresh-generated` backs up the selected assets under `.sdd-mcp/backups/<timestamp>/<target>/`. It then rebuilds only the recognized package-owned set. The user owns shared mutable steering.
 
 ## Model routing boundary
 
-`ROLE_MODEL_ROUTES` and `SKILL_AGENT_ROUTES` own defaults. At installation, `loadModelRoutes` validates optional `--model-roles <file>` YAML once and passes the resolved SDD role table to skill and agent renderers. Host-global settings and the persistent parent-session model are unchanged; Claude's skill override applies only for the invoked turn. See [docs/MODEL-ROUTING.md](docs/MODEL-ROUTING.md).
+`ROLE_MODEL_ROUTES` and `SKILL_AGENT_ROUTES` own the defaults. At installation, `loadModelRoutes` validates the optional `--model-roles <file>` YAML once. It passes the resolved SDD role table to the skill and agent renderers. Host-global settings and the persistent parent-session model do not change. Claude's skill override applies only for the invoked turn. See [docs/MODEL-ROUTING.md](docs/MODEL-ROUTING.md).
 
-- Claude installs native skill `model`/`effort` overrides for the invoked turn and corresponding subagent frontmatter; it does not create a redundant specialist.
-- Codex generated custom agent TOML receives per-role `model`/`model_reasoning_effort`. High-level skills may request one advisor, but selection remains instruction-driven and cannot change an inline parent.
-- OMP performs high-level work inline on the parent by default. `.omp/agents` advisors are explicit opt-in, one child maximum, with no spawn capability, retry, or nesting. Their model/thinking fields are generated from the resolved role route.
-- Implementation, TDD, and simple tasks run inline unless at least two truly independent slices run concurrently.
+- Claude gets native skill `model`/`effort` overrides for the invoked turn. It also gets matching subagent frontmatter. The installer does not create a redundant specialist.
+- Codex gets generated custom agent TOML with per-role `model`/`model_reasoning_effort`. High-level skills may request one advisor. Instructions drive that selection, and it cannot change an inline parent.
+- OMP does high-level work inline on the parent by default. `.omp/agents` advisors are explicit opt-in. They allow one child at most, with no spawn capability, no retry, and no nesting. The installer generates their model and thinking fields from the resolved role route.
+- Implementation, TDD, and simple tasks run inline. They run in parallel only when at least two truly independent slices exist.
 
-This inline-default OMP policy follows real A/B evidence: automatic high-effort child requests increased median cost. Static route metadata cannot inspect the active parent model or guarantee a Codex spawn. Model availability and effort support are host/provider-dependent and are not checked during installation.
+This inline-default OMP policy follows real A/B evidence. Automatic high-effort child requests increased the median cost. Static route metadata cannot inspect the active parent model. It cannot guarantee a Codex spawn. Model availability and effort support depend on the host and provider. The installer does not check them.
 
 ## Measurement model
 
@@ -128,6 +128,6 @@ The packaged `npx sdd-mcp-server context-report` keeps these categories separate
 3. provider-reported usage and cost;
 4. unobservable host payload, reported as unknown.
 
-Fresh full-install static reductions versus v3.5.1 were **74.37% Codex**, **83.21% OMP**, and **95.64% Claude Code**. These are exact repository byte measurements, not provider token claims.
+Fresh full-install static reductions versus v3.5.1 were **74.37% Codex**, **83.21% OMP**, and **95.64% Claude Code**. These are exact repository byte measurements. They are not provider token claims.
 
-Comparable provider-reported three-run median costs improved **6.83% simple**, **11.79% medium**, **14.09% requirements**, **9.12% design**, **1.74% security**, and **1.87% repeated context**. All task-quality checks passed. Static reductions and observed costs remain separate evidence classes.
+Comparable provider-reported three-run median costs improved by these amounts: **6.83% simple**, **11.79% medium**, **14.09% requirements**, **9.12% design**, **1.74% security**, and **1.87% repeated context**. All task-quality checks passed. Static reductions and observed costs stay in separate evidence classes.

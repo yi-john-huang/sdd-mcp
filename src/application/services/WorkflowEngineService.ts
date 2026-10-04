@@ -192,13 +192,13 @@ export class WorkflowEngineService {
       await this.assertNoApprovedArtifactDrift(featureRoot, spec);
       const record = spec.approvals[request.phase];
       this.assertPriorApproved(request.phase, spec.approvals);
-      if (record.approved) throw new GovernanceError('PhaseNotApproved', `${request.phase} is already approved`);
-      if (record.revision !== request.expectedRevision) throw new GovernanceError('RevisionConflict', `Expected revision ${request.expectedRevision}, found ${record.revision}`);
+      if (record.approved) throw new GovernanceError('PhaseNotApproved', `${request.phase} is already approved. Reload status and continue with the next phase.`);
+      if (record.revision !== request.expectedRevision) throw new GovernanceError('RevisionConflict', `Expected revision ${request.expectedRevision}, found ${record.revision}. Reload status and submit again with the current revision.`);
       const artifactPath = path.join(featureRoot, `${request.phase}.md`);
       const priorArtifact = await this.readOptional(artifactPath);
       const observedHash = priorArtifact === null ? null : sha256(priorArtifact);
       if (observedHash !== request.expectedArtifactSha256) {
-        throw new GovernanceError('ArtifactDrift', `${request.phase}.md changed since it was observed`, { observedArtifactSha256: observedHash });
+        throw new GovernanceError('ArtifactDrift', `${request.phase}.md changed since it was observed. Reread the artifact and submit again with its current content.`, { observedArtifactSha256: observedHash });
       }
       if (request.phase === 'tasks') {
         if (typeof request.reviewTestCases !== 'boolean') throw new GovernanceError('InvalidParams', 'reviewTestCases is required for tasks');
@@ -243,22 +243,22 @@ export class WorkflowEngineService {
     return this.withLockedFeature(request.projectRoot, request.featureName, true, async ({ featureRoot, spec, commitSpec }) => {
       await this.assertNoApprovedArtifactDrift(featureRoot, spec);
       const record = spec.approvals[request.phase];
-      if (!record.generated) throw new GovernanceError('PhaseNotApproved', `${request.phase} has not been submitted`);
-      if (record.revision !== request.expectedRevision) throw new GovernanceError('RevisionConflict', 'The reviewed revision is stale');
-      if (record.artifactSha256 !== request.expectedArtifactSha256) throw new GovernanceError('ArtifactDrift', 'The reviewed artifact hash is stale');
+      if (!record.generated) throw new GovernanceError('PhaseNotApproved', `${request.phase} has not been submitted. Submit the phase artifact before approval.`);
+      if (record.revision !== request.expectedRevision) throw new GovernanceError('RevisionConflict', 'The reviewed revision is stale. Reload status and review the current revision.');
+      if (record.artifactSha256 !== request.expectedArtifactSha256) throw new GovernanceError('ArtifactDrift', 'The reviewed artifact hash is stale. Reload status and review the current artifact.');
       const artifact = await this.requireArtifact(featureRoot, request.phase);
-      if (sha256(artifact) !== record.artifactSha256) throw new GovernanceError('ArtifactDrift', `${request.phase}.md differs from the submitted artifact`);
+      if (sha256(artifact) !== record.artifactSha256) throw new GovernanceError('ArtifactDrift', `${request.phase}.md differs from the submitted artifact. Inspect the changed artifact, then revise it in its phase Skill.`);
       this.assertPriorApproved(request.phase, spec.approvals);
-      if (record.validation.status !== 'passed' && record.validation.status !== 'legacy-accepted') throw new GovernanceError('PhaseValidationFailed', `${request.phase} did not pass validation`, { blockers: record.validation.blockers });
+      if (record.validation.status !== 'passed' && record.validation.status !== 'legacy-accepted') throw new GovernanceError('PhaseValidationFailed', `${request.phase} did not pass validation. Fix the listed blockers and submit the phase again.`, { blockers: record.validation.blockers });
       if (record.validation.status === 'passed') {
         const upstream = await this.readUpstream(featureRoot, request.phase);
         const validation = this.validate(request.phase, artifact, upstream.requirements, upstream.design);
-        if (validation.status !== 'passed') throw new GovernanceError('PhaseValidationFailed', `${request.phase} no longer validates`, { blockers: validation.blockers });
+        if (validation.status !== 'passed') throw new GovernanceError('PhaseValidationFailed', `${request.phase} no longer validates. Fix the listed blockers and submit the phase again.`, { blockers: validation.blockers });
       }
       const checkpoint = spec.checkpoints.test_cases;
       if (request.phase === 'tasks' && spec.workflow_options.review_test_cases === true &&
           (!checkpoint.reviewed || checkpoint.reviewed_revision !== record.revision || checkpoint.reviewed_artifact_sha256 !== record.artifactSha256)) {
-        throw new GovernanceError('PhaseNotApproved', 'The current tasks revision requires explicit test-case review');
+        throw new GovernanceError('PhaseNotApproved', 'The current tasks revision requires explicit test-case review. Record the test-case review decision before approving tasks.');
       }
       if (!record.approved) {
         spec.approvals[request.phase] = { ...record, approved: true };
@@ -276,15 +276,15 @@ export class WorkflowEngineService {
       await this.assertNoApprovedArtifactDrift(featureRoot, spec);
       const tasks = spec.approvals.tasks;
       if (spec.workflow_options.review_test_cases !== true) throw new GovernanceError('StateInvariantViolation', 'Test-case review is not required');
-      if (!tasks.generated) throw new GovernanceError('PhaseNotApproved', 'Tasks are not ready for test-case review');
-      if (tasks.revision !== request.expectedTasksRevision) throw new GovernanceError('RevisionConflict', 'The tasks review revision is stale');
-      if (tasks.artifactSha256 !== request.expectedArtifactSha256 || sha256(await this.requireArtifact(featureRoot, 'tasks')) !== request.expectedArtifactSha256) throw new GovernanceError('ArtifactDrift', 'The tasks artifact changed before review');
+      if (!tasks.generated) throw new GovernanceError('PhaseNotApproved', 'Tasks are not generated yet. Submit the tasks phase before test-case review.');
+      if (tasks.revision !== request.expectedTasksRevision) throw new GovernanceError('RevisionConflict', 'The tasks review revision is stale. Reload status and review the current tasks revision.');
+      if (tasks.artifactSha256 !== request.expectedArtifactSha256 || sha256(await this.requireArtifact(featureRoot, 'tasks')) !== request.expectedArtifactSha256) throw new GovernanceError('ArtifactDrift', 'The tasks artifact changed before review. Reload status and review the current tasks artifact.');
       const checkpoint = spec.checkpoints.test_cases;
       const alreadyReviewed = checkpoint.reviewed
         && checkpoint.reviewed_revision === tasks.revision
         && checkpoint.reviewed_artifact_sha256 === tasks.artifactSha256;
       if (!alreadyReviewed) {
-        if (tasks.validation.status !== 'passed' || !spec.approvals.design.approved || tasks.approved) throw new GovernanceError('PhaseNotApproved', 'Tasks are not ready for test-case review');
+        if (tasks.validation.status !== 'passed' || !spec.approvals.design.approved || tasks.approved) throw new GovernanceError('PhaseNotApproved', 'Tasks are not ready for test-case review. Submit passing tasks after design approval and before tasks approval.');
         spec.checkpoints.test_cases = { required: true, reviewed: true, reviewed_at: new Date().toISOString(), reviewed_revision: tasks.revision, reviewed_artifact_sha256: tasks.artifactSha256 };
         spec.updated_at = new Date().toISOString();
         await commitSpec(spec);
@@ -301,11 +301,11 @@ export class WorkflowEngineService {
     return this.withLockedFeature(request.projectRoot, request.featureName, true, async ({ featureRoot, spec, commitSpec }) => {
       await this.assertNoApprovedArtifactDrift(featureRoot, spec);
       const tasksRecord = spec.approvals.tasks;
-      if (!tasksRecord.approved) throw new GovernanceError('PhaseNotApproved', 'Tasks are not approved');
-      if (sha256(await this.requireArtifact(featureRoot, 'tasks')) !== tasksRecord.artifactSha256) throw new GovernanceError('ArtifactDrift', 'Approved tasks artifact has drifted');
+      if (!tasksRecord.approved) throw new GovernanceError('PhaseNotApproved', 'Tasks are not approved. Approve the tasks phase before starting implementation.');
+      if (sha256(await this.requireArtifact(featureRoot, 'tasks')) !== tasksRecord.artifactSha256) throw new GovernanceError('ArtifactDrift', 'Approved tasks artifact has drifted. Inspect the changed artifact, then revise it in the tasks phase Skill.');
       if (spec.workflow_options.review_test_cases === true) {
         const cp = spec.checkpoints.test_cases;
-        if (!cp.reviewed || cp.reviewed_revision !== tasksRecord.revision || cp.reviewed_artifact_sha256 !== tasksRecord.artifactSha256) throw new GovernanceError('PhaseNotApproved', 'Tasks review checkpoint is stale');
+        if (!cp.reviewed || cp.reviewed_revision !== tasksRecord.revision || cp.reviewed_artifact_sha256 !== tasksRecord.artifactSha256) throw new GovernanceError('PhaseNotApproved', 'Tasks review checkpoint is stale. Record test-case review for the current tasks revision.');
       }
       if (!spec.implementation) {
         const content = await this.requireArtifact(featureRoot, 'tasks');
@@ -315,13 +315,13 @@ export class WorkflowEngineService {
           if (current.status !== 'passed') {
             throw new GovernanceError(
               'PhaseValidationFailed',
-              'Approved tasks no longer satisfy the executable task contract',
+              'Approved tasks no longer satisfy the executable task contract. Fix the listed blockers in the tasks phase Skill.',
               { blockers: current.blockers },
             );
           }
           return Object.entries(current.tasks).map(([id, task]) => ({ id, ...task }));
         })();
-        if (parsed.length === 0) throw new GovernanceError('LegacyTaskConflict', 'Tasks artifact contains no executable leaf tasks');
+        if (parsed.length === 0) throw new GovernanceError('LegacyTaskConflict', 'Tasks artifact contains no executable leaf tasks. Add at least one executable task in the tasks phase Skill.');
         const taskStates: WorkflowSpecV5['implementation']['tasks'] = {};
         for (const task of parsed) {
           taskStates[task.id] = {
@@ -347,12 +347,12 @@ export class WorkflowEngineService {
     return this.withLockedFeature(request.projectRoot, request.featureName, true, async ({ featureRoot, spec, commitSpec }) => {
       await this.assertNoApprovedArtifactDrift(featureRoot, spec);
       const implementation = spec.implementation;
-      if (!implementation) throw new GovernanceError('TaskTransitionInvalid', 'Implementation has not started');
-      if (implementation.revision !== request.expectedRevision) throw new GovernanceError('RevisionConflict', 'Implementation revision is stale');
+      if (!implementation) throw new GovernanceError('TaskTransitionInvalid', 'Implementation has not started. Start implementation before changing task state.');
+      if (implementation.revision !== request.expectedRevision) throw new GovernanceError('RevisionConflict', 'Implementation revision is stale. Reload status and submit again with the current revision.');
       const task = implementation.tasks[request.taskNumber];
-      if (!task) throw new GovernanceError('TaskTransitionInvalid', `Unknown task ${request.taskNumber}`);
+      if (!task) throw new GovernanceError('TaskTransitionInvalid', `Unknown task ${request.taskNumber}. Use a task number from the approved tasks artifact.`);
       const incomplete = task.dependencies.filter((dependency) => implementation.tasks[dependency]?.status !== 'completed');
-      if (request.action === 'start' && incomplete.length > 0) throw new GovernanceError('TaskDependencyIncomplete', 'Task dependencies are incomplete', { dependencies: incomplete });
+      if (request.action === 'start' && incomplete.length > 0) throw new GovernanceError('TaskDependencyIncomplete', 'Task dependencies are incomplete. Complete the listed dependency tasks first.', { dependencies: incomplete });
       const prior = task.status;
       if (request.action === 'start') {
         if (prior === 'pending') task.status = 'in-progress';
@@ -368,7 +368,7 @@ export class WorkflowEngineService {
         const expected = task.tdd_required ? 'green-observed' : 'in-progress';
         if (prior !== expected || !request.evidence || request.evidence.exitCode !== 0) this.invalidTransition(request.action, prior);
         const artifacts = this.normalizeArtifacts(request.affectedArtifacts ?? []);
-        if (task.planned_artifacts.length > 0 && artifacts.length === 0) throw new GovernanceError('TaskTransitionInvalid', 'At least one observed artifact is required');
+        if (task.planned_artifacts.length > 0 && artifacts.length === 0) throw new GovernanceError('TaskTransitionInvalid', 'At least one observed artifact is required. Name the changed artifacts when completing the task.');
         task.status = 'completed'; task.evidence.verification = this.evidence(request.evidence!); task.observed_artifacts = artifacts;
       } else {
         if (!['in-progress', 'red-observed', 'green-observed'].includes(prior) || !request.blocker?.trim()) this.invalidTransition(request.action, prior);
@@ -502,20 +502,20 @@ export class WorkflowEngineService {
         || (raw.schema_version as number) < 1
         || (raw.schema_version as number) > 4)
     ) {
-      throw new GovernanceError('LegacyStateConflict', `Unsupported workflow schema: ${String(raw.schema_version)}`);
+      throw new GovernanceError('LegacyStateConflict', `Unsupported workflow schema: ${String(raw.schema_version)}. Restore a supported workflow state file.`);
     }
     const accepted = new Set(['init', 'requirements-generated', 'requirements-approved', 'design-generated', 'design-approved', 'tasks-generated', 'tasks-approved', 'implementation-ready', 'implementation', 'completed', 'implementation-completed']);
     const legacyPhase = typeof raw.phase === 'string' ? raw.phase : 'init';
-    if (!accepted.has(legacyPhase)) throw new GovernanceError('LegacyStateConflict', `Unknown legacy phase: ${legacyPhase}`);
+    if (!accepted.has(legacyPhase)) throw new GovernanceError('LegacyStateConflict', `Unknown legacy phase: ${legacyPhase}. Correct the phase in the workflow state file.`);
     const legacyApprovals = raw.approvals && typeof raw.approvals === 'object' ? raw.approvals as Record<string, unknown> : {};
     const approvals = {} as Record<ApprovablePhase, PhaseRecord>;
     for (const phase of PHASES) {
       const value = legacyApprovals[phase] && typeof legacyApprovals[phase] === 'object' ? legacyApprovals[phase] as Record<string, unknown> : {};
       const generated = value.generated === true;
       const approved = value.approved === true;
-      if (approved && !generated) throw new GovernanceError('LegacyStateConflict', `${phase} is approved but not generated`);
+      if (approved && !generated) throw new GovernanceError('LegacyStateConflict', `${phase} is approved but not generated. Correct the approval records in the workflow state file.`);
       const artifact = this.readOptionalSync(path.join(featureRoot, `${phase}.md`));
-      if (generated && artifact === null) throw new GovernanceError('LegacyStateConflict', `Generated ${phase} artifact is missing`);
+      if (generated && artifact === null) throw new GovernanceError('LegacyStateConflict', `Generated ${phase} artifact is missing. Restore the artifact file or correct the workflow state file.`);
       approvals[phase] = {
         generated,
         approved,
@@ -551,14 +551,14 @@ export class WorkflowEngineService {
     const reviewed = choice === true && testRaw?.reviewed === true;
     const completedRank = legacyPhase === 'completed' || legacyPhase === 'implementation-completed';
     const implementationRank = ['implementation-ready', 'implementation', 'completed', 'implementation-completed'].includes(legacyPhase);
-    if (implementationRank && (!approvals.tasks.approved || (choice === true && !reviewed))) throw new GovernanceError('LegacyStateConflict', 'Legacy implementation rank does not satisfy tasks governance');
+    if (implementationRank && (!approvals.tasks.approved || (choice === true && !reviewed))) throw new GovernanceError('LegacyStateConflict', 'Legacy implementation rank does not satisfy tasks governance. Approve and review the tasks phase first.');
     const description = typeof raw.description === 'string' ? raw.description : '';
     const language = typeof raw.language === 'string' ? raw.language : 'en';
     if (description.length > 20_000) {
-      throw new GovernanceError('LegacyStateConflict', 'Legacy description exceeds the schema-v5 limit');
+      throw new GovernanceError('LegacyStateConflict', 'Legacy description exceeds the schema-v5 limit. Shorten the description in the workflow state file.');
     }
     if (!['en', 'ja', 'zh-TW'].includes(language)) {
-      throw new GovernanceError('LegacyStateConflict', `Unsupported legacy language: ${language}`);
+      throw new GovernanceError('LegacyStateConflict', `Unsupported legacy language: ${language}. Use a supported language in the workflow state file.`);
     }
     const updatedAt = typeof raw.updated_at === 'string'
       ? raw.updated_at
@@ -579,9 +579,9 @@ export class WorkflowEngineService {
     };
     if (implementationRank) {
       const tasks = this.parseLegacyTasks(this.readOptionalSync(path.join(featureRoot, 'tasks.md')) ?? '');
-      if (tasks.length === 0) throw new GovernanceError('LegacyTaskConflict', 'Legacy tasks contain no leaves');
+      if (tasks.length === 0) throw new GovernanceError('LegacyTaskConflict', 'Legacy tasks contain no leaves. Add at least one executable task to the tasks artifact.');
       spec.implementation = { revision: 1, tasks_revision: approvals.tasks.revision, legacy_imported: true, tasks: Object.fromEntries(tasks.map((task) => [task.id, { title: task.title, tdd_required: task.tddRequired, dependencies: [], status: task.completed ? 'completed' : 'pending', evidence: {}, planned_artifacts: [], observed_artifacts: [] }])) };
-      if (completedRank && !this.allComplete(spec.implementation)) throw new GovernanceError('LegacyStateConflict', 'Completed legacy phase has unchecked tasks');
+      if (completedRank && !this.allComplete(spec.implementation)) throw new GovernanceError('LegacyStateConflict', 'Completed legacy phase has unchecked tasks. Complete the unchecked tasks or correct the legacy phase.');
     }
     return spec;
   }
@@ -656,7 +656,7 @@ export class WorkflowEngineService {
       if (observedArtifactSha256 !== record.artifactSha256) {
         throw new GovernanceError(
           'ArtifactDrift',
-          `Approved ${phase}.md differs from revision ${record.revision}`,
+          `Approved ${phase}.md differs from revision ${record.revision}. Inspect the changed artifact, then revise it in its phase Skill.`,
           { phase, observedArtifactSha256 },
         );
       }
@@ -682,7 +682,7 @@ export class WorkflowEngineService {
       nextArtifact,
     ];
     if (endpoints.some((value) => Buffer.byteLength(value, 'utf8') > JOURNAL_LIMIT)) {
-      throw new GovernanceError('RecoveryConflict', 'Submission endpoint exceeds the journal size limit');
+      throw new GovernanceError('RecoveryConflict', 'Submission endpoint exceeds the journal size limit. Shorten the artifact and submit again.');
     }
     const journal: SubmissionJournal = {
       schema_version: 1,
@@ -705,7 +705,7 @@ export class WorkflowEngineService {
       } catch (rollbackError) {
         throw new GovernanceError(
           'RecoveryConflict',
-          'Submission failed and CAS rollback could not safely restore prior bytes',
+          'Submission failed and CAS rollback could not safely restore prior bytes. Inspect the spec files before retrying.',
           { cause: errorSummary(error), rollback: errorSummary(rollbackError) },
         );
       }
@@ -719,7 +719,7 @@ export class WorkflowEngineService {
     if (await this.fileSystem.exists(journalPath)) {
       const journalStats = await stat(journalPath);
       if (!journalStats.isFile() || journalStats.size > JOURNAL_FILE_LIMIT) {
-        throw new GovernanceError('RecoveryConflict', 'Submission journal exceeds its raw size limit');
+        throw new GovernanceError('RecoveryConflict', 'Submission journal exceeds its raw size limit. Inspect the journal and spec files, then restore a known state.');
       }
     }
     const raw = await this.readOptional(journalPath);
@@ -728,10 +728,10 @@ export class WorkflowEngineService {
     try {
       journal = JSON.parse(raw) as SubmissionJournal;
     } catch {
-      throw new GovernanceError('RecoveryConflict', 'Submission journal is malformed');
+      throw new GovernanceError('RecoveryConflict', 'Submission journal is malformed. Inspect the journal and spec files, then restore a known state.');
     }
     if (journal.schema_version !== 1) {
-      throw new GovernanceError('RecoveryConflict', 'Submission journal schema is unsupported');
+      throw new GovernanceError('RecoveryConflict', 'Submission journal schema is unsupported. Inspect the journal and spec files, then restore a known state.');
     }
     const priorSpec = decode(journal.spec?.prior);
     const nextSpec = decode(journal.spec?.next);
@@ -744,10 +744,10 @@ export class WorkflowEngineService {
     const currentArtifact = await this.readOptional(artifactPath);
     const convergeNext = currentSpec === nextSpec;
     if (currentSpec !== priorSpec && !convergeNext) {
-      throw new GovernanceError('RecoveryConflict', 'Current spec bytes match neither journal endpoint');
+      throw new GovernanceError('RecoveryConflict', 'Current spec bytes match neither journal endpoint. Inspect the spec file and restore a known state.');
     }
     if (currentArtifact !== priorArtifact && currentArtifact !== nextArtifact) {
-      throw new GovernanceError('RecoveryConflict', 'Current artifact bytes match neither journal endpoint');
+      throw new GovernanceError('RecoveryConflict', 'Current artifact bytes match neither journal endpoint. Inspect the artifact and restore a known state.');
     }
     await this.assertJournalValidation(featureRoot, journalPhase, nextSpec, nextArtifact);
     await this.replaceCas(artifactPath, currentArtifact, convergeNext ? nextArtifact : priorArtifact, assertHeld);
@@ -768,12 +768,12 @@ export class WorkflowEngineService {
         await assertHeld();
         return;
       }
-      throw new GovernanceError('RecoveryConflict', `Concurrent byte change at ${path.basename(filePath)}`);
+      throw new GovernanceError('RecoveryConflict', `Concurrent byte change at ${path.basename(filePath)}. Retry after the other writer finishes.`);
     }
     if (desired === null) {
       if (current !== null) await unlink(filePath);
       if (await this.readOptional(filePath) !== null) {
-        throw new GovernanceError('RecoveryConflict', `Delete verification failed for ${path.basename(filePath)}`);
+        throw new GovernanceError('RecoveryConflict', `Delete verification failed for ${path.basename(filePath)}. Inspect the file and retry.`);
       }
     } else {
       await this.requireAtomicFileSystem().writeFileAtomic(filePath, desired);
@@ -803,7 +803,7 @@ export class WorkflowEngineService {
       if (heading) {
         const id = heading[1];
         if (headings.has(id)) {
-          throw new GovernanceError('LegacyTaskConflict', `Duplicate legacy task ${id}`);
+          throw new GovernanceError('LegacyTaskConflict', `Duplicate legacy task ${id}. Rename one task so each identifier is unique.`);
         }
         const body: string[] = [];
         for (let cursor = index + 1; cursor < lines.length && !headingPattern.test(lines[cursor]); cursor += 1) {
@@ -831,12 +831,12 @@ export class WorkflowEngineService {
 
     const ids = new Set([...headings.keys(), ...checklist.keys()]);
     if (ids.size > 5_000) {
-      throw new GovernanceError('LegacyTaskConflict', 'Legacy tasks contain too many task identifiers');
+      throw new GovernanceError('LegacyTaskConflict', 'Legacy tasks contain too many task identifiers. Split the work into a smaller tasks artifact.');
     }
     for (const id of ids) {
       const title = headings.get(id)?.title ?? checklist.get(id)?.title ?? id;
       if (id.length > 50 || title.trim().length === 0 || title.length > 500) {
-        throw new GovernanceError('LegacyTaskConflict', `Legacy task ${id.slice(0, 50)} exceeds schema-v5 field limits`);
+        throw new GovernanceError('LegacyTaskConflict', `Legacy task ${id.slice(0, 50)} exceeds schema-v5 field limits. Shorten its fields in the tasks artifact.`);
       }
     }
     const parents = new Set<string>();
@@ -849,7 +849,7 @@ export class WorkflowEngineService {
     }
     const leaves = [...ids].filter((id) => !parents.has(id));
     if (leaves.length > 1_000) {
-      throw new GovernanceError('LegacyTaskConflict', 'Legacy tasks contain more than 1000 executable leaves');
+      throw new GovernanceError('LegacyTaskConflict', 'Legacy tasks contain more than 1000 executable leaves. Merge tasks to stay within 1000 leaves.');
     }
     return leaves.map((id) => {
       const heading = headings.get(id);
@@ -899,14 +899,14 @@ export class WorkflowEngineService {
   }
 
   private assertPriorApproved(phase: ApprovablePhase, approvals: Record<ApprovablePhase, PhaseRecord>): void {
-    for (const prior of PHASES.slice(0, PHASES.indexOf(phase))) if (!approvals[prior].approved) throw new GovernanceError('PhaseNotApproved', `${prior} is not approved`);
+    for (const prior of PHASES.slice(0, PHASES.indexOf(phase))) if (!approvals[prior].approved) throw new GovernanceError('PhaseNotApproved', `${prior} is not approved. Approve the ${prior} phase first.`);
   }
   private assertLegacyOrdering(approvals: Record<ApprovablePhase, PhaseRecord>): void {
     for (const [index, phase] of PHASES.entries()) {
       if (!approvals[phase].generated && !approvals[phase].approved) continue;
       for (const prior of PHASES.slice(0, index)) {
         if (!approvals[prior].approved) {
-          throw new GovernanceError('LegacyStateConflict', `${phase} exists before ${prior} approval`);
+          throw new GovernanceError('LegacyStateConflict', `${phase} exists before ${prior} approval. Approve ${prior} first, or move the ${phase} artifact out of the feature folder.`);
         }
       }
     }
@@ -931,15 +931,15 @@ export class WorkflowEngineService {
                 ? 'requirements-generated'
                 : 'init';
     if (!implementationRank && legacyPhase !== expected) {
-      throw new GovernanceError('LegacyStateConflict', `Legacy phase ${legacyPhase} disagrees with approval records (${expected})`);
+      throw new GovernanceError('LegacyStateConflict', `Legacy phase ${legacyPhase} disagrees with approval records (${expected}). Correct the phase in the workflow state file.`);
     }
     if (typeof raw.ready_for_implementation === 'boolean' && raw.ready_for_implementation !== implementationRank) {
-      throw new GovernanceError('LegacyStateConflict', 'ready_for_implementation disagrees with legacy phase rank');
+      throw new GovernanceError('LegacyStateConflict', 'ready_for_implementation disagrees with legacy phase rank. Correct the flag in the workflow state file.');
     }
     if (typeof raw.implementation_completed === 'boolean') {
       const completedRank = legacyPhase === 'completed' || legacyPhase === 'implementation-completed';
       if (raw.implementation_completed !== completedRank) {
-        throw new GovernanceError('LegacyStateConflict', 'implementation_completed disagrees with legacy phase rank');
+        throw new GovernanceError('LegacyStateConflict', 'implementation_completed disagrees with legacy phase rank. Correct the flag in the workflow state file.');
       }
     }
   }
@@ -947,7 +947,7 @@ export class WorkflowEngineService {
   private legacyPhaseValue(value: string): WorkflowPhase { if (value.startsWith('tasks')) return WorkflowPhase.TASKS; if (value.startsWith('design')) return WorkflowPhase.DESIGN; if (value.startsWith('requirements')) return WorkflowPhase.REQUIREMENTS; return WorkflowPhase.INIT; }
   private implementationCounts(value: NonNullable<WorkflowSpecV5['implementation']>) { const tasks = Object.values(value.tasks); return { completed: tasks.filter((t) => t.status === 'completed').length, total: tasks.length, active: tasks.filter((t) => ['in-progress', 'red-observed', 'green-observed'].includes(t.status)).length, blocked: tasks.filter((t) => t.status === 'blocked').length }; }
   private allComplete(value: NonNullable<WorkflowSpecV5['implementation']>): boolean { const tasks = Object.values(value.tasks); return tasks.length > 0 && tasks.every((task) => task.status === 'completed'); }
-  private invalidTransition(action: string, status: TaskStatus): never { throw new GovernanceError('TaskTransitionInvalid', `Cannot ${action} from ${status}`); }
+  private invalidTransition(action: string, status: TaskStatus): never { throw new GovernanceError('TaskTransitionInvalid', `Cannot ${action} from ${status}. Select a task action valid for its current status.`); }
   private evidence(value: { command: string; exitCode: number; summary: string }): ExecutionEvidence {
     if (
       typeof value.command !== 'string'
@@ -1523,7 +1523,7 @@ export class WorkflowEngineService {
     const priorRaw = this.parseSpecBytes(priorBytes);
     const nextRaw = this.parseSpecBytes(nextBytes);
     if (priorRaw.schema_version !== 5 || nextRaw.schema_version !== 5) {
-      throw new GovernanceError('RecoveryConflict', 'Submission journal endpoints must use schema-v5');
+      throw new GovernanceError('RecoveryConflict', 'Submission journal endpoints must use schema-v5. Inspect the journal and spec files, then restore a known state.');
     }
     let prior: WorkflowSpecV5;
     let next: WorkflowSpecV5;
@@ -1533,7 +1533,7 @@ export class WorkflowEngineService {
     } catch (error) {
       throw new GovernanceError(
         'RecoveryConflict',
-        'Submission journal contains invalid workflow state',
+        'Submission journal contains invalid workflow state. Inspect the journal and spec files, then restore a known state.',
         { cause: errorSummary(error) },
       );
     }
@@ -1547,7 +1547,7 @@ export class WorkflowEngineService {
         phase !== changed[0]
         && next.approvals[phase].revision !== prior.approvals[phase].revision)
     ) {
-      throw new GovernanceError('RecoveryConflict', 'Submission journal does not describe one phase revision');
+      throw new GovernanceError('RecoveryConflict', 'Submission journal does not describe one phase revision. Inspect the journal and spec files, then restore a known state.');
     }
     const changedPhase = changed[0];
     const priorRecord = prior.approvals[changedPhase];
@@ -1590,7 +1590,7 @@ export class WorkflowEngineService {
       || !submissionRecordValid
       || !workflowMetadataValid
     ) {
-      throw new GovernanceError('RecoveryConflict', 'Submission journal does not describe a valid phase submission');
+      throw new GovernanceError('RecoveryConflict', 'Submission journal does not describe a valid phase submission. Inspect the journal and spec files, then restore a known state.');
     }
     return changedPhase;
   }
@@ -1614,7 +1614,7 @@ export class WorkflowEngineService {
     } catch (error) {
       throw new GovernanceError(
         'RecoveryConflict',
-        'Submission journal validation cannot be reproduced',
+        'Submission journal validation cannot be reproduced. Inspect the artifact, then submit the phase again.',
         { cause: errorSummary(error) },
       );
     }
@@ -1672,5 +1672,5 @@ export class WorkflowEngineService {
 
 function sha256(content: string): string { return createHash('sha256').update(content).digest('hex'); }
 function encode(content: string): JournalBytes { return { base64: Buffer.from(content).toString('base64'), sha256: sha256(content) }; }
-function decode(value: JournalBytes | undefined): string { if (!value || typeof value.base64 !== 'string' || typeof value.sha256 !== 'string') throw new GovernanceError('RecoveryConflict', 'Journal byte record is malformed'); const bytes = Buffer.from(value.base64, 'base64'); if (bytes.length > JOURNAL_LIMIT) throw new GovernanceError('RecoveryConflict', 'Journal byte record exceeds size limit'); const content = bytes.toString('utf8'); if (sha256(content) !== value.sha256 || Buffer.from(content).toString('base64') !== value.base64) throw new GovernanceError('RecoveryConflict', 'Journal byte hash or encoding is invalid'); return content; }
+function decode(value: JournalBytes | undefined): string { if (!value || typeof value.base64 !== 'string' || typeof value.sha256 !== 'string') throw new GovernanceError('RecoveryConflict', 'Journal byte record is malformed. Inspect the journal and spec files, then restore a known state.'); const bytes = Buffer.from(value.base64, 'base64'); if (bytes.length > JOURNAL_LIMIT) throw new GovernanceError('RecoveryConflict', 'Journal byte record exceeds size limit. Inspect the journal and spec files, then restore a known state.'); const content = bytes.toString('utf8'); if (sha256(content) !== value.sha256 || Buffer.from(content).toString('base64') !== value.base64) throw new GovernanceError('RecoveryConflict', 'Journal byte hash or encoding is invalid. Inspect the journal and spec files, then restore a known state.'); return content; }
 function errorSummary(error: unknown): string { return String(error).slice(0, 2_000); }

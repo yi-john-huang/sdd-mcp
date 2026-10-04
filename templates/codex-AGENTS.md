@@ -1,6 +1,6 @@
 # AGENTS.md — Spec-Driven Development (SDD)
 
-This project uses `sdd-mcp-server` with manual-only Skills and its hidden governed runtime.
+This project uses `sdd-mcp-server` with manual-only workflow Skills and its hidden governed runtime. The `output-clarity-ladder` skill applies automatically to explanation, summary, and teaching replies; it is the only model-invocable skill.
 
 ## Start
 
