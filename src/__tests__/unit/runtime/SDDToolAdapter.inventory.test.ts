@@ -18,6 +18,7 @@ const EXPECTED_TOOLS = [
   'sdd-validate-design',
   'sdd-validate-gap',
   'sdd-spec-impl',
+  'sdd-jev-check',
 ] as const;
 
 
@@ -31,13 +32,14 @@ describe('v5 MCP tool inventory', () => {
     dependency,
     dependency,
     dependency,
+    dependency,
   );
   const tools = adapter.getSDDTools();
 
-  it('publishes exactly the canonical 16 tools in stable order', () => {
+  it('publishes exactly the canonical 17 tools in stable order', () => {
     expect(SDD_TOOL_NAMES).toEqual(EXPECTED_TOOLS);
     expect(tools.map(({ name }) => name)).toEqual(EXPECTED_TOOLS);
-    expect(new Set(tools.map(({ name }) => name)).size).toBe(16);
+    expect(new Set(tools.map(({ name }) => name)).size).toBe(17);
   });
 
   it('uses featureName as the only public feature locator', () => {
@@ -133,6 +135,7 @@ describe('v5 disk-authoritative handler routing', () => {
     clarificationService as never,
     workflowEngineService as never,
     logger as never,
+    { check: jest.fn() } as never,
   );
   const byName = Object.fromEntries(adapter.getSDDTools().map((tool) => [tool.name, tool.handler]));
 

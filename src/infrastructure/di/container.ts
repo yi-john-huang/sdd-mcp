@@ -14,6 +14,8 @@ import type {
   ValidationPort,
   QualityAnalyzer,
   TaskTracker,
+  JevHttpPort,
+  GitPort,
 } from "../../domain/ports.js";
 
 // Template ports
@@ -42,6 +44,8 @@ import { ConsoleLoggerAdapter } from "../adapters/ConsoleLoggerAdapter.js";
 import { AjvValidationAdapter } from "../adapters/AjvValidationAdapter.js";
 import { LinusQualityAnalyzer } from "../adapters/LinusQualityAnalyzer.js";
 import { FileBasedTaskTracker } from "../adapters/FileBasedTaskTracker.js";
+import { FetchJevHttpAdapter } from "../adapters/FetchJevHttpAdapter.js";
+import { NodeGitAdapter } from "../adapters/NodeGitAdapter.js";
 
 // Template infrastructure
 import { HandlebarsRenderer } from "../templates/HandlebarsRenderer.js";
@@ -86,6 +90,7 @@ import { TemplateService } from "../../application/services/TemplateService.js";
 import { QualityService } from "../../application/services/QualityService.js";
 import { QualityGateService } from "../../application/services/QualityGateService.js";
 import { WorkflowEngineService } from "../../application/services/WorkflowEngineService.js";
+import { JevAdvisoryService, type JevEnvironment } from "../../application/services/JevAdvisoryService.js";
 import { ProjectInitializationService } from "../../application/services/ProjectInitializationService.js";
 import { WorkflowValidationService } from "../../application/services/WorkflowValidationService.js";
 import { CodebaseAnalysisService } from "../../application/services/CodebaseAnalysisService.js";
@@ -122,6 +127,11 @@ export function createContainer(): Container {
     .bind<QualityAnalyzer>(TYPES.QualityAnalyzer)
     .to(LinusQualityAnalyzer);
   container.bind<TaskTracker>(TYPES.TaskTracker).to(FileBasedTaskTracker);
+
+  // JEV advisory checks: HTTPS and git are ports so tests can replace them.
+  container.bind<JevHttpPort>(TYPES.JevHttpPort).to(FetchJevHttpAdapter);
+  container.bind<GitPort>(TYPES.GitPort).to(NodeGitAdapter);
+  container.bind<JevEnvironment>(TYPES.JevEnvironment).toConstantValue(process.env);
 
   // Bind template ports
   container
@@ -198,6 +208,9 @@ export function createContainer(): Container {
   container
     .bind<WorkflowEngineService>(TYPES.WorkflowEngineService)
     .to(WorkflowEngineService);
+  container
+    .bind<JevAdvisoryService>(TYPES.JevAdvisoryService)
+    .to(JevAdvisoryService);
   container
     .bind<ProjectInitializationService>(TYPES.ProjectInitializationService)
     .to(ProjectInitializationService);

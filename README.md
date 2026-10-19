@@ -227,7 +227,7 @@ For an OMP migration, Codex TOML agents remain preserved but are not executable 
 After this one-time migration, use a normal install without `--refresh-generated` for subsequent v5 updates. Review conflicts, then reload/restart the host and accept project trust before invoking a native phase Skill.
 
 ## Integrator/runtime reference: canonical v5 inventory
-Every packaged entrypoint exposes the same 16 tools:
+Every packaged entrypoint exposes the same 17 tools:
 
 1. `sdd-init`
 2. `sdd-requirements`
@@ -245,6 +245,9 @@ Every packaged entrypoint exposes the same 16 tools:
 14. `sdd-validate-design`
 15. `sdd-validate-gap`
 16. `sdd-spec-impl`
+17. `sdd-jev-check`
+
+`sdd-jev-check` is opt-in and advisory. It is off by default and never changes workflow state. See [Optional JEV advisory](docs/WORKFLOW.md#optional-jev-advisory).
 
 Feature-scoped tools use `featureName`; v5 payloads bind phase mutations and approvals to exact revisions and artifact hashes. This inventory is for MCP integrators and runtime maintainers—not end-user workflow instructions. Hosts discover installed Skills, and the installer supports `--list`.
 

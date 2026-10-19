@@ -136,11 +136,63 @@ The two operator journeys are different on purpose:
 
 An old OMP-via-Codex project must select `--target omp`. The installer preserves Codex TOML agents. It never treats them as executable OMP agents. See [INSTALL-GUIDE.md](INSTALL-GUIDE.md) for target mapping and commands.
 
+## Optional JEV advisory
+
+JEV is an optional, advisory check. It calls the TypeSafe Jev decision API to judge meaning that the structural gates cannot judge. It is off by default. When it is off, the workflow behaves as before and JEV creates no files.
+
+JEV never changes approval, validation, the next action, or `spec.json`. A person still makes every decision. A result is advice only.
+
+### Turn it on
+
+| Setting | Meaning |
+|---|---|
+| `SDD_JEV_ENABLED` | `1`, `true`, `yes`, or `on` enables JEV. Any other value disables it. |
+| `SDD_JEV_API_KEY` | Your API key. JEV reads the key only from this environment variable. |
+| `SDD_JEV_ALLOW_CODE` | Same values as above. Required before JEV sends any code excerpt. |
+| `SDD_JEV_TIMEOUT_MS` | Request timeout in milliseconds. The default is 5000. The limits are 1000 and 15000. |
+| `.spec/sdd-config.json` | Optional project setting: `{"jev":{"enabled":true}}`. It never holds a key. |
+
+The environment variable wins over the project setting. The project setting applies only when `SDD_JEV_ENABLED` is unset. JEV needs both the switch and a key. It never writes the key to a sidecar, a log, an error message, or a tool response.
+
+JEV sends each request to one fixed HTTPS endpoint. It makes one attempt, follows no redirect, and never retries.
+
+### Checks
+
+| Check | When it runs | Data sent |
+|---|---|---|
+| `requirements` | After validation passes, before approval | Requirement text and the feature goal |
+| `design` | After validation passes, before approval | Design decisions and the requirements they cover |
+| `testcases` | After tasks validation, before the test-case or approval question | Task text and the planned test cases |
+| `red` | Before the RED record | Test command, failure summary, test name, and acceptance criteria |
+| `security`, `principles` | After a review or audit returns | Existing findings and bounded code excerpts |
+| `commit` | Before a commit | Nothing. It only reads a saved sidecar. |
+
+A local classifier checks RED evidence first. It sends no request for a clear setup error or a clear assertion failure.
+
+### Code and privacy
+
+JEV sends code only for the `security` and `principles` checks, and only with `SDD_JEV_ALLOW_CODE`. It sends at most 15 lines before and after each cited line. The total is at most 8 KB (8,192 bytes) per request. A finding that does not fit is sent without code.
+
+JEV redacts secret patterns from every request before it sends them. It never sends `.env*` files, keys and certificates, lockfiles, or generated output. Spec text is limited to 32 KB per request.
+
+### Results and sidecars
+
+Every Skill shows at most one line: `JEV: <n> flagged (<ids>)`, `JEV: no flags`, or `JEV: unavailable (<reason>)`. The reasons are `disabled`, `no-key`, `network`, `timeout`, `http-<status>`, `invalid-response`, and `code-disabled`. A failure never blocks the workflow.
+
+JEV saves results as sidecar files in `.spec/specs/<feature>/review/`. Without a feature, it uses `.spec/reviews/`. Each sidecar is bound to the artifact revision and SHA-256. When the artifact changes, JEV ignores the old sidecar.
+
+- Spec-phase sidecars (`jev-requirements-r<n>.json`, `jev-design-r<n>.json`, `jev-testcases-r<n>.json`, `jev-red-<task>-<hash>.json`) hold answers and hashes for spec text you already commit. They are not git-ignored.
+- Code-review sidecars (`jev-review-security-<hash>.json`, `jev-review-principles-<hash>.json`) are git-ignored. The installer adds the entries.
+- A sidecar holds hashes. It never holds the key, the request, or the excerpt text.
+- JEV writes no sidecar when it is disabled or has no key.
+
+The `sdd-commit` Skill reads a matching code-review sidecar. It shows one warning line for a confirmed high or critical security finding. It never calls JEV.
+
 ## Integrator/runtime reference: exact inventory
 
-This section is for protocol integrators and runtime maintainers. The sole packaged runtime exposes exactly 16 tools. End users invoke phase Skills instead:
+This section is for protocol integrators and runtime maintainers. The sole packaged runtime exposes exactly 17 tools. End users invoke phase Skills instead:
 
-`sdd-init`, `sdd-requirements`, `sdd-design`, `sdd-tasks`, `sdd-implement`, `sdd-status`, `sdd-approve`, `sdd-review-test-cases`, `sdd-quality-check`, `sdd-context-load`, `sdd-template-render`, `sdd-steering`, `sdd-steering-custom`, `sdd-validate-design`, `sdd-validate-gap`, and `sdd-spec-impl`.
+`sdd-init`, `sdd-requirements`, `sdd-design`, `sdd-tasks`, `sdd-implement`, `sdd-status`, `sdd-approve`, `sdd-review-test-cases`, `sdd-quality-check`, `sdd-context-load`, `sdd-template-render`, `sdd-steering`, `sdd-steering-custom`, `sdd-validate-design`, `sdd-validate-gap`, `sdd-spec-impl`, and `sdd-jev-check`.
 
 The offline `context-report` command is not an MCP tool.
 

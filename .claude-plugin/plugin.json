@@ -243,6 +243,10 @@
       "description": "Approve workflow phases"
     },
     {
+      "name": "sdd-review-test-cases",
+      "description": "Record the optional test-case review checkpoint"
+    },
+    {
       "name": "sdd-quality-check",
       "description": "Code quality analysis"
     },
@@ -273,6 +277,10 @@
     {
       "name": "sdd-spec-impl",
       "description": "Execute spec tasks using TDD"
+    },
+    {
+      "name": "sdd-jev-check",
+      "description": "Run an opt-in advisory JEV check"
     }
   ],
 

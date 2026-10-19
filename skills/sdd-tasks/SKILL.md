@@ -14,9 +14,9 @@ The user invokes this Skill; backend lifecycle calls are internal. Never tell th
 2. Design and requirements must be approved. If durable status says otherwise, present the persisted blocker and make no file change.
 3. Load the latest approved compact context before method work. Load an unapproved tasks draft only with full mode and explicit unapproved inclusion.
 4. The saved test-case-review choice is authoritative. Ask once only when status has no choice; reuse it on every revision.
-5. If status reports an observed artifact identity for an orphan or manual edit, read that exact tasks file before revising. Never acknowledge its hash without inspecting and deliberately incorporating or replacing its content.
+5. If status reports an observed artifact identity for an orphan or manual edit, read that exact tasks file before revising. Never acknowledge its hash without inspecting it and deliberately incorporating or replacing it.
 
-If the runtime is unavailable because of host permission, report an actionable reload/trust or policy blocker; never substitute manual backend instructions.
+If the runtime is unavailable by host permission, report a reload/trust or policy blocker; never substitute manual backend instructions.
 
 ## Method and Artifact Contract
 
@@ -26,9 +26,11 @@ If the runtime is unavailable because of host permission, report an actionable r
 4. `TDD` is exactly `required` or `not-applicable — <reason>`. Behavioral work uses RED → GREEN → REFACTOR and covers relevant boundaries, errors, transitions, security, migration, and integration.
 5. Mark concurrency only for genuinely independent slices.
 
-Internally submit complete Markdown with the exact revision and artifact identity last observed and the persisted review choice. Submission is the canonical write. Present the saved path and concise validation outcome. A failed validation remains a durable draft to revise and cannot advance.
+Internally submit complete Markdown with the exact revision and artifact identity last observed and the persisted review choice. Submission is the canonical write. A failed validation stays a durable draft and cannot advance.
 
 ## Human Gates
+
+Before the test-case or approval question, internally run the JEV `testcases` check; when it asks for a case list, send one, flagged tasks first, and show its line. It never records the checkpoint.
 
 If test-case review is required, present the concrete behavior, boundary, and error cases. Only explicit confirmation records the internal checkpoint for the exact tasks revision and artifact. This is separate from approval.
 
@@ -36,12 +38,12 @@ After validation and any required review, ask **“Approve these implementation 
 
 ## Specialist Delegation
 
-Target renderers provide the `planner` route. When a native advisor is required, dispatch exactly one compact handoff with `specialistDepth: 1`; include only approved decisions, constraints, dependencies, and the task contract. The specialist must not delegate again. Keep the handoff and returned summary at or below 2,048 estimated tokens. If unavailable, record one fallback and continue in the parent without retrying or selecting a generic child.
+Target renderers provide the `planner` route. When a native advisor is required, dispatch exactly one compact handoff with `specialistDepth: 1`; include only approved decisions, constraints, and the task contract. The specialist must not delegate again. Keep handoff and summary at or below 2,048 estimated tokens. If unavailable, record one fallback and continue in the parent without retrying or selecting a generic child.
 
 ## Output
 
-Return the canonical saved path, traceability, saved checkpoint choice, concise validation evidence, the current human decision, and durable blockers. Do not present raw MCP operations as next steps. Execution report: mode (inline|project-agent; asked|reused|not offered), agents started and whether parallel, configured model/effort per agent (never claim unobserved values), and any fallback to the parent.
+Return the saved path, traceability, checkpoint choice, validation evidence, the current human decision, and durable blockers. Do not present raw MCP operations as next steps. Execution report: mode (inline|project-agent; asked|reused|not offered), agents started and whether parallel, configured model/effort per agent (never claim unobserved values), and any fallback to the parent.
 
 ## Optional Reference
 
-Read [REFERENCE.md](REFERENCE.md) only for the exact task template, sizing heuristics, dependency diagrams, or extended checklist.
+Read [REFERENCE.md](REFERENCE.md) only for the task template, sizing, dependency diagrams, checklist, or case-list format.

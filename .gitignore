@@ -25,6 +25,10 @@ build/
 # AI tool configs
 .serena/
 
+# JEV code-review sidecars (per-diff hashes; spec-phase sidecars stay tracked)
+.spec/reviews/
+.spec/specs/*/review/jev-review-*
+
 # Generated SDD agent installs
 # Created by: npx sdd-mcp-server@latest install --all
 .claude/agents/
