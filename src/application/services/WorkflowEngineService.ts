@@ -162,7 +162,10 @@ export class WorkflowEngineService {
     await resolver.assertContained(resolved.specsRoot, initializationLock);
 
     return withFilesystemLock(initializationLock, async (lease) => {
-      if (await this.fileSystem!.exists(resolved.featureRoot)) {
+      // Older versions left empty feature directories behind; reuse those, never populated ones.
+      const occupied = await this.fileSystem!.exists(resolved.featureRoot)
+        && (await this.fileSystem!.readdir(resolved.featureRoot)).length > 0;
+      if (occupied) {
         throw new GovernanceError('StateInvariantViolation', `Feature already exists: ${request.featureName}`);
       }
       await this.fileSystem!.mkdir(resolved.featureRoot);
@@ -512,6 +515,10 @@ export class WorkflowEngineService {
     if (!this.fileSystem) throw new GovernanceError('StateInvariantViolation', 'FileSystemPort is required');
     const resolver = new SpecPathResolver(this.fileSystem);
     const resolved = await resolver.resolve(projectRoot, featureName);
+    // The lock helper creates its parent directory; never let it materialize a missing feature.
+    if (!(await this.fileSystem.exists(resolved.featureRoot))) {
+      throw new GovernanceError('StateInvariantViolation', `Feature metadata not found: ${featureName}`);
+    }
     const lockPath = path.join(resolved.featureRoot, '.workflow.lock');
     await resolver.assertContained(resolved.featureRoot, lockPath);
     return withFilesystemLock(lockPath, async (lease) => {
