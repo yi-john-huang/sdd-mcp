@@ -64,6 +64,19 @@ describe('JevAdvisoryService test-case adequacy check', () => {
       await expect(readdir(reviewDir())).rejects.toThrow();
     });
 
+    it('judges not-applicable reasons without cases when no task is TDD-required', async () => {
+      await project.submit('tasks', FIXTURE_TASKS.replace('**TDD:** required', '**TDD:** not-applicable — configuration-only task'));
+      const result = await service().check(request(undefined));
+      expect(result).toMatchObject({ status: 'answered', line: 'JEV: no flags' });
+      expect(http.calls).toHaveLength(1);
+      expect(Object.keys(posted().questions).sort()).toEqual(['1.1.tddReason', '1.2.tddReason']);
+
+      const unmatched = await service().check(request([{ taskId: '9.9', kind: 'error', given: 'g', when: 'w', then: 't', covers: 'c' }]));
+      expect(unmatched).toMatchObject({ status: 'answered', unknownTasks: ['9.9'] });
+      expect(http.calls).toHaveLength(2);
+      expect(http.calls[1]!.body).not.toContain('"9.9"');
+    });
+
     it('skips when the tasks failed validation', async () => {
       await project.submit('tasks', '# nothing here');
       const result = await service().check(request(CASES));

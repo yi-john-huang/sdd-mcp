@@ -21,6 +21,8 @@ export interface TestcaseExchange extends BuiltExchange {
   truncatedTasks: string[];
   /** Number of supplied cases that belong to a TDD-required task, before truncation. */
   matchedCases: number;
+  /** Number of TDD-required tasks in tasks.md, before truncation. */
+  tddTaskCount: number;
   caseListSha256: string;
 }
 
@@ -98,6 +100,7 @@ export function buildTestcaseExchange(snapshot: AdvisorySnapshot, cases: readonl
     unknownTasks,
     truncatedTasks,
     matchedCases: cases.filter((entry) => tddIds.has(entry.taskId)).length,
+    tddTaskCount: tddIds.size,
     caseListSha256: hashCaseList(cases),
   };
 }

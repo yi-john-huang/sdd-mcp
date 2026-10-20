@@ -166,14 +166,17 @@ export class JevAdvisoryService {
     };
   }
 
-  /** A1: judge the planned test cases. The skill first calls without cases to learn whether JEV is active. */
+  /**
+   * A1: judge the planned test cases. The skill first calls without cases to learn whether JEV is active.
+   * With no TDD-required task, only the not-applicable reasons are judged, so no cases are needed.
+   */
   private async testcasesCheck(request: JevCheckRequest, context: ExchangeContext): Promise<JevCheckResult> {
-    if (!request.cases?.length) return skippedResult('testcases', 'cases-required');
+    const cases = request.cases ?? [];
     const snapshot = await this.readySnapshot(request, 'tasks');
-    const built = snapshot && buildTestcaseExchange(snapshot, request.cases);
+    const built = snapshot && buildTestcaseExchange(snapshot, cases);
     if (!snapshot || !built) return skippedResult('testcases', 'not-ready');
-    // Without a single case for a TDD-required task, every task would be judged on `cases: []`.
-    if (built.matchedCases === 0) return skippedResult('testcases', 'cases-required');
+    // Without a single case for an existing TDD-required task, every task would be judged on `cases: []`.
+    if (built.tddTaskCount > 0 && built.matchedCases === 0) return skippedResult('testcases', 'cases-required');
     const plan: ExchangePlan = {
       check: 'testcases',
       kind: 'testcases',
