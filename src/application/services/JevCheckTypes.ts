@@ -1,7 +1,7 @@
 export const JEV_CHECK_KINDS = ['requirements', 'design', 'testcases', 'red', 'security', 'principles', 'commit'] as const;
 export type JevCheckKind = (typeof JEV_CHECK_KINDS)[number];
 
-export type JevSkipReason = 'not-ready' | 'cases-required' | 'feature-not-found' | 'no-changes' | 'disabled';
+export type JevSkipReason = 'not-ready' | 'cases-required' | 'feature-not-found' | 'no-changes' | 'disabled' | 'invalid-base-ref';
 
 export interface JevCase {
   taskId: string;
@@ -46,6 +46,8 @@ export interface JevCheckRequest {
   evidence?: JevEvidenceInput;
   findings?: readonly JevFindingInput[];
   units?: readonly JevUnitInput[];
+  /** `security` and `principles` only: review merge-base(baseRef, HEAD) against the working tree. */
+  baseRef?: string;
 }
 
 export interface JevItemDetail {

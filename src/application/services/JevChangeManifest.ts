@@ -2,16 +2,24 @@ import { createHash } from 'node:crypto';
 import { lstat, readlink } from 'node:fs/promises';
 import path from 'node:path';
 import type { GitPort } from '../../domain/ports.js';
+import { resolveRange, type ResolvedRange } from './JevBaseRef.js';
 
 export interface ManifestEntry {
   path: string;
   token: string;
 }
 
+export interface RangeIdentity {
+  rangeBaseCommit: string;
+  headCommit: string;
+}
+
 export type ChangeManifest =
-  | { status: 'ok'; diffSha256: string; baseCommit: string | null; entries: ManifestEntry[] }
+  | { status: 'ok'; diffSha256: string; baseCommit: string | null; entries: ManifestEntry[]; range?: RangeIdentity }
   | { status: 'empty' }
   | { status: 'unavailable' };
+
+export type RangeManifest = ChangeManifest | { status: 'invalid-base-ref' };
 
 const MAX_PATHS = 2000;
 const HASH_CHUNK = 200;
@@ -50,9 +58,10 @@ async function symlinkBlob(git: GitPort, root: string, file: string): Promise<st
 /**
  * The 160000 gitlink `git add` stores for a submodule or embedded repository: its HEAD commit.
  * Undefined when the directory is not its own repository, has no commit, or its commit is
- * unchanged from HEAD (only its own working tree is dirty, which `git add` cannot stage).
+ * unchanged from the one recorded in `recordedIn` (only its own working tree is dirty, which
+ * `git add` cannot stage).
  */
-async function gitlinkCommit(git: GitPort, root: string, dir: string): Promise<string | undefined> {
+async function gitlinkCommit(git: GitPort, root: string, dir: string, recordedIn: string): Promise<string | undefined> {
   try {
     await lstat(path.join(root, dir, '.git'));
   } catch {
@@ -61,7 +70,7 @@ async function gitlinkCommit(git: GitPort, root: string, dir: string): Promise<s
   const head = await git.run(['rev-parse', '--verify', '--quiet', 'HEAD'], path.join(root, dir));
   const commit = head.ok ? head.stdout.toString('utf8').trim() : '';
   if (!commit) return undefined;
-  const recorded = await git.run(['ls-tree', '-z', 'HEAD', '--', dir], root);
+  const recorded = await git.run(['ls-tree', '-z', recordedIn, '--', dir], root);
   const match = recorded.ok ? /^160000 commit ([0-9a-f]+)\t/.exec(recorded.stdout.toString('utf8')) : null;
   return match?.[1] === commit ? undefined : commit;
 }
@@ -88,11 +97,11 @@ function finish(entries: ManifestEntry[], base: string | null): ChangeManifest {
   return { status: 'ok', diffSha256: createHash('sha256').update(manifest).digest('hex'), baseCommit: base, entries: kept };
 }
 
-async function reviewEntries(git: GitPort, root: string): Promise<ManifestEntry[] | undefined> {
-  const status = await git.run(['-c', 'status.renames=false', 'status', '--porcelain=v1', '-z', '--untracked-files=all'], root);
-  if (!status.ok) return undefined;
-  // An untracked embedded repository is listed with a trailing slash; `git add` records it without one.
-  const paths = text(status.stdout).map((record) => record.slice(3).replace(/\/$/, ''));
+/**
+ * One token per changed path, as `git add` would store it. `recordedIn` is the commit a nested
+ * repository's gitlink is compared with: HEAD for working-tree reviews, the merge base for ranges.
+ */
+async function tokenEntries(git: GitPort, root: string, paths: readonly string[], recordedIn: string): Promise<ManifestEntry[] | undefined> {
   const present: string[] = [];
   const entries: ManifestEntry[] = [];
   for (const file of paths) {
@@ -104,7 +113,7 @@ async function reviewEntries(git: GitPort, root: string): Promise<ManifestEntry[
       if (!blob) return undefined;
       entries.push({ path: file, token: blob });
     } else if (kind === 'directory') {
-      const commit = await gitlinkCommit(git, root, file);
+      const commit = await gitlinkCommit(git, root, file, recordedIn);
       if (commit) entries.push({ path: file, token: commit });
     }
     // Other entry types (sockets, FIFOs) cannot be staged and are skipped.
@@ -113,6 +122,35 @@ async function reviewEntries(git: GitPort, root: string): Promise<ManifestEntry[
   if (!blobs) return undefined;
   for (const [file, blob] of blobs) entries.push({ path: file, token: blob });
   return entries;
+}
+
+const STATUS_ARGS = ['-c', 'status.renames=false', 'status', '--porcelain=v1', '-z', '--untracked-files=all'] as const;
+
+// An untracked embedded repository is listed with a trailing slash; `git add` records it without one.
+const statusPath = (record: string): string => record.slice(3).replace(/\/$/, '');
+
+async function reviewEntries(git: GitPort, root: string): Promise<ManifestEntry[] | undefined> {
+  const status = await git.run(STATUS_ARGS, root);
+  if (!status.ok) return undefined;
+  return tokenEntries(git, root, text(status.stdout).map(statusPath), 'HEAD');
+}
+
+/** Every path that differs between the merge base and the working tree, plus untracked files. */
+async function rangeEntries(git: GitPort, root: string, range: RangeIdentity): Promise<ManifestEntry[] | undefined> {
+  const diff = await git.run(['diff', '--name-status', '--no-renames', '--no-ext-diff', '-z', range.rangeBaseCommit, '--'], root);
+  const status = await git.run(STATUS_ARGS, root);
+  if (!diff.ok || !status.ok) return undefined;
+  const paths = new Set(text(status.stdout).filter((record) => record.startsWith('?? ')).map(statusPath));
+  const removed = new Set<string>();
+  const parts = text(diff.stdout);
+  for (let index = 0; index + 1 < parts.length; index += 2) {
+    const file = parts[index + 1] as string;
+    // A path the commit tracked and the tree no longer holds is deleted, even if a directory now sits there.
+    if (parts[index] === 'D' && !paths.has(file)) removed.add(file);
+    else paths.add(file);
+  }
+  const entries = await tokenEntries(git, root, [...paths], range.rangeBaseCommit);
+  return entries && [...[...removed].map((file) => ({ path: file, token: DELETED })), ...entries];
 }
 
 async function stagedEntries(git: GitPort, root: string): Promise<ManifestEntry[] | undefined> {
@@ -159,4 +197,23 @@ export function buildReviewManifest(git: GitPort, projectRoot: string): Promise<
 /** Staged changes only, hashed with the same definition as the review manifest. */
 export function buildStagedManifest(git: GitPort, projectRoot: string): Promise<ChangeManifest> {
   return build(git, projectRoot, stagedEntries);
+}
+
+/**
+ * Everything that differs between merge-base(baseRef, HEAD) and the working tree: committed,
+ * staged, unstaged, and untracked changes, tokenized exactly like the review manifest. `baseRef`
+ * must already be well formed; an unresolvable one yields `invalid-base-ref`.
+ */
+export async function buildRangeManifest(git: GitPort, projectRoot: string, baseRef: string): Promise<RangeManifest> {
+  try {
+    const resolved: ResolvedRange = await resolveRange(git, projectRoot, baseRef);
+    if (!resolved.ok) return { status: 'invalid-base-ref' };
+    const range: RangeIdentity = { rangeBaseCommit: resolved.rangeBaseCommit, headCommit: resolved.headCommit };
+    const entries = await rangeEntries(git, projectRoot, range);
+    if (!entries) return UNAVAILABLE;
+    const manifest = finish(entries, range.headCommit);
+    return manifest.status === 'ok' ? { ...manifest, range } : manifest;
+  } catch {
+    return UNAVAILABLE;
+  }
 }

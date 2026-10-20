@@ -177,6 +177,59 @@ describe('JevAdvisoryService gates', () => {
     });
   });
 
+  describe('baseRef validation', () => {
+    const active: JevEnvironment = { SDD_JEV_ENABLED: '1', SDD_JEV_API_KEY: TEST_KEY, SDD_JEV_ALLOW_CODE: '1' };
+    const invalid: Array<[string, string]> = [
+      ['a leading dash', '--output=x'],
+      ['a space', 'origin/develop branch'],
+      ['a tab', 'origin/\tdevelop'],
+      ['a newline', 'origin/develop\n-x'],
+      ['a NUL character', 'origin/dev\u0000elop'],
+      ['a DEL character', 'origin/dev\u007Felop'],
+      ['an empty string', ''],
+      ['257 characters', 'a'.repeat(257)],
+    ];
+
+    it.each(['security', 'principles'] as const)('skips %s with invalid-base-ref and no side effects for every malformed value', async (check) => {
+      scriptOneChangedFile(git);
+      const before = await snapshotTree(project.root);
+      for (const [, baseRef] of invalid) {
+        const result = await service(active).check(requestFor(check, { baseRef }));
+        expect(result).toMatchObject({ check, status: 'skipped', skipReason: 'invalid-base-ref', line: null, persisted: false });
+      }
+      expectNoSideEffects();
+      expect(await snapshotTree(project.root)).toEqual(before);
+    });
+
+    it.each(['requirements', 'design', 'testcases', 'red', 'commit'] as const)(
+      'skips %s given a well-formed baseRef, with no git, http, or file effects',
+      async (check) => {
+        const before = await snapshotTree(project.root);
+        const result = await service(active).check(requestFor(check, { baseRef: 'origin/develop' }));
+        expect(result).toMatchObject({ check, status: 'skipped', skipReason: 'invalid-base-ref', line: null });
+        expectNoSideEffects();
+        expect(await snapshotTree(project.root)).toEqual(before);
+      },
+    );
+
+    it.each(JEV_CHECK_KINDS)('still reports disabled for %s with a baseRef and touches nothing', async (check) => {
+      const before = await snapshotTree(project.root);
+      const result = await service({}).check(requestFor(check, { baseRef: '--output=x' }));
+      if (check === 'commit') expect(result).toMatchObject({ status: 'skipped', skipReason: 'disabled' });
+      else expect(result).toMatchObject({ status: 'unavailable', reason: 'disabled' });
+      expectNoSideEffects();
+      expect(await snapshotTree(project.root)).toEqual(before);
+    });
+
+    it.each(['security', 'principles'] as const)('still reports no-key for %s with a baseRef and touches nothing', async (check) => {
+      const before = await snapshotTree(project.root);
+      const result = await service({ SDD_JEV_ENABLED: '1', SDD_JEV_ALLOW_CODE: '1' }).check(requestFor(check, { baseRef: 'origin/develop' }));
+      expect(result).toMatchObject({ status: 'unavailable', reason: 'no-key', persisted: false });
+      expectNoSideEffects();
+      expect(await snapshotTree(project.root)).toEqual(before);
+    });
+  });
+
   describe('failure containment and key hygiene', () => {
     it('turns an internal exception into a result value instead of rejecting', async () => {
       fileSystem.throwOn = { method: 'exists', match: /spec\.json$/ };

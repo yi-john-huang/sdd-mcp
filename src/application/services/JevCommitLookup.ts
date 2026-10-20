@@ -2,6 +2,7 @@ import path from 'node:path';
 import type { FileSystemPort, GitPort } from '../../domain/ports.js';
 import type { JevCheckResult } from './JevCheckTypes.js';
 import { buildStagedManifest } from './JevChangeManifest.js';
+import { QUESTION_SET_VERSION } from './JevQuestionCatalog.js';
 import { renderCommitWarning } from './JevReport.js';
 import { skippedResult } from './JevResults.js';
 import type { JevSidecarStore } from './JevSidecarStore.js';
@@ -11,8 +12,9 @@ const MAX_FEATURES_SCANNED = 200;
 const SERIOUS = new Set(['high', 'critical']);
 
 /**
- * Read-only: shows one warning when a saved code review of exactly the staged change holds a
- * confirmed high or critical finding. It never contacts JEV, needs no key, and writes nothing.
+ * Read-only: shows one warning when a saved working-tree code review of exactly the staged change
+ * holds a confirmed high or critical finding. Committed-range reviews and sidecars from another
+ * question-set version never match. It never contacts JEV, needs no key, and writes nothing.
  */
 export class JevCommitLookup {
   constructor(
@@ -30,7 +32,7 @@ export class JevCommitLookup {
 
     const flagged: string[] = [];
     for (const featureName of locations) {
-      const sidecar = await this.store.findByDiff(projectRoot, featureName, 'security', staged.diffSha256);
+      const sidecar = await this.store.findByDiff(projectRoot, featureName, 'security', staged.diffSha256, QUESTION_SET_VERSION);
       for (const item of sidecar?.items ?? []) {
         if (item.classification === 'confirmed' && SERIOUS.has(item.jevSeverity ?? '')) flagged.push(item.id);
       }

@@ -179,6 +179,9 @@ describe('JEV code-review sidecar ignore policy', () => {
       expect(ignored('.spec/specs/demo/review/jev-review-security-abc123.json')).toBe(true);
       expect(ignored('.spec/specs/demo/review/jev-review-principles-abc123.json')).toBe(true);
       expect(ignored('.spec/reviews/jev-review-security-abc123.json')).toBe(true);
+      expect(ignored('.spec/specs/demo/review/jev-review-security-range-abc123.json')).toBe(true);
+      expect(ignored('.spec/specs/demo/review/jev-review-principles-range-abc123.json')).toBe(true);
+      expect(ignored('.spec/reviews/jev-review-security-range-abc123.json')).toBe(true);
       for (const kept of ['jev-requirements-r1.json', 'jev-design-r1.json', 'jev-testcases-r1.json', 'jev-red-2.1-abc123.json']) {
         expect(ignored(`.spec/specs/demo/review/${kept}`)).toBe(false);
       }

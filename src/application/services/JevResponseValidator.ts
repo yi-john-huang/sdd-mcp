@@ -14,45 +14,16 @@ export type JevAnswer =
   | { type: 'score'; raw: number; index: number }
   | { type: 'noul'; noul: number };
 
-export type JevScoreBase = 'zero' | 'one-inferred' | 'none';
 export type JevMeta = Readonly<Record<string, string | number | boolean | null>>;
 
 export type ValidatedJevResponse =
-  | { ok: true; answers: Record<string, JevAnswer>; scoreBase: JevScoreBase; meta: JevMeta }
-  | { ok: false };
-
-export type NormalizedScores =
-  | { ok: true; base: JevScoreBase; scores: Record<string, { raw: number; index: number }> }
+  | { ok: true; answers: Record<string, JevAnswer>; meta: JevMeta }
   | { ok: false };
 
 const INVALID = { ok: false } as const;
 
 function isPlainObject(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
-}
-
-/**
- * Single place that decides the score base. Score questions ask for a zero-based index; as a
- * defensive fallback, a score equal to its level count proves 1-based, otherwise scores are 0-based.
- * Mixed or out-of-range values are invalid. The base used is stored as `scoreBase` in the sidecar.
- */
-export function normalizeScores(
-  rawScores: Readonly<Record<string, number>>,
-  levelCounts: Readonly<Record<string, number>>,
-): NormalizedScores {
-  const ids = Object.keys(rawScores);
-  if (ids.length === 0) return { ok: true, base: 'none', scores: {} };
-  const oneBased = ids.some((id) => rawScores[id] === levelCounts[id]);
-  const scores: Record<string, { raw: number; index: number }> = {};
-  for (const id of ids) {
-    const raw = rawScores[id];
-    const levels = levelCounts[id];
-    const low = oneBased ? 1 : 0;
-    const high = oneBased ? levels : levels - 1;
-    if (!Number.isInteger(raw) || raw < low || raw > high) return INVALID;
-    scores[id] = { raw, index: oneBased ? raw - 1 : raw };
-  }
-  return { ok: true, base: oneBased ? 'one-inferred' : 'zero', scores };
 }
 
 function collectMeta(root: Record<string, unknown>): JevMeta {
@@ -74,7 +45,7 @@ function soleKey(answer: unknown): [string, unknown] | undefined {
   return entries.length === 1 ? entries[0] : undefined;
 }
 
-/** Validates one raw answer value against its question; score index is filled in later. */
+/** Validates one raw answer value against its question. Scores are zero-based: an integer 0..levels-1. */
 function parseAnswer(question: JevQuestion, value: unknown): JevAnswer | undefined {
   if (question.type === 'choice') {
     return typeof value === 'string' && Object.hasOwn(question.criteria, value)
@@ -83,7 +54,9 @@ function parseAnswer(question: JevQuestion, value: unknown): JevAnswer | undefin
   }
   if (typeof value !== 'number') return undefined;
   if (question.type === 'score') {
-    return Number.isInteger(value) ? { type: 'score', raw: value, index: value } : undefined;
+    return Number.isInteger(value) && value >= 0 && value < question.criteria.length
+      ? { type: 'score', raw: value, index: value }
+      : undefined;
   }
   return Number.isFinite(value) && value >= 0 && value <= 1 ? { type: 'noul', noul: value } : undefined;
 }
@@ -100,25 +73,12 @@ export function validateJevResponse(body: string, questions: JevQuestionSet): Va
   const rawAnswers = root.answers;
 
   const answers: Record<string, JevAnswer> = {};
-  const rawScores: Record<string, number> = {};
-  const levelCounts: Record<string, number> = {};
   for (const [id, question] of Object.entries(questions)) {
     const entry = soleKey(Object.hasOwn(rawAnswers, id) ? rawAnswers[id] : undefined);
     if (!entry || entry[0] !== question.type) return INVALID;
     const answer = parseAnswer(question, entry[1]);
     if (!answer) return INVALID;
-    if (answer.type === 'score' && question.type === 'score') {
-      rawScores[id] = answer.raw;
-      levelCounts[id] = question.criteria.length;
-    } else {
-      answers[id] = answer;
-    }
+    answers[id] = answer;
   }
-
-  const normalized = normalizeScores(rawScores, levelCounts);
-  if (!normalized.ok) return INVALID;
-  for (const [id, score] of Object.entries(normalized.scores)) {
-    answers[id] = { type: 'score', raw: score.raw, index: score.index };
-  }
-  return { ok: true, answers, scoreBase: normalized.base, meta: collectMeta(root) };
+  return { ok: true, answers, meta: collectMeta(root) };
 }

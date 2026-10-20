@@ -152,4 +152,28 @@ describe('documented JEV advisory feature', () => {
     expect(unreleased).toMatch(/JEV/);
     expect(unreleased).toContain('sdd-jev-check');
   });
+
+  it('documents reviewing committed branch changes with baseRef', () => {
+    expect(workflow).toContain('`baseRef`');
+    expect(workflow).toContain('invalid-base-ref');
+    expect(workflow).toMatch(/Git 2\.30/);
+    expect(workflow).toMatch(/merge base/i);
+    expect(workflow).toContain('-range-');
+    expect(workflow).toMatch(/staged (?:diffs?|changes) only|only (?:the )?staged/i);
+    expect(workflow).toMatch(/`--end-of-options`/);
+  });
+
+  it('documents the zero-based score scale and never a fallback', () => {
+    expect(workflow).toMatch(/zero-based/i);
+    expect(workflow).toMatch(/0 (?:to|through) (?:the )?(?:last|highest) level|integer from 0/i);
+    expect(workflow).not.toMatch(/one-based|1-based|inferred/i);
+  });
+
+  it('records baseRef and the zero-based scale in the changelog under Unreleased', () => {
+    const unreleased = read('CHANGELOG.md').split('## [5.4.0]')[0]!;
+    expect(unreleased).toContain('`baseRef`');
+    expect(unreleased).toMatch(/zero-based/i);
+    expect(unreleased).not.toMatch(/one-based|1-based|inferred/i);
+    expect(read('README.md')).toContain('`baseRef`');
+  });
 });

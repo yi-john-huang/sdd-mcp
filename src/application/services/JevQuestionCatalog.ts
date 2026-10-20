@@ -1,9 +1,9 @@
 import type { JevQuestion, JevQuestionSet } from './JevResponseValidator.js';
 
 /** Bump when any question text, label, or level changes; sidecars bind to it. */
-export const QUESTION_SET_VERSION = 2;
+export const QUESTION_SET_VERSION = 3;
 
-/** Pins the score scale so answers need no base guessing; the validator's inference is only a fallback. */
+/** Score answers are zero-based: an integer from 0 to the last level's index. The validator accepts nothing else. */
 export const SCORE_SCALE_INSTRUCTION = 'Answer with the zero-based index of the matching level (0 = first level listed).';
 
 /** Constant preamble. Artifact, evidence, and code text only ever appear under `state`. */

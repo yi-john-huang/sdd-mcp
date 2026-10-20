@@ -4,7 +4,8 @@ import { inject, injectable } from 'inversify';
 import { TYPES } from '../../infrastructure/di/types.js';
 import type { FileSystemPort, GitPort, JevHttpPort, LoggerPort } from '../../domain/ports.js';
 import type { JevCheckRequest, JevCheckResult } from './JevCheckTypes.js';
-import { buildReviewManifest } from './JevChangeManifest.js';
+import { isWellFormedBaseRef } from './JevBaseRef.js';
+import { buildRangeManifest, buildReviewManifest, type RangeManifest } from './JevChangeManifest.js';
 import { JevCommitLookup } from './JevCommitLookup.js';
 import { JevExchange, type ExchangeContext, type ExchangePlan } from './JevExchange.js';
 import { QUESTION_SET_VERSION } from './JevQuestionCatalog.js';
@@ -51,7 +52,7 @@ export class JevAdvisoryService {
   ) {
     this.store = new JevSidecarStore(fileSystem, logger);
     this.exchange = new JevExchange(http, this.store, logger);
-    this.review = new JevReviewCheck(git, this.exchange);
+    this.review = new JevReviewCheck(this.exchange);
     this.commit = new JevCommitLookup(fileSystem, git, this.store);
   }
 
@@ -71,18 +72,33 @@ export class JevAdvisoryService {
     if (!settings.enabled) {
       return request.check === 'commit' ? skippedResult('commit', 'disabled') : unavailableResult(request.check, 'disabled');
     }
-    if (request.check === 'commit') return this.commit.run(request.projectRoot);
+    if (request.check === 'commit') return this.commitLookup(request);
     if (!settings.hasKey) return unavailableResult(request.check, 'no-key');
+    if (!this.baseRefAcceptable(request)) return skippedResult(request.check, 'invalid-base-ref');
     if (!(await this.featureInScope(request))) return skippedResult(request.check, 'feature-not-found');
     if ((request.check === 'security' || request.check === 'principles') && !settings.allowCode) {
       return this.codeDisabled(request);
     }
-    const context = { projectRoot: request.projectRoot, featureName: request.featureName, settings };
+    return this.dispatch(request, { projectRoot: request.projectRoot, featureName: request.featureName, settings });
+  }
+
+  private dispatch(request: JevCheckRequest, context: ExchangeContext): Promise<JevCheckResult> | JevCheckResult {
     if (request.check === 'requirements' || request.check === 'design') return this.specCheck(request, context);
     if (request.check === 'testcases') return this.testcasesCheck(request, context);
     if (request.check === 'red') return this.redCheck(request, context);
-    if (request.check === 'security' || request.check === 'principles') return this.review.run(request, context);
+    if (request.check === 'security' || request.check === 'principles') return this.review.run(request, context, () => this.manifestFor(request));
     return skippedResult(request.check, 'not-ready');
+  }
+
+  /** The commit lookup matches staged diffs only, so a base ref has no meaning there. */
+  private commitLookup(request: JevCheckRequest): Promise<JevCheckResult> | JevCheckResult {
+    return request.baseRef === undefined ? this.commit.run(request.projectRoot) : skippedResult('commit', 'invalid-base-ref');
+  }
+
+  /** No base ref is always fine; one is meaningful only for the code reviews, and only when well formed. */
+  private baseRefAcceptable(request: JevCheckRequest): boolean {
+    if (request.baseRef === undefined) return true;
+    return (request.check === 'security' || request.check === 'principles') && isWellFormedBaseRef(request.baseRef);
   }
 
   /** A snapshot of a phase that passed validation and still matches what was recorded; else undefined. */
@@ -250,17 +266,25 @@ export class JevAdvisoryService {
     return this.fileSystem.exists(path.join(path.resolve(request.projectRoot), '.spec', 'specs', featureName, 'spec.json'));
   }
 
+  /** The change set to judge: the working tree alone, or the working tree against merge-base(baseRef, HEAD). */
+  private manifestFor(request: JevCheckRequest): Promise<RangeManifest> {
+    return request.baseRef === undefined
+      ? buildReviewManifest(this.git, request.projectRoot)
+      : buildRangeManifest(this.git, request.projectRoot, request.baseRef);
+  }
+
   /** Reported whatever the working tree holds (FR-14); a sidecar needs a manifest to bind to. */
   private async codeDisabled(request: JevCheckRequest): Promise<JevCheckResult> {
     const result = unavailableResult(request.check, 'code-disabled');
-    const manifest = await buildReviewManifest(this.git, request.projectRoot);
+    const manifest = await this.manifestFor(request);
+    if (manifest.status === 'invalid-base-ref') return skippedResult(request.check, 'invalid-base-ref');
     if (manifest.status !== 'ok') return result;
     const kind = request.check === 'principles' ? 'principles' : 'security';
     const sidecar: JevSidecar = {
       schema: 1,
       kind,
       createdAt: new Date().toISOString(),
-      binding: { questionSetVersion: QUESTION_SET_VERSION, diffSha256: manifest.diffSha256, inputSha256: inputHash(request) },
+      binding: { questionSetVersion: QUESTION_SET_VERSION, diffSha256: manifest.diffSha256, inputSha256: inputHash(request), ...manifest.range },
       status: 'unavailable',
       reason: 'code-disabled',
       source: 'jev',

@@ -1,8 +1,9 @@
 import { execFileSync } from 'node:child_process';
-import { mkdir, readdir, rm, writeFile } from 'node:fs/promises';
+import { mkdir, readdir, readFile, rm, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { JevAdvisoryService, type AdvisoryEngine, type JevEnvironment } from '../../../application/services/JevAdvisoryService';
 import type { JevCheckRequest, JevFindingInput } from '../../../application/services/JevCheckTypes';
+import { QUESTION_SET_VERSION } from '../../../application/services/JevQuestionCatalog';
 import { NodeGitAdapter } from '../../../infrastructure/adapters/NodeGitAdapter';
 import {
   FakeGitPort, FakeJevHttpPort, SpyFileSystem, TEST_KEY, benignAnswers, createTempProject, silentLogger, snapshotTree, type TempProject,
@@ -134,6 +135,60 @@ describe('JevAdvisoryService commit lookup', () => {
       const result = await service(COMMIT_ENV, fakeGit).check(commitRequest());
       expect(result).toMatchObject({ line: null });
       expect(fakeGit.calls).toHaveLength(0);
+    });
+
+    describe('sidecars that do not describe exactly the staged change', () => {
+      const reviewDir = (): string => path.join(project.root, '.spec', 'specs', 'demo', 'review');
+      const rewriteStored = async (change: (stored: Record<string, any>) => void): Promise<void> => {
+        const [file] = await readdir(reviewDir());
+        const target = path.join(reviewDir(), file!);
+        const stored = JSON.parse(await readFile(target, 'utf8'));
+        change(stored);
+        await writeFile(target, JSON.stringify(stored));
+      };
+
+      it('stays silent for a committed-range sidecar, even one with the staged diff hash', async () => {
+        http.respond = async (request) => ({ status: 200, body: benignAnswers(request.body, confirmedHigh('F1') as never) });
+        const ranged = await service(REVIEW_ENV).check({
+          check: 'security', projectRoot: project.root, featureName: 'demo', findings: [finding('F1', 1)], baseRef: 'HEAD',
+        });
+        expect(ranged.sidecar).toMatch(/jev-review-security-range-[a-f0-9]{12}\.json$/);
+        git('add', '-A');
+        expect(await service(COMMIT_ENV).check(commitRequest())).toMatchObject({ status: 'skipped', line: null, flagged: [] });
+      });
+
+      it('stays silent when a sidecar under the plain name carries a range binding', async () => {
+        await review([finding('F1', 1)], confirmedHigh('F1'));
+        git('add', '-A');
+        expect((await service(COMMIT_ENV).check(commitRequest())).line).toBe(WARNING(1));
+        await rewriteStored((stored) => {
+          stored.binding.rangeBaseCommit = 'a'.repeat(40);
+          stored.binding.headCommit = 'b'.repeat(40);
+        });
+        expect((await service(COMMIT_ENV).check(commitRequest())).line).toBeNull();
+      });
+
+      it('stays silent for a sidecar from an older question-set version', async () => {
+        await review([finding('F1', 1)], confirmedHigh('F1'));
+        git('add', '-A');
+        await rewriteStored((stored) => {
+          stored.binding.questionSetVersion = QUESTION_SET_VERSION - 1;
+        });
+        expect((await service(COMMIT_ENV).check(commitRequest())).line).toBeNull();
+      });
+
+      it('makes no request and no write while ignoring them', async () => {
+        await review([finding('F1', 1)], confirmedHigh('F1'));
+        git('add', '-A');
+        await rewriteStored((stored) => {
+          stored.binding.questionSetVersion = QUESTION_SET_VERSION - 1;
+        });
+        const requestsBefore = http.calls.length;
+        const specBefore = await snapshotTree(path.join(project.root, '.spec'));
+        await service(COMMIT_ENV).check(commitRequest());
+        expect(http.calls.length).toBe(requestsBefore);
+        expect(await snapshotTree(path.join(project.root, '.spec'))).toEqual(specBefore);
+      });
     });
 
     it('stays silent for an unavailable code-disabled sidecar', async () => {

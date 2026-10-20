@@ -42,6 +42,9 @@ describe('sdd-jev-check tool definition', () => {
     ['a security check without a feature', { check: 'security', findings: [finding] }],
     ['a principles check with a feature', { check: 'principles', featureName: 'payments', units: [unit] }],
     ['a commit check', { check: 'commit' }],
+    ['a security check with a baseRef', { check: 'security', findings: [finding], baseRef: 'origin/develop' }],
+    ['a principles check with a SHA baseRef', { check: 'principles', units: [unit], baseRef: 'a'.repeat(40) }],
+    ['a baseRef of exactly 256 characters', { check: 'security', findings: [finding], baseRef: 'a'.repeat(256) }],
   ])('accepts %s', async (_name, data) => {
     expect(await accepts(data)).toBe(true);
   });
@@ -63,6 +66,10 @@ describe('sdd-jev-check tool definition', () => {
     ['a finding line below 1', { check: 'security', findings: [{ ...finding, line: 0 }] }],
     ['an unknown severity', { check: 'security', findings: [{ ...finding, severity: 'catastrophic' }] }],
     ['an invalid feature name', { check: 'requirements', featureName: '../escape' }],
+    ['an empty baseRef', { check: 'security', findings: [finding], baseRef: '' }],
+    ['a baseRef of 257 characters', { check: 'security', findings: [finding], baseRef: 'a'.repeat(257) }],
+    ['a non-string baseRef', { check: 'security', findings: [finding], baseRef: 7 }],
+    ['a baseRef without the required findings', { check: 'security', baseRef: 'origin/develop' }],
     ['too many findings', { check: 'security', findings: Array.from({ length: 51 }, (_, i) => ({ ...finding, id: `F${i}` })) }],
     ['an invalid case kind', { check: 'testcases', featureName: 'payments', cases: [{ taskId: '1.1', kind: 'other', given: 'g', when: 'w', then: 't', covers: 'c' }] }],
     ['a non-numeric task id in a case', { check: 'testcases', featureName: 'payments', cases: [{ taskId: 'abc', kind: 'error', given: 'g', when: 'w', then: 't', covers: 'c' }] }],
@@ -81,6 +88,24 @@ describe('sdd-jev-check handler', () => {
     const adapter = new SDDToolAdapter(dependency, dependency, dependency, dependency, dependency, dependency, dependency, dependency);
     const tool = adapter.getSDDTools().find(({ name }) => name === 'sdd-jev-check');
     expect(tool?.tool.inputSchema).toEqual(schemaOf('sdd-jev-check'));
+  });
+
+  it('publishes baseRef as an optional bounded string and keeps the required set and closed shape', () => {
+    const schema = schemaOf('sdd-jev-check') as {
+      properties: Record<string, unknown>; required: string[]; additionalProperties: boolean;
+    };
+    expect(schema.properties.baseRef).toEqual({ type: 'string', minLength: 1, maxLength: 256 });
+    expect(schema.required).toEqual(['check']);
+    expect(schema.additionalProperties).toBe(false);
+  });
+
+  it('passes baseRef to the service unchanged', async () => {
+    const check = jest.fn().mockResolvedValue({});
+    const handlers = build({ check });
+    await handlers['sdd-jev-check']!({ check: 'security', findings: [finding], baseRef: 'origin/develop' });
+    expect(check).toHaveBeenLastCalledWith(expect.objectContaining({ check: 'security', baseRef: 'origin/develop' }));
+    await handlers['sdd-jev-check']!({ check: 'security', findings: [finding] });
+    expect(check.mock.calls[1]![0].baseRef).toBeUndefined();
   });
 
   it('passes the arguments and the server workspace root to the service and returns its result unchanged', async () => {

@@ -21,7 +21,6 @@ const sidecar = (overrides: Partial<JevSidecar> = {}): JevSidecar => ({
   status: 'answered',
   source: 'jev',
   answers: { 'FR-1.testability': { type: 'score', raw: 2, index: 2 }, 'FR-1.ambiguity': { type: 'choice', choice: 'bounded' } },
-  scoreBase: 'zero',
   meta: { model: 'm1' },
   truncated: false,
   omittedIds: [],
@@ -87,14 +86,16 @@ describe('JevSidecarStore', () => {
   describe('content', () => {
     it('stores binding, answers, raw scores, reason, redaction count, and excerpt hashes', async () => {
       const item = { id: 'F1', location: 'src/a.ts:10', excerptSha256: SHA2, modelSeverity: 'important', jevSeverity: 'low', disagreement: true };
-      const timeout = sidecar({ status: 'unavailable', reason: 'timeout', answers: undefined, scoreBase: undefined, meta: undefined, items: [item], baseCommit: 'f'.repeat(40) });
+      const timeout = sidecar({ status: 'unavailable', reason: 'timeout', answers: undefined, meta: undefined, items: [item], baseCommit: 'f'.repeat(40) });
       await store.write(root, feature, timeout);
       const stored = JSON.parse(await readFile(path.join(reviewDir(), 'jev-requirements-r3.json'), 'utf8'));
       expect(stored).toMatchObject({ schema: 1, status: 'unavailable', reason: 'timeout', redactions: 2, binding: binding(), items: [item], baseCommit: 'f'.repeat(40) });
       await store.write(root, feature, sidecar());
       const answered = JSON.parse(await readFile(path.join(reviewDir(), 'jev-requirements-r3.json'), 'utf8'));
       expect(answered.answers['FR-1.testability']).toEqual({ type: 'score', raw: 2, index: 2 });
-      expect(answered.scoreBase).toBe('zero');
+      expect(Object.keys(answered).sort()).toEqual(
+        ['answers', 'binding', 'createdAt', 'droppedFindingIds', 'kind', 'meta', 'omittedIds', 'redactions', 'schema', 'source', 'status', 'truncated'],
+      );
     });
 
     it('drops unknown fields so a key, request body, or excerpt text can never reach disk', async () => {
@@ -132,7 +133,7 @@ describe('JevSidecarStore', () => {
   });
 
   describe('answered vs unavailable replacement', () => {
-    const timeout = (): JevSidecar => sidecar({ status: 'unavailable', reason: 'timeout', answers: undefined, scoreBase: undefined });
+    const timeout = (): JevSidecar => sidecar({ status: 'unavailable', reason: 'timeout', answers: undefined });
     const readStored = async (): Promise<JevSidecar> => JSON.parse(await readFile(path.join(reviewDir(), 'jev-requirements-r3.json'), 'utf8')) as JevSidecar;
 
     it('does not replace an answered sidecar with an unavailable one', async () => {
@@ -205,6 +206,80 @@ describe('JevSidecarStore', () => {
 
     it('returns undefined when there is no sidecar', async () => {
       await expect(store.readMatching(root, feature, 'requirements', binding())).resolves.toBeUndefined();
+    });
+  });
+
+  describe('committed-range review sidecars', () => {
+    const MERGE = '1'.repeat(40);
+    const HEAD = '2'.repeat(40);
+    const range = (overrides: Partial<SidecarBinding> = {}): SidecarBinding => ({
+      questionSetVersion: 3, inputSha256: SHA, diffSha256: SHA2, rangeBaseCommit: MERGE, headCommit: HEAD, ...overrides,
+    });
+    const reviewSidecar = (bound: SidecarBinding, overrides: Partial<JevSidecar> = {}): JevSidecar =>
+      sidecar({ kind: 'security', binding: bound, ...overrides });
+    const readRange = (bound: SidecarBinding) => store.readMatching(root, feature, 'security', bound);
+
+    it.each(['security', 'principles'] as const)('names a %s range sidecar from the diff hash', (kind) => {
+      expect(store.fileNameFor(kind, range())).toBe(`jev-review-${kind}-range-${SHA2.slice(0, 12)}.json`);
+    });
+
+    it('keeps the plain file name when the binding has no range', () => {
+      expect(store.fileNameFor('security', range({ rangeBaseCommit: undefined, headCommit: undefined }))).toBe(`jev-review-security-${SHA2.slice(0, 12)}.json`);
+    });
+
+    it('stores exactly the five binding fields and reads the sidecar back', async () => {
+      const result = await store.write(root, feature, reviewSidecar(range()));
+      expect(result).toEqual({ persisted: true, path: `.spec/specs/demo/review/jev-review-security-range-${SHA2.slice(0, 12)}.json` });
+      const stored = JSON.parse(await readFile(path.join(reviewDir(), `jev-review-security-range-${SHA2.slice(0, 12)}.json`), 'utf8'));
+      expect(stored.binding).toEqual(range());
+      expect(Object.keys(stored.binding).sort()).toEqual(['diffSha256', 'headCommit', 'inputSha256', 'questionSetVersion', 'rangeBaseCommit']);
+      expect((await readRange(range()))?.binding).toEqual(range());
+    });
+
+    it.each([
+      ['headCommit', { headCommit: '3'.repeat(40) }],
+      ['rangeBaseCommit', { rangeBaseCommit: '4'.repeat(40) }],
+      ['inputSha256', { inputSha256: 'c'.repeat(64) }],
+      ['questionSetVersion', { questionSetVersion: 4 }],
+    ])('ignores a range sidecar when %s differs', async (_name, change) => {
+      await store.write(root, feature, reviewSidecar(range()));
+      const current = range(change);
+      expect(await readRange(current)).toBeUndefined();
+      await writeFile(path.join(reviewDir(), store.fileNameFor('security', current)), JSON.stringify(reviewSidecar(range())), 'utf8');
+      expect(await readRange(current)).toBeUndefined();
+    });
+
+    it('treats a different diff hash as a different file, so the old range sidecar is never matched', async () => {
+      await store.write(root, feature, reviewSidecar(range()));
+      expect(await readRange(range({ diffSha256: 'd'.repeat(64) }))).toBeUndefined();
+    });
+
+    it('does not match a plain sidecar to a range binding or the reverse', async () => {
+      const plain = range({ rangeBaseCommit: undefined, headCommit: undefined });
+      await store.write(root, feature, reviewSidecar(plain));
+      expect(await readRange(range())).toBeUndefined();
+      await store.write(root, feature, reviewSidecar(range()));
+      expect((await store.readMatching(root, feature, 'security', plain))?.binding).toEqual(plain);
+    });
+
+    it('does not replace an answered range sidecar with an unavailable one', async () => {
+      await store.write(root, feature, reviewSidecar(range()));
+      const result = await store.write(root, feature, reviewSidecar(range(), { status: 'unavailable', reason: 'timeout', answers: undefined }));
+      expect(result).toEqual({ persisted: false });
+      expect((await readRange(range()))?.status).toBe('answered');
+    });
+
+    it('persists a code-disabled range sidecar when nothing was answered before', async () => {
+      const result = await store.write(root, feature, reviewSidecar(range(), { status: 'unavailable', reason: 'code-disabled', answers: undefined }));
+      expect(result.persisted).toBe(true);
+    });
+
+    it('leaves a plain review sidecar byte-compatible: no range keys are written', async () => {
+      const plain = range({ rangeBaseCommit: undefined, headCommit: undefined });
+      await store.write(root, feature, reviewSidecar(plain));
+      const text = await readFile(path.join(reviewDir(), `jev-review-security-${SHA2.slice(0, 12)}.json`), 'utf8');
+      expect(text).not.toContain('rangeBaseCommit');
+      expect(text).not.toContain('headCommit');
     });
   });
 

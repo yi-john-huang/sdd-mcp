@@ -176,6 +176,7 @@ export const SDD_TOOL_DEFINITIONS: ReadonlyArray<Tool & { name: SDDToolName }> =
         evidence,
         findings: { type: 'array', maxItems: 50, items: jevFinding },
         units: { type: 'array', maxItems: 30, items: jevUnit },
+        baseRef: { type: 'string', minLength: 1, maxLength: 256 },
       },
       required: ['check'], additionalProperties: false,
       allOf: [

@@ -4,7 +4,7 @@ import type { JevCheckKind, JevCheckResult, JevItemDetail } from './JevCheckType
 import type { ExchangeState } from './JevSpecState.js';
 import { renderJevLine } from './JevReport.js';
 import { MAX_JEV_RESPONSE_BYTES, validateJevResponse } from './JevResponseValidator.js';
-import type { JevAnswer, JevMeta, JevQuestionSet, JevScoreBase } from './JevResponseValidator.js';
+import type { JevAnswer, JevMeta, JevQuestionSet } from './JevResponseValidator.js';
 import { unavailableResult } from './JevResults.js';
 import type { JevSettings } from './JevSettings.js';
 import type { JevSidecar, JevSidecarStore, SidecarBinding, SidecarItem, SidecarKind } from './JevSidecarStore.js';
@@ -46,7 +46,7 @@ export interface ExchangeContext {
 }
 
 type Outcome =
-  | { ok: true; answers: Record<string, JevAnswer>; scoreBase: JevScoreBase; meta: JevMeta }
+  | { ok: true; answers: Record<string, JevAnswer>; meta: JevMeta }
   | { ok: false; reason: string };
 
 function withDeadline<T>(promise: Promise<T>, ms: number): Promise<T> {
@@ -87,7 +87,7 @@ export class JevExchange {
     }
     const interpretation = plan.interpret(outcome.answers);
     const written = await this.persist(plan, context, {
-      status: 'answered', answers: outcome.answers, scoreBase: outcome.scoreBase, meta: outcome.meta, items: interpretation.items,
+      status: 'answered', answers: outcome.answers, meta: outcome.meta, items: interpretation.items,
     });
     return this.answered(plan, outcome.answers, { persisted: written.persisted, path: written.path, interpretation });
   }
@@ -109,7 +109,7 @@ export class JevExchange {
       if (response.status < 200 || response.status > 299) return { ok: false, reason: `http-${response.status}` };
       const validated = validateJevResponse(response.body, plan.questions);
       return validated.ok
-        ? { ok: true, answers: validated.answers, scoreBase: validated.scoreBase, meta: validated.meta }
+        ? { ok: true, answers: validated.answers, meta: validated.meta }
         : { ok: false, reason: 'invalid-response' };
     } catch (error) {
       return { ok: false, reason: reasonFor(error) };
@@ -119,7 +119,7 @@ export class JevExchange {
   private async persist(
     plan: ExchangePlan,
     context: ExchangeContext,
-    body: Pick<JevSidecar, 'status' | 'reason' | 'answers' | 'scoreBase' | 'meta'> & { items?: SidecarItem[] },
+    body: Pick<JevSidecar, 'status' | 'reason' | 'answers' | 'meta'> & { items?: SidecarItem[] },
   ): Promise<{ persisted: boolean; path?: string }> {
     if (plan.unbound) return { persisted: false };
     const sidecar: JevSidecar = {

@@ -15,8 +15,14 @@ const STEPS: Array<[string, RegExp[]]> = [
   ['sdd-design', [/internally run the JEV `design` check/, /never affects approval/i]],
   ['sdd-tasks', [/internally run the JEV `testcases` check/, /case list/, /never records the checkpoint/i]],
   ['sdd-implement', [/internally run the JEV `red` check/, /never blocks recording/i]],
-  ['sdd-review', [/parent \(never an agent\)/, /JEV `security` and `principles` checks/, /only violated principles/i]],
-  ['sdd-security-check', [/parent \(never an agent\)/, /JEV `security` check/]],
+  ['sdd-review', [
+    /parent \(never an agent\)/, /JEV `security` and `principles` checks/, /only violated principles/i,
+    /pass (?:its|the) base[^.]*as `baseRef`/i, /omit `baseRef`/i,
+  ]],
+  ['sdd-security-check', [
+    /parent \(never an agent\)/, /JEV `security` check/,
+    /pass (?:its|the) base[^.]*as `baseRef`/i, /omit `baseRef`/i,
+  ]],
   ['sdd-commit', [/JEV `commit` lookup/, /local, read-only/, /never blocks/i]],
 ];
 const AFFECTED = STEPS.map(([name]) => name);

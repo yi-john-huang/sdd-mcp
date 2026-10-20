@@ -29,7 +29,26 @@ const levels = (q: JevQuestion | undefined): number => (q?.type === 'score' ? q.
 
 describe('question catalog structure', () => {
   it('exports a question set version', () => {
-    expect(QUESTION_SET_VERSION).toBe(2);
+    expect(QUESTION_SET_VERSION).toBe(3);
+  });
+
+  it('leaves no trace of a guessed score base in source, docs, or skills', () => {
+    const root = path.resolve(__dirname, '../../../..');
+    const banned = [new RegExp(`one-${'inferred'}`), /scoreBase/, /base guessing/i, /normalizeScores/];
+    const files: string[] = [];
+    const walk = (target: string): void => {
+      const info = fs.statSync(target);
+      if (info.isFile()) {
+        if (/\.(ts|md)$/.test(target)) files.push(target);
+        return;
+      }
+      for (const name of fs.readdirSync(target)) if (name !== 'node_modules') walk(path.join(target, name));
+    };
+    for (const entry of ['src', 'docs', 'skills', 'README.md', 'CHANGELOG.md']) walk(path.join(root, entry));
+    const offenders = files
+      .filter((file) => !file.endsWith('JevQuestionCatalog.test.ts'))
+      .filter((file) => banned.some((pattern) => pattern.test(fs.readFileSync(file, 'utf8'))));
+    expect(offenders).toEqual([]);
   });
 
   it('states the zero-based scale in every score question and nowhere else', () => {

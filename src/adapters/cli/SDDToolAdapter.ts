@@ -334,6 +334,7 @@ export class SDDToolAdapter {
       evidence: args.evidence as JevCheckRequest["evidence"],
       findings: args.findings as JevCheckRequest["findings"],
       units: args.units as JevCheckRequest["units"],
+      baseRef: args.baseRef as string | undefined,
     });
   }
 

@@ -247,7 +247,7 @@ Every packaged entrypoint exposes the same 17 tools:
 16. `sdd-spec-impl`
 17. `sdd-jev-check`
 
-`sdd-jev-check` is opt-in and advisory. It is off by default and never changes workflow state. See [Optional JEV advisory](docs/WORKFLOW.md#optional-jev-advisory).
+`sdd-jev-check` is opt-in and advisory. It is off by default and never changes workflow state. For a PR or branch review, its code checks accept an optional `baseRef` to judge committed changes. See [Optional JEV advisory](docs/WORKFLOW.md#optional-jev-advisory).
 
 Feature-scoped tools use `featureName`; v5 payloads bind phase mutations and approvals to exact revisions and artifact hashes. This inventory is for MCP integrators and runtime maintainers—not end-user workflow instructions. Hosts discover installed Skills, and the installer supports `--list`.
 

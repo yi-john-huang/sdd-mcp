@@ -1,7 +1,6 @@
 import { createHash } from 'node:crypto';
-import type { GitPort } from '../../domain/ports.js';
 import type { JevCheckRequest, JevCheckResult, JevFindingInput, JevUnitInput } from './JevCheckTypes.js';
-import { buildReviewManifest } from './JevChangeManifest.js';
+import type { RangeManifest } from './JevChangeManifest.js';
 import { buildExcerpts, type ExcerptResult } from './JevCodeExcerpts.js';
 import type { ExchangeContext, ExchangePlan, JevExchange } from './JevExchange.js';
 import { buildPrincipleQuestions, buildSecurityQuestions, QUESTION_SET_VERSION } from './JevQuestionCatalog.js';
@@ -28,16 +27,18 @@ export function inputHash(request: JevCheckRequest): string {
  * review returned, and judges findings and units that already exist; it never adds any.
  */
 export class JevReviewCheck {
-  constructor(
-    private readonly git: GitPort,
-    private readonly exchange: JevExchange,
-  ) {}
+  constructor(private readonly exchange: JevExchange) {}
 
-  async run(request: JevCheckRequest, context: ExchangeContext): Promise<JevCheckResult> {
+  /**
+   * The caller supplies how to build the manifest, so a working-tree review and a range review share
+   * this path, and git is not touched at all when there is nothing to judge.
+   */
+  async run(request: JevCheckRequest, context: ExchangeContext, manifestOf: () => Promise<RangeManifest>): Promise<JevCheckResult> {
     const security = request.check === 'security';
     const inputs: ReadonlyArray<JevFindingInput | JevUnitInput> = (security ? request.findings : request.units) ?? [];
     if (inputs.length === 0) return skippedResult(request.check, 'not-ready');
-    const manifest = await buildReviewManifest(this.git, request.projectRoot);
+    const manifest = await manifestOf();
+    if (manifest.status === 'invalid-base-ref') return skippedResult(request.check, 'invalid-base-ref');
     if (manifest.status === 'empty') return skippedResult(request.check, 'no-changes');
 
     const excerpts = await buildExcerpts(request.projectRoot, inputs.map(({ id, path, line }) => ({ id, path, line })));
@@ -57,6 +58,7 @@ export class JevReviewCheck {
         questionSetVersion: QUESTION_SET_VERSION,
         inputSha256: inputHash(request),
         ...(manifest.status === 'ok' && { diffSha256: manifest.diffSha256 }),
+        ...(manifest.status === 'ok' && manifest.range),
       },
       unbound: manifest.status !== 'ok',
       baseCommit: manifest.status === 'ok' ? manifest.baseCommit : undefined,

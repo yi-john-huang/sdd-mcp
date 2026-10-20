@@ -171,6 +171,7 @@ describe('JevAdvisoryService requirements and design checks', () => {
       ['a redirect', async () => ({ status: 302, body: '' }), 'http-302'],
       ['a malformed body', async () => ({ status: 200, body: 'not json' }), 'invalid-response'],
       ['an answer outside the declared labels', async () => ({ status: 200, body: JSON.stringify({ answers: {} }) }), 'invalid-response'],
+      ['a score beyond the zero-based range', async () => ({ status: 200, body: benignAnswers(http.calls[0]!.body, { 'FR-1.testability': { score: 99 } }) }), 'invalid-response'],
     ];
 
     it.each(reasonCases)('maps %s to its reason after exactly one attempt and persists it', async (_name, respond, reason) => {

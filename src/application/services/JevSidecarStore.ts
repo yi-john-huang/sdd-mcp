@@ -1,6 +1,6 @@
 import path from 'node:path';
 import type { FileSystemPort, LoggerPort } from '../../domain/ports.js';
-import type { JevAnswer, JevMeta, JevScoreBase } from './JevResponseValidator.js';
+import type { JevAnswer, JevMeta } from './JevResponseValidator.js';
 import { SpecPathResolver, validateFeatureName } from './SpecPathResolver.js';
 
 export type SidecarKind = 'requirements' | 'design' | 'testcases' | 'red' | 'security' | 'principles';
@@ -13,6 +13,10 @@ export interface SidecarBinding {
   evidenceSha256?: string;
   diffSha256?: string;
   inputSha256?: string;
+  /** Committed-range reviews only: the merge base of the caller's base ref and HEAD. */
+  rangeBaseCommit?: string;
+  /** Committed-range reviews only: HEAD when the review ran. */
+  headCommit?: string;
 }
 
 export interface SidecarItem {
@@ -34,7 +38,6 @@ export interface JevSidecar {
   reason?: string;
   source: 'jev' | 'local';
   answers?: Record<string, JevAnswer>;
-  scoreBase?: JevScoreBase;
   meta?: JevMeta;
   baseCommit?: string | null;
   truncated: boolean;
@@ -55,7 +58,10 @@ const HASH_PREFIX = 12;
 const KINDS: ReadonlySet<string> = new Set(['requirements', 'design', 'testcases', 'red', 'security', 'principles']);
 /** Reasons that must leave no filesystem trace at all. */
 const TRACELESS_REASONS: ReadonlySet<string> = new Set(['disabled', 'no-key']);
-const BINDING_KEYS = ['questionSetVersion', 'revision', 'artifactSha256', 'caseListSha256', 'evidenceSha256', 'diffSha256', 'inputSha256'] as const;
+const BINDING_KEYS = [
+  'questionSetVersion', 'revision', 'artifactSha256', 'caseListSha256', 'evidenceSha256', 'diffSha256', 'inputSha256',
+  'rangeBaseCommit', 'headCommit',
+] as const;
 
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   typeof value === 'object' && value !== null && !Array.isArray(value);
@@ -92,7 +98,6 @@ function toStored(sidecar: JevSidecar): JevSidecar {
     reason: sidecar.reason,
     source: sidecar.source,
     answers: sidecar.answers && Object.fromEntries(Object.entries(sidecar.answers).map(([id, answer]) => [id, pickAnswer(answer)])),
-    scoreBase: sidecar.scoreBase,
     meta: sidecar.meta && Object.fromEntries(Object.entries(sidecar.meta).filter(([, value]) => value === null || ['string', 'number', 'boolean'].includes(typeof value))),
     baseCommit: sidecar.baseCommit,
     truncated: sidecar.truncated,
@@ -147,7 +152,8 @@ export class JevSidecarStore {
       return `jev-red-${task}-${(binding.evidenceSha256 ?? '').slice(0, HASH_PREFIX)}.json`;
     }
     if (kind === 'security' || kind === 'principles') {
-      return `jev-review-${kind}-${(binding.diffSha256 ?? '').slice(0, HASH_PREFIX)}.json`;
+      const range = binding.rangeBaseCommit === undefined ? '' : 'range-';
+      return `jev-review-${kind}-${range}${(binding.diffSha256 ?? '').slice(0, HASH_PREFIX)}.json`;
     }
     return `jev-${kind}-r${binding.revision ?? 0}.json`;
   }
@@ -204,15 +210,25 @@ export class JevSidecarStore {
     return parsed && sameBinding(parsed.binding, binding) ? parsed : undefined;
   }
 
-  /** Looks a review sidecar up by the full diff hash alone; used by the read-only commit lookup. */
+  /**
+   * Looks a working-tree review sidecar up by the full diff hash; used by the read-only commit
+   * lookup. Only a sidecar of the current question-set version and without a range binding can
+   * describe exactly the staged change.
+   */
   async findByDiff(
     projectRoot: string,
     featureName: string | undefined,
     kind: 'security' | 'principles',
     diffSha256: string,
+    questionSetVersion: number,
   ): Promise<JevSidecar | undefined> {
-    const parsed = await this.readAnswered(projectRoot, featureName, kind, this.fileNameFor(kind, { questionSetVersion: 0, diffSha256 }));
-    return parsed?.binding.diffSha256 === diffSha256 ? parsed : undefined;
+    const parsed = await this.readAnswered(projectRoot, featureName, kind, this.fileNameFor(kind, { questionSetVersion, diffSha256 }));
+    const bound = parsed?.binding;
+    const matches = bound?.diffSha256 === diffSha256
+      && bound.questionSetVersion === questionSetVersion
+      && bound.rangeBaseCommit === undefined
+      && bound.headCommit === undefined;
+    return matches ? parsed : undefined;
   }
 
   /** Names of review sidecars of one kind in a location; empty on any problem. */

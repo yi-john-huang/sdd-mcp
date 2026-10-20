@@ -1,6 +1,5 @@
 import {
   MAX_JEV_RESPONSE_BYTES,
-  normalizeScores,
   validateJevResponse,
   type JevQuestionSet,
 } from '../../../application/services/JevResponseValidator';
@@ -21,8 +20,9 @@ const valid = {
 describe('validateJevResponse', () => {
   it('accepts a valid response covering every question type', () => {
     const result = validateJevResponse(body(valid), QUESTIONS);
-    expect(result).toMatchObject({ ok: true, scoreBase: 'zero' });
+    expect(result.ok).toBe(true);
     if (!result.ok) return;
+    expect(Object.keys(result).sort()).toEqual(['answers', 'meta', 'ok']);
     expect(result.answers['FR-1.testability']).toEqual({ type: 'score', raw: 2, index: 2 });
     expect(result.answers['FR-1.ambiguity']).toEqual({ type: 'choice', choice: 'bounded' });
     expect(result.answers['goal.clarification']).toEqual({ type: 'noul', noul: 0.25 });
@@ -85,43 +85,30 @@ describe('validateJevResponse', () => {
   it('reads a zero-based severity answer as asked, without shifting it', () => {
     const severity: JevQuestionSet = { 'F1.severity': { type: 'score', instructions: 'i', criteria: ['info', 'low', 'medium', 'high', 'critical'] } };
     const result = validateJevResponse(body({ 'F1.severity': { score: 3 } }), severity);
-    expect(result).toMatchObject({ ok: true, scoreBase: 'zero' });
+    expect(result.ok).toBe(true);
     if (result.ok) expect(result.answers['F1.severity']).toEqual({ type: 'score', raw: 3, index: 3 });
   });
 
-  it('infers a 1-based score and stores the raw value', () => {
-    const result = validateJevResponse(body({ ...valid, 'FR-1.testability': { score: 4 } }), QUESTIONS);
-    expect(result).toMatchObject({ ok: true, scoreBase: 'one-inferred' });
-    if (result.ok) expect(result.answers['FR-1.testability']).toEqual({ type: 'score', raw: 4, index: 3 });
-  });
-});
-
-describe('normalizeScores', () => {
-  it('treats scores in 0..n-1 as 0-based', () => {
-    expect(normalizeScores({ a: 0, b: 3 }, { a: 4, b: 4 })).toEqual({
-      ok: true,
-      base: 'zero',
-      scores: { a: { raw: 0, index: 0 }, b: { raw: 3, index: 3 } },
-    });
+  it.each([[0], [3]])('accepts the boundary score %i of a four-level question', (score) => {
+    const result = validateJevResponse(body({ ...valid, 'FR-1.testability': { score } }), QUESTIONS);
+    expect(result.ok).toBe(true);
+    if (result.ok) expect(result.answers['FR-1.testability']).toEqual({ type: 'score', raw: score, index: score });
   });
 
-  it('treats a score equal to the level count as 1-based', () => {
-    expect(normalizeScores({ a: 1, b: 4 }, { a: 4, b: 4 })).toEqual({
-      ok: true,
-      base: 'one-inferred',
-      scores: { a: { raw: 1, index: 0 }, b: { raw: 4, index: 3 } },
-    });
+  it.each([[4], [5], [-1], [1.5]])('rejects the score %s of a four-level question', (score) => {
+    expect(validateJevResponse(body({ ...valid, 'FR-1.testability': { score } }), QUESTIONS)).toEqual({ ok: false });
   });
 
-  it('rejects a response holding both 0 and the level count', () => {
-    expect(normalizeScores({ a: 0, b: 4 }, { a: 4, b: 4 })).toEqual({ ok: false });
+  it('rejects a response whose every score equals its level count', () => {
+    const questions: JevQuestionSet = {
+      a: { type: 'score', instructions: 'i', criteria: ['x', 'y', 'z', 'w'] },
+      b: { type: 'score', instructions: 'i', criteria: ['x', 'y', 'z', 'w'] },
+    };
+    expect(validateJevResponse(body({ a: { score: 4 }, b: { score: 4 } }), questions)).toEqual({ ok: false });
   });
 
-  it.each([[{ a: 5 }], [{ a: -1 }], [{ a: 4, b: 9 }]])('rejects out-of-range scores %j', (scores) => {
-    expect(normalizeScores(scores, { a: 4, b: 4 })).toEqual({ ok: false });
-  });
-
-  it('returns base none and no scores when there are no score questions', () => {
-    expect(normalizeScores({}, {})).toEqual({ ok: true, base: 'none', scores: {} });
+  it('accepts a response with no score questions', () => {
+    const questions: JevQuestionSet = { c: { type: 'choice', instructions: 'i', criteria: { yes: 'y' } } };
+    expect(validateJevResponse(body({ c: { choice: 'yes' } }), questions).ok).toBe(true);
   });
 });
