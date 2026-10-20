@@ -68,6 +68,7 @@ async function readWindow(root: string, request: ExcerptRequest): Promise<string
     const canonicalRoot = await realpath(root);
     const canonicalFile = await realpath(path.join(root, normalize(request.path)));
     if (!isInside(canonicalRoot, canonicalFile)) return null;
+    if (isExcludedPath(path.relative(canonicalRoot, canonicalFile))) return null;
     const info = await stat(canonicalFile);
     if (!info.isFile() || info.size > MAX_SOURCE_BYTES) return null;
     const content = await readFile(canonicalFile, 'utf8');

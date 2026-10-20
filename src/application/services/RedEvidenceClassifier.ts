@@ -23,6 +23,7 @@ const ASSERTION_PATTERNS: readonly NamedPattern[] = [
   { name: 'assertion-error', regex: /AssertionError/ },
   { name: 'expected-received', regex: /Expected:[\s\S]*Received:/ },
   { name: 'expect-call', regex: /\bexpect\(/ },
+  { name: 'assert-fail', regex: /\bassert(?:ion)?\b.*fail/i },
 ];
 
 function firstMatch(patterns: readonly NamedPattern[], text: string): string | undefined {

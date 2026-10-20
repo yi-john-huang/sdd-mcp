@@ -18,6 +18,8 @@ describe('classifyRedEvidence', () => {
     'AssertionError: expected 1 to equal 2',
     'Expected: 1\nReceived: 2',
     'expect(received).toBe(expected)',
+    'Assertion failed',
+    'assert failed',
   ])('classifies %p as assertion', (summary) => {
     const result = classifyRedEvidence('npx jest a.test.ts', summary);
     expect(result.classification).toBe('assertion');
@@ -26,6 +28,11 @@ describe('classifyRedEvidence', () => {
 
   it('prefers setup when both setup and assertion patterns match', () => {
     const result = classifyRedEvidence('npx jest', "Cannot find module './x'\nexpect(received).toBe(expected)");
+    expect(result).toEqual({ classification: 'setup', matchedPattern: 'module-not-found' });
+  });
+
+  it('prefers setup when a module error is mixed with Assertion failed', () => {
+    const result = classifyRedEvidence('npx jest', "Cannot find module './x'\nAssertion failed");
     expect(result).toEqual({ classification: 'setup', matchedPattern: 'module-not-found' });
   });
 

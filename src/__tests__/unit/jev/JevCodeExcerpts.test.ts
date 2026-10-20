@@ -95,6 +95,16 @@ describe('code excerpts', () => {
     it.each(['src/index.ts', 'src/environment.ts', 'src/builder/index.ts', 'docs/keys.md', 'lib/mini.js'])('keeps %s', (relative) => {
       expect(isExcludedPath(relative)).toBe(false);
     });
+
+    it.each([
+      ['.env.production', 'src/settings.ts'],
+      ['certs/server.pem', 'src/tls.ts'],
+    ])('yields no excerpt for an in-repo symlink to %s', async (target, link) => {
+      await put(target, 'secret = 1\nline 2\n');
+      await mkdir(path.dirname(path.join(root, link)), { recursive: true });
+      await symlink(path.join(root, target), path.join(root, link));
+      expect((await one(link, 1)).excerpt).toBeNull();
+    });
   });
 
   describe('unsafe or unreadable files', () => {
