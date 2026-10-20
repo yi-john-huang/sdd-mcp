@@ -15,7 +15,7 @@ import {
   type ContextLoadResult,
 } from './ContextCompactionService.js';
 import { InvalidFeatureNameError, SpecPathResolver, validateFeatureName } from './SpecPathResolver.js';
-import { WorkflowValidationService, type DesignValidationResult } from './WorkflowValidationService.js';
+import { WorkflowValidationService, taskAcceptanceCriteria, type DesignValidationResult } from './WorkflowValidationService.js';
 import { GovernanceError } from './WorkflowErrors.js';
 import { FilesystemLockCompromisedError, withFilesystemLock } from '../../utils/withFilesystemLock.js';
 
@@ -73,6 +73,23 @@ export interface DurableFeatureStatus {
   readonly phases: Record<ApprovablePhase, PhaseRecord & { observedArtifactSha256?: string }>;
   readonly checkpoint: { required: boolean; reviewed: boolean; reviewedRevision?: number; reviewedArtifactSha256?: string };
   readonly implementation?: { revision: number; completed: number; total: number; active: number; blocked: number };
+}
+/** Read-only view for advisory checks; carries no handle that can mutate workflow state. */
+export interface AdvisorySnapshot {
+  readonly featureName: string;
+  readonly description: string;
+  readonly phase: ApprovablePhase;
+  readonly revision: number;
+  readonly recordedSha256?: string;
+  readonly observedSha256?: string;
+  readonly validationStatus: PhaseRecord['validation']['status'];
+  readonly content: string;
+  readonly requirementsContent?: string;
+  readonly designContent?: string;
+  readonly implementation?: {
+    readonly revision: number;
+    readonly tasks: Readonly<Record<string, { readonly status: TaskStatus; readonly tddRequired: boolean; readonly acceptanceCriteria: string }>>;
+  };
 }
 export interface RecordTaskProgressRequest extends FeatureRequest {
   readonly taskNumber: string; readonly action: 'start' | 'record-red' | 'record-green' | 'complete' | 'block';
@@ -422,6 +439,47 @@ export class WorkflowEngineService {
       }
     }
     return statuses;
+  }
+
+  /**
+   * Read-only view for advisory checks. Never commits state, publishes a handoff, or creates
+   * files for an unknown feature (the lock helper would create the feature directory).
+   */
+  async readAdvisorySnapshot(request: FeatureRequest & { readonly phase: ApprovablePhase }): Promise<AdvisorySnapshot> {
+    validateFeatureName(request.featureName);
+    if (!this.fileSystem) throw new GovernanceError('StateInvariantViolation', 'FileSystemPort is required');
+    const specPath = path.join(path.resolve(request.projectRoot), '.spec', 'specs', request.featureName, 'spec.json');
+    if (!(await this.fileSystem.exists(specPath))) {
+      throw new GovernanceError('StateInvariantViolation', `Feature metadata not found: ${request.featureName}`);
+    }
+    return this.withLockedFeature(request.projectRoot, request.featureName, false, async ({ featureRoot, spec }) => {
+      const artifact = (name: string): Promise<string | null> => this.readOptional(path.join(featureRoot, `${name}.md`));
+      const record = spec.approvals[request.phase];
+      const content = await artifact(request.phase);
+      const requirementsContent = request.phase === 'requirements' ? null : await artifact('requirements');
+      const designContent = request.phase === 'tasks' ? await artifact('design') : null;
+      const tasksContent = spec.implementation ? (request.phase === 'tasks' ? content : await artifact('tasks')) : null;
+      const criteria = taskAcceptanceCriteria(tasksContent ?? '');
+      return {
+        featureName: request.featureName,
+        description: spec.description,
+        phase: request.phase,
+        revision: record.revision,
+        recordedSha256: record.artifactSha256,
+        observedSha256: content === null ? undefined : sha256(content),
+        validationStatus: record.validation.status,
+        content: content ?? '',
+        requirementsContent: requirementsContent ?? undefined,
+        designContent: designContent ?? undefined,
+        implementation: spec.implementation && {
+          revision: spec.implementation.revision,
+          tasks: Object.fromEntries(Object.entries(spec.implementation.tasks).map(([id, task]) => [
+            id,
+            { status: task.status, tddRequired: task.tdd_required, acceptanceCriteria: criteria[id] ?? '' },
+          ])),
+        },
+      };
+    });
   }
 
   async loadProject(request: FeatureRequest): Promise<Project> {

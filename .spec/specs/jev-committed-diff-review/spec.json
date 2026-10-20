@@ -1,0 +1,460 @@
+{
+  "schema_version": 5,
+  "feature_name": "jev-committed-diff-review",
+  "description": "## Original Description\nFollow-up to the completed jev-advisory-toggle spec (whose approved artifacts must not be edited). Goal 1: the sdd-jev-check B1 (security) and B2 (principles) checks gain an optional, strictly validated baseRef input so they can review already-committed branch diffs (merge-base(baseRef, HEAD)..HEAD, optionally plus working-tree changes), while the no-baseRef uncommitted behaviour stays exactly unchanged and all existing guarantees remain (code opt-in SDD_JEV_ALLOW_CODE, default-off toggle + SDD_JEV_API_KEY, redaction before clip, ±15-line excerpts, 8 KB cap, exclusions including symlink targets, sidecar binding by revision/SHA-256 with stale ignored, answered-not-overwritten-by-unavailable, advisory only, no spec.json changes, zero side effects when disabled/no-key, read-only git via GitPort, baseRef validated with no option injection and resolved via git rev-parse --verify --end-of-options <ref>^{commit}). Committed-diff sidecars are bound to baseCommit+headCommit+diff hash; sdd-commit warning lookup keeps matching staged diffs. sdd-review and sdd-security-check Skill text (within 4,000-byte limits), docs, tool input schema and inventory/schema tests are updated. Goal 2: the JEV score scale is definitively zero-based: remove the one-based inferred fallback in JevResponseValidator and related code, accept only integer 0..levels-1, anything else is invalid-response; remove uncertainty notes from code comments, tests and docs; bump QUESTION_SET_VERSION if sidecar semantics change.\n\n## Core Features (What)\n1) Optional baseRef input on sdd-jev-check for B1 security and B2 principles reviewing merge-base(baseRef, HEAD)..HEAD committed diffs; 2) strict baseRef validation (reject leading '-', whitespace, control chars; resolve via git rev-parse --verify --end-of-options <ref>^{commit}) with no git side effects on rejection; 3) committed-diff sidecars bound to baseCommit+headCommit+diff SHA-256, stale ones ignored, sdd-commit lookup still matching staged diffs; 4) zero-based-only JEV score validation (integer 0..levels-1, else invalid-response) with the one-based inference and uncertainty notes removed; 5) Skill text (sdd-review, sdd-security-check), docs, tool schema and inventory/schema tests updated. Editing approved artifacts in .spec/specs/jev-advisory-toggle/; changing no-baseRef uncommitted behaviour; changing other JEV checks beyond the score-scale rule; writing git state (fetch, checkout, etc.); making JEV results blocking; spec.json changes from JEV; sdd-commit matching committed-diff sidecars.\n\n## Success Criteria\nTests cover committed diff with baseRef, invalid baseRef rejected with zero git side effects, unchanged no-baseRef behaviour, committed-diff sidecar binding, and zero-based-only validation; full test suite passes except the known pre-existing compiled-cli.e2e cancellation failure; lint reports 0 errors; typecheck and build pass; Skill files stay within 4,000 bytes.",
+  "language": "en",
+  "phase": "implementation-completed",
+  "created_at": "2026-10-20T02:12:00.237Z",
+  "updated_at": "2026-10-20T02:32:03.278Z",
+  "approvals": {
+    "requirements": {
+      "generated": true,
+      "approved": true,
+      "revision": 1,
+      "artifact_sha256": "f73d882eaa4c388b4cda423f26eb7960759210cd8ffdf5d363d6ca543aa3a709",
+      "validation": {
+        "status": "passed",
+        "checked_at": "2026-10-20T02:14:02.054Z",
+        "blockers": []
+      }
+    },
+    "design": {
+      "generated": true,
+      "approved": true,
+      "revision": 1,
+      "artifact_sha256": "3df57ca9f4968bc08e266437c1521ee5b026df22f0aa9b448bca6a95315cd939",
+      "validation": {
+        "status": "passed",
+        "checked_at": "2026-10-20T02:16:47.257Z",
+        "blockers": []
+      }
+    },
+    "tasks": {
+      "generated": true,
+      "approved": true,
+      "revision": 1,
+      "artifact_sha256": "a11e3c222519590a2152b04b64e5f8bd89f4f323e2390832e1cc990da4da72d9",
+      "validation": {
+        "status": "passed",
+        "checked_at": "2026-10-20T02:18:23.419Z",
+        "blockers": []
+      }
+    }
+  },
+  "workflow_options": {
+    "review_test_cases": false
+  },
+  "checkpoints": {
+    "test_cases": {
+      "required": false,
+      "reviewed": false
+    }
+  },
+  "implementation": {
+    "revision": 38,
+    "tasks_revision": 1,
+    "legacy_imported": false,
+    "tasks": {
+      "1.1": {
+        "title": "Zero-based-only score validation",
+        "tdd_required": true,
+        "dependencies": [],
+        "status": "completed",
+        "evidence": {
+          "red": {
+            "command": "npx jest src/__tests__/unit/jev/JevResponseValidator.test.ts",
+            "exit_code": 1,
+            "summary": "3 failed, 28 passed: score 4 of 4 levels and all-scores-equal-level-count were accepted as one-inferred; result still carried scoreBase.",
+            "observed_at": "2026-10-20T02:19:52.986Z"
+          },
+          "green": {
+            "command": "npx jest src/__tests__/unit/jev",
+            "exit_code": 0,
+            "summary": "20 suites, 482 tests passed; tsc --noEmit clean. Validator accepts only integers 0..levels-1; normalizeScores and scoreBase removed.",
+            "observed_at": "2026-10-20T02:20:53.284Z"
+          },
+          "verification": {
+            "command": "npx jest src/__tests__/unit/jev && npx tsc --noEmit && npx eslint <changed src files>",
+            "exit_code": 0,
+            "summary": "482 JEV tests pass, typecheck clean, eslint 0 errors on changed source files.",
+            "observed_at": "2026-10-20T02:20:59.444Z"
+          }
+        },
+        "planned_artifacts": [
+          "src/application/services/JevResponseValidator.ts",
+          "src/application/services/JevExchange.ts",
+          "src/application/services/JevSidecarStore.ts",
+          "src/__tests__/unit/jev/JevResponseValidator.test.ts",
+          "src/__tests__/unit/jev/JevSidecarStore.test.ts"
+        ],
+        "observed_artifacts": [
+          "src/application/services/JevResponseValidator.ts",
+          "src/application/services/JevExchange.ts",
+          "src/application/services/JevSidecarStore.ts",
+          "src/__tests__/unit/jev/JevResponseValidator.test.ts",
+          "src/__tests__/unit/jev/JevSidecarStore.test.ts",
+          "src/__tests__/unit/jev/JevAdvisoryService.phases.test.ts"
+        ]
+      },
+      "1.2": {
+        "title": "Question-set version 3 and text clean-up",
+        "tdd_required": true,
+        "dependencies": [
+          "1.1"
+        ],
+        "status": "completed",
+        "evidence": {
+          "red": {
+            "command": "npx jest src/__tests__/unit/jev/JevQuestionCatalog.test.ts",
+            "exit_code": 1,
+            "summary": "2 failed: QUESTION_SET_VERSION was 2 (expected 3); repository text scan found 'base guessing' wording in JevQuestionCatalog.ts.",
+            "observed_at": "2026-10-20T02:21:28.747Z"
+          },
+          "green": {
+            "command": "npx jest src/__tests__/unit/jev",
+            "exit_code": 0,
+            "summary": "20 suites, 483 tests passed. QUESTION_SET_VERSION is 3; no guessed-score-base wording remains in src, docs, skills, README or CHANGELOG.",
+            "observed_at": "2026-10-20T02:21:39.614Z"
+          },
+          "verification": {
+            "command": "npx jest src/__tests__/unit/jev && npx tsc --noEmit && npx eslint src/application/services/JevQuestionCatalog.ts",
+            "exit_code": 0,
+            "summary": "483 JEV tests pass, typecheck clean, eslint clean.",
+            "observed_at": "2026-10-20T02:21:48.725Z"
+          }
+        },
+        "planned_artifacts": [
+          "src/application/services/JevQuestionCatalog.ts",
+          "src/__tests__/unit/jev/JevQuestionCatalog.test.ts",
+          "src/__tests__/unit/jev/JevSidecarStore.test.ts",
+          "src/__tests__/unit/cli/documentation-consistency.test.ts"
+        ],
+        "observed_artifacts": [
+          "src/application/services/JevQuestionCatalog.ts",
+          "src/__tests__/unit/jev/JevQuestionCatalog.test.ts",
+          "src/__tests__/unit/jev/JevResponseValidator.test.ts",
+          "src/__tests__/unit/jev/JevSidecarStore.test.ts"
+        ]
+      },
+      "2.1": {
+        "title": "baseRef request field, schema, adapter, and pure validation",
+        "tdd_required": true,
+        "dependencies": [],
+        "status": "completed",
+        "evidence": {
+          "red": {
+            "command": "npx jest src/__tests__/unit/jev/JevBaseRef.test.ts src/__tests__/unit/jev/JevAdvisoryService.gates.test.ts src/__tests__/unit/jev/sddJevCheckTool.test.ts",
+            "exit_code": 1,
+            "summary": "3 suites failed: JevBaseRef module missing, JevCheckRequest has no baseRef, schema/adapter tests for baseRef fail (5 test failures).",
+            "observed_at": "2026-10-20T02:22:20.901Z"
+          },
+          "green": {
+            "command": "npx jest src/__tests__/unit/jev src/__tests__/unit/runtime/SDDToolAdapter.inventory.test.ts",
+            "exit_code": 0,
+            "summary": "22 suites, 543 tests passed. isWellFormedBaseRef, invalid-base-ref skip, schema property and adapter pass-through implemented.",
+            "observed_at": "2026-10-20T02:23:24.435Z"
+          },
+          "verification": {
+            "command": "npx jest src/__tests__/unit/jev src/__tests__/unit/runtime/SDDToolAdapter.inventory.test.ts && npx tsc --noEmit && npx eslint <changed services>",
+            "exit_code": 0,
+            "summary": "543 tests pass, typecheck clean, eslint 0 errors and no new warnings on changed service files (the pre-existing SDDToolAdapter any warnings are untouched).",
+            "observed_at": "2026-10-20T02:23:27.939Z"
+          }
+        },
+        "planned_artifacts": [
+          "src/application/services/JevBaseRef.ts",
+          "src/application/services/JevCheckTypes.ts",
+          "src/application/services/JevAdvisoryService.ts",
+          "src/infrastructure/mcp/sddToolDefinitions.ts",
+          "src/adapters/cli/SDDToolAdapter.ts",
+          "src/__tests__/unit/jev/JevBaseRef.test.ts",
+          "src/__tests__/unit/jev/JevAdvisoryService.gates.test.ts",
+          "src/__tests__/unit/jev/sddJevCheckTool.test.ts",
+          "src/__tests__/unit/runtime/SDDToolAdapter.inventory.test.ts"
+        ],
+        "observed_artifacts": [
+          "src/application/services/JevBaseRef.ts",
+          "src/application/services/JevCheckTypes.ts",
+          "src/application/services/JevAdvisoryService.ts",
+          "src/infrastructure/mcp/sddToolDefinitions.ts",
+          "src/adapters/cli/SDDToolAdapter.ts",
+          "src/__tests__/unit/jev/JevBaseRef.test.ts",
+          "src/__tests__/unit/jev/JevAdvisoryService.gates.test.ts",
+          "src/__tests__/unit/jev/sddJevCheckTool.test.ts"
+        ]
+      },
+      "2.2": {
+        "title": "Read-only range resolution",
+        "tdd_required": true,
+        "dependencies": [
+          "2.1"
+        ],
+        "status": "completed",
+        "evidence": {
+          "red": {
+            "command": "npx jest src/__tests__/unit/jev/JevBaseRef.test.ts",
+            "exit_code": 1,
+            "summary": "Suite failed to compile: resolveRange is not exported from JevBaseRef (0 tests ran).",
+            "observed_at": "2026-10-20T02:23:56.155Z"
+          },
+          "green": {
+            "command": "npx jest src/__tests__/unit/jev/JevBaseRef.test.ts",
+            "exit_code": 0,
+            "summary": "42 tests passed on git 2.47.3, including real-repo cases: branch, moved base, SHA, missing ref, tree object, unrelated history, unborn HEAD, option-looking ref.",
+            "observed_at": "2026-10-20T02:24:15.422Z"
+          },
+          "verification": {
+            "command": "npx jest src/__tests__/unit/jev/JevBaseRef.test.ts && npx tsc --noEmit && npx eslint src/application/services/JevBaseRef.ts",
+            "exit_code": 0,
+            "summary": "42 tests pass, typecheck clean, eslint clean.",
+            "observed_at": "2026-10-20T02:24:17.761Z"
+          }
+        },
+        "planned_artifacts": [
+          "src/application/services/JevBaseRef.ts",
+          "src/__tests__/unit/jev/JevBaseRef.test.ts"
+        ],
+        "observed_artifacts": [
+          "src/application/services/JevBaseRef.ts",
+          "src/__tests__/unit/jev/JevBaseRef.test.ts"
+        ]
+      },
+      "2.3": {
+        "title": "Committed-range manifest",
+        "tdd_required": true,
+        "dependencies": [
+          "2.2"
+        ],
+        "status": "completed",
+        "evidence": {
+          "red": {
+            "command": "npx jest src/__tests__/unit/jev/JevChangeManifest.test.ts",
+            "exit_code": 1,
+            "summary": "Suite failed to compile: buildRangeManifest is not exported from JevChangeManifest (0 tests ran).",
+            "observed_at": "2026-10-20T02:25:54.698Z"
+          },
+          "green": {
+            "command": "npx jest src/__tests__/unit/jev",
+            "exit_code": 0,
+            "summary": "21 suites, 579 tests passed. 29 manifest tests cover committed/staged/untracked/deleted/symlink/gitlink/sidecar-exclusion/2000-path limit/invalid ref/git failure/call budget/no writes; existing review and staged tests unchanged.",
+            "observed_at": "2026-10-20T02:26:39.913Z"
+          },
+          "verification": {
+            "command": "npx jest src/__tests__/unit/jev && npx tsc --noEmit && npx eslint src/application/services/JevChangeManifest.ts",
+            "exit_code": 0,
+            "summary": "579 JEV tests pass, typecheck and eslint clean.",
+            "observed_at": "2026-10-20T02:26:42.391Z"
+          }
+        },
+        "planned_artifacts": [
+          "src/application/services/JevChangeManifest.ts",
+          "src/__tests__/unit/jev/JevChangeManifest.test.ts"
+        ],
+        "observed_artifacts": [
+          "src/application/services/JevChangeManifest.ts",
+          "src/__tests__/unit/jev/JevChangeManifest.test.ts"
+        ]
+      },
+      "2.4": {
+        "title": "Range binding fields and file name",
+        "tdd_required": true,
+        "dependencies": [],
+        "status": "completed",
+        "evidence": {
+          "red": {
+            "command": "npx jest src/__tests__/unit/jev/JevSidecarStore.test.ts src/__tests__/unit/cli/install-target.test.ts",
+            "exit_code": 1,
+            "summary": "JevSidecarStore suite failed to compile: SidecarBinding has no rangeBaseCommit/headCommit. The installer ignore-pattern test passes already (existing jev-review-* pattern covers range names).",
+            "observed_at": "2026-10-20T02:24:37.874Z"
+          },
+          "green": {
+            "command": "npx jest src/__tests__/unit/jev src/__tests__/unit/cli/install-target.test.ts",
+            "exit_code": 0,
+            "summary": "22 suites, 589 tests passed. Range binding fields, range file name, stale detection per field, no-overwrite and ignore-pattern coverage verified.",
+            "observed_at": "2026-10-20T02:24:58.916Z"
+          },
+          "verification": {
+            "command": "npx jest src/__tests__/unit/jev src/__tests__/unit/cli/install-target.test.ts && npx tsc --noEmit && npx eslint src/application/services/JevSidecarStore.ts",
+            "exit_code": 0,
+            "summary": "589 tests pass, typecheck and eslint clean.",
+            "observed_at": "2026-10-20T02:25:01.464Z"
+          }
+        },
+        "planned_artifacts": [
+          "src/application/services/JevSidecarStore.ts",
+          "src/__tests__/unit/jev/JevSidecarStore.test.ts",
+          "src/__tests__/unit/cli/install-target.test.ts"
+        ],
+        "observed_artifacts": [
+          "src/application/services/JevSidecarStore.ts",
+          "src/__tests__/unit/jev/JevSidecarStore.test.ts",
+          "src/__tests__/unit/cli/install-target.test.ts"
+        ]
+      },
+      "2.5": {
+        "title": "Service wiring for review and code-disabled paths",
+        "tdd_required": true,
+        "dependencies": [
+          "2.1",
+          "2.3",
+          "2.4"
+        ],
+        "status": "completed",
+        "evidence": {
+          "red": {
+            "command": "npx jest src/__tests__/unit/jev/JevAdvisoryService.range.test.ts",
+            "exit_code": 1,
+            "summary": "13 failed, 6 passed: the service still ignores baseRef (no range manifest, no range binding or file name, no invalid-base-ref skip for unresolvable refs).",
+            "observed_at": "2026-10-20T02:27:26.170Z"
+          },
+          "green": {
+            "command": "npx jest src/__tests__/unit/jev",
+            "exit_code": 0,
+            "summary": "22 suites, 598 tests passed. 19 new real-repository range tests pass; existing review, gates and manifest tests pass with unchanged expectations.",
+            "observed_at": "2026-10-20T02:28:07.757Z"
+          },
+          "verification": {
+            "command": "npx jest src/__tests__/unit/jev && npx tsc --noEmit && npx eslint src/application/services/JevAdvisoryService.ts src/application/services/JevReviewCheck.ts",
+            "exit_code": 0,
+            "summary": "598 JEV tests pass, typecheck and eslint clean (no complexity warnings left in the service).",
+            "observed_at": "2026-10-20T02:28:10.504Z"
+          }
+        },
+        "planned_artifacts": [
+          "src/application/services/JevAdvisoryService.ts",
+          "src/application/services/JevReviewCheck.ts",
+          "src/__tests__/unit/jev/JevAdvisoryService.review.test.ts",
+          "src/__tests__/unit/jev/JevAdvisoryService.gates.test.ts"
+        ],
+        "observed_artifacts": [
+          "src/application/services/JevAdvisoryService.ts",
+          "src/application/services/JevReviewCheck.ts",
+          "src/__tests__/unit/jev/JevAdvisoryService.range.test.ts"
+        ]
+      },
+      "2.6": {
+        "title": "Commit lookup ignores range and older-version sidecars",
+        "tdd_required": true,
+        "dependencies": [
+          "1.2",
+          "2.4"
+        ],
+        "status": "completed",
+        "evidence": {
+          "red": {
+            "command": "npx jest src/__tests__/unit/jev/JevAdvisoryService.commit.test.ts",
+            "exit_code": 1,
+            "summary": "2 failed, 18 passed: a plain-name sidecar carrying a range binding, and one from an older question-set version, still produced a commit warning.",
+            "observed_at": "2026-10-20T02:28:31.735Z"
+          },
+          "green": {
+            "command": "npx jest src/__tests__/unit/jev",
+            "exit_code": 0,
+            "summary": "22 suites, 602 tests passed. Commit lookup ignores range-bound and older-version sidecars; existing staged-match warning tests unchanged and green.",
+            "observed_at": "2026-10-20T02:28:54.375Z"
+          },
+          "verification": {
+            "command": "npx jest src/__tests__/unit/jev && npx tsc --noEmit && npx eslint src/application/services/JevSidecarStore.ts src/application/services/JevCommitLookup.ts",
+            "exit_code": 0,
+            "summary": "602 JEV tests pass, typecheck and eslint clean.",
+            "observed_at": "2026-10-20T02:28:57.131Z"
+          }
+        },
+        "planned_artifacts": [
+          "src/application/services/JevSidecarStore.ts",
+          "src/application/services/JevCommitLookup.ts",
+          "src/__tests__/unit/jev/JevAdvisoryService.commit.test.ts"
+        ],
+        "observed_artifacts": [
+          "src/application/services/JevSidecarStore.ts",
+          "src/application/services/JevCommitLookup.ts",
+          "src/__tests__/unit/jev/JevAdvisoryService.commit.test.ts"
+        ]
+      },
+      "3.1": {
+        "title": "Skill text passes baseRef",
+        "tdd_required": false,
+        "dependencies": [
+          "2.5"
+        ],
+        "status": "completed",
+        "evidence": {
+          "verification": {
+            "command": "npx jest src/__tests__/unit/jev/JevSkillText.test.ts src/__tests__/unit/cli/canonical-assets.test.ts",
+            "exit_code": 0,
+            "summary": "58 tests pass. Both Skills instruct passing the PR/branch base as baseRef and omitting it for uncommitted-only reviews; sizes 2856 and 2967 bytes (limit 4000); rendered for claude-code, codex and omp.",
+            "observed_at": "2026-10-20T02:29:16.679Z"
+          }
+        },
+        "planned_artifacts": [
+          "skills/sdd-review/SKILL.md",
+          "skills/sdd-security-check/SKILL.md",
+          "src/__tests__/unit/jev/JevSkillText.test.ts"
+        ],
+        "observed_artifacts": [
+          "skills/sdd-review/SKILL.md",
+          "skills/sdd-security-check/SKILL.md",
+          "src/__tests__/unit/jev/JevSkillText.test.ts"
+        ]
+      },
+      "3.2": {
+        "title": "Documentation and changelog",
+        "tdd_required": false,
+        "dependencies": [
+          "2.5",
+          "2.6",
+          "1.2"
+        ],
+        "status": "completed",
+        "evidence": {
+          "verification": {
+            "command": "npx jest src/__tests__/unit/cli/documentation-consistency.test.ts src/__tests__/unit/cli/target-installers.test.ts src/__tests__/unit/cli/canonical-assets.test.ts",
+            "exit_code": 0,
+            "summary": "3 suites, 63 tests pass, including 3 new documentation tests. Skill render baseline hashes for sdd-review and sdd-security-check (claude-code, omp, codex) refreshed deliberately because the Skill text changed; the other nine Skills are byte-identical. The full cli directory still shows only the known compiled-cli.e2e cancellation failure.",
+            "observed_at": "2026-10-20T02:30:52.855Z"
+          }
+        },
+        "planned_artifacts": [
+          "docs/WORKFLOW.md",
+          "README.md",
+          "CHANGELOG.md",
+          "src/__tests__/unit/cli/documentation-consistency.test.ts"
+        ],
+        "observed_artifacts": [
+          "docs/WORKFLOW.md",
+          "README.md",
+          "CHANGELOG.md",
+          "src/__tests__/unit/cli/documentation-consistency.test.ts",
+          "src/__tests__/unit/cli/fixtures/workflow-skill-render-baseline.json"
+        ]
+      },
+      "4.1": {
+        "title": "Full verification gates",
+        "tdd_required": false,
+        "dependencies": [
+          "1.1",
+          "1.2",
+          "2.1",
+          "2.2",
+          "2.3",
+          "2.4",
+          "2.5",
+          "2.6",
+          "3.1",
+          "3.2"
+        ],
+        "status": "completed",
+        "evidence": {
+          "verification": {
+            "command": "npx jest --testPathIgnorePatterns compiled-cli.e2e",
+            "exit_code": 0,
+            "summary": "79 suites, 1314 tests pass. Full 'npm test' (exit 1) shows 1323 passed and exactly 1 failure, the known pre-existing 'maps interactive cancellation to exit code 130 without writes' in compiled-cli.e2e.test.ts (the other 9 tests in that file pass). npm run build, npm run typecheck exit 0; npm run lint: 0 errors, 323 warnings. The entrypoints.stdio JEV schema flake did not recur. git diff of .spec/specs/jev-advisory-toggle is empty.",
+            "observed_at": "2026-10-20T02:32:03.278Z"
+          }
+        },
+        "planned_artifacts": [],
+        "observed_artifacts": []
+      }
+    }
+  }
+}

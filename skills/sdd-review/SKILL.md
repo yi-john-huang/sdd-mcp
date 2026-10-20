@@ -13,8 +13,9 @@ disable-model-invocation: true
 3. Review data flow, state transitions, concurrency, resource ownership, compatibility, and boundary conditions.
 4. Check authorization, validation, injection, secret handling, sensitive logging, and dependency risk where applicable.
 5. Remove false positives and preference-only remarks. Cite each finding with a path and line, triggering scenario, impact, and concrete remediation.
-6. Rank findings: **critical** (security/data loss), **important** (incorrect behavior/regression), then **minor** (maintainability with real cost).
-7. State verification evidence and residual risk. If no findings remain, say so explicitly.
+6. After removing false positives, the parent (never an agent) internally runs the JEV `security` and `principles` checks on the finding records and changed units. Show each returned line, note severity disagreements, and report only violated principles with their location. Keep the model's severity when JEV is unavailable. For a PR or branch review, pass its base (for example `origin/<base-branch>` or a commit SHA) as `baseRef` so committed changes are judged; omit `baseRef` when only uncommitted changes are reviewed.
+7. Rank findings: **critical** (security/data loss), **important** (incorrect behavior/regression), then **minor** (maintainability with real cost).
+8. State verification evidence and residual risk. If no findings remain, say so explicitly.
 
 Do not edit code unless asked. Never claim a test or security check ran when it did not.
 

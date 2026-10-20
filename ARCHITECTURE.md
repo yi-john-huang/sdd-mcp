@@ -9,7 +9,7 @@ SDD-MCP combines one packaged MCP runtime with target-native, progressively load
 
 ```mermaid
 graph TB
-    Claude[Claude Code] --> Runtime[Canonical 16-tool MCP runtime]
+    Claude[Claude Code] --> Runtime[Canonical 17-tool MCP runtime]
     Codex[Codex] --> Runtime
     OMP[Oh My Pi] --> Runtime
     Runtime --> Services[Application services]
@@ -39,7 +39,7 @@ Both `sdd-entry.js` and the documented `mcp-server.js` launcher call the compile
 
 ## Canonical MCP surface
 
-v4 exposes exactly 16 tools on every runtime surface:
+The runtime exposes exactly 17 tools on every surface:
 
 | Workflow | Context and status | Validation and project guidance |
 |---|---|---|
@@ -49,6 +49,9 @@ v4 exposes exactly 16 tools on every runtime surface:
 | `sdd-tasks` | `sdd-review-test-cases` | `sdd-steering-custom` |
 | `sdd-implement` |  | `sdd-validate-design` |
 | `sdd-spec-impl` |  | `sdd-validate-gap` |
+|  |  | `sdd-jev-check` |
+
+`sdd-jev-check` is opt-in and advisory. `JevAdvisoryService` reads a read-only snapshot from the workflow engine. It reaches JEV through an injected HTTPS port and `git` through an injected read-only port. It saves results as sidecar files bound to the artifact hash. It never writes `spec.json` and never affects approval. See [docs/WORKFLOW.md](docs/WORKFLOW.md#optional-jev-advisory).
 
 Every operation on an existing feature uses `featureName`. The server supplies the validated project root internally. Public `projectId` locators no longer exist. `sdd-status` may omit `featureName` to list the specs it contains. The project removed `sdd-list-skills`. Native hosts discover skills, and the installer already provides `--list`.
 

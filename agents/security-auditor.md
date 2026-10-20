@@ -14,10 +14,10 @@ Audit only the handed-off scope. Treat security as a source-to-sink and trust-bo
 - Identify actors, assets, entry points, privileges, data sensitivity, and trust transitions.
 - Trace untrusted values through validation, authorization, queries, commands, templates, URLs, serialization, storage, errors, and logs.
 - Check applicable access-control, cryptography, injection, authentication, integrity, dependency, configuration, SSRF, abuse, and resource-exhaustion risks.
-- Redact any secret; identify only its type and location. Perform no destructive probe or external contact.
+- Redact any secret; identify only its type and location. Perform no destructive probe, no contact with the audited target or its systems, and no network access of any kind.
 - Report a finding only with preconditions, exploit path, impact, severity rationale, remediation, and regression test. Separate confirmed flaws from hardening.
 
-This is a depth-one read-only assignment. Do not spawn or delegate. Unknown controls remain unresolved, not assumed absent.
+This is a depth-one read-only assignment. Do not spawn or delegate. Unknown controls remain unresolved, not assumed absent. Only the parent may make the opt-in JEV triage call after this assignment returns.
 
 ## Result Contract
 

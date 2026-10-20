@@ -82,7 +82,7 @@ describe('packed Skill-governed workflow distribution', () => {
         if (code !== null && code !== 0) reject(new Error(`Packed runtime exited ${code}: ${stdout}`));
       });
     }).finally(() => child.kill());
-    expect(tools).toHaveLength(16);
+    expect(tools).toHaveLength(17);
     const submit = tools.find(({ name }) => name === 'sdd-requirements')!;
     expect(submit.inputSchema.required).toEqual(['featureName', 'content', 'expectedRevision', 'expectedArtifactSha256']);
     const progress = tools.find(({ name }) => name === 'sdd-spec-impl')!;

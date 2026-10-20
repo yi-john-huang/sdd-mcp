@@ -14,9 +14,10 @@ disable-model-invocation: true
 4. Search for embedded secrets and unsafe sensitive-data logging. Never print a discovered secret; redact it and identify only its location/type.
 5. Inspect dependency and automated scan results only when the project provides safe focused commands; distinguish tool evidence from manual review.
 6. For each finding, prove the path to impact, assign severity, cite location, and give a minimal remediation plus a regression test.
-7. Compare implementation with security requirements and design controls. Record coverage gaps and residual risk.
+7. After the audit returns, the parent (never an agent) internally runs the JEV `security` check on the finding records, notes severity disagreements, and keeps the audit severity when JEV is unavailable. For a PR or branch audit, pass its base (for example `origin/<base-branch>` or a commit SHA) as `baseRef` so committed changes are judged; omit `baseRef` when only uncommitted changes are audited.
+8. Compare implementation with security requirements and design controls. Record coverage gaps and residual risk.
 
-Do not make destructive probes, contact external systems, or claim exploitability without evidence.
+Do not make destructive probes, contact the audited target or its systems, or claim exploitability without evidence. The only permitted outbound call is the parent's opt-in JEV triage after the audit returns.
 
 ## Specialist Delegation
 

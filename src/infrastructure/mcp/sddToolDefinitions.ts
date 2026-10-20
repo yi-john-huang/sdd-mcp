@@ -4,7 +4,7 @@ export const SDD_TOOL_NAMES = [
   'sdd-init', 'sdd-requirements', 'sdd-design', 'sdd-tasks', 'sdd-implement', 'sdd-status',
   'sdd-approve', 'sdd-review-test-cases', 'sdd-quality-check', 'sdd-context-load',
   'sdd-template-render', 'sdd-steering', 'sdd-steering-custom', 'sdd-validate-design',
-  'sdd-validate-gap', 'sdd-spec-impl',
+  'sdd-validate-gap', 'sdd-spec-impl', 'sdd-jev-check',
 ] as const;
 
 export type SDDToolName = (typeof SDD_TOOL_NAMES)[number];
@@ -44,6 +44,54 @@ const affectedArtifacts = {
   type: 'array', maxItems: 100, uniqueItems: true,
   items: { type: 'string', minLength: 1, maxLength: 500, pattern: '^(?![/\\\\])(?![A-Za-z]:)(?!.*(?:^|[/\\\\])\\.\\.(?:[/\\\\]|$))(?!.*\\u0000).+$' },
 };
+
+const projectRelativePath = {
+  type: 'string' as const, minLength: 1, maxLength: 500,
+  pattern: affectedArtifacts.items.pattern,
+};
+const jevCase = {
+  type: 'object' as const,
+  properties: {
+    taskId: { type: 'string' as const, maxLength: 50, pattern: '^\\d+(?:\\.\\d+)*$' },
+    kind: { type: 'string' as const, enum: ['behavior', 'boundary', 'error', 'transition', 'security'] },
+    given: { type: 'string' as const, minLength: 1, maxLength: 500 },
+    when: { type: 'string' as const, minLength: 1, maxLength: 500 },
+    then: { type: 'string' as const, minLength: 1, maxLength: 500 },
+    covers: { type: 'string' as const, minLength: 1, maxLength: 200 },
+  },
+  required: ['taskId', 'kind', 'given', 'when', 'then', 'covers'],
+  additionalProperties: false,
+};
+const jevFinding = {
+  type: 'object' as const,
+  properties: {
+    id: { type: 'string' as const, pattern: '^[A-Za-z0-9._-]{1,40}$' },
+    path: projectRelativePath,
+    line: { type: 'integer' as const, minimum: 1 },
+    title: { type: 'string' as const, minLength: 1, maxLength: 300 },
+    severity: { type: 'string' as const, enum: ['critical', 'high', 'medium', 'low', 'important', 'minor'] },
+    description: { type: 'string' as const, maxLength: 2000 },
+    preconditions: { type: 'string' as const, maxLength: 1000 },
+    remediation: { type: 'string' as const, maxLength: 1000 },
+  },
+  required: ['id', 'path', 'line', 'title', 'severity'],
+  additionalProperties: false,
+};
+const jevUnit = {
+  type: 'object' as const,
+  properties: {
+    id: { type: 'string' as const, pattern: '^[A-Za-z0-9._-]{1,40}$' },
+    path: projectRelativePath,
+    line: { type: 'integer' as const, minimum: 1 },
+    summary: { type: 'string' as const, minLength: 1, maxLength: 500 },
+  },
+  required: ['id', 'path', 'line', 'summary'],
+  additionalProperties: false,
+};
+const requiredWhenCheck = (checks: string[], required: string[]) => ({
+  if: { properties: { check: { enum: checks } }, required: ['check'] },
+  then: { required },
+});
 
 export const SDD_TOOL_DEFINITIONS: ReadonlyArray<Tool & { name: SDDToolName }> = [
   {
@@ -112,6 +160,30 @@ export const SDD_TOOL_DEFINITIONS: ReadonlyArray<Tool & { name: SDDToolName }> =
         { if: { properties: { action: { enum: ['record-red', 'record-green', 'complete'] } }, required: ['action'] }, then: { required: ['evidence'] } },
         { if: { properties: { action: { const: 'complete' } }, required: ['action'] }, then: { required: ['affectedArtifacts'] } },
         { if: { properties: { action: { const: 'block' } }, required: ['action'] }, then: { required: ['blocker'] } },
+      ],
+    },
+  },
+  {
+    name: 'sdd-jev-check', description: 'Run an opt-in advisory JEV check',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        check: { type: 'string', enum: ['requirements', 'design', 'testcases', 'red', 'security', 'principles', 'commit'] },
+        featureName,
+        cases: { type: 'array', maxItems: 300, items: jevCase },
+        taskNumber: { type: 'string', minLength: 1, maxLength: 50, pattern: '^\\d+(?:\\.\\d+)*$' },
+        testName: { type: 'string', minLength: 1, maxLength: 300 },
+        evidence,
+        findings: { type: 'array', maxItems: 50, items: jevFinding },
+        units: { type: 'array', maxItems: 30, items: jevUnit },
+        baseRef: { type: 'string', minLength: 1, maxLength: 256 },
+      },
+      required: ['check'], additionalProperties: false,
+      allOf: [
+        requiredWhenCheck(['requirements', 'design', 'testcases', 'red'], ['featureName']),
+        requiredWhenCheck(['red'], ['taskNumber', 'testName', 'evidence']),
+        requiredWhenCheck(['security'], ['findings']),
+        requiredWhenCheck(['principles'], ['units']),
       ],
     },
   },

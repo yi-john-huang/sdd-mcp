@@ -30,7 +30,7 @@ export interface TasksValidationResult extends ArtifactValidationResult {
   tasks: Record<string, ParsedTask>;
 }
 
-interface Section {
+export interface Section {
   id: string;
   title: string;
   body: string[];
@@ -60,7 +60,7 @@ function blocker(code: string, message: string, reference?: string): ValidationB
 }
 
 /** Removes fenced regions while preserving line boundaries for deterministic parsing. */
-function visibleLines(content: string): string[] {
+export function visibleLines(content: string): string[] {
   const lines = content.replace(/\r\n?/g, '\n').split('\n');
   let fence: { marker: '`' | '~'; length: number } | undefined;
   return lines.map((line) => {
@@ -78,7 +78,7 @@ function visibleLines(content: string): string[] {
   });
 }
 
-function parseSections(lines: string[], heading: RegExp): { sections: Section[]; duplicates: string[] } {
+export function parseSections(lines: string[], heading: RegExp): { sections: Section[]; duplicates: string[] } {
   const sections: Section[] = [];
   let current: Section | undefined;
   for (const line of lines) {
@@ -137,11 +137,11 @@ function metadataValues(section: Section, label: string): string[] {
   return values;
 }
 
-function metadata(section: Section, label: string): string | undefined {
+export function metadata(section: Section, label: string): string | undefined {
   return metadataValues(section, label)[0];
 }
 
-function parseList(value: string | undefined): string[] {
+export function parseList(value: string | undefined): string[] {
   if (!value || value.trim() === 'none') return [];
   return value.split(',').map((item) => item.trim()).filter(Boolean);
 }
@@ -160,10 +160,16 @@ function isProjectRelativePath(value: string): boolean {
     && value === value.trim();
 }
 
-function uniqueSections(sections: Section[]): Section[] {
+export function uniqueSections(sections: Section[]): Section[] {
   const byId = new Map<string, Section>();
   for (const section of sections) if (!byId.has(section.id)) byId.set(section.id, section);
   return [...byId.values()];
+}
+
+/** Acceptance-criteria text per task id, for read-only advisory views. */
+export function taskAcceptanceCriteria(content: string): Record<string, string> {
+  const { sections } = parseSections(visibleLines(content), /^###\s+(\d+(?:\.\d+)+)\s+(.+?)\s*$/);
+  return Object.fromEntries(uniqueSections(sections).map((section) => [section.id, metadata(section, 'Acceptance criteria') ?? '']));
 }
 
 function extractRequirementIds(content: string): string[] {

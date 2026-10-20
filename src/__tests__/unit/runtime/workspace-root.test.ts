@@ -82,6 +82,7 @@ function handlers(): Record<string, (args: Record<string, unknown>) => Promise<u
     {} as never,
     workflowService,
     logger,
+    {} as never,
   );
   return Object.fromEntries(adapter.getSDDTools().map(({ name, handler }) => [name, handler]));
 }
