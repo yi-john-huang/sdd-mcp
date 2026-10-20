@@ -1,7 +1,10 @@
 import type { JevQuestion, JevQuestionSet } from './JevResponseValidator.js';
 
 /** Bump when any question text, label, or level changes; sidecars bind to it. */
-export const QUESTION_SET_VERSION = 1;
+export const QUESTION_SET_VERSION = 2;
+
+/** Pins the score scale so answers need no base guessing; the validator's inference is only a fallback. */
+export const SCORE_SCALE_INSTRUCTION = 'Answer with the zero-based index of the matching level (0 = first level listed).';
 
 /** Constant preamble. Artifact, evidence, and code text only ever appear under `state`. */
 export const INSTRUCTION_PREAMBLE =
@@ -70,7 +73,7 @@ const choice = (instructions: string, criteria: Record<string, string>): JevQues
 });
 const score = (instructions: string, criteria: readonly string[]): JevQuestion => ({
   type: 'score',
-  instructions: `${INSTRUCTION_PREAMBLE} ${instructions}`,
+  instructions: `${INSTRUCTION_PREAMBLE} ${instructions} ${SCORE_SCALE_INSTRUCTION}`,
   criteria,
 });
 const noul = (instructions: string): JevQuestion => ({

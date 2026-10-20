@@ -82,6 +82,13 @@ describe('validateJevResponse', () => {
     expect(validateJevResponse(body({ ...valid, 'goal.clarification': { noul: 1 } }), QUESTIONS).ok).toBe(true);
   });
 
+  it('reads a zero-based severity answer as asked, without shifting it', () => {
+    const severity: JevQuestionSet = { 'F1.severity': { type: 'score', instructions: 'i', criteria: ['info', 'low', 'medium', 'high', 'critical'] } };
+    const result = validateJevResponse(body({ 'F1.severity': { score: 3 } }), severity);
+    expect(result).toMatchObject({ ok: true, scoreBase: 'zero' });
+    if (result.ok) expect(result.answers['F1.severity']).toEqual({ type: 'score', raw: 3, index: 3 });
+  });
+
   it('infers a 1-based score and stores the raw value', () => {
     const result = validateJevResponse(body({ ...valid, 'FR-1.testability': { score: 4 } }), QUESTIONS);
     expect(result).toMatchObject({ ok: true, scoreBase: 'one-inferred' });

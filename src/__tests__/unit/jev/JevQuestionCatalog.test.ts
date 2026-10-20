@@ -4,6 +4,7 @@ import {
   INSTRUCTION_PREAMBLE,
   PRINCIPLES,
   QUESTION_SET_VERSION,
+  SCORE_SCALE_INSTRUCTION,
   buildDesignQuestions,
   buildPrincipleQuestions,
   buildRedQuestions,
@@ -28,7 +29,24 @@ const levels = (q: JevQuestion | undefined): number => (q?.type === 'score' ? q.
 
 describe('question catalog structure', () => {
   it('exports a question set version', () => {
-    expect(QUESTION_SET_VERSION).toBe(1);
+    expect(QUESTION_SET_VERSION).toBe(2);
+  });
+
+  it('states the zero-based scale in every score question and nowhere else', () => {
+    let scores = 0;
+    for (const set of all()) {
+      for (const [, question] of entries(set)) {
+        if (question.type === 'score') {
+          scores += 1;
+          expect(question.instructions.endsWith(SCORE_SCALE_INSTRUCTION)).toBe(true);
+        } else {
+          expect(question.instructions).not.toContain(SCORE_SCALE_INSTRUCTION);
+        }
+      }
+    }
+    expect(scores).toBeGreaterThan(0);
+    expect(SCORE_SCALE_INSTRUCTION).toMatch(/zero-based index/);
+    expect(SCORE_SCALE_INSTRUCTION).toMatch(/0 = first level/);
   });
 
   it('starts every instruction with the data-not-instructions preamble and shapes criteria per type', () => {

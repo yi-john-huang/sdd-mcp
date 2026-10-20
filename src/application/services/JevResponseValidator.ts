@@ -32,9 +32,9 @@ function isPlainObject(value: unknown): value is Record<string, unknown> {
 }
 
 /**
- * Single place that decides the score base. The API contract does not document it, so:
- * a score equal to its level count proves 1-based; otherwise scores are 0-based.
- * Mixed or out-of-range values are invalid.
+ * Single place that decides the score base. Score questions ask for a zero-based index; as a
+ * defensive fallback, a score equal to its level count proves 1-based, otherwise scores are 0-based.
+ * Mixed or out-of-range values are invalid. The base used is stored as `scoreBase` in the sidecar.
  */
 export function normalizeScores(
   rawScores: Readonly<Record<string, number>>,
