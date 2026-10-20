@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [5.5.0] - 2026-10-20
+
 ### Added
 - Add opt-in, advisory JEV checks that call the TypeSafe Jev decision API. They judge requirements testability, design-to-requirement fidelity, planned test cases, RED validity, security finding triage, and coding-principle adherence. JEV is off by default. It needs `SDD_JEV_ENABLED` (or `.spec/sdd-config.json`) and `SDD_JEV_API_KEY`. Code excerpts need the separate `SDD_JEV_ALLOW_CODE`.
 - Add the `sdd-jev-check` MCP tool, the 17th tool. It never changes `spec.json`, approval, validation, or the next action. Results are saved as sidecar files bound to the artifact revision and SHA-256.
