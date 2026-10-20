@@ -1,3 +1,5 @@
+import { readFileSync } from 'node:fs';
+import path from 'node:path';
 import {
   MAX_JEV_RESPONSE_BYTES,
   validateJevResponse,
@@ -55,12 +57,10 @@ describe('validateJevResponse', () => {
     ['a missing question id', body({ 'FR-1.testability': { score: 1 }, 'FR-1.ambiguity': { choice: 'bounded' } })],
     ['a wrong answer key for the type', body({ ...valid, 'FR-1.ambiguity': { score: 1 } })],
     ['an undeclared choice label', body({ ...valid, 'FR-1.ambiguity': { choice: 'other' } })],
-    ['a non-integer score', body({ ...valid, 'FR-1.testability': { score: 1.5 } })],
     ['a string score', body({ ...valid, 'FR-1.testability': { score: '1' } })],
     ['a noul below zero', body({ ...valid, 'goal.clarification': { noul: -0.01 } })],
     ['a noul above one', body({ ...valid, 'goal.clarification': { noul: 1.01 } })],
     ['a string noul', body({ ...valid, 'goal.clarification': { noul: '0.5' } })],
-    ['an answer with two keys', body({ ...valid, 'FR-1.ambiguity': { choice: 'bounded', score: 1 } })],
     ['a null answer', body({ ...valid, 'FR-1.ambiguity': null })],
     ['an out-of-range score', body({ ...valid, 'FR-1.testability': { score: 7 } })],
     ['a negative score', body({ ...valid, 'FR-1.testability': { score: -1 } })],
@@ -95,7 +95,7 @@ describe('validateJevResponse', () => {
     if (result.ok) expect(result.answers['FR-1.testability']).toEqual({ type: 'score', raw: score, index: score });
   });
 
-  it.each([[4], [5], [-1], [1.5]])('rejects the score %s of a four-level question', (score) => {
+  it.each([[4], [5], [-1], [3.6], [-0.6]])('rejects the score %s of a four-level question', (score) => {
     expect(validateJevResponse(body({ ...valid, 'FR-1.testability': { score } }), QUESTIONS)).toEqual({ ok: false });
   });
 
@@ -105,6 +105,88 @@ describe('validateJevResponse', () => {
       b: { type: 'score', instructions: 'i', criteria: ['x', 'y', 'z', 'w'] },
     };
     expect(validateJevResponse(body({ a: { score: 4 }, b: { score: 4 } }), questions)).toEqual({ ok: false });
+  });
+
+  describe('real Jev API response shape (jev-1.13.0)', () => {
+    const fixture = (name: string): string => readFileSync(path.join(__dirname, '../../fixtures/jev', name), 'utf8');
+    const legend = ['untestable', 'vague bound', 'observable', 'measurable with threshold'];
+    const questions = (extra: JevQuestionSet): JevQuestionSet => ({ t: { type: 'score', instructions: 'i', criteria: legend }, ...extra });
+
+    it('parses score, choice and noul answers with type, confidence, legend and probabilities', () => {
+      const result = validateJevResponse(fixture('score-choice-noul.json'), questions({
+        c: { type: 'choice', instructions: 'i', criteria: { ambiguous: 'a', clear: 'b' } },
+        n: { type: 'noul', instructions: 'i' },
+      }));
+      expect(result.ok).toBe(true);
+      if (!result.ok) return;
+      expect(result.answers.t).toEqual({ type: 'score', raw: 1.05, index: 1 });
+      expect(result.answers.c).toEqual({ type: 'choice', choice: 'ambiguous' });
+      expect(result.answers.n).toEqual({ type: 'noul', noul: 0.59 });
+      expect(result.meta.model).toBe('jev-1.13.0');
+    });
+
+    it('uses the argmax of probabilities over round(score)', () => {
+      const severity = ['informational', 'low', 'medium', 'high', 'critical'];
+      const result = validateJevResponse(fixture('score-clear.json'), questions({
+        s: { type: 'score', instructions: 'i', criteria: severity },
+        c: { type: 'choice', instructions: 'i', criteria: { functional: 'a', non_functional: 'b', unclear: 'c' } },
+      }));
+      expect(result.ok).toBe(true);
+      if (!result.ok) return;
+      expect(Math.round(1.62)).toBe(2);
+      expect(result.answers.s).toEqual({ type: 'score', raw: 1.62, index: 0 });
+      expect(result.answers.t).toEqual({ type: 'score', raw: 2.96, index: 3 });
+      expect(result.answers.c).toEqual({ type: 'choice', choice: 'non_functional' });
+    });
+
+    const one = (answer: unknown, criteria: readonly string[] = legend): ReturnType<typeof validateJevResponse> =>
+      validateJevResponse(body({ t: answer }), { t: { type: 'score', instructions: 'i', criteria } });
+
+    it('falls back to round(score) when probabilities are missing or invalid', () => {
+      const index = (answer: unknown): number | undefined => {
+        const result = one(answer);
+        return result.ok && result.answers.t.type === 'score' ? result.answers.t.index : undefined;
+      };
+      expect(index({ type: 'score', score: 2.4 })).toBe(2);
+      expect(index({ score: 1.5, probabilities: {} })).toBe(2);
+      expect(index({ score: 1.4, probabilities: { 0: 'x', 1: 1 } })).toBe(1);
+      expect(index({ score: 1.4, probabilities: { 0: 2 } })).toBe(1);
+      expect(index({ score: 1.4, probabilities: { 9: 1 } })).toBe(1);
+      expect(index({ score: 1.4, probabilities: [0.5, 0.5] })).toBe(1);
+    });
+
+    it('breaks probability ties toward the lowest index and accepts a subset of levels', () => {
+      const result = one({ score: 3, probabilities: { 2: 0.4, 1: 0.4 } });
+      expect(result.ok && result.answers.t).toEqual({ type: 'score', raw: 3, index: 1 });
+    });
+
+    it.each([
+      ['a type that differs from the question type', { type: 'choice', score: 1 }],
+      ['a legend with a different level count', { score: 1, legend: { 0: 'a', 1: 'b' } }],
+      ['an out-of-range rounded score', { score: 3.6 }],
+      ['a non-finite score', { score: null }],
+      ['a non-numeric score', { score: '1.2' }],
+      ['a missing score value', { type: 'score', confidence: 0.5 }],
+    ])('rejects %s', (_name, answer) => {
+      expect(one(answer)).toEqual({ ok: false });
+    });
+
+    it.each([
+      ['a choice outside the labels', { type: 'choice', choice: 'other' }],
+      ['a wrong-typed choice answer', { type: 'noul', choice: 'a' }],
+    ])('rejects %s', (_name, answer) => {
+      expect(validateJevResponse(body({ c: answer }), { c: { type: 'choice', instructions: 'i', criteria: { a: 'x' } } })).toEqual({ ok: false });
+    });
+
+    it('rejects a noul answer outside [0,1] even with extra fields', () => {
+      const noul: JevQuestionSet = { n: { type: 'noul', instructions: 'i' } };
+      expect(validateJevResponse(body({ n: { type: 'noul', noul: 1.2 } }), noul)).toEqual({ ok: false });
+      expect(validateJevResponse(body({ n: { type: 'noul', noul: 0.4, extra: 'kept out' } }), noul).ok).toBe(true);
+    });
+
+    it('rejects an answer that is missing both its value and a valid shape', () => {
+      expect(validateJevResponse(body({ t: { type: 'score' } }), { t: { type: 'score', instructions: 'i', criteria: legend } })).toEqual({ ok: false });
+    });
   });
 
   it('accepts a response with no score questions', () => {

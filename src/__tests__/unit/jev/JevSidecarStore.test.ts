@@ -98,6 +98,14 @@ describe('JevSidecarStore', () => {
       );
     });
 
+    it('stores and reads back a fractional raw score from the real API', async () => {
+      await store.write(root, feature, sidecar({ answers: { 'FR-1.testability': { type: 'score', raw: 1.62, index: 0 } } }));
+      const stored = JSON.parse(await readFile(path.join(reviewDir(), 'jev-requirements-r3.json'), 'utf8'));
+      expect(stored.answers['FR-1.testability']).toEqual({ type: 'score', raw: 1.62, index: 0 });
+      const found = await store.readMatching(root, feature, 'requirements', binding());
+      expect(found?.answers?.['FR-1.testability']).toEqual({ type: 'score', raw: 1.62, index: 0 });
+    });
+
     it('drops unknown fields so a key, request body, or excerpt text can never reach disk', async () => {
       const hostile = {
         ...sidecar({ items: [{ id: 'F1', excerptSha256: SHA2, excerpt: 'const secret = 1', apiKey: KEY } as never] }),

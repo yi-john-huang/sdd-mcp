@@ -1,0 +1,40 @@
+{
+  "model": "jev-1.13.0",
+  "answers": {
+    "t": {
+      "type": "score",
+      "score": 1.05,
+      "confidence": 0.91,
+      "legend": {
+        "0": "untestable",
+        "1": "vague bound",
+        "2": "observable",
+        "3": "measurable with threshold"
+      },
+      "probabilities": {
+        "0": 0.02,
+        "1": 0.92,
+        "2": 0.05,
+        "3": 0.01
+      }
+    },
+    "c": {
+      "type": "choice",
+      "choice": "ambiguous",
+      "confidence": 0.94,
+      "probabilities": {
+        "ambiguous": 0.97,
+        "clear": 0.03
+      }
+    },
+    "n": {
+      "type": "noul",
+      "noul": 0.59
+    }
+  },
+  "usage": {
+    "input_tokens": 461,
+    "output_tokens": 65,
+    "cost_usd": 0.000194
+  }
+}
