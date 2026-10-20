@@ -130,6 +130,54 @@ describe('change manifest', () => {
     expect(manifest).toMatchObject({ status: 'ok', baseCommit: git('rev-parse', 'HEAD').trim() });
   });
 
+  it('hashes a changed symlink by its link text, equal to the staged 120000 blob', async () => {
+    commitBase();
+    fs.symlinkSync('a.ts', path.join(repo, 'src/link.ts'));
+    git('add', '-A');
+    git('commit', '-q', '-m', 'link');
+    fs.rmSync(path.join(repo, 'src/link.ts'));
+    fs.symlinkSync('old.ts', path.join(repo, 'src/link.ts'));
+    fs.symlinkSync('../src', path.join(repo, 'dirlink'));
+    const review = await hashOf('review');
+    git('add', '-A');
+    expect(await hashOf('staged')).toBe(review);
+  });
+
+  it('keeps the manifest available for a dangling symlink', async () => {
+    commitBase();
+    fs.symlinkSync('missing.ts', path.join(repo, 'src/dangling.ts'));
+    const review = await hashOf('review');
+    git('add', '-A');
+    expect(await hashOf('staged')).toBe(review);
+  });
+
+  it('records an embedded repository by its HEAD commit, as git add stores the gitlink', async () => {
+    commitBase();
+    const nested = path.join(repo, 'vendor/nested');
+    fs.mkdirSync(nested, { recursive: true });
+    const nestedGit = (...args: string[]): string => execFileSync('git', args, { cwd: nested, encoding: 'utf8' });
+    nestedGit('init', '-q');
+    fs.writeFileSync(path.join(nested, 'x.txt'), 'x\n');
+    nestedGit('add', '-A');
+    nestedGit('-c', 'user.email=t@example.com', '-c', 'user.name=T', '-c', 'commit.gpgsign=false', 'commit', '-q', '-m', 'n');
+    write('src/a.ts', 'export const a = 2;\n');
+    const review = await buildReviewManifest(new NodeGitAdapter(), repo);
+    if (review.status !== 'ok') throw new Error(`manifest was ${review.status}`);
+    expect(review.entries).toContainEqual({ path: 'vendor/nested', token: nestedGit('rev-parse', 'HEAD').trim() });
+    git('add', '-A');
+    expect(await hashOf('staged')).toBe(review.diffSha256);
+  });
+
+  it('skips a directory entry that cannot be staged instead of failing the manifest', async () => {
+    commitBase();
+    fs.mkdirSync(path.join(repo, 'empty-repo'));
+    execFileSync('git', ['init', '-q'], { cwd: path.join(repo, 'empty-repo') });
+    write('src/a.ts', 'export const a = 2;\n');
+    const review = await buildReviewManifest(new NodeGitAdapter(), repo);
+    if (review.status !== 'ok') throw new Error(`manifest was ${review.status}`);
+    expect(review.entries.map((entry) => entry.path)).toEqual(['src/a.ts']);
+  });
+
   it('ignores JEV sidecar directories so writing a sidecar cannot change the hash', async () => {
     commitBase();
     write('src/a.ts', 'export const a = 2;\n');

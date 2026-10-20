@@ -92,8 +92,8 @@ export interface JevHttpPort {
 export type GitResult = { ok: true; stdout: Buffer } | { ok: false };
 
 export interface GitPort {
-  /** Runs one read-only git command without a shell. Never rejects. */
-  run(args: readonly string[], cwd: string): Promise<GitResult>;
+  /** Runs one read-only git command without a shell, with optional stdin. Never rejects. */
+  run(args: readonly string[], cwd: string, input?: Buffer): Promise<GitResult>;
 }
 
 export interface TaskTracker {

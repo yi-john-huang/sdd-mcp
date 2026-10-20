@@ -1,5 +1,5 @@
 import { createHash } from 'node:crypto';
-import { lstat } from 'node:fs/promises';
+import { lstat, readlink } from 'node:fs/promises';
 import path from 'node:path';
 import type { GitPort } from '../../domain/ports.js';
 
@@ -22,12 +22,16 @@ const SIDECAR_PATH = /^\.spec\/(?:reviews\/|specs\/[^/]+\/review\/)/;
 
 const text = (stdout: Buffer): string[] => stdout.toString('utf8').split('\0').filter((part) => part.length > 0);
 
-async function exists(root: string, file: string): Promise<boolean> {
+type EntryKind = 'file' | 'symlink' | 'directory' | 'deleted' | 'other';
+
+async function kindOf(root: string, file: string): Promise<EntryKind> {
   try {
-    await lstat(path.join(root, file));
-    return true;
+    const info = await lstat(path.join(root, file));
+    if (info.isFile()) return 'file';
+    if (info.isSymbolicLink()) return 'symlink';
+    return info.isDirectory() ? 'directory' : 'other';
   } catch {
-    return false;
+    return 'deleted';
   }
 }
 
@@ -36,7 +40,33 @@ async function baseCommit(git: GitPort, root: string): Promise<string | null> {
   return result.ok ? result.stdout.toString('utf8').trim() || null : null;
 }
 
-/** Blob ids for working-tree files, exactly as `git add` would store them. Symlinks hash their target. */
+/** The 120000 blob `git add` stores for a symlink: the hash of its link text, not of its target. */
+async function symlinkBlob(git: GitPort, root: string, file: string): Promise<string | undefined> {
+  const target = await readlink(path.join(root, file), { encoding: 'buffer' });
+  const result = await git.run(['hash-object', '--no-filters', '--stdin'], root, target);
+  return result.ok ? result.stdout.toString('utf8').trim() || undefined : undefined;
+}
+
+/**
+ * The 160000 gitlink `git add` stores for a submodule or embedded repository: its HEAD commit.
+ * Undefined when the directory is not its own repository, has no commit, or its commit is
+ * unchanged from HEAD (only its own working tree is dirty, which `git add` cannot stage).
+ */
+async function gitlinkCommit(git: GitPort, root: string, dir: string): Promise<string | undefined> {
+  try {
+    await lstat(path.join(root, dir, '.git'));
+  } catch {
+    return undefined;
+  }
+  const head = await git.run(['rev-parse', '--verify', '--quiet', 'HEAD'], path.join(root, dir));
+  const commit = head.ok ? head.stdout.toString('utf8').trim() : '';
+  if (!commit) return undefined;
+  const recorded = await git.run(['ls-tree', '-z', 'HEAD', '--', dir], root);
+  const match = recorded.ok ? /^160000 commit ([0-9a-f]+)\t/.exec(recorded.stdout.toString('utf8')) : null;
+  return match?.[1] === commit ? undefined : commit;
+}
+
+/** Blob ids for regular working-tree files, exactly as `git add` would store them. */
 async function workingTreeBlobs(git: GitPort, root: string, files: string[]): Promise<Map<string, string> | undefined> {
   const blobs = new Map<string, string>();
   for (let start = 0; start < files.length; start += HASH_CHUNK) {
@@ -61,12 +91,23 @@ function finish(entries: ManifestEntry[], base: string | null): ChangeManifest {
 async function reviewEntries(git: GitPort, root: string): Promise<ManifestEntry[] | undefined> {
   const status = await git.run(['-c', 'status.renames=false', 'status', '--porcelain=v1', '-z', '--untracked-files=all'], root);
   if (!status.ok) return undefined;
-  const paths = text(status.stdout).map((record) => record.slice(3));
+  // An untracked embedded repository is listed with a trailing slash; `git add` records it without one.
+  const paths = text(status.stdout).map((record) => record.slice(3).replace(/\/$/, ''));
   const present: string[] = [];
   const entries: ManifestEntry[] = [];
   for (const file of paths) {
-    if (await exists(root, file)) present.push(file);
-    else entries.push({ path: file, token: DELETED });
+    const kind = await kindOf(root, file);
+    if (kind === 'file') present.push(file);
+    else if (kind === 'deleted') entries.push({ path: file, token: DELETED });
+    else if (kind === 'symlink') {
+      const blob = await symlinkBlob(git, root, file);
+      if (!blob) return undefined;
+      entries.push({ path: file, token: blob });
+    } else if (kind === 'directory') {
+      const commit = await gitlinkCommit(git, root, file);
+      if (commit) entries.push({ path: file, token: commit });
+    }
+    // Other entry types (sockets, FIFOs) cannot be staged and are skipped.
   }
   const blobs = await workingTreeBlobs(git, root, present);
   if (!blobs) return undefined;
