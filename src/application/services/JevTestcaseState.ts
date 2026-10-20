@@ -15,8 +15,12 @@ const DECISION_HEADING = /^###\s+(D-\d+):\s*(.+?)\s*$/;
 export interface TestcaseExchange extends BuiltExchange {
   /** Kept tasks with whether their TDD is marked not-applicable. */
   tasks: Array<{ id: string; notApplicable: boolean }>;
-  /** Case task ids that do not belong to a kept TDD-required task, sorted. */
+  /** Case task ids that do not belong to any TDD-required task in tasks.md, sorted. */
   unknownTasks: string[];
+  /** Case task ids of TDD-required tasks dropped by the state cap, sorted. */
+  truncatedTasks: string[];
+  /** Number of supplied cases that belong to a TDD-required task, before truncation. */
+  matchedCases: number;
   caseListSha256: string;
 }
 
@@ -77,8 +81,10 @@ export function buildTestcaseExchange(snapshot: AdvisorySnapshot, cases: readonl
   const fit = fitState('testcases', items, undefined);
   if (fit.keptIds.length === 0) return undefined;
   const kept = tasks.filter(({ section }) => fit.keptIds.includes(section.id));
-  const tddIds = new Set(kept.filter(({ notApplicable }) => !notApplicable).map(({ section }) => section.id));
-  const unknownTasks = [...new Set(cases.map((entry) => entry.taskId).filter((id) => !tddIds.has(id)))].sort();
+  const tddIds = new Set(tasks.filter(({ notApplicable }) => !notApplicable).map(({ section }) => section.id));
+  const caseTaskIds = [...new Set(cases.map((entry) => entry.taskId))].sort();
+  const unknownTasks = caseTaskIds.filter((id) => !tddIds.has(id));
+  const truncatedTasks = caseTaskIds.filter((id) => tddIds.has(id) && fit.omittedIds.includes(id));
   const keptTasks = kept.map(({ section, notApplicable }) => ({ id: section.id, notApplicable }));
   return {
     state: fit.state,
@@ -90,6 +96,8 @@ export function buildTestcaseExchange(snapshot: AdvisorySnapshot, cases: readonl
     redactions: fit.redactions + counts.n,
     tasks: keptTasks,
     unknownTasks,
+    truncatedTasks,
+    matchedCases: cases.filter((entry) => tddIds.has(entry.taskId)).length,
     caseListSha256: hashCaseList(cases),
   };
 }

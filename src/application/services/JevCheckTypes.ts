@@ -76,4 +76,5 @@ export interface JevCheckResult {
   matchedPattern?: string;
   droppedFindingIds?: string[];
   unknownTasks?: string[];
+  truncatedTasks?: string[];
 }

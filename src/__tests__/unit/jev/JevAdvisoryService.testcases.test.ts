@@ -52,6 +52,18 @@ describe('JevAdvisoryService test-case adequacy check', () => {
       await expect(readdir(reviewDir())).rejects.toThrow();
     });
 
+    it('asks for cases again when no case belongs to a TDD-required task', async () => {
+      await project.submit('tasks', FIXTURE_TASKS);
+      const unmatched: JevCase[] = [
+        { taskId: '9.9', kind: 'error', given: 'g', when: 'w', then: 't', covers: 'c' },
+        { taskId: '1.2', kind: 'behavior', given: 'g', when: 'w', then: 't', covers: 'c' },
+      ];
+      const result = await service().check(request(unmatched));
+      expect(result).toMatchObject({ status: 'skipped', skipReason: 'cases-required', line: null });
+      expect(http.calls).toHaveLength(0);
+      await expect(readdir(reviewDir())).rejects.toThrow();
+    });
+
     it('skips when the tasks failed validation', async () => {
       await project.submit('tasks', '# nothing here');
       const result = await service().check(request(CASES));
@@ -163,6 +175,8 @@ describe('JevAdvisoryService test-case adequacy check', () => {
       const stored = await storedSidecar() as unknown as { omittedIds: string[] };
       expect(stored.omittedIds.length).toBeGreaterThan(0);
       expect(stored.omittedIds).toContain('1.40');
+      expect(result.truncatedTasks).toContain('1.40');
+      expect(result.unknownTasks).toBeUndefined();
     });
   });
 

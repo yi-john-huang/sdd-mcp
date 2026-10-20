@@ -167,10 +167,13 @@ describe('JevAdvisoryService gates', () => {
       expect(await snapshotTree(project.root)).toEqual(before);
     });
 
-    it('skips when there are no changes to bind', async () => {
+    it.each(['security', 'principles'] as const)('still reports code-disabled for %s on a clean tree, without a sidecar', async (check) => {
       git.handler = () => ({ ok: true, stdout: Buffer.from('') });
-      const result = await service(active).check(requestFor('principles'));
-      expect(result).toMatchObject({ status: 'skipped', skipReason: 'no-changes', line: null });
+      const before = await snapshotTree(project.root);
+      const result = await service(active).check(requestFor(check));
+      expect(result).toMatchObject({ status: 'unavailable', reason: 'code-disabled', line: 'JEV: unavailable (code-disabled)', persisted: false });
+      expect(http.calls).toHaveLength(0);
+      expect(await snapshotTree(project.root)).toEqual(before);
     });
   });
 

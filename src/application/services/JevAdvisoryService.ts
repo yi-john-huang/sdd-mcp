@@ -172,6 +172,8 @@ export class JevAdvisoryService {
     const snapshot = await this.readySnapshot(request, 'tasks');
     const built = snapshot && buildTestcaseExchange(snapshot, request.cases);
     if (!snapshot || !built) return skippedResult('testcases', 'not-ready');
+    // Without a single case for a TDD-required task, every task would be judged on `cases: []`.
+    if (built.matchedCases === 0) return skippedResult('testcases', 'cases-required');
     const plan: ExchangePlan = {
       check: 'testcases',
       kind: 'testcases',
@@ -192,7 +194,10 @@ export class JevAdvisoryService {
         return {
           flagged,
           details: flaggedFirst.map((id) => ({ id, flagged: flagged.includes(id) })),
-          extras: built.unknownTasks.length > 0 ? { unknownTasks: built.unknownTasks } : undefined,
+          extras: {
+            ...(built.unknownTasks.length > 0 && { unknownTasks: built.unknownTasks }),
+            ...(built.truncatedTasks.length > 0 && { truncatedTasks: built.truncatedTasks }),
+          },
         };
       },
     };
@@ -242,10 +247,10 @@ export class JevAdvisoryService {
     return this.fileSystem.exists(path.join(path.resolve(request.projectRoot), '.spec', 'specs', featureName, 'spec.json'));
   }
 
+  /** Reported whatever the working tree holds (FR-14); a sidecar needs a manifest to bind to. */
   private async codeDisabled(request: JevCheckRequest): Promise<JevCheckResult> {
-    const manifest = await buildReviewManifest(this.git, request.projectRoot);
-    if (manifest.status === 'empty') return skippedResult(request.check, 'no-changes');
     const result = unavailableResult(request.check, 'code-disabled');
+    const manifest = await buildReviewManifest(this.git, request.projectRoot);
     if (manifest.status !== 'ok') return result;
     const kind = request.check === 'principles' ? 'principles' : 'security';
     const sidecar: JevSidecar = {
