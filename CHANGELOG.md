@@ -24,6 +24,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - JEV score answers are zero-based only: an integer from 0 to the index of the last level. Any other value is `invalid-response`. Sidecars no longer record a score base. The question-set version is now 3, so JEV ignores sidecars saved by earlier versions.
 - `sdd-review` and `sdd-security-check` pass the PR or branch base as `baseRef` when they run the JEV code checks.
 
+### Fixed
+- `sdd-status`, `sdd-context-load`, and other reads of a missing feature no longer create an empty `.spec/specs/<feature>/` folder. They report `Feature metadata not found` as before.
+- `sdd-init` now accepts an empty feature folder left behind by earlier versions. It still rejects a folder that contains files with `Feature already exists`.
+
 ### Documentation
 - Add the Optional JEV advisory section to `docs/WORKFLOW.md`. Update the tool count in the README and `ARCHITECTURE.md`.
 
