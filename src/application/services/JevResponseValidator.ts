@@ -39,26 +39,53 @@ function collectMeta(root: Record<string, unknown>): JevMeta {
   return meta;
 }
 
-function soleKey(answer: unknown): [string, unknown] | undefined {
-  if (!isPlainObject(answer)) return undefined;
-  const entries = Object.entries(answer);
-  return entries.length === 1 ? entries[0] : undefined;
+const isUnit = (value: unknown): value is number => typeof value === 'number' && Number.isFinite(value) && value >= 0 && value <= 1;
+
+/** Argmax of a valid `probabilities` object (keys are level indexes, values in [0,1]); ties go to the lowest index. */
+function argmaxLevel(probabilities: unknown, levels: number): number | undefined {
+  if (!isPlainObject(probabilities)) return undefined;
+  let best: number | undefined;
+  let bestValue = -1;
+  for (const [key, value] of Object.entries(probabilities)) {
+    const level = /^(0|[1-9]\d*)$/.test(key) ? Number(key) : -1;
+    if (level < 0 || level >= levels || !isUnit(value)) return undefined;
+    if (value > bestValue || (value === bestValue && level < (best as number))) {
+      best = level;
+      bestValue = value;
+    }
+  }
+  return best;
 }
 
-/** Validates one raw answer value against its question. Scores are zero-based: an integer 0..levels-1. */
-function parseAnswer(question: JevQuestion, value: unknown): JevAnswer | undefined {
+function validProbabilityLabels(probabilities: unknown, criteria: Readonly<Record<string, string>>): boolean {
+  return probabilities === undefined
+    || (isPlainObject(probabilities) && Object.entries(probabilities).every(([label, value]) => Object.hasOwn(criteria, label) && isUnit(value)));
+}
+
+/**
+ * Validates one raw answer object against its question. The answer carries its value under the question type
+ * (`score`, `choice`, `noul`); `type`, `confidence`, `legend`, `probabilities` and unknown extras are tolerated.
+ * Scores are zero-based: argmax of `probabilities` when valid, else round(score), within 0..levels-1.
+ */
+function parseAnswer(question: JevQuestion, answer: unknown): JevAnswer | undefined {
+  if (!isPlainObject(answer)) return undefined;
+  if (answer.type !== undefined && answer.type !== question.type) return undefined;
+  const value = Object.hasOwn(answer, question.type) ? answer[question.type] : undefined;
+
   if (question.type === 'choice') {
-    return typeof value === 'string' && Object.hasOwn(question.criteria, value)
+    return typeof value === 'string' && Object.hasOwn(question.criteria, value) && validProbabilityLabels(answer.probabilities, question.criteria)
       ? { type: 'choice', choice: value }
       : undefined;
   }
-  if (typeof value !== 'number') return undefined;
-  if (question.type === 'score') {
-    return Number.isInteger(value) && value >= 0 && value < question.criteria.length
-      ? { type: 'score', raw: value, index: value }
-      : undefined;
-  }
-  return Number.isFinite(value) && value >= 0 && value <= 1 ? { type: 'noul', noul: value } : undefined;
+  if (typeof value !== 'number' || !Number.isFinite(value)) return undefined;
+  if (question.type === 'score') return parseScore(answer, value, question.criteria.length);
+  return isUnit(value) ? { type: 'noul', noul: value } : undefined;
+}
+
+function parseScore(answer: Record<string, unknown>, value: number, levels: number): JevAnswer | undefined {
+  if (answer.legend !== undefined && (!isPlainObject(answer.legend) || Object.keys(answer.legend).length !== levels)) return undefined;
+  const index = argmaxLevel(answer.probabilities, levels) ?? Math.round(value) + 0;
+  return Number.isInteger(index) && index >= 0 && index < levels ? { type: 'score', raw: value, index } : undefined;
 }
 
 export function validateJevResponse(body: string, questions: JevQuestionSet): ValidatedJevResponse {
@@ -74,9 +101,7 @@ export function validateJevResponse(body: string, questions: JevQuestionSet): Va
 
   const answers: Record<string, JevAnswer> = {};
   for (const [id, question] of Object.entries(questions)) {
-    const entry = soleKey(Object.hasOwn(rawAnswers, id) ? rawAnswers[id] : undefined);
-    if (!entry || entry[0] !== question.type) return INVALID;
-    const answer = parseAnswer(question, entry[1]);
+    const answer = parseAnswer(question, Object.hasOwn(rawAnswers, id) ? rawAnswers[id] : undefined);
     if (!answer) return INVALID;
     answers[id] = answer;
   }

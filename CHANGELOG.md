@@ -30,6 +30,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `sdd-status`, `sdd-context-load`, and other reads of a missing feature no longer create an empty `.spec/specs/<feature>/` folder. They report `Feature metadata not found` as before.
 - `sdd-init` now accepts an empty feature folder left behind by earlier versions. It still rejects a folder that contains files with `Feature already exists`.
 
+- `sdd-jev-check` no longer reports `unavailable (invalid-response)` against the real TypeSafe Jev API (model `jev-1.13.0`). The response validator now accepts the real answer shape: `type`, `confidence`, `legend`, `probabilities`, and unknown extra fields. A `type` that differs from the question type, a `legend` with a different number of levels, a `choice` outside the question labels, and a `noul` outside 0 to 1 are still `invalid-response`.
+- A score level is now the highest-probability entry of `probabilities` (ties go to the lowest index) when that object is valid, and `round(score)` otherwise. The level must stay within 0 to the last level index. The raw fractional score is kept, and sidecars accept it. The question-set version stays 3 and the sidecar schema stays 1, because the questions and the stored fields do not change.
+
 ### Documentation
 - Add the Optional JEV advisory section to `docs/WORKFLOW.md`. Update the tool count in the README and `ARCHITECTURE.md`.
 

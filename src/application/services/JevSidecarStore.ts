@@ -111,7 +111,7 @@ function toStored(sidecar: JevSidecar): JevSidecar {
 function isAnswer(value: unknown): value is JevAnswer {
   if (!isRecord(value)) return false;
   if (value.type === 'choice') return typeof value.choice === 'string';
-  if (value.type === 'score') return Number.isInteger(value.raw) && Number.isInteger(value.index);
+  if (value.type === 'score') return typeof value.raw === 'number' && Number.isFinite(value.raw) && Number.isInteger(value.index);
   return value.type === 'noul' && typeof value.noul === 'number';
 }
 

@@ -1,0 +1,56 @@
+{
+  "model": "jev-1.13.0",
+  "answers": {
+    "t": {
+      "type": "score",
+      "score": 2.96,
+      "confidence": 0.97,
+      "legend": {
+        "0": "untestable",
+        "1": "vague bound",
+        "2": "observable",
+        "3": "measurable with threshold"
+      },
+      "probabilities": {
+        "0": 0.01,
+        "1": 0,
+        "2": 0,
+        "3": 0.99
+      }
+    },
+    "s": {
+      "type": "score",
+      "score": 1.62,
+      "confidence": 0,
+      "legend": {
+        "0": "informational",
+        "1": "low",
+        "2": "medium",
+        "3": "high",
+        "4": "critical"
+      },
+      "probabilities": {
+        "0": 0.33,
+        "1": 0.12,
+        "2": 0.25,
+        "3": 0.23,
+        "4": 0.07
+      }
+    },
+    "c": {
+      "type": "choice",
+      "choice": "non_functional",
+      "confidence": 1,
+      "probabilities": {
+        "functional": 0,
+        "non_functional": 1,
+        "unclear": 0
+      }
+    }
+  },
+  "usage": {
+    "input_tokens": 537,
+    "output_tokens": 71,
+    "cost_usd": 0.000226
+  }
+}
