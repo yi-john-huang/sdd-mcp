@@ -138,6 +138,13 @@ export const SKILL_AGENT_ROUTES: Readonly<Record<string, AgentRole>> = {
 /** Skills the model may invoke automatically; every other skill is manual-only. */
 export const MODEL_INVOCABLE_SKILLS: ReadonlySet<string> = new Set(['output-clarity-ladder']);
 
+/**
+ * Code-review JEV sidecars hold per-diff hashes, so they are local. Spec-phase sidecars
+ * (jev-requirements/design/testcases/red) hold only hashes and answers for committed spec
+ * text and stay tracked.
+ */
+const JEV_REVIEW_IGNORES = ['.spec/reviews/', '.spec/specs/*/review/jev-review-*'] as const;
+
 const TARGET_POLICIES: Readonly<Record<InstallTarget, TargetPolicy>> = {
   'claude-code': {
     target: 'claude-code',
@@ -152,7 +159,7 @@ const TARGET_POLICIES: Readonly<Record<InstallTarget, TargetPolicy>> = {
       runtimeConfig: '.mcp.json',
       runtimePermissionConfig: '.claude/settings.json',
     },
-    ignoreEntries: ['.claude/', '.sdd-mcp/'],
+    ignoreEntries: ['.claude/', '.sdd-mcp/', ...JEV_REVIEW_IGNORES],
   },
   codex: {
     target: 'codex',
@@ -166,7 +173,7 @@ const TARGET_POLICIES: Readonly<Record<InstallTarget, TargetPolicy>> = {
       rootGuidance: 'AGENTS.md',
       runtimeConfig: '.codex/config.toml',
     },
-    ignoreEntries: ['.agents/', '.codex/', '.sdd-mcp/'],
+    ignoreEntries: ['.agents/', '.codex/', '.sdd-mcp/', ...JEV_REVIEW_IGNORES],
   },
   omp: {
     target: 'omp',
@@ -180,7 +187,7 @@ const TARGET_POLICIES: Readonly<Record<InstallTarget, TargetPolicy>> = {
       rootGuidance: '.omp/AGENTS.md',
       runtimeConfig: '.omp/mcp.json',
     },
-    ignoreEntries: ['.omp/', '.sdd-mcp/'],
+    ignoreEntries: ['.omp/', '.sdd-mcp/', ...JEV_REVIEW_IGNORES],
   },
 };
 

@@ -2,7 +2,7 @@
   "$schema": "https://raw.githubusercontent.com/anthropics/claude-code-plugins/main/schema/plugin.json",
   "name": "sdd-mcp",
   "displayName": "SDD MCP Server",
-  "version": "5.4.0",
+  "version": "5.5.0",
   "description": "Spec-Driven Development (SDD) plugin for Claude Code providing a comprehensive workflow for building features with requirements, design, tasks, and implementation phases.",
   "author": "SDD Team",
   "license": "MIT",
@@ -243,6 +243,10 @@
       "description": "Approve workflow phases"
     },
     {
+      "name": "sdd-review-test-cases",
+      "description": "Record the optional test-case review checkpoint"
+    },
+    {
       "name": "sdd-quality-check",
       "description": "Code quality analysis"
     },
@@ -273,6 +277,10 @@
     {
       "name": "sdd-spec-impl",
       "description": "Execute spec tasks using TDD"
+    },
+    {
+      "name": "sdd-jev-check",
+      "description": "Run an opt-in advisory JEV check"
     }
   ],
 

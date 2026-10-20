@@ -29,7 +29,7 @@ Internally submit the complete Markdown with the exact revision and artifact ide
 
 ## Human Gate
 
-When validation passes, ask one explicit question: **“Approve this design?”** Only an unambiguous affirmative answer in this Skill flow permits internal approval of the exact reviewed revision and artifact. Never self-approve. Reread status after approval and report the persisted outcome.
+When validation passes, internally run the JEV `design` check and show its line, if any; it never affects approval. Then ask one explicit question: **“Approve this design?”** Only an unambiguous affirmative answer in this Skill flow permits internal approval of the exact reviewed revision and artifact. Never self-approve. Reread status after approval and report the persisted outcome.
 
 ## Specialist Delegation
 

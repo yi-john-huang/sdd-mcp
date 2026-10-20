@@ -17,6 +17,9 @@ export const TYPES = {
   I18nService: Symbol.for("I18nService"),
   I18nManagerPort: Symbol.for("I18nManagerPort"),
   PlatformAdapter: Symbol.for("PlatformAdapter"),
+  JevHttpPort: Symbol.for("JevHttpPort"),
+  GitPort: Symbol.for("GitPort"),
+  JevEnvironment: Symbol.for("JevEnvironment"),
 
   // Application services
   ProjectService: Symbol.for("ProjectService"),
@@ -25,6 +28,7 @@ export const TYPES = {
   QualityService: Symbol.for("QualityService"),
   QualityGateService: Symbol.for("QualityGateService"),
   WorkflowEngineService: Symbol.for("WorkflowEngineService"),
+  JevAdvisoryService: Symbol.for("JevAdvisoryService"),
   ProjectInitializationService: Symbol.for("ProjectInitializationService"),
   WorkflowValidationService: Symbol.for("WorkflowValidationService"),
   CodebaseAnalysisService: Symbol.for("CodebaseAnalysisService"),

@@ -1,0 +1,935 @@
+{
+  "schema_version": 5,
+  "feature_name": "jev-advisory-toggle",
+  "description": "## Original Description\nAdd an opt-in, advisory-only TypeSafe Jev (JEV) decision check to the SDD workflow so maintainers and SDD users get typed, persisted semantic judgements of requirements testability, design-to-requirement fidelity, planned TDD test cases, RED-failure validity, security finding triage and narrowed principle adherence. Why: today every runtime gate is structural only, so vague requirements, decisions that do not satisfy their Covers requirements, inadequate test plans and setup-error REDs reach the human or later phases and cause rework. Who: SDD workflow users of sdd-mcp-server on Claude Code, Codex and OMP who explicitly enable JEV with their own API key. What: a TypeScript runtime JEV client (hard-coded HTTPS endpoint https://jevtypesafeai.com/api/v1/decide, bearer key from SDD_JEV_API_KEY, short timeout, no retry, defensive response validation), enabled only by SDD_JEV_ENABLED or a project setting (default off), a separate SDD_JEV_ALLOW_CODE opt-in for code excerpts with bounding and secret redaction, a local regex RED setup-failure classifier, and sidecar JSON results bound to revision and SHA-256 under the feature review directory; skills for requirements, design, tasks, implement, review, security-check and commit show at most one JEV line. Success: when disabled or without a key behaviour is byte-for-byte unchanged and spec.json, approvalRequired, resolveNextAction and validation are never affected; failures report JEV unavailable with a reason code and never block; tests cover disabled, no-key, mocked success, timeout, network failure, stale sidecar, no spec.json change, RED classifier and redaction; full suite, lint, typecheck and build pass.\n\n## Success Criteria\n1) 100% of existing tests still pass with JEV disabled (only the known pre-existing compiled-cli TTY e2e failure allowed); 2) 0 lint errors, typecheck and build pass; 3) with JEV disabled or no key, 0 outbound HTTP calls and 0 bytes changed in spec.json across all phase operations; 4) every JEV failure mode (disabled, no-key, network, timeout, http-N, invalid-response, code-disabled) returns within the configured timeout (default 5 s, max 15 s) with exactly one 'JEV: unavailable (<reason>)' line and no thrown error; 5) the API key appears in 0 sidecar files, logs or tool responses (asserted by tests); 6) code excerpts sent are <= 8 KB total with all configured secret patterns redacted (asserted by tests).",
+  "language": "en",
+  "phase": "implementation-completed",
+  "created_at": "2026-10-19T13:46:11.483Z",
+  "updated_at": "2026-10-19T18:58:35.185Z",
+  "approvals": {
+    "requirements": {
+      "generated": true,
+      "approved": true,
+      "revision": 2,
+      "artifact_sha256": "09db471dd47a20bf5dc9d2869ae27b3e1f577395356cc7dbd3ebf1768d5bb07a",
+      "validation": {
+        "status": "passed",
+        "checked_at": "2026-10-19T13:50:31.485Z",
+        "blockers": []
+      }
+    },
+    "design": {
+      "generated": true,
+      "approved": true,
+      "revision": 1,
+      "artifact_sha256": "16655d3aed344c6cb932e791c282b19080a5f69533836564af72e78c20a688d2",
+      "validation": {
+        "status": "passed",
+        "checked_at": "2026-10-19T13:57:48.989Z",
+        "blockers": []
+      }
+    },
+    "tasks": {
+      "generated": true,
+      "approved": true,
+      "revision": 1,
+      "artifact_sha256": "d63241a9ca1b023112ac0ee0f1f16c1f29acb0258e48d5f7a8a4eefb6ea505f0",
+      "validation": {
+        "status": "passed",
+        "checked_at": "2026-10-19T14:00:43.506Z",
+        "blockers": []
+      }
+    }
+  },
+  "workflow_options": {
+    "review_test_cases": true
+  },
+  "checkpoints": {
+    "test_cases": {
+      "required": true,
+      "reviewed": true,
+      "reviewed_at": "2026-10-19T14:01:13.677Z",
+      "reviewed_revision": 1,
+      "reviewed_artifact_sha256": "d63241a9ca1b023112ac0ee0f1f16c1f29acb0258e48d5f7a8a4eefb6ea505f0"
+    }
+  },
+  "implementation": {
+    "revision": 90,
+    "tasks_revision": 1,
+    "legacy_imported": false,
+    "tasks": {
+      "1.1": {
+        "title": "Resolve JEV activation, key, code opt-in, and timeout settings",
+        "tdd_required": true,
+        "dependencies": [],
+        "status": "completed",
+        "evidence": {
+          "red": {
+            "command": "npx jest src/__tests__/unit/jev/JevSettings.test.ts",
+            "exit_code": 1,
+            "summary": "22 of 42 assertions fail against a behavior-less stub (enabled/key/timeout/file-read expectations unmet); failures are assertion errors, not setup errors.",
+            "observed_at": "2026-10-19T14:02:41.474Z"
+          },
+          "green": {
+            "command": "npx jest src/__tests__/unit/jev/JevSettings.test.ts",
+            "exit_code": 0,
+            "summary": "42 of 42 tests pass: enable/disable value table, env-over-file precedence, key validation, code opt-in, timeout clamp, serialization hides key, config file read cases.",
+            "observed_at": "2026-10-19T14:03:09.851Z"
+          },
+          "verification": {
+            "command": "npx jest src/__tests__/unit/jev/JevSettings.test.ts && npm run typecheck && npx eslint src/application/services/JevSettings.ts",
+            "exit_code": 0,
+            "summary": "Focused tests 42/42 pass after refactor; typecheck exits 0; eslint reports 0 errors on the new service file.",
+            "observed_at": "2026-10-19T14:03:12.242Z"
+          }
+        },
+        "planned_artifacts": [
+          "src/application/services/JevSettings.ts",
+          "src/__tests__/unit/jev/JevSettings.test.ts"
+        ],
+        "observed_artifacts": [
+          "src/application/services/JevSettings.ts",
+          "src/__tests__/unit/jev/JevSettings.test.ts"
+        ]
+      },
+      "1.2": {
+        "title": "Redact secrets from every JEV state string",
+        "tdd_required": true,
+        "dependencies": [],
+        "status": "completed",
+        "evidence": {
+          "red": {
+            "command": "npx jest src/__tests__/unit/jev/JevRedaction.test.ts",
+            "exit_code": 1,
+            "summary": "19 of 21 tests fail against a no-op redaction stub: secrets remain in output and counts are 0; failures are assertion errors, not setup errors.",
+            "observed_at": "2026-10-19T14:03:47.556Z"
+          },
+          "green": {
+            "command": "npx jest src/__tests__/unit/jev/JevRedaction.test.ts",
+            "exit_code": 0,
+            "summary": "22 of 22 tests pass: one per secret pattern, assignment name kept, counts, unchanged clean text, 100 KB adversarial inputs under 200 ms, redactState walk without mutation, single count for double match.",
+            "observed_at": "2026-10-19T14:04:20.322Z"
+          },
+          "verification": {
+            "command": "npx jest src/__tests__/unit/jev/JevRedaction.test.ts && npm run typecheck && npx eslint src/application/services/JevRedaction.ts",
+            "exit_code": 0,
+            "summary": "Redaction tests 22/22 pass; typecheck exits 0; eslint reports no problems on the redaction module.",
+            "observed_at": "2026-10-19T14:04:34.070Z"
+          }
+        },
+        "planned_artifacts": [
+          "src/application/services/JevRedaction.ts",
+          "src/__tests__/unit/jev/JevRedaction.test.ts"
+        ],
+        "observed_artifacts": [
+          "src/application/services/JevRedaction.ts",
+          "src/__tests__/unit/jev/JevRedaction.test.ts"
+        ]
+      },
+      "1.3": {
+        "title": "Classify RED evidence locally",
+        "tdd_required": true,
+        "dependencies": [],
+        "status": "completed",
+        "evidence": {
+          "red": {
+            "command": "npx jest src/__tests__/unit/jev/RedEvidenceClassifier.test.ts",
+            "exit_code": 1,
+            "summary": "13 of 17 tests fail against a stub that always returns ambiguous: setup and assertion classifications and precedence are not produced; failures are assertion errors.",
+            "observed_at": "2026-10-19T14:04:50.709Z"
+          },
+          "green": {
+            "command": "npx jest src/__tests__/unit/jev/RedEvidenceClassifier.test.ts",
+            "exit_code": 0,
+            "summary": "17 of 17 tests pass: each setup pattern, assertion patterns, setup-over-assertion precedence, ambiguous, command matching, TS12 and ENOENTITY not matched.",
+            "observed_at": "2026-10-19T14:04:59.898Z"
+          },
+          "verification": {
+            "command": "npx jest src/__tests__/unit/jev/RedEvidenceClassifier.test.ts && npm run typecheck && npx eslint src/application/services/RedEvidenceClassifier.ts",
+            "exit_code": 0,
+            "summary": "Classifier tests 17/17 pass; typecheck exits 0; eslint reports no problems.",
+            "observed_at": "2026-10-19T14:05:11.204Z"
+          }
+        },
+        "planned_artifacts": [
+          "src/application/services/RedEvidenceClassifier.ts",
+          "src/__tests__/unit/jev/RedEvidenceClassifier.test.ts"
+        ],
+        "observed_artifacts": [
+          "src/application/services/RedEvidenceClassifier.ts",
+          "src/__tests__/unit/jev/RedEvidenceClassifier.test.ts"
+        ]
+      },
+      "1.4": {
+        "title": "Validate JEV responses and normalize score base",
+        "tdd_required": true,
+        "dependencies": [],
+        "status": "completed",
+        "evidence": {
+          "red": {
+            "command": "npx jest src/__tests__/unit/jev/JevResponseValidator.test.ts",
+            "exit_code": 1,
+            "summary": "8 of 30 tests fail against a stub that always returns ok:false: valid-response acceptance, meta capping, 0-based and inferred 1-based score normalization are unmet; assertion errors, not setup errors.",
+            "observed_at": "2026-10-19T14:05:44.054Z"
+          },
+          "green": {
+            "command": "npx jest src/__tests__/unit/jev/JevResponseValidator.test.ts",
+            "exit_code": 0,
+            "summary": "30 of 30 tests pass: valid response, extra ids dropped, meta capped, 16 rejection shapes, 256 KB cap, 0-based and inferred 1-based scores with raw preserved, mixed 0/n rejected.",
+            "observed_at": "2026-10-19T14:06:11.929Z"
+          },
+          "verification": {
+            "command": "npx jest src/__tests__/unit/jev/JevResponseValidator.test.ts && npm run typecheck && npx eslint src/application/services/JevResponseValidator.ts",
+            "exit_code": 0,
+            "summary": "Validator tests 30/30 pass after extracting parseAnswer; typecheck exits 0; eslint reports no problems (complexity warning removed).",
+            "observed_at": "2026-10-19T14:06:41.766Z"
+          }
+        },
+        "planned_artifacts": [
+          "src/application/services/JevResponseValidator.ts",
+          "src/__tests__/unit/jev/JevResponseValidator.test.ts"
+        ],
+        "observed_artifacts": [
+          "src/application/services/JevResponseValidator.ts",
+          "src/__tests__/unit/jev/JevResponseValidator.test.ts"
+        ]
+      },
+      "1.5": {
+        "title": "Define the constant question catalog with single-sourced criteria",
+        "tdd_required": true,
+        "dependencies": [],
+        "status": "completed",
+        "evidence": {
+          "red": {
+            "command": "npx jest src/__tests__/unit/jev/JevQuestionCatalog.test.ts",
+            "exit_code": 1,
+            "summary": "9 of 10 tests fail against empty-catalog stub: no questions built, preamble empty, version 0, principle set empty; assertion errors, not setup errors.",
+            "observed_at": "2026-10-19T14:07:28.605Z"
+          },
+          "green": {
+            "command": "npx jest src/__tests__/unit/jev/JevQuestionCatalog.test.ts",
+            "exit_code": 0,
+            "summary": "10 of 10 tests pass: preamble on every instruction, per-kind templates and labels, 5-level ordered severity, six principles x four labels, rule headings exist verbatim, ids never reach instructions or criteria.",
+            "observed_at": "2026-10-19T14:08:07.392Z"
+          },
+          "verification": {
+            "command": "npx jest src/__tests__/unit/jev/JevQuestionCatalog.test.ts && npm run typecheck && npx eslint src/application/services/JevQuestionCatalog.ts",
+            "exit_code": 0,
+            "summary": "Catalog tests 10/10 pass; typecheck exits 0; eslint reports no problems.",
+            "observed_at": "2026-10-19T14:08:18.333Z"
+          }
+        },
+        "planned_artifacts": [
+          "src/application/services/JevQuestionCatalog.ts",
+          "src/__tests__/unit/jev/JevQuestionCatalog.test.ts"
+        ],
+        "observed_artifacts": [
+          "src/application/services/JevQuestionCatalog.ts",
+          "src/__tests__/unit/jev/JevQuestionCatalog.test.ts"
+        ]
+      },
+      "1.6": {
+        "title": "Render the one-line report and apply flag rules",
+        "tdd_required": true,
+        "dependencies": [
+          "1.5"
+        ],
+        "status": "completed",
+        "evidence": {
+          "red": {
+            "command": "npx jest src/__tests__/unit/jev/JevReport.test.ts",
+            "exit_code": 1,
+            "summary": "25 of 29 tests fail against a no-op stub: no line rendering, no flags, empty severity mapping and principle report; assertion errors, not setup errors.",
+            "observed_at": "2026-10-19T14:09:02.620Z"
+          },
+          "green": {
+            "command": "npx jest src/__tests__/unit/jev/JevReport.test.ts",
+            "exit_code": 0,
+            "summary": "29 of 29 tests pass: all reason lines, no-flags/short/truncated lines, skipped null, commit warning, flag boundaries (index 1 vs 2, noul 0.49 vs 0.5), severity mapping and disagreement, violated-only principles.",
+            "observed_at": "2026-10-19T14:09:29.284Z"
+          },
+          "verification": {
+            "command": "npx jest src/__tests__/unit/jev/JevReport.test.ts && npm run typecheck && npx eslint src/application/services/JevReport.ts",
+            "exit_code": 0,
+            "summary": "Report tests 29/29 pass; typecheck exits 0; eslint reports no problems.",
+            "observed_at": "2026-10-19T14:09:38.663Z"
+          }
+        },
+        "planned_artifacts": [
+          "src/application/services/JevReport.ts",
+          "src/__tests__/unit/jev/JevReport.test.ts"
+        ],
+        "observed_artifacts": [
+          "src/application/services/JevReport.ts",
+          "src/__tests__/unit/jev/JevReport.test.ts"
+        ]
+      },
+      "2.1": {
+        "title": "Add the JEV HTTPS port and fetch adapter with timeout and no redirects",
+        "tdd_required": true,
+        "dependencies": [],
+        "status": "completed",
+        "evidence": {
+          "red": {
+            "command": "npx jest src/__tests__/unit/jev/FetchJevHttpAdapter.test.ts",
+            "exit_code": 1,
+            "summary": "7 of 8 tests fail against a stub adapter returning status 0: no POST made, no timeout/network/too-large errors, no redirect handling; only the endpoint constant test passes. Assertion errors, not setup errors.",
+            "observed_at": "2026-10-19T14:10:22.850Z"
+          },
+          "green": {
+            "command": "npx jest src/__tests__/unit/jev/FetchJevHttpAdapter.test.ts",
+            "exit_code": 0,
+            "summary": "8 of 8 tests pass against a local 127.0.0.1 server: single POST with one Authorization header, non-2xx returned, timeout in ~1009 ms, closed port is network, 302 not followed (0 target hits), 300 KB body is too-large, non-loopback http refused, endpoint constant exact.",
+            "observed_at": "2026-10-19T14:10:48.886Z"
+          },
+          "verification": {
+            "command": "npx jest src/__tests__/unit/jev/FetchJevHttpAdapter.test.ts && npm run typecheck && npx eslint src/infrastructure/adapters/FetchJevHttpAdapter.ts src/domain/ports.ts",
+            "exit_code": 0,
+            "summary": "Adapter tests 8/8 pass; typecheck exits 0; eslint reports no problems on the adapter and ports.",
+            "observed_at": "2026-10-19T14:10:57.952Z"
+          }
+        },
+        "planned_artifacts": [
+          "src/domain/ports.ts",
+          "src/infrastructure/adapters/FetchJevHttpAdapter.ts",
+          "src/__tests__/unit/jev/FetchJevHttpAdapter.test.ts"
+        ],
+        "observed_artifacts": [
+          "src/domain/ports.ts",
+          "src/infrastructure/adapters/FetchJevHttpAdapter.ts",
+          "src/__tests__/unit/jev/FetchJevHttpAdapter.test.ts"
+        ]
+      },
+      "2.2": {
+        "title": "Add the read-only git port and change-manifest hashing",
+        "tdd_required": true,
+        "dependencies": [],
+        "status": "completed",
+        "evidence": {
+          "red": {
+            "command": "npx jest src/__tests__/unit/jev/JevChangeManifest.test.ts",
+            "exit_code": 1,
+            "summary": "8 of 9 tests fail against stub manifest builders that always return unavailable: no hashes, entries, empty detection or base commit are produced; only the failing-git test passes. Failures come from the stub result, not from setup errors.",
+            "observed_at": "2026-10-19T14:12:27.478Z"
+          },
+          "green": {
+            "command": "npx jest src/__tests__/unit/jev/JevChangeManifest.test.ts",
+            "exit_code": 0,
+            "summary": "9 of 9 tests pass in temporary git repos: review hash equals staged hash for modified plus untracked files, partial stage or extra edit differs, deleted files recorded as deleted, index mtime and object count unchanged, failing/throwing git gives unavailable, empty detection, null and real base commit, sidecar dirs excluded.",
+            "observed_at": "2026-10-19T14:12:49.274Z"
+          },
+          "verification": {
+            "command": "npx jest src/__tests__/unit/jev/JevChangeManifest.test.ts && npm run typecheck && npx eslint src/application/services/JevChangeManifest.ts src/infrastructure/adapters/NodeGitAdapter.ts src/domain/ports.ts",
+            "exit_code": 0,
+            "summary": "Manifest tests 9/9 pass; typecheck exits 0; eslint reports no problems.",
+            "observed_at": "2026-10-19T14:12:58.932Z"
+          }
+        },
+        "planned_artifacts": [
+          "src/domain/ports.ts",
+          "src/infrastructure/adapters/NodeGitAdapter.ts",
+          "src/application/services/JevChangeManifest.ts",
+          "src/__tests__/unit/jev/JevChangeManifest.test.ts"
+        ],
+        "observed_artifacts": [
+          "src/domain/ports.ts",
+          "src/infrastructure/adapters/NodeGitAdapter.ts",
+          "src/application/services/JevChangeManifest.ts",
+          "src/__tests__/unit/jev/JevChangeManifest.test.ts"
+        ]
+      },
+      "3.1": {
+        "title": "Add a read-only advisory snapshot to the workflow engine",
+        "tdd_required": true,
+        "dependencies": [],
+        "status": "completed",
+        "evidence": {
+          "red": {
+            "command": "npx jest src/__tests__/unit/jev/AdvisorySnapshot.test.ts",
+            "exit_code": 1,
+            "summary": "7 of 9 tests fail against a stub readAdvisorySnapshot returning an empty snapshot: revision, hashes, validation status, content, upstream artifacts, implementation task view and unknown-feature rejection are all unmet. The workflow setup (init, submit, approve, begin) runs fine; failures are assertion errors.",
+            "observed_at": "2026-10-19T14:15:01.450Z"
+          },
+          "green": {
+            "command": "npx jest src/__tests__/unit/jev/AdvisorySnapshot.test.ts src/__tests__/unit/workflow src/__tests__/unit/context",
+            "exit_code": 0,
+            "summary": "128 of 128 tests pass in 14 suites: snapshot tests 9/9 (revision, hashes, failed/not-run states, upstream content, implementation task view, no spec.json or directory change across 10 calls, unknown feature creates no directory) plus all existing workflow and context suites unchanged.",
+            "observed_at": "2026-10-19T14:15:36.112Z"
+          },
+          "verification": {
+            "command": "npx jest src/__tests__/unit/jev/AdvisorySnapshot.test.ts src/__tests__/unit/workflow src/__tests__/unit/context && npm run typecheck && npx eslint src/application/services/WorkflowEngineService.ts src/application/services/WorkflowValidationService.ts",
+            "exit_code": 0,
+            "summary": "Snapshot plus existing workflow/context suites 128/128 pass; typecheck exits 0; eslint reports 0 errors (10 pre-existing complexity warnings in untouched methods, none in the new code).",
+            "observed_at": "2026-10-19T14:16:00.811Z"
+          }
+        },
+        "planned_artifacts": [
+          "src/application/services/WorkflowEngineService.ts",
+          "src/application/services/WorkflowValidationService.ts",
+          "src/__tests__/unit/jev/AdvisorySnapshot.test.ts"
+        ],
+        "observed_artifacts": [
+          "src/application/services/WorkflowEngineService.ts",
+          "src/application/services/WorkflowValidationService.ts",
+          "src/__tests__/unit/jev/AdvisorySnapshot.test.ts"
+        ]
+      },
+      "3.2": {
+        "title": "Persist, bind, and read matching sidecars",
+        "tdd_required": true,
+        "dependencies": [
+          "1.4"
+        ],
+        "status": "completed",
+        "evidence": {
+          "red": {
+            "command": "npx jest src/__tests__/unit/jev/JevSidecarStore.test.ts",
+            "exit_code": 1,
+            "summary": "17 of 31 tests fail against a no-op store stub: file names empty, nothing persisted, no matching read, no whitelist serialization or write-failure warning; assertion errors, not setup errors.",
+            "observed_at": "2026-10-19T14:17:19.039Z"
+          },
+          "green": {
+            "command": "npx jest src/__tests__/unit/jev/JevSidecarStore.test.ts",
+            "exit_code": 0,
+            "summary": "31 of 31 tests pass: file names per kind, feature vs .spec/reviews locations, whitelist serialization drops key/body/excerpt, disabled and no-key leave the tree unchanged, other reasons persisted, no feature directory created, binding mismatches and unavailable/corrupt/oversized/wrong-kind sidecars ignored, symlink escape and unwritable path return persisted false.",
+            "observed_at": "2026-10-19T14:17:50.176Z"
+          },
+          "verification": {
+            "command": "npx jest src/__tests__/unit/jev/JevSidecarStore.test.ts && npm run typecheck && npx eslint src/application/services/JevSidecarStore.ts",
+            "exit_code": 0,
+            "summary": "Sidecar store tests 31/31 pass after splitting the shape guard; typecheck exits 0; eslint reports no problems.",
+            "observed_at": "2026-10-19T14:18:17.396Z"
+          }
+        },
+        "planned_artifacts": [
+          "src/application/services/JevSidecarStore.ts",
+          "src/__tests__/unit/jev/JevSidecarStore.test.ts"
+        ],
+        "observed_artifacts": [
+          "src/application/services/JevSidecarStore.ts",
+          "src/__tests__/unit/jev/JevSidecarStore.test.ts"
+        ]
+      },
+      "3.3": {
+        "title": "Build bounded, excluded, redacted code excerpts",
+        "tdd_required": true,
+        "dependencies": [
+          "1.2"
+        ],
+        "status": "completed",
+        "evidence": {
+          "red": {
+            "command": "npx jest src/__tests__/unit/jev/JevCodeExcerpts.test.ts",
+            "exit_code": 1,
+            "summary": "Most tests fail against a stub that returns null excerpts and excludes nothing: line windows, byte-budget dropping, every exclusion pattern (isExcludedPath always false) and redaction are unmet; assertion errors, not setup errors.",
+            "observed_at": "2026-10-19T14:19:06.752Z"
+          },
+          "green": {
+            "command": "npx jest src/__tests__/unit/jev/JevCodeExcerpts.test.ts",
+            "exit_code": 0,
+            "summary": "47 of 47 tests pass: windows 85-115 / 1-18 / end clamp, CRLF, 8192-byte budget drops whole items with ids recorded, 28 excluded paths yield no excerpt, symlink escape / oversize / NUL / missing / unsafe paths give null, secrets redacted before hashing.",
+            "observed_at": "2026-10-19T14:26:25.866Z"
+          },
+          "verification": {
+            "command": "npx jest src/__tests__/unit/jev/JevCodeExcerpts.test.ts && npm run typecheck && npx eslint src/application/services/JevCodeExcerpts.ts",
+            "exit_code": 0,
+            "summary": "Excerpt tests 47/47 pass; typecheck exits 0; eslint reports no problems.",
+            "observed_at": "2026-10-19T14:26:39.392Z"
+          }
+        },
+        "planned_artifacts": [
+          "src/application/services/JevCodeExcerpts.ts",
+          "src/__tests__/unit/jev/JevCodeExcerpts.test.ts"
+        ],
+        "observed_artifacts": [
+          "src/application/services/JevCodeExcerpts.ts",
+          "src/__tests__/unit/jev/JevCodeExcerpts.test.ts"
+        ]
+      },
+      "4.1": {
+        "title": "Orchestrate gates with zero side effects when disabled or keyless",
+        "tdd_required": true,
+        "dependencies": [
+          "1.1",
+          "1.6",
+          "2.1",
+          "2.2",
+          "3.1",
+          "3.2"
+        ],
+        "status": "completed",
+        "evidence": {
+          "red": {
+            "command": "npx jest src/__tests__/unit/jev/JevAdvisoryService.gates.test.ts",
+            "exit_code": 1,
+            "summary": "29 of 32 tests fail against a stub service that always returns skipped/not-ready: disabled and no-key reasons, feature-not-found, code-disabled sidecars, exception containment are unmet; the 3 passing tests are vacuous negatives. Assertion errors, not setup errors.",
+            "observed_at": "2026-10-19T18:25:40.075Z"
+          },
+          "green": {
+            "command": "npx jest src/__tests__/unit/jev/JevAdvisoryService.gates.test.ts src/__tests__/unit/jev/JevSettings.test.ts",
+            "exit_code": 0,
+            "summary": "74 of 74 tests pass: all 7 kinds report disabled and no-key with zero http/git/engine calls and an identical project tree, only config reads touch the filesystem, feature-not-found never creates a directory, code-disabled writes one sidecar for security and principles (feature and .spec/reviews locations), git failure and no-changes handled, internal exceptions become results, key absent from results, logs, and files.",
+            "observed_at": "2026-10-19T18:26:31.767Z"
+          },
+          "verification": {
+            "command": "npx jest src/__tests__/unit/jev/JevAdvisoryService.gates.test.ts src/__tests__/unit/jev/JevSettings.test.ts && npm run typecheck && npx eslint src/application/services/JevAdvisoryService.ts src/application/services/JevResults.ts src/application/services/JevSettings.ts src/application/services/JevCheckTypes.ts",
+            "exit_code": 0,
+            "summary": "Gates and settings tests 74/74 pass; typecheck exits 0; eslint reports no problems on the new service files.",
+            "observed_at": "2026-10-19T18:26:37.281Z"
+          }
+        },
+        "planned_artifacts": [
+          "src/application/services/JevAdvisoryService.ts",
+          "src/__tests__/unit/jev/helpers.ts",
+          "src/__tests__/unit/jev/JevAdvisoryService.gates.test.ts"
+        ],
+        "observed_artifacts": [
+          "src/application/services/JevAdvisoryService.ts",
+          "src/application/services/JevResults.ts",
+          "src/application/services/JevCheckTypes.ts",
+          "src/application/services/JevSettings.ts",
+          "src/infrastructure/di/types.ts",
+          "src/__tests__/unit/jev/helpers.ts",
+          "src/__tests__/unit/jev/JevAdvisoryService.gates.test.ts"
+        ]
+      },
+      "4.2": {
+        "title": "Run requirements and design checks with mocked HTTP, failures, and reuse",
+        "tdd_required": true,
+        "dependencies": [
+          "1.2",
+          "1.4",
+          "1.5",
+          "4.1"
+        ],
+        "status": "completed",
+        "evidence": {
+          "red": {
+            "command": "npx jest src/__tests__/unit/jev/JevAdvisoryService.phases.test.ts",
+            "exit_code": 1,
+            "summary": "20 of 23 tests fail because the service still returns skipped/not-ready for requirements and design: no request is built or sent, no flags, no sidecar, no failure mapping, reuse, or truncation; the 3 passing tests are vacuous negatives. Real-engine setup (init, submit) works; assertion errors, not setup errors.",
+            "observed_at": "2026-10-19T18:28:22.043Z"
+          },
+          "green": {
+            "command": "npx jest src/__tests__/unit/jev/JevAdvisoryService.phases.test.ts src/__tests__/unit/jev/JevAdvisoryService.gates.test.ts",
+            "exit_code": 0,
+            "summary": "55 of 55 tests pass: one POST to the fixed URL with only state and questions, flags for weak requirements and design, failure mapping (network, timeout, too-large, http-503, redirect, malformed) with one attempt and a persisted reason, never-resolving transport returns timeout under 1500 ms, sidecar reuse and stale-hash ignore, secret redaction, 32 KB whole-section truncation, spec files untouched; gate tests still pass.",
+            "observed_at": "2026-10-19T18:30:09.064Z"
+          },
+          "verification": {
+            "command": "npx jest src/__tests__/unit/jev/JevAdvisoryService.phases.test.ts src/__tests__/unit/jev/JevAdvisoryService.gates.test.ts && npm run typecheck && npx eslint src/application/services/JevExchange.ts src/application/services/JevSpecState.ts src/application/services/JevAdvisoryService.ts src/application/services/JevSidecarStore.ts",
+            "exit_code": 0,
+            "summary": "Phases and gates tests 55/55 pass; typecheck exits 0; eslint reports no problems on the exchange, spec-state, service, and store modules.",
+            "observed_at": "2026-10-19T18:30:12.218Z"
+          }
+        },
+        "planned_artifacts": [
+          "src/application/services/JevAdvisoryService.ts",
+          "src/__tests__/unit/jev/JevAdvisoryService.phases.test.ts"
+        ],
+        "observed_artifacts": [
+          "src/application/services/JevAdvisoryService.ts",
+          "src/application/services/JevExchange.ts",
+          "src/application/services/JevSpecState.ts",
+          "src/application/services/JevSidecarStore.ts",
+          "src/__tests__/unit/jev/helpers.ts",
+          "src/__tests__/unit/jev/JevAdvisoryService.phases.test.ts"
+        ]
+      },
+      "4.3": {
+        "title": "Run the A1 test-case adequacy check without touching the checkpoint",
+        "tdd_required": true,
+        "dependencies": [
+          "4.2"
+        ],
+        "status": "completed",
+        "evidence": {
+          "red": {
+            "command": "npx jest src/__tests__/unit/jev/JevAdvisoryService.testcases.test.ts",
+            "exit_code": 1,
+            "summary": "9 of 11 tests fail because the service returns skipped/not-ready for testcases: no cases-required handshake, no request, no flags, no case-list binding, no truncation or unknown-task report; the 2 passing tests are vacuous negatives. Real-engine setup works; assertion errors, not setup errors.",
+            "observed_at": "2026-10-19T18:31:10.051Z"
+          },
+          "green": {
+            "command": "npx jest src/__tests__/unit/jev/JevAdvisoryService",
+            "exit_code": 0,
+            "summary": "66 of 66 service tests pass (gates 32, phases 23, testcases 11): cases-required handshake with 0 POSTs, task context with covered EARS text and not-applicable reasons, flagged-first details, unknown-task report, case-list hash reuse/reorder/edit behavior, artifact change ignores sidecar, whole-task truncation, spec.json byte-identical and checkpoint untouched with review off and on.",
+            "observed_at": "2026-10-19T18:31:58.111Z"
+          },
+          "verification": {
+            "command": "npx jest src/__tests__/unit/jev/JevAdvisoryService src/__tests__/unit/workflow/TestCaseReviewCheckpoint.test.ts && npm run typecheck && npx eslint src/application/services/JevAdvisoryService.ts src/application/services/JevTestcaseState.ts",
+            "exit_code": 0,
+            "summary": "Service suites and the existing checkpoint test pass; typecheck exits 0; eslint reports no problems.",
+            "observed_at": "2026-10-19T18:31:59.573Z"
+          }
+        },
+        "planned_artifacts": [
+          "src/application/services/JevAdvisoryService.ts",
+          "src/__tests__/unit/jev/JevAdvisoryService.testcases.test.ts"
+        ],
+        "observed_artifacts": [
+          "src/application/services/JevAdvisoryService.ts",
+          "src/application/services/JevTestcaseState.ts",
+          "src/__tests__/unit/jev/JevAdvisoryService.testcases.test.ts"
+        ]
+      },
+      "4.4": {
+        "title": "Run the A2 RED validity check with the local classifier first",
+        "tdd_required": true,
+        "dependencies": [
+          "1.3",
+          "4.1"
+        ],
+        "status": "completed",
+        "evidence": {
+          "red": {
+            "command": "npx jest src/__tests__/unit/jev/JevAdvisoryService.red.test.ts",
+            "exit_code": 1,
+            "summary": "9 of 14 tests fail because the service returns skipped/not-ready for red: no local classification, no setup/assertion results, no request for ambiguous evidence, no flags, redaction, reuse; 5 pass (negative gates plus the record-red non-regression guard). Real-engine setup works; assertion errors, not setup errors.",
+            "observed_at": "2026-10-19T18:33:39.073Z"
+          },
+          "green": {
+            "command": "npx jest src/__tests__/unit/jev/JevAdvisoryService",
+            "exit_code": 0,
+            "summary": "80 of 80 service tests pass (RED suite 14): TS2304 evidence classified setup locally with no request and a source:local sidecar, assertion evidence valid, setup beats assertion, ambiguous evidence sends one request with evidence/test name/acceptance and no source, JEV setup-error or noul>=0.5 flags the task, redaction, no-key writes nothing, non-in-progress or non-TDD tasks skipped, record-red state identical across local, JEV, and unavailable results.",
+            "observed_at": "2026-10-19T18:34:57.584Z"
+          },
+          "verification": {
+            "command": "npx jest src/__tests__/unit/jev/JevAdvisoryService && npm run typecheck && npx eslint src/application/services/JevAdvisoryService.ts src/application/services/JevSpecState.ts",
+            "exit_code": 0,
+            "summary": "Service suites 80/80 pass; typecheck exits 0; eslint reports no problems on the service and spec-state modules.",
+            "observed_at": "2026-10-19T18:34:59.108Z"
+          }
+        },
+        "planned_artifacts": [
+          "src/application/services/JevAdvisoryService.ts",
+          "src/__tests__/unit/jev/JevAdvisoryService.red.test.ts"
+        ],
+        "observed_artifacts": [
+          "src/application/services/JevAdvisoryService.ts",
+          "src/application/services/JevSpecState.ts",
+          "src/__tests__/unit/jev/JevAdvisoryService.red.test.ts"
+        ]
+      },
+      "4.5": {
+        "title": "Run B1 security triage and B2 principle checks on bounded code",
+        "tdd_required": true,
+        "dependencies": [
+          "2.2",
+          "3.3",
+          "4.2"
+        ],
+        "status": "completed",
+        "evidence": {
+          "red": {
+            "command": "npx jest src/__tests__/unit/jev/JevAdvisoryService.review.test.ts",
+            "exit_code": 1,
+            "summary": "17 of 17 tests fail because the service returns skipped/not-ready for security and principles when code is allowed: no excerpts, request, flags, severity disagreement, violated-only report, sidecar, reuse, or budget drop; assertion errors, not setup errors.",
+            "observed_at": "2026-10-19T18:36:00.703Z"
+          },
+          "green": {
+            "command": "npx jest src/__tests__/unit/jev/JevAdvisoryService",
+            "exit_code": 0,
+            "summary": "97 of 97 service tests pass (review suite 17): redacted +-15-line excerpts within 8192 bytes, secret never sent, important-vs-low disagreement flagged and important-vs-medium accepted, false-positive and partial-remediation flagged, excluded file sent without code, whole-finding drop with ids reported, sidecar holds hashes/base commit/locations and no excerpt text, git failure returns answers unpersisted, .spec/reviews without a feature, reuse and re-ask on changed input or diff, violated-only principle report with the other answers stored.",
+            "observed_at": "2026-10-19T18:37:11.917Z"
+          },
+          "verification": {
+            "command": "npx jest src/__tests__/unit/jev/JevAdvisoryService && npm run typecheck && npx eslint src/application/services/JevAdvisoryService.ts src/application/services/JevReviewCheck.ts src/application/services/JevExchange.ts",
+            "exit_code": 0,
+            "summary": "Service suites 97/97 pass; typecheck exits 0; eslint reports no problems on the service, review check, and exchange modules.",
+            "observed_at": "2026-10-19T18:37:13.589Z"
+          }
+        },
+        "planned_artifacts": [
+          "src/application/services/JevAdvisoryService.ts",
+          "src/__tests__/unit/jev/JevAdvisoryService.review.test.ts"
+        ],
+        "observed_artifacts": [
+          "src/application/services/JevAdvisoryService.ts",
+          "src/application/services/JevReviewCheck.ts",
+          "src/application/services/JevExchange.ts",
+          "src/__tests__/unit/jev/JevAdvisoryService.review.test.ts"
+        ]
+      },
+      "4.6": {
+        "title": "Look up the commit warning from sidecars only",
+        "tdd_required": true,
+        "dependencies": [
+          "4.5"
+        ],
+        "status": "completed",
+        "evidence": {
+          "red": {
+            "command": "npx jest src/__tests__/unit/jev/JevAdvisoryService.commit.test.ts",
+            "exit_code": 1,
+            "summary": "4 of 15 tests fail: the commit lookup returns skipped/not-ready, so no warning is produced for a confirmed high or critical finding matching the staged change (feature and .spec/reviews locations, with and without a key); the 11 passing tests are silent-case and gate negatives. Assertion errors, not setup errors.",
+            "observed_at": "2026-10-19T18:38:06.899Z"
+          },
+          "green": {
+            "command": "npx jest src/__tests__/unit/jev",
+            "exit_code": 0,
+            "summary": "366 of 366 tests pass in 17 suites; commit suite 15/15: one warning line for confirmed high/critical findings matching the staged change with no request and no key (feature and .spec/reviews locations), silent for hardening, medium, false positive, stale, partially staged, corrupt, absent, and code-disabled sidecars, zero git calls when disabled or when no sidecar exists, project tree unchanged, no error without .spec or repository.",
+            "observed_at": "2026-10-19T18:39:14.760Z"
+          },
+          "verification": {
+            "command": "npx jest src/__tests__/unit/jev && npm run typecheck && npx eslint src/application/services/JevCommitLookup.ts src/application/services/JevSidecarStore.ts src/application/services/JevAdvisoryService.ts",
+            "exit_code": 0,
+            "summary": "JEV tests 366/366 pass; typecheck exits 0; eslint reports no problems on the commit lookup, store, and service.",
+            "observed_at": "2026-10-19T18:39:16.164Z"
+          }
+        },
+        "planned_artifacts": [
+          "src/application/services/JevAdvisoryService.ts",
+          "src/__tests__/unit/jev/JevAdvisoryService.commit.test.ts"
+        ],
+        "observed_artifacts": [
+          "src/application/services/JevAdvisoryService.ts",
+          "src/application/services/JevCommitLookup.ts",
+          "src/application/services/JevSidecarStore.ts",
+          "src/__tests__/unit/jev/JevAdvisoryService.commit.test.ts"
+        ]
+      },
+      "5.1": {
+        "title": "Expose `sdd-jev-check` as the 17th MCP tool with DI wiring",
+        "tdd_required": true,
+        "dependencies": [
+          "4.3",
+          "4.4",
+          "4.6"
+        ],
+        "status": "completed",
+        "evidence": {
+          "red": {
+            "command": "npx jest src/__tests__/unit/jev/sddJevCheckTool.test.ts src/__tests__/unit/runtime/SDDToolAdapter.inventory.test.ts src/__tests__/unit/runtime/workspace-root.test.ts",
+            "exit_code": 1,
+            "summary": "32 of 49 tests fail because sdd-jev-check does not exist: the inventory still has 16 tools, the schema lookup finds nothing, no handler is registered; the 17 passing tests are the existing inventory and workspace-root cases with the new constructor argument. Failures stem from the missing tool, not from broken setup.",
+            "observed_at": "2026-10-19T18:41:49.219Z"
+          },
+          "green": {
+            "command": "npx jest src/__tests__/unit/jev src/__tests__/unit/runtime",
+            "exit_code": 0,
+            "summary": "424 of 424 tests pass in 21 suites: 17 tools in stable order, the existing 16 definitions deep-equal to the pre-change fixture, schema accepts valid and rejects missing feature/findings/units/evidence, extra properties, '..' and absolute paths, handler returns the service result unchanged with the server workspace root, and the compiled stdio server lists 17 tools on both entrypoints and answers sdd-jev-check with disabled / no-key while the project directory stays empty.",
+            "observed_at": "2026-10-19T18:44:35.531Z"
+          },
+          "verification": {
+            "command": "npx jest src/__tests__/unit/jev src/__tests__/unit/runtime && npm run typecheck && npx eslint src/adapters/cli/SDDToolAdapter.ts src/infrastructure/mcp/sddToolDefinitions.ts src/infrastructure/di/container.ts src/infrastructure/di/types.ts",
+            "exit_code": 0,
+            "summary": "JEV and runtime suites 424/424 pass against a fresh npm run build; typecheck exits 0; eslint reports 0 errors (43 pre-existing warnings in untouched steering code).",
+            "observed_at": "2026-10-19T18:44:37.785Z"
+          }
+        },
+        "planned_artifacts": [
+          "src/infrastructure/mcp/sddToolDefinitions.ts",
+          "src/adapters/cli/SDDToolAdapter.ts",
+          "src/infrastructure/di/types.ts",
+          "src/infrastructure/di/container.ts",
+          "src/__tests__/unit/runtime/SDDToolAdapter.inventory.test.ts",
+          "src/__tests__/unit/jev/sddJevCheckTool.test.ts"
+        ],
+        "observed_artifacts": [
+          "src/infrastructure/mcp/sddToolDefinitions.ts",
+          "src/adapters/cli/SDDToolAdapter.ts",
+          "src/infrastructure/di/types.ts",
+          "src/infrastructure/di/container.ts",
+          "src/__tests__/unit/runtime/SDDToolAdapter.inventory.test.ts",
+          "src/__tests__/unit/jev/sddJevCheckTool.test.ts"
+        ]
+      },
+      "5.2": {
+        "title": "Prove workflow state isolation end to end",
+        "tdd_required": true,
+        "dependencies": [
+          "5.1"
+        ],
+        "status": "completed",
+        "evidence": {
+          "red": {
+            "command": "npx jest src/__tests__/unit/jev/JevIsolation.test.ts",
+            "exit_code": 1,
+            "summary": "MUTATION-BASED RED: the isolation behavior already held, so a first run passed 8/8 and could not fail. A first version only compared the final spec.json, and a deliberate mutation (sidecar writer also appends to spec.json) still passed because later engine writes rebuild the file. I strengthened the test to compare spec.json before and after every JEV call and re-ran it with the mutation in place: 1 of 9 fails (specChanges non-empty), proving the test detects state leakage. The mutation is reverted next.",
+            "observed_at": "2026-10-19T18:46:04.995Z"
+          },
+          "green": {
+            "command": "npx jest src/__tests__/unit/jev",
+            "exit_code": 0,
+            "summary": "407 of 407 tests pass in 19 suites with the mutation reverted; isolation suite 9/9: the same full workflow (submit, approve, test-case review, begin, start, record-red/green, complete) run with no JEV calls, JEV disabled, and JEV active over mocked HTTP gives identical responses and final spec.json apart from timestamps, spec.json bytes never change around any JEV call, context loads and handoff contain no jev text, sidecars raise no drift blocker, the disabled tree matches the no-JEV tree, and the active run differs only by review sidecars.",
+            "observed_at": "2026-10-19T18:46:39.667Z"
+          },
+          "verification": {
+            "command": "npx jest src/__tests__/unit/jev && npm run typecheck && npx eslint src/application/services/JevSidecarStore.ts",
+            "exit_code": 0,
+            "summary": "JEV suites 407/407 pass; typecheck exits 0; eslint reports no problems on the restored sidecar store.",
+            "observed_at": "2026-10-19T18:46:40.905Z"
+          }
+        },
+        "planned_artifacts": [
+          "src/__tests__/unit/jev/JevIsolation.test.ts"
+        ],
+        "observed_artifacts": [
+          "src/__tests__/unit/jev/JevIsolation.test.ts"
+        ]
+      },
+      "6.1": {
+        "title": "Add JEV steps to seven Skills and narrow the security contact wording",
+        "tdd_required": true,
+        "dependencies": [
+          "5.1"
+        ],
+        "status": "completed",
+        "evidence": {
+          "red": {
+            "command": "npx jest src/__tests__/unit/jev/JevSkillText.test.ts",
+            "exit_code": 1,
+            "summary": "The text-contract suite fails on missing wording: none of the seven Skills has its JEV step, the security skill and auditor still say 'contact external systems' / 'external contact', and no rendered target (Claude Code, Codex, OMP) carries the steps; the suite compiles and the byte-budget assertions hold. Assertion errors, not setup errors.",
+            "observed_at": "2026-10-19T18:47:50.892Z"
+          },
+          "green": {
+            "command": "npx jest src/__tests__/unit/cli src/__tests__/unit/skills src/__tests__/unit/agents src/__tests__/unit/steering src/__tests__/unit/jev --testPathIgnorePatterns compiled-cli.e2e",
+            "exit_code": 0,
+            "summary": "799 of 799 tests pass in 43 suites (compiled-cli.e2e excluded: it holds only the known pre-existing TTY failure, exit code 130 test). The new Skill-text suite passes 49/49: all seven Skills carry their JEV step, none holds endpoint/key/regex/redaction text, the commit lookup is local and read-only, security skill and auditor use the narrowed contact rule with the single parent-only exception, and Claude Code, Codex, and OMP renders carry the wording. Every Skill is within 4,000 bytes (largest 3,999) and the total stays under 40,000.",
+            "observed_at": "2026-10-19T18:52:34.233Z"
+          },
+          "verification": {
+            "command": "npx jest src/__tests__/unit/cli src/__tests__/unit/skills src/__tests__/unit/agents src/__tests__/unit/steering src/__tests__/unit/jev --testPathIgnorePatterns compiled-cli.e2e && npm run typecheck",
+            "exit_code": 0,
+            "summary": "Cli, skills, agents, steering, and JEV suites 799/799 pass (known TTY test excluded); typecheck exits 0. The workflow-skill render baseline was regenerated only for the seven intentionally changed skills after a guard confirmed the four untouched skills and all Codex policy hashes are identical to the old baseline.",
+            "observed_at": "2026-10-19T18:52:36.991Z"
+          }
+        },
+        "planned_artifacts": [
+          "skills/sdd-requirements/SKILL.md",
+          "skills/sdd-design/SKILL.md",
+          "skills/sdd-tasks/SKILL.md",
+          "skills/sdd-implement/SKILL.md",
+          "skills/sdd-review/SKILL.md",
+          "skills/sdd-security-check/SKILL.md",
+          "skills/sdd-commit/SKILL.md",
+          "agents/security-auditor.md",
+          "src/__tests__/unit/cli/canonical-assets.test.ts",
+          "src/__tests__/unit/jev/JevSkillText.test.ts"
+        ],
+        "observed_artifacts": [
+          "skills/sdd-requirements/SKILL.md",
+          "skills/sdd-design/SKILL.md",
+          "skills/sdd-tasks/SKILL.md",
+          "skills/sdd-tasks/REFERENCE.md",
+          "skills/sdd-implement/SKILL.md",
+          "skills/sdd-review/SKILL.md",
+          "skills/sdd-security-check/SKILL.md",
+          "skills/sdd-commit/SKILL.md",
+          "agents/security-auditor.md",
+          "src/__tests__/unit/cli/fixtures/workflow-skill-render-baseline.json",
+          "src/__tests__/unit/cli/governed-workflow.e2e.test.ts",
+          "src/__tests__/unit/jev/JevSkillText.test.ts"
+        ]
+      },
+      "6.2": {
+        "title": "Git-ignore code-review sidecars for every target",
+        "tdd_required": true,
+        "dependencies": [],
+        "status": "completed",
+        "evidence": {
+          "red": {
+            "command": "npx jest src/__tests__/unit/cli/install-target.test.ts",
+            "exit_code": 1,
+            "summary": "8 new tests fail (ignoreEntries lack the review entries for all 3 targets, idempotence, git check-ignore, repository .gitignore) while the 18 existing tests pass; assertion errors, not setup errors.",
+            "observed_at": "2026-10-19T14:27:19.846Z"
+          },
+          "green": {
+            "command": "npx jest src/__tests__/unit/cli/install-target.test.ts src/__tests__/unit/cli/gitignore-manager.test.ts src/__tests__/unit/cli/target-installers.test.ts src/__tests__/unit/cli/install-skills.test.ts src/__tests__/unit/cli/install-full.integration.test.ts",
+            "exit_code": 0,
+            "summary": "106 of 106 tests pass in 5 suites: all 3 targets ignore the review entries, a second install adds nothing, git check-ignore ignores jev-review-* but not jev-requirements/design/testcases/red sidecars, repository .gitignore carries both entries, existing installer suites unchanged.",
+            "observed_at": "2026-10-19T14:27:51.635Z"
+          },
+          "verification": {
+            "command": "npx jest src/__tests__/unit/cli/install-target.test.ts src/__tests__/unit/cli/gitignore-manager.test.ts && npm run typecheck && npx eslint src/cli/install-target.ts",
+            "exit_code": 0,
+            "summary": "Ignore-policy and installer suites pass; typecheck exits 0; eslint reports no problems.",
+            "observed_at": "2026-10-19T14:28:01.837Z"
+          }
+        },
+        "planned_artifacts": [
+          "src/cli/install-target.ts",
+          ".gitignore",
+          "src/__tests__/unit/cli/install-target.test.ts"
+        ],
+        "observed_artifacts": [
+          "src/cli/install-target.ts",
+          ".gitignore",
+          "src/__tests__/unit/cli/install-target.test.ts"
+        ]
+      },
+      "6.3": {
+        "title": "Update the 17-tool contract documentation and JEV usage docs",
+        "tdd_required": true,
+        "dependencies": [
+          "5.1"
+        ],
+        "status": "completed",
+        "evidence": {
+          "red": {
+            "command": "npx jest src/__tests__/unit/cli/documentation-consistency.test.ts",
+            "exit_code": 1,
+            "summary": "12 of 22 tests fail on missing documentation: README, WORKFLOW, and ARCHITECTURE do not name sdd-jev-check or state 17 tools, plugin.json omits it (and sdd-review-test-cases), WORKFLOW has no Optional JEV advisory section with settings, data sent, sidecars, ignore policy, or reason codes, and the changelog has no Unreleased JEV entry; the 10 existing/valid tests pass. Assertion errors, not setup errors.",
+            "observed_at": "2026-10-19T18:53:32.800Z"
+          },
+          "green": {
+            "command": "npx jest src/__tests__/unit/cli/documentation-consistency.test.ts src/__tests__/unit/runtime src/__tests__/unit/scripts",
+            "exit_code": 0,
+            "summary": "73 of 73 tests pass in 6 suites; the documentation suite passes 19/19: README, WORKFLOW, and ARCHITECTURE name all 17 tools and state 17 with no stale 16-tool wording, plugin.json lists exactly the defined tools, WORKFLOW documents the four settings and project file, precedence, data sent, 15-line / 8 KB excerpt bounds, redaction, sidecar locations and ignore policy, every reason code, and the never-changes-approval/spec.json guarantee, and the changelog has an Unreleased JEV entry. A full npm test run showed 1174 passing with only the known TTY failure.",
+            "observed_at": "2026-10-19T18:55:49.326Z"
+          },
+          "verification": {
+            "command": "npx jest src/__tests__/unit/cli/documentation-consistency.test.ts src/__tests__/unit/runtime src/__tests__/unit/scripts",
+            "exit_code": 0,
+            "summary": "Documentation, runtime, and scripts suites 73/73 pass with the 17-tool contract documented consistently across README, WORKFLOW, ARCHITECTURE, plugin.json, and CHANGELOG.",
+            "observed_at": "2026-10-19T18:55:51.015Z"
+          }
+        },
+        "planned_artifacts": [
+          "docs/WORKFLOW.md",
+          "README.md",
+          "ARCHITECTURE.md",
+          ".claude-plugin/plugin.json",
+          "CHANGELOG.md",
+          "src/__tests__/unit/cli/documentation-consistency.test.ts"
+        ],
+        "observed_artifacts": [
+          "docs/WORKFLOW.md",
+          "README.md",
+          "ARCHITECTURE.md",
+          ".claude-plugin/plugin.json",
+          "CHANGELOG.md",
+          "src/__tests__/unit/cli/documentation-consistency.test.ts"
+        ]
+      },
+      "7.1": {
+        "title": "Pass lint, typecheck, build, and the full suite",
+        "tdd_required": false,
+        "dependencies": [
+          "4.1",
+          "4.2",
+          "4.3",
+          "4.4",
+          "4.5",
+          "4.6",
+          "5.2",
+          "6.1",
+          "6.2",
+          "6.3"
+        ],
+        "status": "completed",
+        "evidence": {
+          "verification": {
+            "command": "npm run lint; npm run typecheck && npm run build && npx jest --testNamePattern '^(?![\\s\\S]*maps interactive cancellation to exit code 130 without writes)[\\s\\S]*$'",
+            "exit_code": 0,
+            "summary": "lint: 0 errors (323 warnings; new and touched source files checked separately with --max-warnings 0 and are clean); typecheck exit 0; build exit 0; test suite 78 of 78 suites pass, 1174 passed and 1 skipped of 1175, the one skipped test being the known pre-existing 'maps interactive cancellation to exit code 130 without writes' TTY test. An unfiltered npm test on the same build reported exactly that one failure and 1174 passing. Only two tests mention the endpoint host: the constant assertion and a negative check that Skill text lacks it; no test contacts the network.",
+            "observed_at": "2026-10-19T18:58:35.185Z"
+          }
+        },
+        "planned_artifacts": [],
+        "observed_artifacts": []
+      }
+    }
+  }
+}

@@ -136,11 +136,79 @@ The two operator journeys are different on purpose:
 
 An old OMP-via-Codex project must select `--target omp`. The installer preserves Codex TOML agents. It never treats them as executable OMP agents. See [INSTALL-GUIDE.md](INSTALL-GUIDE.md) for target mapping and commands.
 
+## Optional JEV advisory
+
+JEV is an optional, advisory check. It calls the TypeSafe Jev decision API to judge meaning that the structural gates cannot judge. It is off by default. When it is off, the workflow behaves as before and JEV creates no files.
+
+JEV never changes approval, validation, the next action, or `spec.json`. A person still makes every decision. A result is advice only.
+
+### Turn it on
+
+| Setting | Meaning |
+|---|---|
+| `SDD_JEV_ENABLED` | `1`, `true`, `yes`, or `on` enables JEV. Any other value disables it. |
+| `SDD_JEV_API_KEY` | Your API key. JEV reads the key only from this environment variable. |
+| `SDD_JEV_ALLOW_CODE` | Same values as above. Required before JEV sends any code excerpt. |
+| `SDD_JEV_TIMEOUT_MS` | Request timeout in milliseconds. The default is 5000. The limits are 1000 and 15000. |
+| `.spec/sdd-config.json` | Optional project setting: `{"jev":{"enabled":true}}`. It never holds a key. |
+
+The environment variable wins over the project setting. The project setting applies only when `SDD_JEV_ENABLED` is unset. JEV needs both the switch and a key. It never writes the key to a sidecar, a log, an error message, or a tool response.
+
+JEV sends each request to one fixed HTTPS endpoint. It makes one attempt, follows no redirect, and never retries.
+
+### Checks
+
+| Check | When it runs | Data sent |
+|---|---|---|
+| `requirements` | After validation passes, before approval | Requirement text and the feature goal |
+| `design` | After validation passes, before approval | Design decisions and the requirements they cover |
+| `testcases` | After tasks validation, before the test-case or approval question | Task text and the planned test cases |
+| `red` | Before the RED record | Test command, failure summary, test name, and acceptance criteria |
+| `security`, `principles` | After a review or audit returns | Existing findings and bounded code excerpts |
+| `commit` | Before a commit | Nothing. It only reads a saved sidecar. |
+
+A local classifier checks RED evidence first. It sends no request for a clear setup error or a clear assertion failure.
+
+### Code and privacy
+
+JEV sends code only for the `security` and `principles` checks, and only with `SDD_JEV_ALLOW_CODE`. It sends at most 15 lines before and after each cited line. The total is at most 8 KB (8,192 bytes) per request. A finding that does not fit is sent without code.
+
+JEV redacts secret patterns from every request before it sends them. It never sends `.env*` files, keys and certificates, lockfiles, or generated output. A symlink that points to such a file is also excluded. Spec text is limited to 32 KB per request.
+
+### Reviewing committed branch changes
+
+By default, the `security` and `principles` checks judge the uncommitted working tree. For a PR or branch review, the Skill passes an optional `baseRef`: a Git ref such as `origin/develop`, or a commit SHA.
+
+- The change set is everything that differs between the merge base of `baseRef` and `HEAD`, and the working tree. It includes committed, staged, unstaged, and untracked changes. With a clean working tree, it is exactly the commits in `merge-base..HEAD`.
+- Code excerpts come from the working tree, with the same limits as before: 15 lines before and after each cited line, and 8 KB per request.
+- `baseRef` is checked before any Git command runs. It must be 1 to 256 characters. It must not start with `-`, and it must not contain whitespace or control characters. JEV then resolves it with `git rev-parse --verify --quiet --end-of-options <baseRef>^{commit}`. The `--end-of-options` flag needs Git 2.30 or later. JEV runs only read-only Git commands.
+- If `baseRef` is malformed, does not name a commit, shares no history with `HEAD`, or is sent with another check, the result is `skipped` with the reason `invalid-base-ref`. JEV sends no request, runs no Git command for a malformed value, and writes no file.
+- Without `baseRef`, nothing changes: JEV judges the working tree only, and writes the same sidecar as before.
+
+A committed-range sidecar is named `jev-review-<kind>-range-<hash>.json`. It is bound to the question-set version, the finding or unit hash, the diff hash, the merge-base commit, and the `HEAD` commit. If any of these changes, JEV ignores the old sidecar. Like other code-review sidecars, it is git-ignored.
+
+### Score scale
+
+JEV score questions use a zero-based scale. The answer is an integer from 0 to the index of the last level, and `0` is the first level listed. Any other value, including a value equal to the number of levels, makes the whole response `invalid-response`.
+
+### Results and sidecars
+
+Every Skill shows at most one line: `JEV: <n> flagged (<ids>)`, `JEV: no flags`, or `JEV: unavailable (<reason>)`. The reasons are `disabled`, `no-key`, `network`, `timeout`, `http-<status>`, `invalid-response`, and `code-disabled`. A failure never blocks the workflow.
+
+JEV saves results as sidecar files in `.spec/specs/<feature>/review/`. Without a feature, it uses `.spec/reviews/`. Each sidecar is bound to the artifact revision and SHA-256. When the artifact changes, JEV ignores the old sidecar.
+
+- Spec-phase sidecars (`jev-requirements-r<n>.json`, `jev-design-r<n>.json`, `jev-testcases-r<n>.json`, `jev-red-<task>-<hash>.json`) hold answers and hashes for spec text you already commit. They are not git-ignored.
+- Code-review sidecars (`jev-review-security-<hash>.json`, `jev-review-principles-<hash>.json`, and the committed-range names `jev-review-<kind>-range-<hash>.json`) are git-ignored. The installer adds the entries.
+- A sidecar holds hashes. It never holds the key, the request, or the excerpt text.
+- JEV writes no sidecar when it is disabled or has no key.
+
+The `sdd-commit` Skill reads a matching code-review sidecar. It shows one warning line for a confirmed high or critical security finding. It never calls JEV. It matches staged diffs only: it ignores committed-range sidecars and sidecars from an older question-set version.
+
 ## Integrator/runtime reference: exact inventory
 
-This section is for protocol integrators and runtime maintainers. The sole packaged runtime exposes exactly 16 tools. End users invoke phase Skills instead:
+This section is for protocol integrators and runtime maintainers. The sole packaged runtime exposes exactly 17 tools. End users invoke phase Skills instead:
 
-`sdd-init`, `sdd-requirements`, `sdd-design`, `sdd-tasks`, `sdd-implement`, `sdd-status`, `sdd-approve`, `sdd-review-test-cases`, `sdd-quality-check`, `sdd-context-load`, `sdd-template-render`, `sdd-steering`, `sdd-steering-custom`, `sdd-validate-design`, `sdd-validate-gap`, and `sdd-spec-impl`.
+`sdd-init`, `sdd-requirements`, `sdd-design`, `sdd-tasks`, `sdd-implement`, `sdd-status`, `sdd-approve`, `sdd-review-test-cases`, `sdd-quality-check`, `sdd-context-load`, `sdd-template-render`, `sdd-steering`, `sdd-steering-custom`, `sdd-validate-design`, `sdd-validate-gap`, `sdd-spec-impl`, and `sdd-jev-check`.
 
 The offline `context-report` command is not an MCP tool.
 

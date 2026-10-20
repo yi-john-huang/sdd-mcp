@@ -1,5 +1,5 @@
 import { spawn } from 'child_process';
-import { mkdtemp, mkdir, readFile, rm, writeFile } from 'node:fs/promises';
+import { mkdtemp, mkdir, readFile, readdir, rm, writeFile } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'path';
 
@@ -135,6 +135,55 @@ describe.each(['sdd-entry.js', 'mcp-server.js'])('%s stdio runtime', (entrypoint
       },
     });
     expect(byName['sdd-spec-impl']).toHaveProperty('allOf');
+  });
+});
+
+describe('compiled stdio JEV advisory tool', () => {
+  const jevVariables = ['SDD_JEV_ENABLED', 'SDD_JEV_API_KEY', 'SDD_JEV_ALLOW_CODE', 'SDD_JEV_TIMEOUT_MS'] as const;
+  const saved = Object.fromEntries(jevVariables.map((name) => [name, process.env[name]]));
+  let projectRoot: string;
+  let serverCwd: string;
+
+  beforeEach(async () => {
+    for (const name of jevVariables) delete process.env[name];
+    // The server writes its own data/plugins directories into its cwd, so keep the project root separate.
+    const temporaryRoot = await mkdtemp(path.join(os.tmpdir(), 'sdd-stdio-jev-'));
+    projectRoot = path.join(temporaryRoot, 'project');
+    serverCwd = path.join(temporaryRoot, 'server');
+    await Promise.all([mkdir(projectRoot, { recursive: true }), mkdir(serverCwd, { recursive: true })]);
+  });
+  afterEach(async () => {
+    for (const name of jevVariables) {
+      if (saved[name] === undefined) delete process.env[name];
+      else process.env[name] = saved[name];
+    }
+    await rm(path.dirname(projectRoot), { recursive: true, force: true });
+  });
+
+  const call = async (args: Record<string, unknown>): Promise<Record<string, unknown>> => {
+    const response = await callTool('sdd-entry.js', serverCwd, 'sdd-jev-check', args, projectRoot);
+    return JSON.parse(response.result?.content?.[0]?.text ?? '{}') as Record<string, unknown>;
+  };
+
+  it('reports disabled by default and creates nothing in the project', async () => {
+    await expect(call({ check: 'requirements', featureName: 'payments' })).resolves.toMatchObject({
+      check: 'requirements', status: 'unavailable', reason: 'disabled', line: 'JEV: unavailable (disabled)', persisted: false,
+    });
+    await expect(call({ check: 'commit' })).resolves.toMatchObject({ status: 'skipped', skipReason: 'disabled', line: null });
+    await expect(readdir(projectRoot)).resolves.toEqual([]);
+  });
+
+  it('reports no-key when enabled without a key and still creates nothing', async () => {
+    process.env.SDD_JEV_ENABLED = '1';
+    await expect(call({ check: 'security', findings: [{ id: 'F1', path: 'src/a.ts', line: 1, title: 't', severity: 'high' }] }))
+      .resolves.toMatchObject({ check: 'security', status: 'unavailable', reason: 'no-key', line: 'JEV: unavailable (no-key)' });
+    await expect(readdir(projectRoot)).resolves.toEqual([]);
+  });
+
+  it('rejects arguments that violate the published schema before running anything', async () => {
+    const response = await callTool('sdd-entry.js', serverCwd, 'sdd-jev-check', { check: 'requirements' }, projectRoot);
+    expect(JSON.stringify(response)).toMatch(/featureName|InvalidParams|Validation failed/);
+    await expect(readdir(projectRoot)).resolves.toEqual([]);
   });
 });
 

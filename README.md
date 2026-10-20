@@ -125,12 +125,12 @@ Use this path when the repository has never had sdd-mcp-generated guidance. The 
 
 ```bash
 # Recommended explicit lean installation
-npx sdd-mcp-server@5.4.0 install --profile lean --target claude-code
-npx sdd-mcp-server@5.4.0 install --profile lean --target codex
-npx sdd-mcp-server@5.4.0 install --profile lean --target omp
+npx sdd-mcp-server@5.5.0 install --profile lean --target claude-code
+npx sdd-mcp-server@5.5.0 install --profile lean --target codex
+npx sdd-mcp-server@5.5.0 install --profile lean --target omp
 
 # Interactive full installation: choose Claude Code, Codex, or OMP
-npx sdd-mcp-server@5.4.0 install --profile full
+npx sdd-mcp-server@5.5.0 install --profile full
 ```
 
 Use the local entrypoint only when this checkout itself is the intended project install. It does not repair personal runtime connection. Build once, then install explicitly:
@@ -214,7 +214,7 @@ Use this path when the project already contains generated sdd-mcp files from an 
 
 ```bash
 # Replace <target> with claude-code, codex, or omp
-npx sdd-mcp-server@5.4.0 install \
+npx sdd-mcp-server@5.5.0 install \
   --profile full \
   --target <target> \
   --refresh-generated
@@ -227,7 +227,7 @@ For an OMP migration, Codex TOML agents remain preserved but are not executable 
 After this one-time migration, use a normal install without `--refresh-generated` for subsequent v5 updates. Review conflicts, then reload/restart the host and accept project trust before invoking a native phase Skill.
 
 ## Integrator/runtime reference: canonical v5 inventory
-Every packaged entrypoint exposes the same 16 tools:
+Every packaged entrypoint exposes the same 17 tools:
 
 1. `sdd-init`
 2. `sdd-requirements`
@@ -245,6 +245,9 @@ Every packaged entrypoint exposes the same 16 tools:
 14. `sdd-validate-design`
 15. `sdd-validate-gap`
 16. `sdd-spec-impl`
+17. `sdd-jev-check`
+
+`sdd-jev-check` is opt-in and advisory. It is off by default and never changes workflow state. For a PR or branch review, its code checks accept an optional `baseRef` to judge committed changes. See [Optional JEV advisory](docs/WORKFLOW.md#optional-jev-advisory).
 
 Feature-scoped tools use `featureName`; v5 payloads bind phase mutations and approvals to exact revisions and artifact hashes. This inventory is for MCP integrators and runtime maintainers—not end-user workflow instructions. Hosts discover installed Skills, and the installer supports `--list`.
 

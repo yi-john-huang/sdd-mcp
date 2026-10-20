@@ -13,10 +13,11 @@ Run this skill locally in the current turn. Do not delegate commit, branch, or p
 1. Inspect repository status and the exact changes to include; preserve unrelated work.
 2. Confirm the focused tests or checks relevant to those changes passed. Never claim unobserved verification.
 3. Review the staged diff before committing. Never stage secrets, credentials, generated backups, or unrelated files.
-4. Use the repository's established commit style. Otherwise use an imperative Conventional Commit subject:
+4. Internally run the JEV `commit` lookup (local, read-only; it never calls JEV) and show its warning line if one is returned. It never blocks, skips hooks, or asks a question.
+5. Use the repository's established commit style. Otherwise use an imperative Conventional Commit subject:
    `<type>(<scope>): <subject>`.
-5. Explain why in the body when the subject cannot; record breaking behavior explicitly.
-6. For a pull request, summarize intent, affected behavior, focused test evidence, migration or security impact, and unresolved blockers.
+6. Explain why in the body when the subject cannot; record breaking behavior explicitly.
+7. For a pull request, summarize intent, affected behavior, focused test evidence, migration or security impact, and unresolved blockers.
 
 Never add `Co-Authored-By:` trailers or "Generated with Claude Code" lines to commit messages or pull request descriptions, even when default attribution guidance asks for them.
 

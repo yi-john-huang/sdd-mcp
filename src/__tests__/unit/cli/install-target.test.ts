@@ -1,3 +1,8 @@
+import { execFileSync } from 'child_process';
+import * as fs from 'fs';
+import * as os from 'os';
+import * as path from 'path';
+import { updateGeneratedIgnores } from '../../../cli/utils/gitignore-manager';
 import {
   CliUsageError,
   DEFAULT_CODEX_MODEL,
@@ -134,5 +139,59 @@ describe('resolveInstallTarget', () => {
       .resolves.toEqual({ target: 'codex', source: 'interactive' });
     await expect(resolveInstallTarget({ legacyCodex: false, profile: 'full' }, io))
       .rejects.toBeInstanceOf(InstallCancelledError);
+  });
+});
+
+describe('JEV code-review sidecar ignore policy', () => {
+  const targets = ['claude-code', 'codex', 'omp'] as const;
+  const reviewEntries = ['.spec/reviews/', '.spec/specs/*/review/jev-review-*'];
+
+  it.each(targets)('ignores code-review sidecars for %s', (target) => {
+    expect(getTargetPolicy(target).ignoreEntries).toEqual(expect.arrayContaining(reviewEntries));
+  });
+
+  it.each(targets)('adds the entries once and nothing on a second install for %s', async (target) => {
+    const root = fs.mkdtempSync(path.join(os.tmpdir(), 'jev-ignore-'));
+    try {
+      const entries = getTargetPolicy(target).ignoreEntries;
+      const first = await updateGeneratedIgnores(root, entries);
+      expect(first.added).toEqual(expect.arrayContaining(reviewEntries));
+      const second = await updateGeneratedIgnores(root, entries);
+      expect(second).toEqual({ status: 'unchanged', added: [] });
+    } finally {
+      fs.rmSync(root, { recursive: true, force: true });
+    }
+  });
+
+  it('ignores code-review sidecars but not spec-phase sidecars', async () => {
+    const root = fs.mkdtempSync(path.join(os.tmpdir(), 'jev-ignore-'));
+    try {
+      execFileSync('git', ['init', '-q'], { cwd: root });
+      await updateGeneratedIgnores(root, getTargetPolicy('claude-code').ignoreEntries);
+      const ignored = (file: string): boolean => {
+        try {
+          execFileSync('git', ['check-ignore', '-q', file], { cwd: root });
+          return true;
+        } catch {
+          return false;
+        }
+      };
+      expect(ignored('.spec/specs/demo/review/jev-review-security-abc123.json')).toBe(true);
+      expect(ignored('.spec/specs/demo/review/jev-review-principles-abc123.json')).toBe(true);
+      expect(ignored('.spec/reviews/jev-review-security-abc123.json')).toBe(true);
+      expect(ignored('.spec/specs/demo/review/jev-review-security-range-abc123.json')).toBe(true);
+      expect(ignored('.spec/specs/demo/review/jev-review-principles-range-abc123.json')).toBe(true);
+      expect(ignored('.spec/reviews/jev-review-security-range-abc123.json')).toBe(true);
+      for (const kept of ['jev-requirements-r1.json', 'jev-design-r1.json', 'jev-testcases-r1.json', 'jev-red-2.1-abc123.json']) {
+        expect(ignored(`.spec/specs/demo/review/${kept}`)).toBe(false);
+      }
+    } finally {
+      fs.rmSync(root, { recursive: true, force: true });
+    }
+  });
+
+  it('keeps the same entries in the repository .gitignore', () => {
+    const gitignore = fs.readFileSync(path.resolve(process.cwd(), '.gitignore'), 'utf8').split(/\r?\n/);
+    for (const entry of reviewEntries) expect(gitignore).toContain(entry);
   });
 });

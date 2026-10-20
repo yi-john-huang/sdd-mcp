@@ -1,4 +1,4 @@
-import { mkdtemp, mkdir, readFile, rm, symlink, truncate, writeFile } from 'node:fs/promises';
+import { mkdtemp, mkdir, readdir, readFile, rm, symlink, truncate, writeFile } from 'node:fs/promises';
 import { spawn } from 'node:child_process';
 import { once } from 'node:events';
 import os from 'node:os';
@@ -153,6 +153,44 @@ describe('WorkflowEngineService schema-v5 governance', () => {
   });
 
   afterEach(async () => { await rm(projectRoot, { recursive: true, force: true }); jest.clearAllMocks(); });
+
+  describe('missing features on read paths', () => {
+    async function snapshot(root: string): Promise<Record<string, string>> {
+      const entries: Record<string, string> = {};
+      const walk = async (directory: string): Promise<void> => {
+        for (const entry of await readdir(directory, { withFileTypes: true })) {
+          const full = path.join(directory, entry.name);
+          const relative = path.relative(root, full);
+          if (entry.isDirectory()) { entries[`${relative}/`] = 'dir'; await walk(full); }
+          else entries[relative] = hash(await readFile(full, 'utf8'));
+        }
+      };
+      await walk(root);
+      return entries;
+    }
+
+    it('leaves the project tree untouched when status or context-load targets a missing feature', async () => {
+      const before = await snapshot(projectRoot);
+      await expect(workflow.getFeatureStatus({ projectRoot, featureName: 'zz-a' })).rejects.toThrow('Feature metadata not found: zz-a');
+      await expect(workflow.loadFeatureContext({ projectRoot, featureName: 'zz-a' })).rejects.toThrow('Feature metadata not found: zz-a');
+      await expect(workflow.loadProject({ projectRoot, featureName: 'zz-a' })).rejects.toThrow('Feature metadata not found: zz-a');
+      expect(await snapshot(projectRoot)).toEqual(before);
+
+      const created = await workflow.initializeFeature({ projectRoot, featureName: 'zz-a', description: 'Late init', language: 'en' });
+      expect(created.name).toBe('zz-a');
+    });
+
+    it('initializes over an empty feature directory left by older versions but not a populated one', async () => {
+      await mkdir(path.join(projectRoot, '.spec', 'specs', 'legacy-empty'));
+      await expect(workflow.initializeFeature({ projectRoot, featureName: 'legacy-empty', description: 'Recover', language: 'en' }))
+        .resolves.toMatchObject({ name: 'legacy-empty' });
+
+      await mkdir(path.join(projectRoot, '.spec', 'specs', 'legacy-full'));
+      await writeFile(path.join(projectRoot, '.spec', 'specs', 'legacy-full', 'notes.md'), 'keep');
+      await expect(workflow.initializeFeature({ projectRoot, featureName: 'legacy-full', description: 'Refuse', language: 'en' }))
+        .rejects.toThrow('Feature already exists: legacy-full');
+    });
+  });
 
   async function submitAndApproveRequirements(): Promise<void> {
     const submitted = await workflow.submitPhaseArtifact({

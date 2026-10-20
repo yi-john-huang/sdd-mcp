@@ -11,7 +11,7 @@ The user invokes this Skill; all MCP calls below are internal. Never ask the use
 ## Resolve and Restore
 
 1. Internally read status before doing method work.
-2. With a supplied missing feature, internally initialize it from the user's name and complete goal. If clarification is required, present the structured questions, collect answers, and retry initialization. Use the returned canonical feature name.
+2. With a supplied missing feature, internally initialize it from the user's name and complete goal. If clarification is required, present the structured questions, collect answers, and retry initialization. Use the canonical feature name.
 3. With no supplied name: ask for a name and goal when no feature exists; resume the sole incomplete feature; when several are incomplete, list them and ask the user to select. Never infer identity from process memory.
 4. Load compact approved context. For a failed or unapproved requirements revision, load that draft only with full mode and explicit unapproved inclusion.
 5. If status reports an observed artifact identity for an orphan or manual edit, read that exact requirements file before revising. Never acknowledge its hash without inspecting and deliberately incorporating or replacing its content.
@@ -25,14 +25,14 @@ If durable state reports a conflict or host permission failure, present an actio
    - `**Objective:** ...`
    - `**EARS Specification:** ... SHALL ...`
    - `**Acceptance Criteria:** 1. ...` with at least one numbered item on the same line.
-3. Replace ambiguous words with observable bounds. Include security, privacy, accessibility, compatibility, errors, and performance only when relevant.
-4. Check completeness, consistency, feasibility, traceability, and testability; run gap analysis internally when existing code is in scope.
+3. Replace ambiguous words with observable bounds. Add security, privacy, accessibility, compatibility, errors, and performance only when relevant.
+4. Check completeness, consistency, feasibility, traceability, and testability; run gap analysis when existing code is in scope.
 
-Internally submit the complete Markdown with the exact revision and artifact identity last observed. Submission, not direct file editing, is the canonical write. Present the saved path and a concise validation result. A failed validation is a durable draft: revise it using the observed draft content and identity; do not request approval.
+Internally submit the complete Markdown with the exact revision and artifact identity last observed. Submission, not direct file editing, is the canonical write. Present the saved path and validation result. A failed validation is a durable draft: revise it using the observed draft and identity; do not request approval.
 
 ## Human Gate
 
-When validation passes, ask one explicit question: **“Approve these requirements?”** Only an unambiguous affirmative answer in this Skill flow permits the internal approval call for the exact reviewed revision and artifact. Never self-approve or treat host tool permission as approval. After approval, reread status and report the persisted outcome.
+When validation passes, internally run the JEV `requirements` check and show its line, if any; it never affects approval. Then ask one explicit question: **“Approve these requirements?”** Only an unambiguous affirmative answer in this Skill flow permits the internal approval call for the exact reviewed revision and artifact. Never self-approve or treat host tool permission as approval. After approval, reread status and report the persisted outcome.
 
 ## Specialist Delegation
 
@@ -40,7 +40,7 @@ Target renderers provide the `planner` route. When a native advisor is required,
 
 ## Output
 
-Return the canonical saved path, key scope decisions, concise validation evidence, the approval question or persisted approval, and durable blockers. Do not present raw MCP operations as next steps. Execution report: mode (inline|project-agent; asked|reused|not offered), agents started and whether parallel, configured model/effort per agent (never claim unobserved values), and any fallback to the parent.
+Return the canonical saved path, scope decisions, validation evidence, the approval question or persisted approval, and durable blockers. Do not present raw MCP operations as next steps. Execution report: mode (inline|project-agent; asked|reused|not offered), agents started and whether parallel, configured model/effort per agent (never claim unobserved values), and any fallback to the parent.
 
 ## Optional Reference
 

@@ -7,6 +7,35 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [5.5.0] - 2026-10-20
+
+### Added
+- Add opt-in, advisory JEV checks that call the TypeSafe Jev decision API. They judge requirements testability, design-to-requirement fidelity, planned test cases, RED validity, security finding triage, and coding-principle adherence. JEV is off by default. It needs `SDD_JEV_ENABLED` (or `.spec/sdd-config.json`) and `SDD_JEV_API_KEY`. Code excerpts need the separate `SDD_JEV_ALLOW_CODE`.
+- Add the `sdd-jev-check` MCP tool, the 17th tool. It never changes `spec.json`, approval, validation, or the next action. Results are saved as sidecar files bound to the artifact revision and SHA-256.
+- Add a local RED classifier. It flags setup failures such as `Cannot find module` and `TS2304` without any request.
+- Redact secrets from every JEV request, bound excerpts to 15 lines around a finding and 8 KB per request, and never send `.env*` files, keys, lockfiles, or generated output.
+- Add an optional `baseRef` input to the `security` and `principles` checks of `sdd-jev-check`. A PR or branch review can now judge already-committed changes: the change set is everything that differs between the merge base of `baseRef` and `HEAD`, and the working tree. `baseRef` is validated before any Git command runs and resolved with read-only Git (`--end-of-options`, Git 2.30 or later). A bad ref gives a `skipped` result with the reason `invalid-base-ref`. Without `baseRef`, behavior is unchanged.
+- Committed-range results are saved as `jev-review-<kind>-range-<hash>.json`, bound to the merge-base commit, the `HEAD` commit, and the diff hash. `sdd-commit` still matches staged diffs only.
+
+### Changed
+- The tool contract grows from 16 to 17 tools. The 16 existing tools keep their inputs and outputs.
+- Seven Skills (`sdd-requirements`, `sdd-design`, `sdd-tasks`, `sdd-implement`, `sdd-review`, `sdd-security-check`, `sdd-commit`) show at most one JEV line. `sdd-commit` only reads a saved sidecar.
+- `sdd-security-check` and the `security-auditor` agent now forbid contact with the audited target or its systems. The agent still has no network access. Only the parent may make the opt-in JEV triage call.
+- The installer git-ignores code-review sidecars (`.spec/reviews/` and `jev-review-*`).
+- `.claude-plugin/plugin.json` now lists `sdd-review-test-cases` and `sdd-jev-check`.
+- JEV score answers are zero-based only: an integer from 0 to the index of the last level. Any other value is `invalid-response`. Sidecars no longer record a score base. The question-set version is now 3, so JEV ignores sidecars saved by earlier versions.
+- `sdd-review` and `sdd-security-check` pass the PR or branch base as `baseRef` when they run the JEV code checks.
+
+### Fixed
+- `sdd-status`, `sdd-context-load`, and other reads of a missing feature no longer create an empty `.spec/specs/<feature>/` folder. They report `Feature metadata not found` as before.
+- `sdd-init` now accepts an empty feature folder left behind by earlier versions. It still rejects a folder that contains files with `Feature already exists`.
+
+- `sdd-jev-check` no longer reports `unavailable (invalid-response)` against the real TypeSafe Jev API (model `jev-1.13.0`). The response validator now accepts the real answer shape: `type`, `confidence`, `legend`, `probabilities`, and unknown extra fields. A `type` that differs from the question type, a `legend` with a different number of levels, a `choice` outside the question labels, and a `noul` outside 0 to 1 are still `invalid-response`.
+- A score level is now the highest-probability entry of `probabilities` (ties go to the lowest index) when that object is valid, and `round(score)` otherwise. The level must stay within 0 to the last level index. The raw fractional score is kept, and sidecars accept it. The question-set version stays 3 and the sidecar schema stays 1, because the questions and the stored fields do not change.
+
+### Documentation
+- Add the Optional JEV advisory section to `docs/WORKFLOW.md`. Update the tool count in the README and `ARCHITECTURE.md`.
+
 ## [5.4.0] - 2026-10-04
 
 ### Added

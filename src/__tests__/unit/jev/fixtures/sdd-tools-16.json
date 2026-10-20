@@ -1,0 +1,606 @@
+[
+  {
+    "name": "sdd-init",
+    "description": "Initialize a governed SDD feature",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "featureName": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{0,79}$",
+          "description": "Feature name under .spec/specs"
+        },
+        "description": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 20000
+        },
+        "language": {
+          "type": "string",
+          "enum": [
+            "en",
+            "ja",
+            "zh-TW"
+          ]
+        },
+        "clarificationAnswers": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "string"
+          }
+        }
+      },
+      "required": [
+        "featureName",
+        "description"
+      ],
+      "additionalProperties": false
+    }
+  },
+  {
+    "name": "sdd-requirements",
+    "description": "Submit requirements artifact",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "featureName": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{0,79}$",
+          "description": "Feature name under .spec/specs"
+        },
+        "content": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 1048576
+        },
+        "expectedRevision": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "expectedArtifactSha256": {
+          "oneOf": [
+            {
+              "type": "null"
+            },
+            {
+              "type": "string",
+              "pattern": "^[a-f0-9]{64}$"
+            }
+          ]
+        }
+      },
+      "required": [
+        "featureName",
+        "content",
+        "expectedRevision",
+        "expectedArtifactSha256"
+      ],
+      "additionalProperties": false
+    }
+  },
+  {
+    "name": "sdd-design",
+    "description": "Submit design artifact",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "featureName": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{0,79}$",
+          "description": "Feature name under .spec/specs"
+        },
+        "content": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 1048576
+        },
+        "expectedRevision": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "expectedArtifactSha256": {
+          "oneOf": [
+            {
+              "type": "null"
+            },
+            {
+              "type": "string",
+              "pattern": "^[a-f0-9]{64}$"
+            }
+          ]
+        }
+      },
+      "required": [
+        "featureName",
+        "content",
+        "expectedRevision",
+        "expectedArtifactSha256"
+      ],
+      "additionalProperties": false
+    }
+  },
+  {
+    "name": "sdd-tasks",
+    "description": "Submit implementation tasks artifact",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "featureName": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{0,79}$",
+          "description": "Feature name under .spec/specs"
+        },
+        "content": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 1048576
+        },
+        "expectedRevision": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "expectedArtifactSha256": {
+          "oneOf": [
+            {
+              "type": "null"
+            },
+            {
+              "type": "string",
+              "pattern": "^[a-f0-9]{64}$"
+            }
+          ]
+        },
+        "reviewTestCases": {
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "featureName",
+        "content",
+        "expectedRevision",
+        "expectedArtifactSha256",
+        "reviewTestCases"
+      ],
+      "additionalProperties": false
+    }
+  },
+  {
+    "name": "sdd-implement",
+    "description": "Begin implementation of approved tasks",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "featureName": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{0,79}$",
+          "description": "Feature name under .spec/specs"
+        }
+      },
+      "required": [
+        "featureName"
+      ],
+      "additionalProperties": false
+    }
+  },
+  {
+    "name": "sdd-status",
+    "description": "Get one feature status or list all features",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "featureName": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{0,79}$",
+          "description": "Feature name under .spec/specs"
+        }
+      },
+      "additionalProperties": false
+    }
+  },
+  {
+    "name": "sdd-approve",
+    "description": "Approve an exact validated phase revision",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "featureName": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{0,79}$",
+          "description": "Feature name under .spec/specs"
+        },
+        "phase": {
+          "type": "string",
+          "enum": [
+            "requirements",
+            "design",
+            "tasks"
+          ]
+        },
+        "expectedRevision": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "expectedArtifactSha256": {
+          "type": "string",
+          "pattern": "^[a-f0-9]{64}$"
+        }
+      },
+      "required": [
+        "featureName",
+        "phase",
+        "expectedRevision",
+        "expectedArtifactSha256"
+      ],
+      "additionalProperties": false
+    }
+  },
+  {
+    "name": "sdd-review-test-cases",
+    "description": "Record review for an exact tasks revision",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "featureName": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{0,79}$",
+          "description": "Feature name under .spec/specs"
+        },
+        "expectedTasksRevision": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "expectedArtifactSha256": {
+          "type": "string",
+          "pattern": "^[a-f0-9]{64}$"
+        }
+      },
+      "required": [
+        "featureName",
+        "expectedTasksRevision",
+        "expectedArtifactSha256"
+      ],
+      "additionalProperties": false
+    }
+  },
+  {
+    "name": "sdd-quality-check",
+    "description": "Perform code quality analysis",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "code": {
+          "type": "string"
+        },
+        "language": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "code"
+      ],
+      "additionalProperties": false
+    }
+  },
+  {
+    "name": "sdd-context-load",
+    "description": "Load phase-aware governed context",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "featureName": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{0,79}$",
+          "description": "Feature name under .spec/specs"
+        },
+        "mode": {
+          "type": "string",
+          "enum": [
+            "compact",
+            "standard",
+            "full"
+          ]
+        },
+        "phase": {
+          "type": "string",
+          "enum": [
+            "requirements",
+            "design",
+            "tasks",
+            "implementation"
+          ]
+        },
+        "maxEstimatedTokens": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "ifNoneMatch": {
+          "type": "string"
+        },
+        "includeUnapproved": {
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "featureName"
+      ],
+      "additionalProperties": false,
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "includeUnapproved": {
+                "const": true
+              }
+            },
+            "required": [
+              "includeUnapproved"
+            ]
+          },
+          "then": {
+            "properties": {
+              "mode": {
+                "const": "full"
+              }
+            },
+            "required": [
+              "mode"
+            ]
+          }
+        }
+      ]
+    }
+  },
+  {
+    "name": "sdd-template-render",
+    "description": "Render an optional SDD scaffold",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "featureName": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{0,79}$",
+          "description": "Feature name under .spec/specs"
+        },
+        "templateType": {
+          "type": "string",
+          "enum": [
+            "requirements",
+            "design",
+            "tasks"
+          ]
+        },
+        "customTemplate": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "featureName",
+        "templateType"
+      ],
+      "additionalProperties": false
+    }
+  },
+  {
+    "name": "sdd-steering",
+    "description": "Create or update project steering documents",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "updateMode": {
+          "type": "string",
+          "enum": [
+            "create",
+            "update"
+          ]
+        }
+      },
+      "additionalProperties": false
+    }
+  },
+  {
+    "name": "sdd-steering-custom",
+    "description": "Create a custom steering document",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "fileName": {
+          "type": "string"
+        },
+        "topic": {
+          "type": "string"
+        },
+        "inclusionMode": {
+          "type": "string",
+          "enum": [
+            "always",
+            "conditional",
+            "manual"
+          ]
+        },
+        "filePattern": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "fileName",
+        "topic",
+        "inclusionMode"
+      ],
+      "additionalProperties": false
+    }
+  },
+  {
+    "name": "sdd-validate-design",
+    "description": "Validate design artifact",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "featureName": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{0,79}$",
+          "description": "Feature name under .spec/specs"
+        }
+      },
+      "required": [
+        "featureName"
+      ],
+      "additionalProperties": false
+    }
+  },
+  {
+    "name": "sdd-validate-gap",
+    "description": "Analyze the implementation gap",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "featureName": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{0,79}$",
+          "description": "Feature name under .spec/specs"
+        }
+      },
+      "required": [
+        "featureName"
+      ],
+      "additionalProperties": false
+    }
+  },
+  {
+    "name": "sdd-spec-impl",
+    "description": "Record governed implementation task progress",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "featureName": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{0,79}$",
+          "description": "Feature name under .spec/specs"
+        },
+        "taskNumber": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 50,
+          "pattern": "^\\d+(?:\\.\\d+)*$"
+        },
+        "action": {
+          "type": "string",
+          "enum": [
+            "start",
+            "record-red",
+            "record-green",
+            "complete",
+            "block"
+          ]
+        },
+        "expectedRevision": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "evidence": {
+          "type": "object",
+          "properties": {
+            "command": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 500
+            },
+            "exitCode": {
+              "type": "integer"
+            },
+            "summary": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 2000
+            }
+          },
+          "required": [
+            "command",
+            "exitCode",
+            "summary"
+          ],
+          "additionalProperties": false
+        },
+        "affectedArtifacts": {
+          "type": "array",
+          "maxItems": 100,
+          "uniqueItems": true,
+          "items": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 500,
+            "pattern": "^(?![/\\\\])(?![A-Za-z]:)(?!.*(?:^|[/\\\\])\\.\\.(?:[/\\\\]|$))(?!.*\\u0000).+$"
+          }
+        },
+        "blocker": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 2000
+        }
+      },
+      "required": [
+        "featureName",
+        "taskNumber",
+        "action",
+        "expectedRevision"
+      ],
+      "additionalProperties": false,
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "action": {
+                "enum": [
+                  "record-red",
+                  "record-green",
+                  "complete"
+                ]
+              }
+            },
+            "required": [
+              "action"
+            ]
+          },
+          "then": {
+            "required": [
+              "evidence"
+            ]
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "action": {
+                "const": "complete"
+              }
+            },
+            "required": [
+              "action"
+            ]
+          },
+          "then": {
+            "required": [
+              "affectedArtifacts"
+            ]
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "action": {
+                "const": "block"
+              }
+            },
+            "required": [
+              "action"
+            ]
+          },
+          "then": {
+            "required": [
+              "blocker"
+            ]
+          }
+        }
+      ]
+    }
+  }
+]

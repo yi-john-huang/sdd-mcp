@@ -1,5 +1,6 @@
 import * as fs from 'fs';
 import * as path from 'path';
+import { SDD_TOOL_NAMES } from '../../../infrastructure/mcp/sddToolDefinitions';
 
 function read(relativePath: string): string {
   return fs.readFileSync(path.resolve(process.cwd(), relativePath), 'utf8');
@@ -83,5 +84,96 @@ describe('target-aware documentation consistency', () => {
 
     expect(Array.isArray(packageJson.files)).toBe(true);
     expect(packageJson.files).toContain('CHANGELOG.md');
+  });
+});
+
+describe('documented MCP tool contract', () => {
+  const names: readonly string[] = SDD_TOOL_NAMES;
+  const inventoryDocs = ['README.md', 'docs/WORKFLOW.md', 'ARCHITECTURE.md'];
+
+  it('has 17 tools and ends with the JEV tool', () => {
+    expect(names).toHaveLength(17);
+    expect(names[16]).toBe('sdd-jev-check');
+  });
+
+  it.each(inventoryDocs)('%s names every defined tool', (file) => {
+    const content = read(file);
+    for (const name of names) expect(content).toContain(`\`${name}\``);
+  });
+
+  it.each(inventoryDocs)('%s states 17 tools and no stale 16-tool inventory', (file) => {
+    const content = read(file);
+    expect(content).toMatch(/\b17\b[- ]tools?|exactly 17 tools|same 17 tools/);
+    expect(content).not.toMatch(/\b16[- ]tools?\b|exactly 16 tools|same 16 tools/);
+  });
+
+  it('lists exactly the defined tools in the Claude plugin manifest', () => {
+    const manifest = JSON.parse(read('.claude-plugin/plugin.json')) as { tools: Array<{ name: string }> };
+    const listed = manifest.tools.map(({ name }) => name);
+    expect(new Set(listed)).toEqual(new Set(names));
+    expect(listed).toHaveLength(names.length);
+  });
+});
+
+describe('documented JEV advisory feature', () => {
+  const workflow = read('docs/WORKFLOW.md');
+
+  it('documents the settings, key, code opt-in, timeout, and project setting', () => {
+    expect(workflow).toContain('Optional JEV advisory');
+    for (const setting of ['SDD_JEV_ENABLED', 'SDD_JEV_API_KEY', 'SDD_JEV_ALLOW_CODE', 'SDD_JEV_TIMEOUT_MS', '.spec/sdd-config.json']) {
+      expect(workflow).toContain(setting);
+    }
+    expect(workflow).toMatch(/environment variable wins|env(?:ironment)? .{0,30}wins/i);
+  });
+
+  it('documents the data sent, the sidecars, and the ignore policy', () => {
+    expect(workflow).toMatch(/redact/i);
+    expect(workflow).toMatch(/8 ?KB|8,192/);
+    expect(workflow).toContain('.spec/reviews/');
+    expect(workflow).toContain('jev-review-');
+    expect(workflow).toMatch(/jev-requirements|spec-phase sidecars?/i);
+    expect(workflow).toMatch(/git-?ignored?/i);
+  });
+
+  it('documents every reason code', () => {
+    for (const reason of ['disabled', 'no-key', 'network', 'timeout', 'http-', 'invalid-response', 'code-disabled']) {
+      expect(workflow).toContain(reason);
+    }
+    expect(workflow).toContain('JEV: unavailable (');
+  });
+
+  it('states that JEV is advisory and never changes approval or spec.json', () => {
+    expect(workflow).toMatch(/never (?:changes|affects) approval/i);
+    expect(workflow).toMatch(/never (?:changes|writes)[^.]{0,60}spec\.json|spec\.json[^.]{0,60}unchanged/i);
+  });
+
+  it('records the feature in the changelog under Unreleased', () => {
+    const unreleased = read('CHANGELOG.md').split('## [5.4.0]')[0]!;
+    expect(unreleased).toMatch(/JEV/);
+    expect(unreleased).toContain('sdd-jev-check');
+  });
+
+  it('documents reviewing committed branch changes with baseRef', () => {
+    expect(workflow).toContain('`baseRef`');
+    expect(workflow).toContain('invalid-base-ref');
+    expect(workflow).toMatch(/Git 2\.30/);
+    expect(workflow).toMatch(/merge base/i);
+    expect(workflow).toContain('-range-');
+    expect(workflow).toMatch(/staged (?:diffs?|changes) only|only (?:the )?staged/i);
+    expect(workflow).toMatch(/`--end-of-options`/);
+  });
+
+  it('documents the zero-based score scale and never a fallback', () => {
+    expect(workflow).toMatch(/zero-based/i);
+    expect(workflow).toMatch(/0 (?:to|through) (?:the )?(?:last|highest) level|integer from 0/i);
+    expect(workflow).not.toMatch(/one-based|1-based|inferred/i);
+  });
+
+  it('records baseRef and the zero-based scale in the changelog under Unreleased', () => {
+    const unreleased = read('CHANGELOG.md').split('## [5.4.0]')[0]!;
+    expect(unreleased).toContain('`baseRef`');
+    expect(unreleased).toMatch(/zero-based/i);
+    expect(unreleased).not.toMatch(/one-based|1-based|inferred/i);
+    expect(read('README.md')).toContain('`baseRef`');
   });
 });

@@ -18,7 +18,7 @@ export interface FileSystemPort {
   exists(path: string): Promise<boolean>;
   mkdir(path: string): Promise<void>;
   readdir(path: string): Promise<string[]>;
-  stat(path: string): Promise<{ isFile(): boolean; isDirectory(): boolean }>;
+  stat(path: string): Promise<{ isFile(): boolean; isDirectory(): boolean; size?: number }>;
   realpath?(path: string): Promise<string>;
   unlink?(path: string): Promise<void>;
 }
@@ -56,6 +56,44 @@ export interface QualityAnalyzer {
   analyzeDataStructure(structure: object): Promise<QualityReport>;
   checkComplexity(code: string): Promise<number>;
   detectSpecialCases(code: string): Promise<string[]>;
+}
+
+/** The only JEV endpoint. No setting, env var, or argument may change it. */
+export const JEV_DECIDE_URL = 'https://jevtypesafeai.com/api/v1/decide';
+
+export interface JevHttpRequest {
+  url: string;
+  body: string;
+  headers: Readonly<Record<string, string>>;
+  timeoutMs: number;
+  maxResponseBytes: number;
+}
+
+export interface JevHttpResponse {
+  status: number;
+  body: string;
+}
+
+export type JevTransportErrorKind = 'network' | 'timeout' | 'too-large';
+
+/** Carries only a kind; never the underlying message, which could echo request headers. */
+export class JevTransportError extends Error {
+  constructor(readonly kind: JevTransportErrorKind) {
+    super(`JEV transport failure: ${kind}`);
+    this.name = 'JevTransportError';
+  }
+}
+
+export interface JevHttpPort {
+  /** One POST, no retry, no redirect following. Rejects only with JevTransportError. */
+  post(request: JevHttpRequest): Promise<JevHttpResponse>;
+}
+
+export type GitResult = { ok: true; stdout: Buffer } | { ok: false };
+
+export interface GitPort {
+  /** Runs one read-only git command without a shell, with optional stdin. Never rejects. */
+  run(args: readonly string[], cwd: string, input?: Buffer): Promise<GitResult>;
 }
 
 export interface TaskTracker {

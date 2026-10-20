@@ -12,6 +12,8 @@ import { RequirementsClarificationService } from "../../application/services/Req
 import type { ContextLoadMode } from "../../application/services/ContextCompactionService.js";
 import { WorkflowEngineService } from "../../application/services/WorkflowEngineService.js";
 import { GovernanceError } from "../../application/services/WorkflowErrors.js";
+import type { JevAdvisoryService } from "../../application/services/JevAdvisoryService.js";
+import type { JevCheckKind, JevCheckRequest } from "../../application/services/JevCheckTypes.js";
 import { LoggerPort } from "../../domain/ports.js";
 import { Project, ClarificationAnswers } from "../../domain/types.js";
 import { ensureStaticSteeringDocuments } from "../../application/services/staticSteering.js";
@@ -45,6 +47,8 @@ export class SDDToolAdapter {
     @inject(TYPES.WorkflowEngineService)
     private readonly workflowEngineService: WorkflowEngineService,
     @inject(TYPES.LoggerPort) private readonly logger: LoggerPort,
+    @inject(TYPES.JevAdvisoryService)
+    private readonly jevService: JevAdvisoryService,
   ) { }
 
   private resolveWorkspaceRoot(): string {
@@ -69,6 +73,7 @@ export class SDDToolAdapter {
       "sdd-validate-design": this.handleValidateDesign.bind(this),
       "sdd-validate-gap": this.handleValidateGap.bind(this),
       "sdd-spec-impl": this.handleSpecImplementation.bind(this),
+      "sdd-jev-check": this.handleJevCheck.bind(this),
     };
 
     return SDD_TOOL_DEFINITIONS.map((tool) => ({
@@ -316,6 +321,22 @@ export class SDDToolAdapter {
     });
   }
 
+
+  /** Advisory only: the service never throws and never touches workflow state. */
+  private async handleJevCheck(args: Record<string, unknown>): Promise<unknown> {
+    return this.jevService.check({
+      check: args.check as JevCheckKind,
+      projectRoot: this.resolveWorkspaceRoot(),
+      featureName: args.featureName as string | undefined,
+      cases: args.cases as JevCheckRequest["cases"],
+      taskNumber: args.taskNumber as string | undefined,
+      testName: args.testName as string | undefined,
+      evidence: args.evidence as JevCheckRequest["evidence"],
+      findings: args.findings as JevCheckRequest["findings"],
+      units: args.units as JevCheckRequest["units"],
+      baseRef: args.baseRef as string | undefined,
+    });
+  }
 
   private async handleSteering(args: Record<string, unknown>): Promise<string> {
     const { updateMode = "update" } = args;

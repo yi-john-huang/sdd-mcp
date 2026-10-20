@@ -53,6 +53,12 @@ docker-compose up -d --scale sdd-mcp-server=3
 | `HOOK_TIMEOUT` | Hook execution timeout (ms) | `5000` | `10000` |
 | `REDIS_URL` | Redis connection URL | - | `redis://localhost:6379` |
 | `DATABASE_URL` | Database connection URL | - | `postgres://user:pass@host:5432/db` |
+| `SDD_JEV_ENABLED` | Enables the optional JEV advisory (`1`, `true`, `yes`, or `on`). Any other value disables it. Wins over `.spec/sdd-config.json` `{"jev":{"enabled":true}}` | unset (off) | `true` |
+| `SDD_JEV_API_KEY` | JEV API key. Read only from this variable | - | - |
+| `SDD_JEV_ALLOW_CODE` | Lets JEV send bounded code excerpts (same values as `SDD_JEV_ENABLED`) | unset (off) | `true` |
+| `SDD_JEV_TIMEOUT_MS` | JEV request timeout (ms), limited to 1000–15000 | `5000` | `8000` |
+
+See [Optional JEV advisory](docs/WORKFLOW.md#optional-jev-advisory).
 
 ### Advanced Configuration
 
