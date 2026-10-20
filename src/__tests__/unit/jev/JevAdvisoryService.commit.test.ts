@@ -80,6 +80,16 @@ describe('JevAdvisoryService commit lookup', () => {
       git('add', '-A');
       expect((await service(REVIEW_ENV).check(commitRequest())).line).toBe(WARNING(1));
     });
+
+    it('keeps the warning when a later unavailable run shares the sidecar path', async () => {
+      await review([finding('F1', 1)], confirmedHigh('F1'));
+      const later = await service({ SDD_JEV_ENABLED: '1', SDD_JEV_API_KEY: TEST_KEY }).check({
+        check: 'security', projectRoot: project.root, featureName: 'demo', findings: [finding('F1', 1)],
+      });
+      expect(later).toMatchObject({ status: 'unavailable', reason: 'code-disabled', persisted: false });
+      git('add', '-A');
+      expect((await service(COMMIT_ENV).check(commitRequest())).line).toBe(WARNING(1));
+    });
   });
 
   describe('no warning', () => {

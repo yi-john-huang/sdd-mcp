@@ -131,6 +131,40 @@ describe('JevSidecarStore', () => {
     });
   });
 
+  describe('answered vs unavailable replacement', () => {
+    const timeout = (): JevSidecar => sidecar({ status: 'unavailable', reason: 'timeout', answers: undefined, scoreBase: undefined });
+    const readStored = async (): Promise<JevSidecar> => JSON.parse(await readFile(path.join(reviewDir(), 'jev-requirements-r3.json'), 'utf8')) as JevSidecar;
+
+    it('does not replace an answered sidecar with an unavailable one', async () => {
+      await store.write(root, feature, sidecar());
+      const result = await store.write(root, feature, timeout());
+      expect(result).toEqual({ persisted: false });
+      const stored = await readStored();
+      expect(stored.status).toBe('answered');
+      expect(stored.answers?.['FR-1.ambiguity']).toEqual({ type: 'choice', choice: 'bounded' });
+    });
+
+    it('replaces an answered sidecar with a newer answered result', async () => {
+      await store.write(root, feature, sidecar());
+      const newer = sidecar({
+        answers: { 'FR-1.testability': { type: 'score', raw: 0, index: 0 }, 'FR-1.ambiguity': { type: 'choice', choice: 'unbounded' } },
+      });
+      const result = await store.write(root, feature, newer);
+      expect(result.persisted).toBe(true);
+      expect((await readStored()).answers?.['FR-1.ambiguity']).toEqual({ type: 'choice', choice: 'unbounded' });
+    });
+
+    it('replaces an unavailable sidecar with an answered result', async () => {
+      await store.write(root, feature, timeout());
+      expect((await readStored()).status).toBe('unavailable');
+      const result = await store.write(root, feature, sidecar());
+      expect(result.persisted).toBe(true);
+      const stored = await readStored();
+      expect(stored.status).toBe('answered');
+      expect(stored.answers?.['FR-1.ambiguity']).toEqual({ type: 'choice', choice: 'bounded' });
+    });
+  });
+
   describe('matching reads', () => {
     it('returns an answered sidecar whose binding is identical', async () => {
       await store.write(root, feature, sidecar());

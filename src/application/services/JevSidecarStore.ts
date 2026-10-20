@@ -174,9 +174,13 @@ export class JevSidecarStore {
         return { persisted: false };
       }
       await this.contain(root, dir);
-      const file = path.join(dir, this.fileNameFor(sidecar.kind, sidecar.binding, taskNumber));
+      const fileName = this.fileNameFor(sidecar.kind, sidecar.binding, taskNumber);
+      const file = path.join(dir, fileName);
       const content = `${JSON.stringify(toStored(sidecar), null, 2)}\n`;
       if (Buffer.byteLength(content, 'utf8') > MAX_SIDECAR_BYTES) return { persisted: false };
+      if (sidecar.status === 'unavailable' && (await this.readAnswered(projectRoot, featureName, sidecar.kind, fileName))) {
+        return { persisted: false };
+      }
       await this.fileSystem.mkdir(dir);
       await this.contain(root, dir);
       await this.contain(root, file);
