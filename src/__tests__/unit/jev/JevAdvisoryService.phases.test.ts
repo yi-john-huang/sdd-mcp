@@ -97,6 +97,15 @@ describe('JevAdvisoryService requirements and design checks', () => {
       expect(await readAllFiles(reviewDir())).not.toContain(secret);
     });
 
+    it('does not send a partial secret that sits across the field clip boundary', async () => {
+      const secret = 'AKIAIOSFODNN7EXAMPLE';
+      await project.submit('requirements', FIXTURE_REQUIREMENTS.replace('Complete checkout', `${' '.repeat(1490)}${secret}`));
+      const result = await service().check(request('requirements'));
+      expect(http.calls[0]!.body).not.toContain('AKIA');
+      expect(http.calls[0]!.body).not.toContain(secret.slice(0, 10));
+      expect(result.redactions).toBeGreaterThanOrEqual(1);
+    });
+
     it('truncates by whole sections beyond 32768 bytes and records the omitted ids', async () => {
       const section = (n: number): string => [
         `### FR-${n}: Requirement ${n}`,

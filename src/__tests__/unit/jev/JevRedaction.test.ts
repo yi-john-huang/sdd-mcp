@@ -1,4 +1,4 @@
-import { redactSecrets, redactState } from '../../../application/services/JevRedaction';
+import { redactSecrets, redactState, redactThenClip } from '../../../application/services/JevRedaction';
 
 const PEM = '-----BEGIN RSA PRIVATE KEY-----\nMIIEowIBAAKCAQEA1234567890abcdef\n-----END RSA PRIVATE KEY-----';
 
@@ -28,6 +28,10 @@ describe('redactSecrets', () => {
     ['password=P@ssw0rd!', 'password', 'P@ssw0rd!'],
     ['passwd = "letmein99"', 'passwd', 'letmein99'],
     ['DB_PASSWORD=supersecretvalue', 'DB_PASSWORD', 'supersecretvalue'],
+    ['{"client_secret": "abc-secret-value"}', 'client_secret', 'abc-secret-value'],
+    ['{"api_key": "sk_live_quoted_key"}', 'api_key', 'sk_live_quoted_key'],
+    ["{'password': 'hunter2hunter2'}", 'password', 'hunter2hunter2'],
+    ['{"token": "tok_value_123"}', 'token', 'tok_value_123'],
   ])('redacts the value of assignment %p and keeps the name', (input, name, secret) => {
     const result = redactSecrets(input);
     expect(result.text).not.toContain(secret);
@@ -61,6 +65,7 @@ describe('redactSecrets', () => {
     const inputs = [
       'a'.repeat(100_000),
       'token='.repeat(16_000),
+      '"token":'.repeat(12_000),
       `-----BEGIN PRIVATE KEY-----${'x'.repeat(100_000)}`,
       `eyJ${'a'.repeat(100_000)}`,
       `Bearer ${'a'.repeat(100_000)}`,
@@ -71,6 +76,26 @@ describe('redactSecrets', () => {
       redactSecrets(input);
       expect(Date.now() - started).toBeLessThan(200);
     }
+  });
+});
+
+describe('redactThenClip', () => {
+  it('redacts an AWS key before clipping so a partial key is not sent', () => {
+    const secret = 'AKIAIOSFODNN7EXAMPLE';
+    const input = `${' '.repeat(1490)}${secret}`;
+    const result = redactThenClip(input, 1500);
+    expect(result.text).not.toContain('AKIA');
+    expect(result.text).not.toContain(secret.slice(0, 10));
+    expect(result.count).toBe(1);
+  });
+
+  it('redacts an assignment that straddles the clip boundary', () => {
+    const secret = 'supersecretvalue';
+    const input = `${' '.repeat(1480)}password=${secret}`;
+    const result = redactThenClip(input, 1500);
+    expect(result.text).not.toContain(secret);
+    expect(result.text).not.toContain(secret.slice(0, 8));
+    expect(result.count).toBe(1);
   });
 });
 

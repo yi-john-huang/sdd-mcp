@@ -1,6 +1,7 @@
 import { createHash } from 'node:crypto';
 import type { JevCase } from './JevCheckTypes.js';
 import { buildTestcaseQuestions } from './JevQuestionCatalog.js';
+import { redactThenClip } from './JevRedaction.js';
 import { fitState, type BuiltExchange } from './JevSpecState.js';
 import { metadata, parseList, parseSections, uniqueSections, visibleLines, type Section } from './WorkflowValidationService.js';
 import type { AdvisorySnapshot } from './WorkflowEngineService.js';
@@ -19,7 +20,11 @@ export interface TestcaseExchange extends BuiltExchange {
   caseListSha256: string;
 }
 
-const clip = (value: string | undefined, limit = FIELD_LIMIT): string => (value ?? '').slice(0, limit);
+function clip(value: string | undefined, limit: number, counts: { n: number }): string {
+  const result = redactThenClip(value, limit);
+  counts.n += result.count;
+  return result.text;
+}
 const sectionsOf = (content: string, heading: RegExp): Section[] =>
   uniqueSections(parseSections(visibleLines(content), heading).sections);
 
@@ -29,19 +34,21 @@ export function hashCaseList(cases: readonly JevCase[]): string {
   return createHash('sha256').update(JSON.stringify(canonical)).digest('hex');
 }
 
-const clipCase = (entry: JevCase): Record<string, string> => ({
+const clipCase = (entry: JevCase, counts: { n: number }): Record<string, string> => ({
   kind: entry.kind,
-  given: clip(entry.given, CASE_FIELD_LIMIT),
-  when: clip(entry.when, CASE_FIELD_LIMIT),
-  then: clip(entry.then, CASE_FIELD_LIMIT),
-  covers: clip(entry.covers, CASE_FIELD_LIMIT),
+  given: clip(entry.given, CASE_FIELD_LIMIT, counts),
+  when: clip(entry.when, CASE_FIELD_LIMIT, counts),
+  then: clip(entry.then, CASE_FIELD_LIMIT, counts),
+  covers: clip(entry.covers, CASE_FIELD_LIMIT, counts),
 });
 
 export function buildTestcaseExchange(snapshot: AdvisorySnapshot, cases: readonly JevCase[]): TestcaseExchange | undefined {
+  const counts = { n: 0 };
+  const bound = (value: string | undefined, limit = FIELD_LIMIT): string => clip(value, limit, counts);
   const requirements = new Map(sectionsOf(snapshot.requirementsContent ?? '', REQUIREMENT_HEADING)
-    .map((section) => [section.id, clip(metadata(section, 'EARS Specification'))] as const));
+    .map((section) => [section.id, bound(metadata(section, 'EARS Specification'))] as const));
   const decisions = new Map(sectionsOf(snapshot.designContent ?? '', DECISION_HEADING)
-    .map((section) => [section.id, clip(metadata(section, 'Decision'), 600)] as const));
+    .map((section) => [section.id, bound(metadata(section, 'Decision'), 600)] as const));
 
   const tasks = sectionsOf(snapshot.content, TASK_HEADING).map((section) => {
     const tdd = metadata(section, 'TDD') ?? '';
@@ -49,21 +56,21 @@ export function buildTestcaseExchange(snapshot: AdvisorySnapshot, cases: readonl
     return {
       section,
       notApplicable: tdd.startsWith('not-applicable'),
-      reason: clip(tdd.replace(/^not-applicable\s*—\s*/, ''), 500),
+      reason: bound(tdd.replace(/^not-applicable\s*—\s*/, ''), 500),
       covers,
     };
   });
   if (tasks.length === 0) return undefined;
 
   const items = tasks.map(({ section, notApplicable, reason, covers }) => {
-    const base = { id: section.id, title: clip(section.title, 300), acceptance: clip(metadata(section, 'Acceptance criteria')) };
+    const base = { id: section.id, title: bound(section.title, 300), acceptance: bound(metadata(section, 'Acceptance criteria')) };
     if (notApplicable) return { ...base, tddNotApplicable: true, reason };
     return {
       ...base,
       covers,
       coveredRequirements: covers.flatMap((id) => (requirements.has(id) ? [{ id, ears: requirements.get(id) }] : [])),
       coveredDecisions: covers.flatMap((id) => (decisions.has(id) ? [{ id, decision: decisions.get(id) }] : [])),
-      cases: cases.filter((entry) => entry.taskId === section.id).map(clipCase),
+      cases: cases.filter((entry) => entry.taskId === section.id).map((entry) => clipCase(entry, counts)),
     };
   });
 
@@ -80,7 +87,7 @@ export function buildTestcaseExchange(snapshot: AdvisorySnapshot, cases: readonl
     secondaryIds: [],
     omittedIds: fit.omittedIds,
     truncated: fit.truncated,
-    redactions: fit.redactions,
+    redactions: fit.redactions + counts.n,
     tasks: keptTasks,
     unknownTasks,
     caseListSha256: hashCaseList(cases),

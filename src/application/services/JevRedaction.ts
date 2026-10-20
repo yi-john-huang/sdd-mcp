@@ -23,7 +23,7 @@ const SECRET_PATTERNS: readonly SecretPattern[] = [
   { regex: /\beyJ[A-Za-z0-9_-]{5,}\.[A-Za-z0-9_-]{5,}\.[A-Za-z0-9_-]{5,}/g, replace: REDACTED },
   { regex: /\bBearer\s+[A-Za-z0-9._~+/=-]{8,}/g, replace: `Bearer ${REDACTED}` },
   {
-    regex: /(\b[\w.-]{0,40}(?:api[_-]?key|apikey|secret|token|passw(?:or)?d)[\w.-]{0,40}\s{0,3}[:=]\s{0,3})(?!\[REDACTED\])("[^"\n]{0,500}"|'[^'\n]{0,500}'|[^\s,;"']{1,500})/gi,
+    regex: /((?:"[\w.-]{0,40}(?:api[_-]?key|apikey|secret|token|passw(?:or)?d)[\w.-]{0,40}"|'[\w.-]{0,40}(?:api[_-]?key|apikey|secret|token|passw(?:or)?d)[\w.-]{0,40}'|\b[\w.-]{0,40}(?:api[_-]?key|apikey|secret|token|passw(?:or)?d)[\w.-]{0,40})\s{0,3}[:=]\s{0,3})(?!\[REDACTED\])("[^"\n]{0,500}"|'[^'\n]{0,500}'|[^\s,;"']{1,500})/gi,
     replace: (_match, prefix) => `${prefix}${REDACTED}`,
   },
 ];
@@ -41,6 +41,12 @@ export function redactSecrets(value: string): RedactionResult {
     });
   }
   return { text, count };
+}
+
+/** Redact secrets in the full string, then bound it. A secret that straddles the limit is not sent in part. */
+export function redactThenClip(value: string | undefined, limit: number): RedactionResult {
+  const result = redactSecrets(value ?? '');
+  return { text: result.text.slice(0, limit), count: result.count };
 }
 
 /** Redacts every string leaf of a JSON-like value without mutating the input. */

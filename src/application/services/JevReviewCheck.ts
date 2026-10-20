@@ -8,9 +8,14 @@ import { buildPrincipleQuestions, buildSecurityQuestions, QUESTION_SET_VERSION }
 import { flagSecurity, violatedPrinciples } from './JevReport.js';
 import { skippedResult } from './JevResults.js';
 import { fitState } from './JevSpecState.js';
+import { redactThenClip } from './JevRedaction.js';
 
 const TEXT_LIMIT = 1000;
-const clip = (value: string | undefined, limit = TEXT_LIMIT): string => (value ?? '').slice(0, limit);
+function clip(value: string | undefined, limit: number, counts: { n: number }): string {
+  const result = redactThenClip(value, limit);
+  counts.n += result.count;
+  return result.text;
+}
 const sha256 = (value: string): string => createHash('sha256').update(value).digest('hex');
 
 /** Hash of the findings or units the caller supplied, in caller order. */
@@ -37,9 +42,10 @@ export class JevReviewCheck {
 
     const excerpts = await buildExcerpts(request.projectRoot, inputs.map(({ id, path, line }) => ({ id, path, line })));
     const excerptOf = new Map(excerpts.items.map((entry) => [entry.id, entry]));
+    const counts = { n: 0 };
     const items = security
-      ? (inputs as JevFindingInput[]).map((entry) => this.findingItem(entry, excerptOf.get(entry.id)))
-      : (inputs as JevUnitInput[]).map((entry) => this.unitItem(entry, excerptOf.get(entry.id)));
+      ? (inputs as JevFindingInput[]).map((entry) => this.findingItem(entry, excerptOf.get(entry.id), counts))
+      : (inputs as JevUnitInput[]).map((entry) => this.unitItem(entry, excerptOf.get(entry.id), counts));
     const fit = fitState(security ? 'security' : 'principles', items, undefined);
     if (fit.keptIds.length === 0) return skippedResult(request.check, 'not-ready');
 
@@ -58,7 +64,7 @@ export class JevReviewCheck {
       questions: security ? buildSecurityQuestions(fit.keptIds) : buildPrincipleQuestions(fit.keptIds),
       omittedIds: fit.omittedIds,
       truncated: fit.truncated,
-      redactions: excerpts.redactions + fit.redactions,
+      redactions: excerpts.redactions + fit.redactions + counts.n,
       droppedFindingIds: excerpts.droppedFindingIds,
       interpret: (answers) => {
         const located = kept.map(({ id, path, line }) => ({ id, location: `${path}:${line}` }));
@@ -99,20 +105,21 @@ export class JevReviewCheck {
     return this.exchange.run(plan, context);
   }
 
-  private findingItem(entry: JevFindingInput, excerpt: ExcerptResult | undefined): Record<string, unknown> & { id: string } {
+  private findingItem(entry: JevFindingInput, excerpt: ExcerptResult | undefined, counts: { n: number }): Record<string, unknown> & { id: string } {
     return {
       id: entry.id,
       location: `${entry.path}:${entry.line}`,
-      title: clip(entry.title, 300),
+      title: clip(entry.title, 300, counts),
       severity: entry.severity,
-      description: clip(entry.description),
-      preconditions: clip(entry.preconditions),
-      remediation: clip(entry.remediation),
+      description: clip(entry.description, TEXT_LIMIT, counts),
+      preconditions: clip(entry.preconditions, TEXT_LIMIT, counts),
+      remediation: clip(entry.remediation, TEXT_LIMIT, counts),
       excerpt: excerpt?.excerpt ?? null,
     };
   }
 
-  private unitItem(entry: JevUnitInput, excerpt: ExcerptResult | undefined): Record<string, unknown> & { id: string } {
-    return { id: entry.id, location: `${entry.path}:${entry.line}`, summary: clip(entry.summary, 500), excerpt: excerpt?.excerpt ?? null };
+  private unitItem(entry: JevUnitInput, excerpt: ExcerptResult | undefined, counts: { n: number }): Record<string, unknown> & { id: string } {
+    return { id: entry.id, location: `${entry.path}:${entry.line}`, summary: clip(entry.summary, 500, counts), excerpt: excerpt?.excerpt ?? null };
   }
+
 }
