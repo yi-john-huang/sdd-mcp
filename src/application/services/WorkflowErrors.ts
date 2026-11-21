@@ -13,6 +13,10 @@ export type GovernanceErrorCode =
   | 'StateInvariantViolation'
   | 'LockTimeout'
   | 'LockCompromised'
+  | 'SelfReportedEvidenceRejected'
+  | 'EvidenceCommandNotAllowed'
+  | 'EvidenceRunTimedOut'
+  | 'EvidenceRunnerUnavailable'
   | 'InternalError';
 
 export class GovernanceError extends Error {
@@ -48,6 +52,10 @@ const PUBLIC_ERROR_CODES = new Set<string>([
   'StateInvariantViolation',
   'LockTimeout',
   'LockCompromised',
+  'SelfReportedEvidenceRejected',
+  'EvidenceCommandNotAllowed',
+  'EvidenceRunTimedOut',
+  'EvidenceRunnerUnavailable',
   'ContextBudgetTooSmall',
   'ContextBudgetExceeded',
   'ContextSourceError',

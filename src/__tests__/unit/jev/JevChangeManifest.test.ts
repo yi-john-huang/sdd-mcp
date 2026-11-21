@@ -38,7 +38,7 @@ beforeEach(() => {
   git('config', 'commit.gpgsign', 'false');
 });
 afterEach(() => {
-  fs.rmSync(repo, { recursive: true, force: true });
+  fs.rmSync(repo, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 });
 });
 
 const commitBase = (): void => {

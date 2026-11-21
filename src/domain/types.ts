@@ -78,11 +78,24 @@ export type TaskStatus =
   | 'blocked'
   | 'completed';
 
+/** `engine`: the server ran the command and observed the result. `caller`: the agent reported it. */
+export type EvidenceSource = 'engine' | 'caller';
+export type EvidenceClassification = 'setup' | 'assertion' | 'ambiguous';
+
 export interface ExecutionEvidence {
   readonly command: string;
   readonly exitCode: number;
   readonly summary: string;
   readonly observedAt: string;
+  /** Absent in entries written before verified evidence existed; read as `caller`. */
+  readonly source?: EvidenceSource;
+  readonly argv?: readonly string[];
+  readonly outputSha256?: string;
+  readonly durationMs?: number;
+  readonly outputExcerpt?: string;
+  readonly truncated?: boolean;
+  readonly redactions?: number;
+  readonly redClassification?: EvidenceClassification;
 }
 
 export interface ImplementationTaskState {

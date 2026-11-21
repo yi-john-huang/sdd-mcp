@@ -11,6 +11,8 @@
     "src/application/services/WorkflowEngineService.ts": {
       "codes": [
         "ArtifactDrift",
+        "EvidenceRunTimedOut",
+        "EvidenceRunnerUnavailable",
         "InvalidParams",
         "LegacyStateConflict",
         "LegacyTaskConflict",
@@ -18,12 +20,15 @@
         "PhaseValidationFailed",
         "RecoveryConflict",
         "RevisionConflict",
+        "SelfReportedEvidenceRejected",
         "StateInvariantViolation",
         "TaskDependencyIncomplete",
         "TaskTransitionInvalid"
       ],
       "numbers": {
         "ArtifactDrift": [],
+        "EvidenceRunTimedOut": [],
+        "EvidenceRunnerUnavailable": [],
         "InvalidParams": [
           "1",
           "1",
@@ -44,6 +49,7 @@
           "5"
         ],
         "RevisionConflict": [],
+        "SelfReportedEvidenceRejected": [],
         "StateInvariantViolation": [
           "5",
           "5",

@@ -32,7 +32,9 @@ The package separates four concerns:
 - **Presentation** (`src/index.ts`, `src/infrastructure/mcp/`, `src/adapters/cli/`): validates public schemas, adds the workspace root, and formats MCP responses.
 - **Application** (`src/application/services/`): coordinates workflow transitions, context selection, project initialization, templates, steering, and quality checks.
 - **Domain** (`src/domain/`): workflow entities, value objects, ports, and errors.
-- **Infrastructure** (`src/infrastructure/`): filesystem, persistence, MCP transport, template, validation, and atomic-write adapters.
+- **Infrastructure** (`src/infrastructure/`): filesystem, persistence, MCP transport, template, validation, process, and atomic-write adapters.
+
+Verified execution evidence runs through one seam: the domain `ProcessPort` (`src/domain/ports.ts`) is implemented by `NodeProcessAdapter` (`src/infrastructure/adapters/`), which spawns a program with no shell, a timeout, and a bounded capture. The application layer owns the rest: `EvidenceSettings` resolves mode, timeout, allowlist, and pass-through names from the environment and `ProjectConfig` (the shared `.spec/sdd-config.json` reader); `EvidenceRunner` validates `argv`, applies the allowlist, scrubs the child environment, hashes and redacts the output, and classifies a RED; `WorkflowEngineService` calls the runner inside the feature lock and records the observation on the task transition. `src/infrastructure/di/evidence-bindings.ts` wires these so tests can load them without the full container.
 - **Installer** (`src/cli/`): target resolution, recursive rendering, managed ownership, backups, and root guidance.
 
 Both `sdd-entry.js` and the documented `mcp-server.js` launcher call the compiled TypeScript runtime. Neither launcher keeps a second handler implementation.

@@ -1,0 +1,567 @@
+{
+  "schema_version": 5,
+  "feature_name": "verified-execution-evidence",
+  "description": "## Original Description\nMake SDD task evidence proven instead of self-reported. Today sdd-implement and simple-task send {command, exitCode, summary} to the workflow engine, and the engine checks only the shape and the exit-code sign for RED, GREEN, and COMPLETE transitions. An agent can record exitCode 1 or 0 without running anything, and the JEV red check classifies a summary the agent wrote. Goal: the SDD server runs the verification command itself in the project root with a timeout and an allowlist, captures the real exit code and a SHA-256 of the output, and records that observed evidence on the task transition. Self-reported evidence is rejected for tdd_required tasks once the feature is on; existing spec.json files stay readable. The RED classifier and JEV red check read the captured output instead of an agent summary. Out of scope: running arbitrary shell for other tools, changing approval gates, changing the 17-tool MCP contract shape beyond new optional inputs.\n\n## Success Criteria\n1. With the feature enabled, 100% of red, green, and verification evidence written to spec.json for tdd_required tasks carries an engine-observed exit code and a SHA-256 of captured output; a payload with a caller-supplied exitCode and no engine run is rejected with a named GovernanceError, proven by an e2e test that submits a faked exitCode. 2. Every evidence run finishes or times out within a configurable bound, default 120 s, maximum 600 s, and a timeout records a blocker instead of fabricated evidence. 3. Backward compatibility: all 12 existing .spec/specs features still load, and the existing 802 tests pass unchanged except for tests that assert the old self-reported path. 4. The RED classifier and the JEV red check receive captured stdout and stderr, bounded to 8 KB, instead of an agent-written summary.",
+  "language": "en",
+  "phase": "implementation-completed",
+  "created_at": "2026-11-21T15:53:56.818Z",
+  "updated_at": "2026-11-21T17:46:53.062Z",
+  "approvals": {
+    "requirements": {
+      "generated": true,
+      "approved": true,
+      "revision": 1,
+      "artifact_sha256": "c1978cc2f19f79cbb9d9c3c1f53686be0c5d7b36b4174bc6fbd99545754ec382",
+      "validation": {
+        "status": "passed",
+        "checked_at": "2026-11-21T15:56:06.459Z",
+        "blockers": []
+      }
+    },
+    "design": {
+      "generated": true,
+      "approved": true,
+      "revision": 1,
+      "artifact_sha256": "162c09b9e32ee3874d7659f7b06535983d7f7bd242213c46d2c41dd0386391b3",
+      "validation": {
+        "status": "passed",
+        "checked_at": "2026-11-21T16:26:41.956Z",
+        "blockers": []
+      }
+    },
+    "tasks": {
+      "generated": true,
+      "approved": true,
+      "revision": 1,
+      "artifact_sha256": "5aa5eef377e95d4dbc981b2a758945057ae50040d5bb9d36225f42f83a6f2505",
+      "validation": {
+        "status": "passed",
+        "checked_at": "2026-11-21T16:36:45.420Z",
+        "blockers": []
+      }
+    }
+  },
+  "workflow_options": {
+    "review_test_cases": true
+  },
+  "checkpoints": {
+    "test_cases": {
+      "required": true,
+      "reviewed": true,
+      "reviewed_at": "2026-11-21T16:41:06.263Z",
+      "reviewed_revision": 1,
+      "reviewed_artifact_sha256": "5aa5eef377e95d4dbc981b2a758945057ae50040d5bb9d36225f42f83a6f2505"
+    }
+  },
+  "implementation": {
+    "revision": 50,
+    "tasks_revision": 1,
+    "legacy_imported": false,
+    "tasks": {
+      "1.1": {
+        "title": "Shared project config reader",
+        "tdd_required": true,
+        "dependencies": [],
+        "status": "completed",
+        "evidence": {
+          "red": {
+            "command": "npx jest src/__tests__/unit/evidence/ProjectConfig.test.ts",
+            "exit_code": 1,
+            "summary": "Tests: 3 failed, 8 passed, 11 total. Expected: {\"jev\":{\"enabled\":true},\"evidence\":{\"mode\":\"verified\"}} Received: undefined; Expected: [\"exists\"] Received: []; Expected: {\"evidence\":{\"timeoutMs\":30000}} Received: undefined. Stub readProjectConfig returns undefined.",
+            "observed_at": "2026-11-21T16:44:20.517Z"
+          },
+          "green": {
+            "command": "npx jest src/__tests__/unit/evidence/ProjectConfig.test.ts src/__tests__/unit/jev/JevSettings.test.ts",
+            "exit_code": 0,
+            "summary": "Test Suites: 2 passed, 2 total. Tests: 53 passed, 53 total. readProjectConfig implemented; readProjectJevSetting delegates to it and its private reader is deleted.",
+            "observed_at": "2026-11-21T16:44:57.587Z"
+          },
+          "verification": {
+            "command": "npx jest src/__tests__/unit/evidence/ProjectConfig.test.ts src/__tests__/unit/jev/JevSettings.test.ts && npx eslint src/application/services/ProjectConfig.ts src/application/services/JevSettings.ts && npx tsc --noEmit",
+            "exit_code": 0,
+            "summary": "Test Suites: 2 passed. Tests: 53 passed, 53 total. ESLint 0 errors on both files. tsc --noEmit passed. REFACTOR: no change needed; the extracted reader is 29 lines.",
+            "observed_at": "2026-11-21T16:45:38.527Z"
+          }
+        },
+        "planned_artifacts": [
+          "src/application/services/ProjectConfig.ts",
+          "src/application/services/JevSettings.ts",
+          "src/__tests__/unit/evidence/ProjectConfig.test.ts",
+          "src/__tests__/unit/jev/JevSettings.test.ts"
+        ],
+        "observed_artifacts": [
+          "src/application/services/ProjectConfig.ts",
+          "src/application/services/JevSettings.ts",
+          "src/__tests__/unit/evidence/ProjectConfig.test.ts"
+        ]
+      },
+      "1.2": {
+        "title": "Evidence settings with precedence, clamping, and warnings",
+        "tdd_required": true,
+        "dependencies": [
+          "1.1"
+        ],
+        "status": "completed",
+        "evidence": {
+          "red": {
+            "command": "npx jest src/__tests__/unit/evidence/EvidenceSettings.test.ts",
+            "exit_code": 1,
+            "summary": "Tests: 24 failed, 1 passed, 25 total. Expected: true Received: false (frozen); Expected: 'self-reported' Received: 'verified' (env precedence); Expected: 5000 Received: 120000 (clamp); Expected warnings length 1 Received 0. Stub returns defaults for every input.",
+            "observed_at": "2026-11-21T16:49:26.686Z"
+          },
+          "green": {
+            "command": "npx jest src/__tests__/unit/evidence/EvidenceSettings.test.ts",
+            "exit_code": 0,
+            "summary": "Tests: 25 passed, 25 total. Env wins over config; unrecognized mode warns and falls back to verified; timeout clamped 5000..600000; whole allowlist or passEnv rejected on any invalid entry with one warning; JSON.stringify exposes only mode and timeoutMs.",
+            "observed_at": "2026-11-21T16:50:06.201Z"
+          },
+          "verification": {
+            "command": "npx jest src/__tests__/unit/evidence/EvidenceSettings.test.ts && npx eslint src/application/services/EvidenceSettings.ts && npx tsc --noEmit",
+            "exit_code": 0,
+            "summary": "Tests: 25 passed, 25 total. ESLint 0 errors. tsc --noEmit passed. REFACTOR: allowlist and passEnv share one resolveNameList helper; no further change.",
+            "observed_at": "2026-11-21T16:50:09.465Z"
+          }
+        },
+        "planned_artifacts": [
+          "src/application/services/EvidenceSettings.ts",
+          "src/__tests__/unit/evidence/EvidenceSettings.test.ts"
+        ],
+        "observed_artifacts": [
+          "src/application/services/EvidenceSettings.ts",
+          "src/__tests__/unit/evidence/EvidenceSettings.test.ts"
+        ]
+      },
+      "1.3": {
+        "title": "ProcessPort and NodeProcessAdapter",
+        "tdd_required": true,
+        "dependencies": [],
+        "status": "completed",
+        "evidence": {
+          "red": {
+            "command": "npx jest src/__tests__/unit/evidence/NodeProcessAdapter.test.ts",
+            "exit_code": 1,
+            "summary": "Tests: 8 failed, 2 passed, 10 total. Expected {kind:'exited', exitCode:0} Received {kind:'spawn-failed', reason:'other'}; same for exit 3, interleaving, truncation, timeout, process tree, not-found, and env pass-through. Stub adapter returns spawn-failed other for every request.",
+            "observed_at": "2026-11-21T16:46:37.601Z"
+          },
+          "green": {
+            "command": "npx jest src/__tests__/unit/evidence/NodeProcessAdapter.test.ts",
+            "exit_code": 0,
+            "summary": "Tests: 10 passed, 10 total (5.6 s). exit 0, exit 3, interleaved stdout/stderr, 1 MiB truncation, timeout kills child and grandchild within 1 s, not-found and missing-cwd spawn-failed, env pass-through, taskkill argv.",
+            "observed_at": "2026-11-21T16:47:44.682Z"
+          },
+          "verification": {
+            "command": "for i in 1 2 3; do npx jest src/__tests__/unit/evidence/NodeProcessAdapter.test.ts; done && npx eslint src/infrastructure/adapters/NodeProcessAdapter.ts && npx tsc --noEmit",
+            "exit_code": 0,
+            "summary": "Three consecutive runs: Tests: 10 passed, 10 total each (no flake in interleave or timeout cases). ESLint 0 errors. tsc --noEmit passed. REFACTOR: removed an identity finish() wrapper.",
+            "observed_at": "2026-11-21T16:48:33.206Z"
+          }
+        },
+        "planned_artifacts": [
+          "src/domain/ports.ts",
+          "src/infrastructure/adapters/NodeProcessAdapter.ts",
+          "src/__tests__/unit/evidence/NodeProcessAdapter.test.ts"
+        ],
+        "observed_artifacts": [
+          "src/domain/ports.ts",
+          "src/infrastructure/adapters/NodeProcessAdapter.ts",
+          "src/__tests__/unit/evidence/NodeProcessAdapter.test.ts"
+        ]
+      },
+      "1.4": {
+        "title": "EvidenceRunner: argv bounds, allowlist, child env, hash, excerpt, redaction, classification",
+        "tdd_required": true,
+        "dependencies": [
+          "1.2",
+          "1.3"
+        ],
+        "status": "completed",
+        "evidence": {
+          "red": {
+            "command": "npx jest src/__tests__/unit/evidence/EvidenceRunner.test.ts",
+            "exit_code": 1,
+            "summary": "Tests: 33 failed, 3 passed, 36 total. Expected: \"npm\" Received: \"/usr/local/bin/npm\" (programName); sh/bash not rejected (port called once); childEnv keeps API_TOKEN; outputSha256 Expected 64-hex Received \"\"; classification Expected assertion Received ambiguous. Stub passes argv through and returns empty evidence.",
+            "observed_at": "2026-11-21T16:52:27.751Z"
+          },
+          "green": {
+            "command": "npx jest src/__tests__/unit/evidence/EvidenceRunner.test.ts",
+            "exit_code": 0,
+            "summary": "Tests: 36 passed, 36 total. programName strips dirs and .cmd/.exe/.bat; sh/bash/parent-segment/NUL/65-element/4097-byte argv rejected with zero port calls; childEnv drops secret-named vars and SDD_JEV_API_KEY; sha256 over raw bytes, 8 KiB UTF-8-safe tail, redaction, RED classification; timed-out and spawn-failed mapped without throwing.",
+            "observed_at": "2026-11-21T16:53:30.317Z"
+          },
+          "verification": {
+            "command": "npx jest src/__tests__/unit/evidence/EvidenceRunner.test.ts && npx eslint src/application/services/EvidenceRunner.ts src/application/services/WorkflowErrors.ts && npx tsc --noEmit",
+            "exit_code": 0,
+            "summary": "Tests: 36 passed, 36 total. ESLint 0 errors. tsc --noEmit passed. REFACTOR: outcome mapping is one exhaustive switch with a never guard; no further change. Also added the four evidence GovernanceErrorCode members needed by the runner and task 2.2.",
+            "observed_at": "2026-11-21T16:53:35.465Z"
+          }
+        },
+        "planned_artifacts": [
+          "src/application/services/EvidenceRunner.ts",
+          "src/__tests__/unit/evidence/EvidenceRunner.test.ts"
+        ],
+        "observed_artifacts": [
+          "src/application/services/EvidenceRunner.ts",
+          "src/application/services/WorkflowErrors.ts",
+          "src/__tests__/unit/evidence/EvidenceRunner.test.ts"
+        ]
+      },
+      "2.1": {
+        "title": "Additive v5 evidence entry and compatibility load",
+        "tdd_required": true,
+        "dependencies": [],
+        "status": "completed",
+        "evidence": {
+          "red": {
+            "command": "npx jest src/__tests__/unit/workflow/WorkflowEngineService.evidence-shape.test.ts",
+            "exit_code": 1,
+            "summary": "Tests: 9 failed, 3 passed, 12 total. Round-trip: Expected - 23 lines (source, argv, output_sha256, duration_ms, output_excerpt, truncated, redactions, red_classification) Received + 0: the writer drops every engine key. Caller entry Expected source: 'caller' Received undefined. Seven malformed engine entries Expected StateInvariantViolation Received resolved status.",
+            "observed_at": "2026-11-21T16:56:30.780Z"
+          },
+          "green": {
+            "command": "npx jest src/__tests__/unit/workflow/WorkflowEngineService.evidence-shape.test.ts src/__tests__/unit/workflow/WorkflowEngineService.v4.test.ts",
+            "exit_code": 0,
+            "summary": "Test Suites: 2 passed. Tests: 44 passed, 44 total (12 new + 32 existing). Engine keys round-trip through specBytes; caller entries get source: caller; seven malformed engine entries rejected with StateInvariantViolation; all repository features still load.",
+            "observed_at": "2026-11-21T16:57:44.535Z"
+          },
+          "verification": {
+            "command": "npx jest src/__tests__/unit/workflow && npx eslint src/application/services/WorkflowEngineService.ts src/domain/types.ts && npx tsc --noEmit",
+            "exit_code": 0,
+            "summary": "Test Suites: 9 passed. Tests: 101 passed, 101 total. ESLint 0 errors (9 pre-existing complexity warnings; the new evidenceExtensionsAreValid warning removed by a table-driven refactor). tsc --noEmit passed. Schema version stays 5.",
+            "observed_at": "2026-11-21T16:58:06.669Z"
+          }
+        },
+        "planned_artifacts": [
+          "src/domain/types.ts",
+          "src/application/services/WorkflowEngineService.ts",
+          "src/__tests__/unit/workflow/WorkflowEngineService.evidence-shape.test.ts"
+        ],
+        "observed_artifacts": [
+          "src/domain/types.ts",
+          "src/application/services/WorkflowEngineService.ts",
+          "src/__tests__/unit/workflow/WorkflowEngineService.evidence-shape.test.ts"
+        ]
+      },
+      "2.2": {
+        "title": "Transition gate: mode, engine run, exit-code rule, re-record RED, lock lease",
+        "tdd_required": true,
+        "dependencies": [
+          "1.4",
+          "2.1"
+        ],
+        "status": "completed",
+        "evidence": {
+          "red": {
+            "command": "npx jest src/__tests__/unit/workflow/WorkflowEngineService.evidence.test.ts src/__tests__/unit/workflow/WorkflowErrors.test.ts",
+            "exit_code": 1,
+            "summary": "Tests: 19 failed, 4 passed, 23 total. Received promise resolved instead of rejected (SelfReportedEvidenceRejected); Expected observed {exitCode: 1, classification: 'assertion'} Received undefined; Expected - 7 Received + 1 (TaskTransitionInvalid details.observed missing); four evidence codes Expected passed through Received InternalError. Engine ignores run and has no mode gate yet.",
+            "observed_at": "2026-11-21T17:03:55.539Z"
+          },
+          "green": {
+            "command": "npx jest src/__tests__/unit/workflow",
+            "exit_code": 0,
+            "summary": "Test Suites: 10 passed. Tests: 121 passed, 121 total. Verified-mode rejection with byte-identical spec.json, engine RED/GREEN/COMPLETE entries, exit-code rule errors carrying details.observed, timeout and spawn-failed without writes, EvidenceRunnerUnavailable, self-reported compatibility, re-record RED after setup only, one run for two concurrent requests, four new codes serialized.",
+            "observed_at": "2026-11-21T17:10:14.079Z"
+          },
+          "verification": {
+            "command": "npx jest src/__tests__/unit/workflow src/__tests__/unit/jev src/__tests__/unit/runtime src/__tests__/unit/evidence && npx eslint src && npx tsc --noEmit",
+            "exit_code": 0,
+            "summary": "workflow: 10 suites, 121 tests passed; jev: 22 suites, 616 tests passed after pointing JEV fixtures at self-reported mode; runtime and evidence suites passed in the combined run. ESLint 0 errors (323 pre-existing warnings). tsc --noEmit passed. The lock has no lease TTL, so no leaseMs was added to withFilesystemLock; the message-contract baseline gained the three engine codes.",
+            "observed_at": "2026-11-21T17:13:03.511Z"
+          }
+        },
+        "planned_artifacts": [
+          "src/application/services/WorkflowEngineService.ts",
+          "src/application/services/WorkflowErrors.ts",
+          "src/utils/withFilesystemLock.ts",
+          "src/__tests__/unit/workflow/WorkflowEngineService.evidence.test.ts",
+          "src/__tests__/unit/workflow/WorkflowErrors.test.ts"
+        ],
+        "observed_artifacts": [
+          "src/application/services/WorkflowEngineService.ts",
+          "src/application/services/WorkflowErrors.ts",
+          "src/infrastructure/di/types.ts",
+          "src/__tests__/unit/workflow/WorkflowEngineService.evidence.test.ts",
+          "src/__tests__/unit/workflow/evidence-harness.ts",
+          "src/__tests__/unit/workflow/WorkflowErrors.test.ts",
+          "src/__tests__/unit/workflow/WorkflowEngineService.v4.test.ts",
+          "src/__tests__/unit/workflow/WorkflowEngineService.evidence-shape.test.ts",
+          "src/__tests__/unit/jev/helpers.ts",
+          "src/__tests__/fixtures/message-contract-baseline.json"
+        ]
+      },
+      "2.3": {
+        "title": "Tool schema `run`, adapter pass-through, result fields, DI wiring",
+        "tdd_required": true,
+        "dependencies": [
+          "2.2"
+        ],
+        "status": "completed",
+        "evidence": {
+          "red": {
+            "command": "npx jest src/__tests__/unit/runtime/SDDToolAdapter.inventory.test.ts src/__tests__/unit/evidence/container-wiring.test.ts src/__tests__/unit/jev/sddJevCheckTool.test.ts",
+            "exit_code": 1,
+            "summary": "Tests: 6 failed, 54 passed, 60 total. schema.properties.run Expected bounded object Received undefined; accepts(run) Expected true Received false; adapter call Expected objectContaining run Received no run key; bindEvidence binds nothing so ProcessPort/EvidenceRunner unresolved and engine.evidenceRunner undefined.",
+            "observed_at": "2026-11-21T17:15:50.199Z"
+          },
+          "green": {
+            "command": "npm run build && npx jest src/__tests__/unit/runtime src/__tests__/unit/evidence src/__tests__/unit/jev/sddJevCheckTool.test.ts src/__tests__/unit/jev/JevAdvisoryService.gates.test.ts",
+            "exit_code": 0,
+            "summary": "Test Suites: 10 passed. Tests: 205 passed, 205 total. run.argv schema with bounds and evidence-or-run anyOf; 5.5.0 shape still valid; adapter forwards run and returns evidenceMode/observed; bindEvidence wires NodeProcessAdapter, EvidenceRunner, ProcessEnvironment; JEV reads ProcessEnvironment; 17 tools; fixture regenerated for sdd-spec-impl only (32+/3-).",
+            "observed_at": "2026-11-21T17:17:26.213Z"
+          },
+          "verification": {
+            "command": "npx jest src/__tests__/unit/jev src/__tests__/unit/workflow && npx eslint src && npx tsc --noEmit",
+            "exit_code": 0,
+            "summary": "Test Suites: 32 passed. Tests: 737 passed, 737 total. Earlier in the task: runtime, evidence, and stdio suites 205 passed against a fresh build. ESLint 0 errors. tsc passed. REFACTOR: evidence bindings live in evidence-bindings.ts because container.ts uses import.meta and cannot load under ts-jest.",
+            "observed_at": "2026-11-21T17:18:48.199Z"
+          }
+        },
+        "planned_artifacts": [
+          "src/infrastructure/mcp/sddToolDefinitions.ts",
+          "src/adapters/cli/SDDToolAdapter.ts",
+          "src/infrastructure/di/container.ts",
+          "src/infrastructure/di/types.ts",
+          "src/__tests__/unit/jev/fixtures/sdd-tools-16.json",
+          "src/__tests__/unit/runtime/SDDToolAdapter.inventory.test.ts",
+          "src/__tests__/unit/runtime/entrypoints.stdio.test.ts",
+          "src/__tests__/unit/evidence/container-wiring.test.ts"
+        ],
+        "observed_artifacts": [
+          "src/infrastructure/mcp/sddToolDefinitions.ts",
+          "src/adapters/cli/SDDToolAdapter.ts",
+          "src/infrastructure/di/container.ts",
+          "src/infrastructure/di/types.ts",
+          "src/infrastructure/di/evidence-bindings.ts",
+          "src/application/services/JevAdvisoryService.ts",
+          "src/__tests__/unit/jev/fixtures/sdd-tools-16.json",
+          "src/__tests__/unit/runtime/SDDToolAdapter.inventory.test.ts",
+          "src/__tests__/unit/evidence/container-wiring.test.ts"
+        ]
+      },
+      "2.4": {
+        "title": "JEV red check reads the engine entry",
+        "tdd_required": true,
+        "dependencies": [
+          "2.2"
+        ],
+        "status": "completed",
+        "evidence": {
+          "red": {
+            "command": "npx jest src/__tests__/unit/jev/JevAdvisoryService.red.test.ts",
+            "exit_code": 1,
+            "summary": "Tests: 3 failed, 15 passed, 18 total. Engine-red cases: Expected status answered Received skipped/not-ready because redCheck requires in-progress and caller evidence; HTTP body expectations not reached; setup entry Expected flagged ['1.1'] Received skipped. Snapshot exposes no evidence entry yet.",
+            "observed_at": "2026-11-21T17:20:51.169Z"
+          },
+          "green": {
+            "command": "npx jest src/__tests__/unit/jev/JevAdvisoryService.red.test.ts src/__tests__/unit/jev/AdvisorySnapshot.test.ts",
+            "exit_code": 0,
+            "summary": "Test Suites: 2 passed. Tests: 27 passed, 27 total. Engine-sourced RED: HTTP body carries the persisted excerpt and not the caller summary, sidecar binds to output_sha256, request works without caller evidence, persisted setup classification flags locally with no request, caller red at red-observed still skipped.",
+            "observed_at": "2026-11-21T17:21:48.022Z"
+          },
+          "verification": {
+            "command": "npx jest src/__tests__/unit/jev src/__tests__/unit/workflow && npx tsc --noEmit && npx eslint src/application/services/JevAdvisoryService.ts src/application/services/WorkflowEngineService.ts",
+            "exit_code": 0,
+            "summary": "Test Suites: 32 passed. Tests: 741 passed, 741 total. tsc passed. ESLint 0 errors. REFACTOR: none needed; the snapshot gains one optional red entry and redCheck has a single engine-or-caller branch.",
+            "observed_at": "2026-11-21T17:22:43.077Z"
+          }
+        },
+        "planned_artifacts": [
+          "src/application/services/JevAdvisoryService.ts",
+          "src/application/services/JevSpecState.ts",
+          "src/application/services/AdvisorySnapshot.ts",
+          "src/__tests__/unit/jev/JevAdvisoryService.red.test.ts",
+          "src/__tests__/unit/jev/helpers.ts"
+        ],
+        "observed_artifacts": [
+          "src/application/services/JevAdvisoryService.ts",
+          "src/application/services/WorkflowEngineService.ts",
+          "src/__tests__/unit/jev/JevAdvisoryService.red.test.ts"
+        ]
+      },
+      "2.5": {
+        "title": "Evidence source in status and handoff",
+        "tdd_required": true,
+        "dependencies": [
+          "2.1"
+        ],
+        "status": "completed",
+        "evidence": {
+          "red": {
+            "command": "npx jest src/__tests__/unit/workflow/WorkflowEngineService.status.test.ts src/__tests__/unit/context/ContextCompactionService.test.ts",
+            "exit_code": 1,
+            "summary": "Tests: 3 failed, 12 passed, 15 total. Expected: \"verified\" Received: undefined (status.evidenceMode); Expected tasks map Received undefined; Expected substring \"- 1.1: completed (verified)\" Received handoff without completed-task labels.",
+            "observed_at": "2026-11-21T17:24:47.512Z"
+          },
+          "green": {
+            "command": "npx jest src/__tests__/unit/workflow src/__tests__/unit/context",
+            "exit_code": 0,
+            "summary": "Test Suites: 16 passed. Tests: 156 passed, 156 total. sdd-status reports evidenceMode and per-task evidence sources with the RED classification; handoff lists completed tasks as (verified) or (self-reported) only once any evidence exists; features without evidence render unchanged.",
+            "observed_at": "2026-11-21T17:26:39.987Z"
+          },
+          "verification": {
+            "command": "npm run build && npx jest src/__tests__/unit/runtime src/__tests__/unit/jev src/__tests__/unit/cli/governed-workflow.e2e.test.ts src/__tests__/unit/evidence && npx tsc --noEmit && npx eslint src/application/services/WorkflowEngineService.ts src/application/services/ContextCompactionService.ts",
+            "exit_code": 0,
+            "summary": "Build OK. Test Suites: 31 passed. Tests: 739 passed, 739 total (plus 156 in workflow and context at GREEN). tsc passed. ESLint 0 errors. REFACTOR: evidence label is one helper; completed tasks appear in the handoff only once evidence exists.",
+            "observed_at": "2026-11-21T17:27:46.975Z"
+          }
+        },
+        "planned_artifacts": [
+          "src/application/services/WorkflowEngineService.ts",
+          "src/application/services/ContextCompactionService.ts",
+          "src/domain/types.ts",
+          "src/__tests__/unit/workflow/WorkflowEngineService.status.test.ts",
+          "src/__tests__/unit/context/ContextCompactionService.handoff.test.ts"
+        ],
+        "observed_artifacts": [
+          "src/application/services/WorkflowEngineService.ts",
+          "src/application/services/ContextCompactionService.ts",
+          "src/__tests__/unit/workflow/WorkflowEngineService.status.test.ts",
+          "src/__tests__/unit/context/ContextCompactionService.test.ts"
+        ]
+      },
+      "3.1": {
+        "title": "sdd-implement skill, reference, and render baseline",
+        "tdd_required": true,
+        "dependencies": [
+          "2.3"
+        ],
+        "status": "completed",
+        "evidence": {
+          "red": {
+            "command": "npx jest src/__tests__/unit/cli/documentation-consistency.test.ts",
+            "exit_code": 1,
+            "summary": "Tests: 3 failed, 22 passed, 25 total. Expected substring: \"run.argv\" Received: current SKILL.md without it; Expected not to contain \"Before recording, internally run the JEV `red` check\" Received: present; Expected pattern /run:\\s*\\{\\s*argv:/ in REFERENCE.md Received: old exit-code example.",
+            "observed_at": "2026-11-21T17:28:51.971Z"
+          },
+          "green": {
+            "command": "npx jest src/__tests__/unit/cli/documentation-consistency.test.ts src/__tests__/unit/cli/install-target.test.ts src/__tests__/unit/cli/skill-delegation.test.ts src/__tests__/unit/cli/target-installers.test.ts",
+            "exit_code": 0,
+            "summary": "Test Suites: 4 passed. Tests: 115 passed, 115 total. SKILL.md now passes run.argv for RED/GREEN/COMPLETE, states the server runs it and records the observed exit code, moves the JEV red step after record-red, and names the setup re-record path; REFERENCE.md shows run: { argv } with no exit code; baseline refreshed for 3 sdd-implement render keys only; simple-task byte-identical.",
+            "observed_at": "2026-11-21T17:29:46.552Z"
+          },
+          "verification": {
+            "command": "npx jest src/__tests__/unit/cli",
+            "exit_code": 0,
+            "summary": "Test Suites: 20 passed. Tests: 333 passed, 333 total. SKILL.md is 3990 bytes (cap 4000); canonical-assets lifecycle contract now expects run.argv, server-observed exit codes, and never-type-an-exit-code; baseline refreshed for the three sdd-implement render keys; simple-task byte-identical. REFACTOR: evidence error guidance moved to REFERENCE.md to keep the skill within its byte budget.",
+            "observed_at": "2026-11-21T17:34:30.087Z"
+          }
+        },
+        "planned_artifacts": [
+          "skills/sdd-implement/SKILL.md",
+          "skills/sdd-implement/REFERENCE.md",
+          "src/__tests__/unit/cli/fixtures/workflow-skill-render-baseline.json",
+          "src/__tests__/unit/cli/documentation-consistency.test.ts"
+        ],
+        "observed_artifacts": [
+          "skills/sdd-implement/SKILL.md",
+          "skills/sdd-implement/REFERENCE.md",
+          "src/__tests__/unit/cli/fixtures/workflow-skill-render-baseline.json",
+          "src/__tests__/unit/cli/documentation-consistency.test.ts",
+          "src/__tests__/unit/cli/canonical-assets.test.ts"
+        ]
+      },
+      "3.2": {
+        "title": "Docs and changelog",
+        "tdd_required": false,
+        "dependencies": [
+          "3.1"
+        ],
+        "status": "completed",
+        "evidence": {
+          "verification": {
+            "command": "npx jest src/__tests__/unit/cli/documentation-consistency.test.ts && grep -c SDD_EVIDENCE_MODE DEPLOYMENT.md docs/WORKFLOW.md CHANGELOG.md",
+            "exit_code": 0,
+            "summary": "Tests: 27 passed, 27 total, including two new cases pinning the settings, allowlist, error codes, rollback, architecture components, README link, and the Unreleased changelog entry. grep: SDD_EVIDENCE_MODE appears in DEPLOYMENT.md (1), docs/WORKFLOW.md (3), CHANGELOG.md (2). docs/WORKFLOW.md gains a 'Verified execution evidence' section and the JEV red row now says the check runs after RED.",
+            "observed_at": "2026-11-21T17:36:18.544Z"
+          }
+        },
+        "planned_artifacts": [
+          "docs/WORKFLOW.md",
+          "DEPLOYMENT.md",
+          "ARCHITECTURE.md",
+          "CHANGELOG.md",
+          "README.md"
+        ],
+        "observed_artifacts": [
+          "docs/WORKFLOW.md",
+          "DEPLOYMENT.md",
+          "ARCHITECTURE.md",
+          "CHANGELOG.md",
+          "README.md",
+          "src/__tests__/unit/cli/documentation-consistency.test.ts"
+        ]
+      },
+      "4.1": {
+        "title": "Stdio e2e: real run, real rejection",
+        "tdd_required": true,
+        "dependencies": [
+          "2.3"
+        ],
+        "status": "completed",
+        "evidence": {
+          "red": {
+            "command": "npx jest src/__tests__/unit/cli/governed-workflow.e2e.test.ts",
+            "exit_code": 1,
+            "summary": "Tests: 1 failed, 5 passed, 6 total. Expected pattern: /^\\[output truncated: 1048576 of \\d+ bytes captured\\]\\n/ Received string: 8 KB of 'x' with no marker. The adapter caps capture at 1 MiB and sets truncated, but the excerpt does not note the truncation (FR-5 AC2).",
+            "observed_at": "2026-11-21T17:41:25.480Z"
+          },
+          "green": {
+            "command": "npx jest src/__tests__/unit/evidence src/__tests__/unit/workflow src/__tests__/unit/cli/governed-workflow.e2e.test.ts",
+            "exit_code": 0,
+            "summary": "Test Suites: 17 passed. Tests: 214 passed, 214 total. Packed stdio e2e: node -e exit 3 persists exit_code 3 / source engine / 64-hex hash; typed exit code rejected with SelfReportedEvidenceRejected and byte-identical spec.json; sh -c rejected with EvidenceCommandNotAllowed; self-reported server accepts the 5.5.0 shape; a 2 MiB command is capped at 1 MiB and the saved excerpt opens with '[output truncated: 1048576 of N bytes captured]'. ProcessRunResult gains totalOutputBytes.",
+            "observed_at": "2026-11-21T17:42:44.764Z"
+          },
+          "verification": {
+            "command": "npx jest src/__tests__/unit/jev src/__tests__/unit/runtime && npx jest src/__tests__/unit/evidence src/__tests__/unit/workflow src/__tests__/unit/cli/governed-workflow.e2e.test.ts && npx tsc --noEmit && npx eslint src",
+            "exit_code": 0,
+            "summary": "jev+runtime: 25 suites, 650 passed (JEV skill-text contract updated to the new sdd-implement wording). evidence+workflow+e2e: 17 suites, 214 passed. tsc passed. ESLint 0 errors. The e2e exposed a real FR-5 gap (excerpt did not note truncation); fixed by adding totalOutputBytes to ProcessRunResult and a '[output truncated: N of M bytes captured]' marker.",
+            "observed_at": "2026-11-21T17:44:36.823Z"
+          }
+        },
+        "planned_artifacts": [
+          "src/__tests__/unit/cli/governed-workflow.e2e.test.ts"
+        ],
+        "observed_artifacts": [
+          "src/__tests__/unit/cli/governed-workflow.e2e.test.ts",
+          "src/domain/ports.ts",
+          "src/infrastructure/adapters/NodeProcessAdapter.ts",
+          "src/application/services/EvidenceRunner.ts",
+          "src/__tests__/unit/workflow/evidence-harness.ts",
+          "src/__tests__/unit/evidence/EvidenceRunner.test.ts",
+          "src/__tests__/unit/evidence/NodeProcessAdapter.test.ts",
+          "src/__tests__/unit/workflow/WorkflowEngineService.evidence.test.ts",
+          "src/__tests__/unit/jev/JevSkillText.test.ts"
+        ]
+      },
+      "4.2": {
+        "title": "Full verification and real-artifact check",
+        "tdd_required": false,
+        "dependencies": [
+          "1.1",
+          "1.2",
+          "1.3",
+          "1.4",
+          "2.1",
+          "2.2",
+          "2.3",
+          "2.4",
+          "2.5",
+          "3.1",
+          "3.2",
+          "4.1"
+        ],
+        "status": "completed",
+        "evidence": {
+          "verification": {
+            "command": "npm run lint && npm run typecheck && npm run build && npm test && npm run context:report && node scratchpad/smoke-evidence.mjs sdd-entry.js",
+            "exit_code": 0,
+            "summary": "ESLint 0 errors (324 warnings, 323 pre-existing). tsc passed. Build passed. npm test: 88 suites, 1475 tests passed, 0 failed (the known TTY test also passed on this run). context:report gates: codex 62.92% (>=50), omp 72.31% (>=50), claude-code 91.92% (>=60), all pass. Real artifact: the built sdd-entry.js driven over stdio with no SDD_EVIDENCE_MODE recorded a RED for a scratch feature in a temp project through run.argv: taskState red-observed, evidenceMode verified, exit_code 3, source engine, 64-hex output_sha256, red_classification assertion; the scratch project was deleted. git status shows only .spec/specs/verified-execution-evidence/ changed under .spec. Deviation: the real-artifact run used a direct stdio call to the built server, not /skill:sdd-implement, because this Claude session's MCP connection still holds the pre-change schema until it restarts.",
+            "observed_at": "2026-11-21T17:46:53.062Z"
+          }
+        },
+        "planned_artifacts": [],
+        "observed_artifacts": []
+      }
+    }
+  }
+}

@@ -1,4 +1,5 @@
 import { SDDToolAdapter, SDD_TOOL_NAMES } from '../../../adapters/cli/SDDToolAdapter';
+import { AjvValidationAdapter } from '../../../infrastructure/adapters/AjvValidationAdapter';
 
 
 const EXPECTED_TOOLS = [
@@ -93,6 +94,49 @@ describe('v5 MCP tool inventory', () => {
     expect(approve.required).toEqual(['featureName', 'phase', 'expectedRevision', 'expectedArtifactSha256']);
     expect(Object.keys(review.properties ?? {})).toEqual(['featureName', 'expectedTasksRevision', 'expectedArtifactSha256']);
     expect(review.required).toEqual(['featureName', 'expectedTasksRevision', 'expectedArtifactSha256']);
+  });
+
+  describe('sdd-spec-impl evidence inputs', () => {
+    const definition = tools.find(({ name }) => name === 'sdd-spec-impl')!.tool;
+    const schema = definition.inputSchema as Record<string, unknown> & { properties: Record<string, unknown> };
+    const validator = new AjvValidationAdapter();
+    const accepts = (data: unknown): Promise<boolean> => validator.validate(data, schema).then(() => true, () => false);
+    const base = { featureName: 'payments', taskNumber: '1.1', expectedRevision: 3 };
+    const evidence = { command: 'jest order', exitCode: 1, summary: 'fails' };
+
+    it('publishes a bounded run.argv next to the existing evidence object', () => {
+      expect(schema.properties.run).toEqual({
+        type: 'object',
+        properties: {
+          argv: {
+            type: 'array', minItems: 1, maxItems: 64,
+            items: { type: 'string', minLength: 1, maxLength: 4096, pattern: '^[^\\u0000]+$' },
+          },
+        },
+        required: ['argv'],
+        additionalProperties: false,
+      });
+      expect(schema.properties.evidence).toMatchObject({ required: ['command', 'exitCode', 'summary'] });
+      expect(definition.description).toMatch(/run\.argv/);
+      expect(definition.description).toMatch(/verified/i);
+    });
+
+    it('accepts the 5.5.0 request shape, a run, and rejects an evidence action with neither', async () => {
+      await expect(accepts({ ...base, action: 'record-red', evidence })).resolves.toBe(true);
+      await expect(accepts({ ...base, action: 'record-red', run: { argv: ['npm', 'test'] } })).resolves.toBe(true);
+      await expect(accepts({ ...base, action: 'complete', run: { argv: ['npm', 'test'] }, affectedArtifacts: ['src/a.ts'] })).resolves.toBe(true);
+      await expect(accepts({ ...base, action: 'record-red' })).resolves.toBe(false);
+      await expect(accepts({ ...base, action: 'record-green' })).resolves.toBe(false);
+      await expect(accepts({ ...base, action: 'start' })).resolves.toBe(true);
+    });
+
+    it('rejects run values outside the published bounds before any handler runs', async () => {
+      await expect(accepts({ ...base, action: 'record-red', run: { argv: [] } })).resolves.toBe(false);
+      await expect(accepts({ ...base, action: 'record-red', run: { argv: ['npm', 'te\u0000st'] } })).resolves.toBe(false);
+      await expect(accepts({ ...base, action: 'record-red', run: { argv: ['x'.repeat(4097)] } })).resolves.toBe(false);
+      await expect(accepts({ ...base, action: 'record-red', run: { argv: new Array(65).fill('a') } })).resolves.toBe(false);
+      await expect(accepts({ ...base, action: 'record-red', run: { argv: ['npm'], cwd: '/elsewhere' } })).resolves.toBe(false);
+    });
   });
 });
 
@@ -279,6 +323,17 @@ describe('v5 disk-authoritative handler routing', () => {
       action: 'start',
       expectedRevision: 0,
     })).resolves.toEqual({ taskState: 'in-progress' });
+  });
+
+  it('forwards run.argv unchanged and returns the observed evidence with the mode', async () => {
+    const result = { taskState: 'red-observed', evidenceMode: 'verified', observed: { exitCode: 1, outputExcerpt: 'Expected: 1', durationMs: 7 } };
+    workflowEngineService.recordTaskProgress.mockResolvedValue(result);
+    await expect(byName['sdd-spec-impl']({
+      featureName: 'payments', taskNumber: '1.1', action: 'record-red', expectedRevision: 1, run: { argv: ['npm', 'test', '--', 'order'] },
+    })).resolves.toEqual(result);
+    expect(workflowEngineService.recordTaskProgress).toHaveBeenLastCalledWith(expect.objectContaining({
+      action: 'record-red', run: { argv: ['npm', 'test', '--', 'order'] }, evidence: undefined,
+    }));
   });
 
   it('renders every template form and rejects unsupported template input', async () => {

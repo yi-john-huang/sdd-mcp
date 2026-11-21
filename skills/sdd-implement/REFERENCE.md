@@ -4,7 +4,13 @@ Read only when a detailed checklist is needed for the current task.
 
 ## Progress Recording Example
 
-For a TDD-required task, persist the observed sequence: start; RED with the exact command, non-zero exit code, and failure summary; GREEN with command, zero exit code, and passing summary; final zero-exit verification plus affected project-relative artifacts. If interrupted, status supplies the persisted state and next action; never reconstruct it from conversation history.
+For a TDD-required task, persist the observed sequence: start; RED with `run: { argv: ["npx", "jest", "src/order.test.ts"] }`, which the server runs and must see fail; GREEN with the same `run`, which the server must see pass; COMPLETE with the final verification `run` plus affected project-relative artifacts. The server stores the observed exit code, a SHA-256 of the output, and an 8 KB excerpt on each record; you never supply them. A RED whose excerpt is classified `setup` can be recorded again after the test is fixed. If interrupted, status supplies the persisted state and next action; never reconstruct it from conversation history.
+
+## Evidence Errors
+
+- `SelfReportedEvidenceRejected`: the project runs in verified evidence mode; pass the command as `run.argv` instead of an evidence object. Projects configured for `self-reported` mode still accept the legacy object.
+- `EvidenceCommandNotAllowed`: the program is not on the allowlist (`node`, `npm`, `npx`, `pnpm`, `yarn`, `bun`, `jest`, `vitest`, `tsc`, `pytest`, `python`, `python3`, `go`, `cargo`, `make`, `mvn`, `gradle`, `dotnet`, or the project's `evidence.allowedCommands`). Shells are never allowed.
+- `EvidenceRunTimedOut`: the command exceeded the configured timeout (default 120 s); narrow the test selection or raise `SDD_EVIDENCE_TIMEOUT_MS`.
 
 ## Design Prompts
 

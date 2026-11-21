@@ -136,12 +136,15 @@ describe('WorkflowEngineService schema-v5 governance', () => {
   let fileSystem: NodeFileSystemAdapter;
   let workflow: WorkflowEngineService;
 
+  // This suite covers the governance rules around caller-reported evidence; verified mode has its own suite.
   function createWorkflow(): WorkflowEngineService {
     return new WorkflowEngineService(
       repository(),
       new ContextCompactionService(fileSystem, logger),
       logger,
       fileSystem,
+      undefined,
+      { SDD_EVIDENCE_MODE: 'self-reported' },
     );
   }
 

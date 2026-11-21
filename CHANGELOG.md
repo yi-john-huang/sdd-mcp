@@ -7,6 +7,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- Verified execution evidence. `sdd-spec-impl` accepts `run.argv` for `record-red`, `record-green`, and `complete`. The server runs the command in the project root with no shell, a timeout (default 120 s), and a 1 MiB output cap, then records the observed exit code, a SHA-256 of the output, the duration, and a redacted 8 KB excerpt on the task. A RED that exits 0, or a GREEN or completion that exits non-zero, is rejected with the observation in the error details and no write.
+- A command allowlist (`node`, `npm`, `npx`, `pnpm`, `yarn`, `bun`, `jest`, `vitest`, `tsc`, `pytest`, `python`, `python3`, `go`, `cargo`, `make`, `mvn`, `gradle`, `dotnet`, or `.spec/sdd-config.json` `evidence.allowedCommands`), a scrubbed child environment (no `SDD_JEV_API_KEY` and no `KEY`, `TOKEN`, `SECRET`, or `PASSWORD` names unless listed in `evidence.passEnv`), and the settings `SDD_EVIDENCE_MODE`, `SDD_EVIDENCE_TIMEOUT_MS`, and `evidence.{mode,timeoutMs}`.
+- `sdd-status` reports `evidenceMode` and, per task, whether each recorded entry came from the `engine` or the `caller`, plus the RED classification. The handoff marks completed tasks `(verified)` or `(self-reported)` once any evidence exists.
+- New error codes `SelfReportedEvidenceRejected`, `EvidenceCommandNotAllowed`, `EvidenceRunTimedOut`, and `EvidenceRunnerUnavailable`.
+
+### Changed
+- Breaking default: evidence mode is `verified`. In this mode an evidence object without `run` is rejected with `SelfReportedEvidenceRejected`. Set `SDD_EVIDENCE_MODE=self-reported` (or `.spec/sdd-config.json` `{"evidence":{"mode":"self-reported"}}`) to keep the 5.5.0 behavior, where caller evidence is saved with `source: "caller"`. Existing `spec.json` files stay readable: the evidence entry is additive and an entry without `source` reads as `caller`; the schema version stays 5.
+- `sdd-implement` now passes the test command as `run.argv` for RED, GREEN, and COMPLETE, reads the returned excerpt and classification, and runs the JEV `red` check after RED is recorded. A RED classified `setup` or `ambiguous` may be recorded again after the test is fixed; an `assertion` RED is final.
+- The JEV `red` check judges the engine's persisted excerpt when one exists and binds its sidecar to the output hash; the caller summary is ignored in that case.
+- The MCP contract stays at 17 tools. `sdd-spec-impl` gains the optional `run` input; the 5.5.0 request shape remains valid.
+
 ## [5.5.0] - 2026-10-20
 
 ### Added

@@ -136,6 +136,49 @@ The two operator journeys are different on purpose:
 
 An old OMP-via-Codex project must select `--target omp`. The installer preserves Codex TOML agents. It never treats them as executable OMP agents. See [INSTALL-GUIDE.md](INSTALL-GUIDE.md) for target mapping and commands.
 
+## Verified execution evidence
+
+The server runs each task's test command itself and records what it observed. The agent never types an exit code. This closes the gap where a RED, GREEN, or COMPLETE record could carry an exit code that no command produced.
+
+### How a task record works
+
+- A RED, GREEN, or COMPLETE record carries the test command as `run.argv`: the program first, then its arguments. The `sdd-implement` Skill supplies it; the user does not operate the tool.
+- The server runs the command in the project root with no shell, with a timeout, and with a bounded output capture. It records the observed exit code, a SHA-256 of the output, the duration, and an 8 KB excerpt of the last output. Secrets are redacted from the excerpt before it is saved.
+- RED needs a non-zero exit code. GREEN and COMPLETE need zero. When the observed code does not fit the action, the result is `TaskTransitionInvalid`, the error details carry the observation, and `spec.json` is unchanged.
+- The RED excerpt is classified `setup`, `assertion`, or `ambiguous`. After a `setup` or `ambiguous` RED, the agent can fix the test and record RED again; the new observation replaces the old one. An `assertion` RED is final.
+- The JEV `red` check runs after RED is recorded and judges the persisted excerpt, not a summary the agent wrote.
+- One evidence command runs per feature at a time. A second request for the same feature waits for the feature lock and then reports `RevisionConflict` or `LockTimeout`.
+
+### Settings
+
+| Setting | Meaning |
+|---|---|
+| `SDD_EVIDENCE_MODE` | `verified` (default) or `self-reported`. In `self-reported` mode the 5.5.0 evidence object is accepted and saved with `source: "caller"`. |
+| `SDD_EVIDENCE_TIMEOUT_MS` | Timeout for one command in milliseconds. The default is 120000. The limits are 5000 and 600000. |
+| `.spec/sdd-config.json` | Optional project settings: `{"evidence":{"mode":"verified","timeoutMs":120000,"allowedCommands":["npm","npx"],"passEnv":["MY_TEST_TOKEN"]}}`. |
+
+The environment variable wins over the project setting. An unrecognized value falls back to the default, and the tool result carries one warning. `sdd-status` reports the resolved `evidenceMode`.
+
+### Allowed programs and environment
+
+- The program in `run.argv[0]` must be on the allowlist after its directory and any `.cmd`, `.exe`, or `.bat` suffix are removed. The default list is `node`, `npm`, `npx`, `pnpm`, `yarn`, `bun`, `jest`, `vitest`, `tsc`, `pytest`, `python`, `python3`, `go`, `cargo`, `make`, `mvn`, `gradle`, and `dotnet`. `evidence.allowedCommands` replaces it. Shells such as `sh` and `bash` are never allowed, and `argv` is never interpreted by a shell.
+- The test process receives the server environment without `SDD_JEV_API_KEY` and without any variable whose name contains `KEY`, `TOKEN`, `SECRET`, or `PASSWORD` as a word. Names listed in `evidence.passEnv` pass through. `CI=1` is set when `CI` is unset.
+
+### Errors
+
+| Code | Meaning | What to do |
+|---|---|---|
+| `SelfReportedEvidenceRejected` | Verified mode is on and the record carried an evidence object but no `run`. | Pass the command as `run.argv`, or set `SDD_EVIDENCE_MODE=self-reported`. |
+| `EvidenceCommandNotAllowed` | The program is not on the allowlist. | Use an allowed test runner or add the program to `evidence.allowedCommands`. |
+| `EvidenceRunTimedOut` | The command did not finish within the timeout. Nothing was saved. | Narrow the test selection or raise `SDD_EVIDENCE_TIMEOUT_MS`. |
+| `EvidenceRunnerUnavailable` | The server has no evidence runner wired in. | Report the installation problem; this does not happen with the packaged server. |
+
+### Compatibility and rollback
+
+- Evidence entries in `spec.json` stay on schema version 5. New fields (`source`, `argv`, `output_sha256`, `duration_ms`, `output_excerpt`, `truncated`, `redactions`, `red_classification`) are added only to engine-observed entries. An entry without `source` is read as `caller`.
+- `sdd-status` reports the source of each recorded entry per task, and the handoff marks each completed task `(verified)` when every entry was engine-observed and `(self-reported)` otherwise. Features without evidence render as before.
+- To roll back, set `SDD_EVIDENCE_MODE=self-reported`. Specs written in verified mode stay readable.
+
 ## Optional JEV advisory
 
 JEV is an optional, advisory check. It calls the TypeSafe Jev decision API to judge meaning that the structural gates cannot judge. It is off by default. When it is off, the workflow behaves as before and JEV creates no files.
@@ -163,7 +206,7 @@ JEV sends each request to one fixed HTTPS endpoint. It makes one attempt, follow
 | `requirements` | After validation passes, before approval | Requirement text and the feature goal |
 | `design` | After validation passes, before approval | Design decisions and the requirements they cover |
 | `testcases` | After tasks validation, before the test-case or approval question | Task text and the planned test cases |
-| `red` | Before the RED record | Test command, failure summary, test name, and acceptance criteria |
+| `red` | After the RED record | Test command, the engine's output excerpt (or the caller summary in `self-reported` mode), test name, and acceptance criteria |
 | `security`, `principles` | After a review or audit returns | Existing findings and bounded code excerpts |
 | `commit` | Before a commit | Nothing. It only reads a saved sidecar. |
 

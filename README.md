@@ -249,6 +249,8 @@ Every packaged entrypoint exposes the same 17 tools:
 
 `sdd-jev-check` is opt-in and advisory. It is off by default and never changes workflow state. For a PR or branch review, its code checks accept an optional `baseRef` to judge committed changes. See [Optional JEV advisory](docs/WORKFLOW.md#optional-jev-advisory).
 
+Task evidence is verified by default: `sdd-spec-impl` takes the test command as `run.argv`, and the server runs it and records the observed exit code, so an agent cannot type a passing result. Set `SDD_EVIDENCE_MODE=self-reported` for the 5.5.0 behavior. See [Verified execution evidence](docs/WORKFLOW.md#verified-execution-evidence).
+
 Feature-scoped tools use `featureName`; v5 payloads bind phase mutations and approvals to exact revisions and artifact hashes. This inventory is for MCP integrators and runtime maintainers—not end-user workflow instructions. Hosts discover installed Skills, and the installer supports `--list`.
 
 ## Integrator/runtime reference: compact continuation

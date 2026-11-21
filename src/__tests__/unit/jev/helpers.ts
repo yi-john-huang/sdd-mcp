@@ -72,7 +72,8 @@ export async function createEngineProject(feature = 'payments'): Promise<EngineP
   const fileSystem = new NodeFileSystemAdapter();
   const logger = silentLogger();
   const repository = { save: async () => undefined, findById: async () => null, findByPath: async () => null, list: async () => [], delete: async () => undefined };
-  const engine = new WorkflowEngineService(repository, new ContextCompactionService(fileSystem, logger), logger, fileSystem);
+  // JEV fixtures record caller evidence directly; verified mode is covered by the workflow evidence suite.
+  const engine = new WorkflowEngineService(repository, new ContextCompactionService(fileSystem, logger), logger, fileSystem, undefined, { SDD_EVIDENCE_MODE: 'self-reported' });
   await engine.initializeFeature({ projectRoot: root, featureName: feature, description: 'Govern checkout', language: 'en' });
   return {
     root, feature, engine, fileSystem,

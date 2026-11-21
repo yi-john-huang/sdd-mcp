@@ -467,7 +467,7 @@
   },
   {
     "name": "sdd-spec-impl",
-    "description": "Record governed implementation task progress",
+    "description": "Record governed implementation task progress. In verified evidence mode, pass the test command as run.argv; the server runs it and records the observed exit code.",
     "inputSchema": {
       "type": "object",
       "properties": {
@@ -520,6 +520,26 @@
           ],
           "additionalProperties": false
         },
+        "run": {
+          "type": "object",
+          "properties": {
+            "argv": {
+              "type": "array",
+              "minItems": 1,
+              "maxItems": 64,
+              "items": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 4096,
+                "pattern": "^[^\\u0000]+$"
+              }
+            }
+          },
+          "required": [
+            "argv"
+          ],
+          "additionalProperties": false
+        },
         "affectedArtifacts": {
           "type": "array",
           "maxItems": 100,
@@ -561,8 +581,17 @@
             ]
           },
           "then": {
-            "required": [
-              "evidence"
+            "anyOf": [
+              {
+                "required": [
+                  "evidence"
+                ]
+              },
+              {
+                "required": [
+                  "run"
+                ]
+              }
             ]
           }
         },

@@ -57,8 +57,12 @@ docker-compose up -d --scale sdd-mcp-server=3
 | `SDD_JEV_API_KEY` | JEV API key. Read only from this variable | - | - |
 | `SDD_JEV_ALLOW_CODE` | Lets JEV send bounded code excerpts (same values as `SDD_JEV_ENABLED`) | unset (off) | `true` |
 | `SDD_JEV_TIMEOUT_MS` | JEV request timeout (ms), limited to 1000–15000 | `5000` | `8000` |
+| `SDD_EVIDENCE_MODE` | `verified`: the server runs each task's test command from `run.argv` and records the observed exit code. `self-reported`: the 5.5.0 evidence object is accepted. Wins over `.spec/sdd-config.json` `{"evidence":{"mode":...}}`. Any other value means `verified` plus a warning | `verified` | `self-reported` |
+| `SDD_EVIDENCE_TIMEOUT_MS` | Timeout for one evidence command (ms), limited to 5000–600000. Wins over `.spec/sdd-config.json` `{"evidence":{"timeoutMs":...}}` | `120000` | `300000` |
 
-See [Optional JEV advisory](docs/WORKFLOW.md#optional-jev-advisory).
+See [Optional JEV advisory](docs/WORKFLOW.md#optional-jev-advisory) and [Verified execution evidence](docs/WORKFLOW.md#verified-execution-evidence).
+
+`.spec/sdd-config.json` may also hold `evidence.allowedCommands` (the programs the server may run; the default list is `node`, `npm`, `npx`, `pnpm`, `yarn`, `bun`, `jest`, `vitest`, `tsc`, `pytest`, `python`, `python3`, `go`, `cargo`, `make`, `mvn`, `gradle`, `dotnet`) and `evidence.passEnv` (variable names that reach the test process although they look like secrets). A list with an invalid entry is ignored as a whole, and the default applies.
 
 ### Advanced Configuration
 
