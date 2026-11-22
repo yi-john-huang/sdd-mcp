@@ -26,11 +26,13 @@ jobs:
       # :0.1 follows patch releases. https://github.com/yi-john-huang/js-ci-runner
       # A job-level `container:` cannot be used: JavaScript actions such as checkout do not run
       # in Alpine containers on ARM64 runners. The image runs as the runner's own non-root user
-      # so the files it writes in the workspace stay removable by the next checkout.
+      # so the files it writes in the workspace stay removable by the next checkout. `--init` adds a
+      # PID 1 that reaps orphans; without it, killed grandchildren stay zombies and the process-tree
+      # kill test sees them as alive.
       - name: Build and test in the js-ci-runner image
         run: |
           mkdir -p "$HOME/.cache/sdd-mcp-npm"
-          docker run --rm --pull always \
+          docker run --rm --init --pull always \
             --user "$(id -u):$(id -g)" -e HOME=/tmp/home -e CI=true \
             -v "$PWD:/work" -w /work \
             -v "$HOME/.cache/sdd-mcp-npm:/tmp/home/.npm" \
