@@ -134,6 +134,12 @@ describe('NodeProcessAdapter', () => {
         expect(Date.now() - started).toBeLessThan(5_000);
       });
 
+      posixIt('should report a clean exit just before the timeout as exited, not timed-out', async () => {
+        const result = await adapter.run(nodeScript(escapee('setTimeout(() => process.exit(0), 600);'), { timeoutMs: 1_000 }));
+        escaped.push(Number(result.output.toString('utf8')));
+        expect(result).toMatchObject({ kind: 'exited', exitCode: 0 });
+      });
+
       posixIt('should still settle as timed-out after the program is killed', async () => {
         const started = Date.now();
         const result = await adapter.run(nodeScript(escapee('setTimeout(() => {}, 60000);'), { timeoutMs: 1_000 }));
@@ -183,8 +189,17 @@ describe('NodeProcessAdapter', () => {
       expect(calls).toHaveLength(1);
       expect(calls[0].file).toBe('cmd.exe');
       expect(calls[0].args.slice(0, 3)).toEqual(['/d', '/s', '/c']);
-      expect(calls[0].args[3]).toContain('^"a^&b^"');
+      expect(calls[0].args[3]).toBe('"npm ^"test^" ^"a^&b^""');
       expect(calls[0].options).toMatchObject({ shell: false, windowsVerbatimArguments: true, detached: false });
+    });
+
+    it('should resolve a relative program against the request cwd', async () => {
+      const { calls, spawnProcess } = fakeSpawn();
+      const seen: string[] = [];
+      const windows = new NodeProcessAdapter({ platform: 'win32', spawnProcess, isFile: (file) => { seen.push(file); return file === 'C:\\proj\\bin\\tool.exe'; } });
+      await windows.run(request({ argv: ['bin\\tool.exe'], cwd: 'C:\\proj', env: { PATH: 'C:\\n' } }));
+      expect(seen).toEqual(['C:\\proj\\bin\\tool.exe']);
+      expect(calls[0].file).toBe('C:\\proj\\bin\\tool.exe');
     });
 
     it('should start an .exe directly with its resolved path', async () => {
@@ -192,6 +207,27 @@ describe('NodeProcessAdapter', () => {
       const windows = new NodeProcessAdapter({ platform: 'win32', spawnProcess, isFile: (file) => file === 'C:\\n\\node.exe' });
       await windows.run(request({ argv: ['node', '-v'], env: { PATH: 'C:\\n' } }));
       expect(calls[0]).toMatchObject({ file: 'C:\\n\\node.exe', args: ['-v'], options: { windowsVerbatimArguments: false } });
+    });
+  });
+
+  describe('settling once', () => {
+    it('should signal the group with SIGKILL once when close arrives after the drain already settled a timeout', async () => {
+      const kill = jest.spyOn(process, 'kill').mockImplementation(() => true);
+      try {
+        const child = Object.assign(new EventEmitter(), { stdout: new PassThrough(), stderr: new PassThrough(), pid: 4242 });
+        const spawnProcess = (() => child) as unknown as typeof spawn;
+        const posix = new NodeProcessAdapter({ platform: 'darwin', spawnProcess });
+        const pending = posix.run(request({ argv: ['node'], timeoutMs: 20 }));
+        await new Promise((resolve) => setTimeout(resolve, 60));
+        child.emit('exit', null, 'SIGTERM');
+        await expect(pending).resolves.toMatchObject({ kind: 'timed-out' });
+        child.emit('close', null, 'SIGTERM');
+        await new Promise((resolve) => setImmediate(resolve));
+        const sigkills = kill.mock.calls.filter(([pid, signal]) => pid === -4242 && signal === 'SIGKILL');
+        expect(sigkills).toHaveLength(1);
+      } finally {
+        kill.mockRestore();
+      }
     });
   });
 

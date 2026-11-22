@@ -19,7 +19,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - The JEV `red` check judges the engine's persisted excerpt when one exists and binds its sidecar to the output hash; the caller summary is ignored in that case.
 - The evidence command runs under a per-feature evidence-run lock instead of the feature lock, so `sdd-status`, JEV checks, and handoff reads no longer fail with `LockTimeout` while tests run. Task actions on one feature still run one command at a time.
 - A run settles within 1 s after the program exits, even when a descendant that left the process group keeps stdout open. On timeout, group members that ignored SIGTERM are killed.
-- On Windows, `npm`, `npx`, `yarn`, and `pnpm` resolve through `PATH` and `PATHEXT`; `.cmd` and `.bat` files run through `cmd.exe /d /s /c` with escaped arguments, because Node cannot spawn them without a shell.
+- On Windows, `npm`, `npx`, `yarn`, and `pnpm` resolve through `PATH` and `PATHEXT`; `.cmd` and `.bat` files run through `cmd.exe /d /s /c` under their original name with escaped arguments, because Node cannot spawn them without a shell. A relative program resolves against the project root. An `argv` element containing a carriage return or line feed is rejected with `InvalidParams` on every platform.
 - The Codex registration sets `tool_timeout_sec = 660`, so Codex waits for the longest evidence command instead of abandoning it after its 60 s default.
 - The MCP contract stays at 17 tools. `sdd-spec-impl` gains the optional `run` input; the 5.5.0 request shape remains valid.
 

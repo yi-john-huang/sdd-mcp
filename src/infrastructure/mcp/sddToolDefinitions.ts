@@ -45,7 +45,7 @@ const run = {
   properties: {
     argv: {
       type: 'array', minItems: 1, maxItems: 64,
-      items: { type: 'string', minLength: 1, maxLength: 4096, pattern: '^[^\\u0000]+$' },
+      items: { type: 'string', minLength: 1, maxLength: 4096, pattern: '^[^\\u0000\\r\\n]+$' },
     },
   },
   required: ['argv'],

@@ -17,6 +17,7 @@ export const MAX_ARG_BYTES = 4096;
 const SECRET_ENV_NAME = /(KEY|TOKEN|SECRET|PASSWORD|PASSWD|CREDENTIALS?)(_|$)|(^|_)PAT(_|$)/i;
 const WINDOWS_SUFFIX = /\.(cmd|exe|bat)$/i;
 const PATH_SEPARATORS = /[/\\]/;
+const LINE_BREAK = /[\r\n]/;
 const UTF8_CONTINUATION = 0b1000_0000;
 const UTF8_CONTINUATION_MASK = 0b1100_0000;
 
@@ -78,6 +79,8 @@ function validateArgv(argv: readonly string[]): void {
     if (typeof element !== 'string' || element.length === 0 || element.includes('\u0000') || Buffer.byteLength(element, 'utf8') > MAX_ARG_BYTES) {
       throw invalid(`every argv element must be 1 to ${MAX_ARG_BYTES} bytes without NUL`);
     }
+    // A line break ends a cmd.exe command line, and Windows runs .cmd and .bat programs through cmd.exe.
+    if (LINE_BREAK.test(element)) throw invalid('argv elements must not contain a line break');
   }
 }
 

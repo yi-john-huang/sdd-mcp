@@ -99,7 +99,7 @@ export class NodeProcessAdapter implements ProcessPort {
 
   /** Windows cannot spawn a .cmd or .bat file without cmd.exe, so those run through an escaped cmd.exe line. */
   private plan(request: ProcessRunRequest): SpawnPlan {
-    if (this.windows) return windowsSpawnPlan(request.argv, request.env, this.isFile);
+    if (this.windows) return windowsSpawnPlan(request.argv, request.env, request.cwd, this.isFile);
     return { file: request.argv[0], args: request.argv.slice(1), windowsVerbatimArguments: false };
   }
 
@@ -149,6 +149,8 @@ export class NodeProcessAdapter implements ProcessPort {
         clearTimeout(drainTimer);
       };
       const finish = (code: number | null, signal: NodeJS.Signals | null): void => {
+        // The drain timer and the close event can both arrive; only the first may signal the group.
+        if (settled) return;
         clearTimers();
         const bytes = output.bytes();
         if (timedOut) {
@@ -168,6 +170,11 @@ export class NodeProcessAdapter implements ProcessPort {
       // 'close' waits for every holder of the pipes. A descendant that left the process group can hold them
       // forever, so after the program itself exits, the result settles within EXIT_DRAIN_MS regardless.
       child.on('exit', (code, signal) => {
+        // A program that exited before its deadline is not timed out, however long the pipes stay open.
+        if (!timedOut) {
+          clearTimeout(termTimer);
+          clearTimeout(killTimer);
+        }
         drainTimer = setTimeout(() => {
           child.stdout?.destroy();
           child.stderr?.destroy();

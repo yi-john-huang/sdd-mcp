@@ -531,7 +531,7 @@
                 "type": "string",
                 "minLength": 1,
                 "maxLength": 4096,
-                "pattern": "^[^\\u0000]+$"
+                "pattern": "^[^\\u0000\\r\\n]+$"
               }
             }
           },

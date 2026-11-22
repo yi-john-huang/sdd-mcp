@@ -1,3 +1,4 @@
+import { SDD_TOOL_DEFINITIONS } from '../../../infrastructure/mcp/sddToolDefinitions';
 import { SDDToolAdapter, SDD_TOOL_NAMES } from '../../../adapters/cli/SDDToolAdapter';
 import { AjvValidationAdapter } from '../../../infrastructure/adapters/AjvValidationAdapter';
 
@@ -110,7 +111,7 @@ describe('v5 MCP tool inventory', () => {
         properties: {
           argv: {
             type: 'array', minItems: 1, maxItems: 64,
-            items: { type: 'string', minLength: 1, maxLength: 4096, pattern: '^[^\\u0000]+$' },
+            items: { type: 'string', minLength: 1, maxLength: 4096, pattern: '^[^\\u0000\\r\\n]+$' },
           },
         },
         required: ['argv'],
@@ -402,5 +403,18 @@ describe('v5 disk-authoritative handler routing', () => {
         patterns: ['src/payments/**'],
       }),
     );
+  });
+});
+
+describe('run.argv element pattern', () => {
+  const schema = SDD_TOOL_DEFINITIONS.find(({ name }) => name === 'sdd-spec-impl')!.inputSchema as unknown as { properties: { run: { properties: { argv: { items: { pattern: string } } } } } };
+  const element = new RegExp(schema.properties.run.properties.argv.items.pattern, 'u');
+
+  it.each([['test'], ['--runInBand'], ['a b & c']])('should accept %j', (value) => {
+    expect(element.test(value)).toBe(true);
+  });
+
+  it.each([['line\nfeed'], ['carriage\rreturn'], ['nul\u0000byte']])('should reject %j, as the server does', (value) => {
+    expect(element.test(value)).toBe(false);
   });
 });
