@@ -162,7 +162,7 @@ The environment variable wins over the project setting. An unrecognized value fa
 ### Allowed programs and environment
 
 - The program in `run.argv[0]` must be on the allowlist after its directory and any `.cmd`, `.exe`, or `.bat` suffix are removed. The default list is `node`, `npm`, `npx`, `pnpm`, `yarn`, `bun`, `jest`, `vitest`, `tsc`, `pytest`, `python`, `python3`, `go`, `cargo`, `make`, `mvn`, `gradle`, and `dotnet`. `evidence.allowedCommands` replaces it. Shells such as `sh` and `bash` are never allowed, and `argv` is never interpreted by a shell.
-- The test process receives the server environment without `SDD_JEV_API_KEY` and without any variable whose name contains `KEY`, `TOKEN`, `SECRET`, or `PASSWORD` as a word. Names listed in `evidence.passEnv` pass through. `CI=1` is set when `CI` is unset.
+- The test process receives the server environment without `SDD_JEV_API_KEY` and without any variable whose name ends a word with `KEY`, `TOKEN`, `SECRET`, `PASSWORD`, `PASSWD`, or `CREDENTIAL(S)` (joined forms such as `OPENAI_APIKEY` included) or holds `PAT` as a word. Names listed in `evidence.passEnv` pass through. `CI=1` is set when `CI` is unset.
 
 ### Errors
 

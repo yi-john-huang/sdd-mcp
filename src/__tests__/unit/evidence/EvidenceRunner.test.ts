@@ -89,6 +89,17 @@ describe('childEnv', () => {
     expect(env.CI).toBe('1');
   });
 
+  it('should also drop joined, abbreviated, and credential-style secret names', () => {
+    const secrets = {
+      OPENAI_APIKEY: 'k', GITHUBTOKEN: 't', ACCESSKEY: 'k', DB_PASSWD: 'p', GH_PAT: 'p', NPM_PAT_RO: 'p',
+      GOOGLE_APPLICATION_CREDENTIALS: '/c.json', AZURE_CREDENTIAL: 'c', CLIENTSECRET: 's',
+    };
+    const lookalikes = { PWD: '/repo', PATH: '/usr/bin', PATHEXT: '.EXE', KEYBOARD: 'us', TOKENIZERS_PARALLELISM: 'false', SSH_AUTH_SOCK: '/s', PATCH_LEVEL: '1' };
+    const env = childEnv({ ...secrets, ...lookalikes }, settings());
+    for (const name of Object.keys(secrets)) expect(env[name]).toBeUndefined();
+    for (const [name, value] of Object.entries(lookalikes)) expect(env[name]).toBe(value);
+  });
+
   it('should re-add passEnv names and leave CI alone when it is already set', () => {
     const env = childEnv({ ...serverEnv, CI: 'true' }, settings({ evidence: { passEnv: ['MY_TEST_TOKEN'] } }));
     expect(env.MY_TEST_TOKEN).toBe('keep-me');

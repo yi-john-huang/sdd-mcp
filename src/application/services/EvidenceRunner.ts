@@ -10,7 +10,11 @@ export const EXCERPT_BYTES = 8 * 1024;
 export const MAX_ARGV_LENGTH = 64;
 export const MAX_ARG_BYTES = 4096;
 
-const SECRET_ENV_NAME = /(^|_)(KEY|TOKEN|SECRET|PASSWORD)(_|$)/i;
+/**
+ * A name ending a word in a secret term, joined (`OPENAI_APIKEY`, `GITHUBTOKEN`) or not, or holding `PAT` as a whole word.
+ * Dropping a harmless look-alike costs less than leaking a credential; `passEnv` restores any name a test needs.
+ */
+const SECRET_ENV_NAME = /(KEY|TOKEN|SECRET|PASSWORD|PASSWD|CREDENTIALS?)(_|$)|(^|_)PAT(_|$)/i;
 const WINDOWS_SUFFIX = /\.(cmd|exe|bat)$/i;
 const PATH_SEPARATORS = /[/\\]/;
 const UTF8_CONTINUATION = 0b1000_0000;
