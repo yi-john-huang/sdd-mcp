@@ -58,7 +58,7 @@ docker-compose up -d --scale sdd-mcp-server=3
 | `SDD_JEV_ALLOW_CODE` | Lets JEV send bounded code excerpts (same values as `SDD_JEV_ENABLED`) | unset (off) | `true` |
 | `SDD_JEV_TIMEOUT_MS` | JEV request timeout (ms), limited to 1000–15000 | `5000` | `8000` |
 | `SDD_EVIDENCE_MODE` | `verified`: the server runs each task's test command from `run.argv` and records the observed exit code. `self-reported`: the 5.5.0 evidence object is accepted. Wins over `.spec/sdd-config.json` `{"evidence":{"mode":...}}`. Any other value means `verified` plus a warning | `verified` | `self-reported` |
-| `SDD_EVIDENCE_TIMEOUT_MS` | Timeout for one evidence command (ms), limited to 5000–600000. Wins over `.spec/sdd-config.json` `{"evidence":{"timeoutMs":...}}` | `120000` | `300000` |
+| `SDD_EVIDENCE_TIMEOUT_MS` | Timeout for one evidence command (ms), limited to 5000–600000. Wins over `.spec/sdd-config.json` `{"evidence":{"timeoutMs":...}}`. The host must wait at least this long for a tool result; the Codex registration sets `tool_timeout_sec = 660` | `120000` | `300000` |
 
 See [Optional JEV advisory](docs/WORKFLOW.md#optional-jev-advisory) and [Verified execution evidence](docs/WORKFLOW.md#verified-execution-evidence).
 
