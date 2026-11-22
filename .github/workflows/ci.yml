@@ -13,9 +13,13 @@ concurrency:
   group: ci-${{ github.ref }}
   cancel-in-progress: true
 
+# Both jobs run on the maintainer's local self-hosted runners (label `sdd-mcp`):
+# a macOS host and a Lima Linux VM on it. Pull requests from forks never run here
+# unless a maintainer approves them (repository setting: all external contributors).
 jobs:
-  test:
-    runs-on: ubuntu-latest
+  test-linux:
+    if: github.event_name == 'push' || github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: [self-hosted, Linux, sdd-mcp]
     # Run the steps in the hardened js-ci-runner image: Node.js 24 on Alpine, non-root (UID 1001).
     # :0.1 follows patch releases. https://github.com/yi-john-huang/js-ci-runner
     container: ghcr.io/yi-john-huang/js-ci-runner/ci:0.1
@@ -27,6 +31,19 @@ jobs:
           path: ~/.npm
           key: npm-${{ hashFiles('package-lock.json') }}
           restore-keys: npm-
+      - run: node --version && id
+      - run: npm ci
+      - run: npm run build
+      - run: npm test
+
+  test-macos:
+    if: github.event_name == 'push' || github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: [self-hosted, macOS, sdd-mcp]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
       - run: node --version && id
       - run: npm ci
       - run: npm run build
