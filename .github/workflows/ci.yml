@@ -20,21 +20,22 @@ jobs:
   test-linux:
     if: github.event_name == 'push' || github.event.pull_request.head.repo.full_name == github.repository
     runs-on: [self-hosted, Linux, sdd-mcp]
-    # Run the steps in the hardened js-ci-runner image: Node.js 24 on Alpine, non-root (UID 1001).
-    # :0.1 follows patch releases. https://github.com/yi-john-huang/js-ci-runner
-    container: ghcr.io/yi-john-huang/js-ci-runner/ci:0.1
     steps:
       - uses: actions/checkout@v4
-      - name: Cache the npm download cache
-        uses: actions/cache@v4
-        with:
-          path: ~/.npm
-          key: npm-${{ hashFiles('package-lock.json') }}
-          restore-keys: npm-
-      - run: node --version && id
-      - run: npm ci
-      - run: npm run build
-      - run: npm test
+      # Build and test in the hardened js-ci-runner image (Node.js 24 on Alpine).
+      # :0.1 follows patch releases. https://github.com/yi-john-huang/js-ci-runner
+      # A job-level `container:` cannot be used: JavaScript actions such as checkout do not run
+      # in Alpine containers on ARM64 runners. The image runs as the runner's own non-root user
+      # so the files it writes in the workspace stay removable by the next checkout.
+      - name: Build and test in the js-ci-runner image
+        run: |
+          mkdir -p "$HOME/.cache/sdd-mcp-npm"
+          docker run --rm --pull always \
+            --user "$(id -u):$(id -g)" -e HOME=/tmp/home -e CI=true \
+            -v "$PWD:/work" -w /work \
+            -v "$HOME/.cache/sdd-mcp-npm:/tmp/home/.npm" \
+            ghcr.io/yi-john-huang/js-ci-runner/ci:0.1 \
+            sh -c 'node --version && id && npm ci && npm run build && npm test'
 
   test-macos:
     if: github.event_name == 'push' || github.event.pull_request.head.repo.full_name == github.repository
