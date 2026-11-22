@@ -5,7 +5,7 @@
 
 A Model Context Protocol server and target-native installer for governed Spec-Driven Development (SDD) in Claude Code, Codex, and Oh My Pi (OMP).
 
-> **v5.4.0** — The new `output-clarity-ladder` skill makes explanation, summary, and teaching replies easier to check. It is the only skill the model applies without a command, and it ships English, Japanese, and Traditional Chinese guidance. Runtime blockers and errors now state the next action. Releases are automated: a merge to `master` publishes to npm with provenance. Claude Code requires 2.1.284+ for the pinned 5.5 defaults.
+> **v6.0.0** — Task evidence is now verified. The server runs each RED, GREEN, and completion test command from `run.argv` and records the exit code it observes, so an agent cannot type a passing result. This is a breaking default: set `SDD_EVIDENCE_MODE=self-reported` to keep the 5.5.0 behavior. Optional JEV advisory checks (from 5.5.0) can judge RED validity from the recorded output. Claude Code requires 2.1.284+ for the pinned 5.5 model defaults.
 
 ## Why sdd-mcp?
 
