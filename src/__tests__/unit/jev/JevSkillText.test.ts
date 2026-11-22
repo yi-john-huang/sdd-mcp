@@ -14,7 +14,7 @@ const STEPS: Array<[string, RegExp[]]> = [
   ['sdd-requirements', [/internally run the JEV `requirements` check/, /never affects approval/i]],
   ['sdd-design', [/internally run the JEV `design` check/, /never affects approval/i]],
   ['sdd-tasks', [/internally run the JEV `testcases` check/, /case list/, /never records the checkpoint/i]],
-  ['sdd-implement', [/internally run the JEV `red` check/, /never blocks recording/i]],
+  ['sdd-implement', [/run the JEV `red` check internally/, /advisory only/i, /run\.argv/]],
   ['sdd-review', [
     /parent \(never an agent\)/, /JEV `security` and `principles` checks/, /only violated principles/i,
     /pass (?:its|the) base[^.]*as `baseRef`/i, /omit `baseRef`/i,

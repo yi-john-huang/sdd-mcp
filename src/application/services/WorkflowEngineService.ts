@@ -2,11 +2,14 @@ import { createHash } from 'node:crypto';
 import { readFile, rmdir, stat, unlink } from 'node:fs/promises';
 import { readFileSync } from 'node:fs';
 import path from 'node:path';
-import { injectable, inject } from 'inversify';
+import { injectable, inject, optional } from 'inversify';
 import { TYPES } from '../../infrastructure/di/types.js';
 import {
-  ExecutionEvidence, PhaseRecord, Project, TaskStatus, WorkflowPhase,
+  ExecutionEvidence, PhaseRecord, Project, TaskStatus, WorkflowPhase, type EvidenceClassification, type EvidenceSource,
 } from '../../domain/types.js';
+import type { EvidenceRunner, ObservedEvidence } from './EvidenceRunner.js';
+import { resolveEvidenceSettings, type EvidenceMode, type EvidenceSettings } from './EvidenceSettings.js';
+import { readProjectConfig } from './ProjectConfig.js';
 import { ProjectRepository, LoggerPort, FileSystemPort } from '../../domain/ports.js';
 import {
   ContextCompactionService,
@@ -23,6 +26,9 @@ const PHASES: ApprovablePhase[] = ['requirements', 'design', 'tasks'];
 const JOURNAL_LIMIT = 4 * 1024 * 1024;
 const JOURNAL_FILE_LIMIT = 24 * 1024 * 1024;
 const PHASE_CONTENT_CHARACTER_LIMIT = 1_048_576;
+const EVIDENCE_ACTIONS: ReadonlySet<string> = new Set(['record-red', 'record-green', 'complete']);
+/** Held for a whole task action, command included, so one feature never runs two evidence commands at once. */
+const EVIDENCE_RUN_LOCK = '.evidence-run.lock';
 
 export type NextAction =
   | { kind: 'submit-phase' | 'revise-phase' | 'request-approval'; phase: ApprovablePhase }
@@ -72,7 +78,15 @@ export interface DurableFeatureStatus {
   readonly nextAction: NextAction; readonly blockers: readonly string[];
   readonly phases: Record<ApprovablePhase, PhaseRecord & { observedArtifactSha256?: string }>;
   readonly checkpoint: { required: boolean; reviewed: boolean; reviewedRevision?: number; reviewedArtifactSha256?: string };
-  readonly implementation?: { revision: number; completed: number; total: number; active: number; blocked: number };
+  readonly implementation?: { revision: number; completed: number; total: number; active: number; blocked: number; tasks?: Readonly<Record<string, TaskEvidenceStatus>> };
+  /** The mode the server resolved for this project: who may supply task evidence. */
+  readonly evidenceMode?: EvidenceMode;
+}
+/** Per-task view of recorded evidence: which side observed each entry. */
+export interface TaskEvidenceStatus {
+  readonly status: TaskStatus;
+  readonly evidence: { readonly red?: EvidenceSource; readonly green?: EvidenceSource; readonly verification?: EvidenceSource };
+  readonly redClassification?: EvidenceClassification;
 }
 /** Read-only view for advisory checks; carries no handle that can mutate workflow state. */
 export interface AdvisorySnapshot {
@@ -88,13 +102,33 @@ export interface AdvisorySnapshot {
   readonly designContent?: string;
   readonly implementation?: {
     readonly revision: number;
-    readonly tasks: Readonly<Record<string, { readonly status: TaskStatus; readonly tddRequired: boolean; readonly acceptanceCriteria: string }>>;
+    readonly tasks: Readonly<Record<string, { readonly status: TaskStatus; readonly tddRequired: boolean; readonly acceptanceCriteria: string; readonly red?: AdvisoryRedEntry }>>;
   };
+}
+/** The recorded RED as advisory checks see it: who observed it and what the runner printed. */
+export interface AdvisoryRedEntry {
+  readonly source: EvidenceSource;
+  readonly command: string;
+  readonly exitCode: number;
+  readonly outputExcerpt?: string;
+  readonly outputSha256?: string;
+  readonly redClassification?: EvidenceClassification;
 }
 export interface RecordTaskProgressRequest extends FeatureRequest {
   readonly taskNumber: string; readonly action: 'start' | 'record-red' | 'record-green' | 'complete' | 'block';
   readonly expectedRevision: number; readonly evidence?: { command: string; exitCode: number; summary: string };
+  /** The test command the server runs itself; required for evidence actions in verified mode. */
+  readonly run?: { readonly argv: readonly string[] };
   readonly affectedArtifacts?: string[]; readonly blocker?: string;
+}
+/** What the server observed when it ran the evidence command; echoed in results and error details. */
+export interface ObservedEvidenceResult {
+  readonly exitCode?: number; readonly outputSha256?: string; readonly outputExcerpt: string; readonly durationMs: number;
+  readonly truncated?: boolean; readonly redactions?: number; readonly classification?: EvidenceClassification; readonly spawnFailed?: string;
+}
+export interface RecordTaskProgressResult {
+  featureName: string; taskNumber: string; taskState: TaskStatus; revision: number; nextAction: NextAction; handoff: HandoffPublication;
+  evidenceMode?: EvidenceMode; observed?: ObservedEvidenceResult; warnings?: readonly string[];
 }
 interface WorkflowSpecV5 extends Record<string, unknown> {
   schema_version: 5; feature_name: string; description: string; language: string; phase: WorkflowPhase;
@@ -113,6 +147,7 @@ interface WorkflowSpecV5 extends Record<string, unknown> {
 interface JournalBytes { base64: string; sha256: string }
 interface SubmissionJournal { schema_version: 1; spec: { prior: JournalBytes; next: JournalBytes }; artifact: { prior: JournalBytes | null; next: JournalBytes } }
 const VALIDATION_STATUSES = new Set(['not-run', 'passed', 'failed', 'legacy-accepted'] as const);
+const isNonNegativeInteger = (field: unknown): boolean => Number.isInteger(field) && (field as number) >= 0;
 const TASK_STATUSES = new Set<TaskStatus>([
   'pending',
   'in-progress',
@@ -132,6 +167,9 @@ export class WorkflowEngineService {
     @inject(TYPES.ContextCompactionService) private readonly contextCompactionService: ContextCompactionService,
     @inject(TYPES.LoggerPort) private readonly logger: LoggerPort,
     @inject(TYPES.FileSystemPort) private readonly fileSystem?: FileSystemPort,
+    @inject(TYPES.EvidenceRunner) @optional() private readonly evidenceRunner?: EvidenceRunner,
+    /** The server environment for evidence settings and child processes; `{}` when not injected. */
+    @inject(TYPES.ProcessEnvironment) @optional() private readonly environment: Readonly<Record<string, string | undefined>> = {},
   ) {}
 
   async initializeFeature(request: InitializeFeatureRequest): Promise<Project> {
@@ -363,33 +401,74 @@ export class WorkflowEngineService {
     });
   }
 
-  async recordTaskProgress(request: RecordTaskProgressRequest): Promise<{ featureName: string; taskNumber: string; taskState: TaskStatus; revision: number; nextAction: NextAction; handoff: HandoffPublication }> {
-    return this.withLockedFeature(request.projectRoot, request.featureName, true, async ({ featureRoot, spec, commitSpec }) => {
+  /**
+   * Task actions on one feature are serialized by the evidence-run lock, so a command runs at most once at a time.
+   * The command itself runs outside the feature lock, which stays free for status, JEV, and handoff reads;
+   * the transition is checked before the run and again, against the current revision, before the commit.
+   */
+  async recordTaskProgress(request: RecordTaskProgressRequest): Promise<RecordTaskProgressResult> {
+    return this.withEvidenceRunLock(request.projectRoot, request.featureName, async () => {
+      const outcome = request.run && EVIDENCE_ACTIONS.has(request.action) ? await this.observeBeforeCommit(request, request.run) : undefined;
+      return this.commitTaskProgress(request, outcome);
+    });
+  }
+
+  private async observeBeforeCommit(request: RecordTaskProgressRequest, run: NonNullable<RecordTaskProgressRequest['run']>): Promise<ObservedEvidence> {
+    const { projectRoot, settings } = await this.withLockedFeature(request.projectRoot, request.featureName, false, async ({ projectRoot, featureRoot, spec }) => {
       await this.assertNoApprovedArtifactDrift(featureRoot, spec);
-      const implementation = spec.implementation;
-      if (!implementation) throw new GovernanceError('TaskTransitionInvalid', 'Implementation has not started. Start implementation before changing task state.');
-      if (implementation.revision !== request.expectedRevision) throw new GovernanceError('RevisionConflict', 'Implementation revision is stale. Reload status and submit again with the current revision.');
-      const task = implementation.tasks[request.taskNumber];
-      if (!task) throw new GovernanceError('TaskTransitionInvalid', `Unknown task ${request.taskNumber}. Use a task number from the approved tasks artifact.`);
-      const incomplete = task.dependencies.filter((dependency) => implementation.tasks[dependency]?.status !== 'completed');
-      if (request.action === 'start' && incomplete.length > 0) throw new GovernanceError('TaskDependencyIncomplete', 'Task dependencies are incomplete. Complete the listed dependency tasks first.', { dependencies: incomplete });
-      const prior = task.status;
+      this.assertTransition(spec, request);
+      return { projectRoot, settings: await this.evidenceSettings(projectRoot) };
+    });
+    return this.runEvidence(run.argv, projectRoot, settings);
+  }
+
+  /** Every precondition of the action, without mutating the spec. */
+  private assertTransition(spec: WorkflowSpecV5, request: RecordTaskProgressRequest) {
+    const implementation = spec.implementation;
+    if (!implementation) throw new GovernanceError('TaskTransitionInvalid', 'Implementation has not started. Start implementation before changing task state.');
+    if (implementation.revision !== request.expectedRevision) throw new GovernanceError('RevisionConflict', 'Implementation revision is stale. Reload status and submit again with the current revision.');
+    const task = implementation.tasks[request.taskNumber];
+    if (!task) throw new GovernanceError('TaskTransitionInvalid', `Unknown task ${request.taskNumber}. Use a task number from the approved tasks artifact.`);
+    const incomplete = task.dependencies.filter((dependency) => implementation.tasks[dependency]?.status !== 'completed');
+    if (request.action === 'start' && incomplete.length > 0) throw new GovernanceError('TaskDependencyIncomplete', 'Task dependencies are incomplete. Complete the listed dependency tasks first.', { dependencies: incomplete });
+    const prior = task.status;
+    this.assertEvidenceActionAllowed(task, request, prior);
+    return { implementation, task, prior };
+  }
+
+  private assertEvidenceActionAllowed(task: WorkflowSpecV5['implementation']['tasks'][string], request: RecordTaskProgressRequest, prior: TaskStatus): void {
+    if (request.action === 'record-red' && (!task.tdd_required || !this.canRecordRed(task.evidence.red, prior))) this.invalidTransition(request.action, prior);
+    if (request.action === 'record-green' && (!task.tdd_required || prior !== 'red-observed')) this.invalidTransition(request.action, prior);
+    if (request.action !== 'complete') return;
+    if (prior !== (task.tdd_required ? 'green-observed' : 'in-progress')) this.invalidTransition(request.action, prior);
+    if (task.planned_artifacts.length > 0 && this.normalizeArtifacts(request.affectedArtifacts ?? []).length === 0) {
+      throw new GovernanceError('TaskTransitionInvalid', 'At least one observed artifact is required. Name the changed artifacts when completing the task.');
+    }
+  }
+
+  private async commitTaskProgress(request: RecordTaskProgressRequest, outcome: ObservedEvidence | undefined): Promise<RecordTaskProgressResult> {
+    return this.withLockedFeature(request.projectRoot, request.featureName, true, async ({ projectRoot, featureRoot, spec, commitSpec }) => {
+      await this.assertNoApprovedArtifactDrift(featureRoot, spec);
+      const settings = await this.evidenceSettings(projectRoot);
+      let observed: ObservedEvidenceResult | undefined;
+      const { implementation, task, prior } = this.assertTransition(spec, request);
       if (request.action === 'start') {
         if (prior === 'pending') task.status = 'in-progress';
         else if (prior === 'blocked' && task.blocked_from) { task.status = task.blocked_from; delete task.blocker; delete task.blocked_from; }
         else this.invalidTransition(request.action, prior);
       } else if (request.action === 'record-red') {
-        if (!task.tdd_required || prior !== 'in-progress' || !request.evidence || request.evidence.exitCode === 0) this.invalidTransition(request.action, prior);
-        task.status = 'red-observed'; task.evidence.red = this.evidence(request.evidence!);
+        const obtained = this.obtainEvidence(request, settings, 'red', outcome);
+        if (obtained.evidence.exitCode === 0) this.invalidTransition(request.action, prior, obtained.observed);
+        task.status = 'red-observed'; task.evidence.red = obtained.evidence; observed = obtained.observed;
       } else if (request.action === 'record-green') {
-        if (!task.tdd_required || prior !== 'red-observed' || !request.evidence || request.evidence.exitCode !== 0) this.invalidTransition(request.action, prior);
-        task.status = 'green-observed'; task.evidence.green = this.evidence(request.evidence!);
+        const obtained = this.obtainEvidence(request, settings, 'green', outcome);
+        if (obtained.evidence.exitCode !== 0) this.invalidTransition(request.action, prior, obtained.observed);
+        task.status = 'green-observed'; task.evidence.green = obtained.evidence; observed = obtained.observed;
       } else if (request.action === 'complete') {
-        const expected = task.tdd_required ? 'green-observed' : 'in-progress';
-        if (prior !== expected || !request.evidence || request.evidence.exitCode !== 0) this.invalidTransition(request.action, prior);
         const artifacts = this.normalizeArtifacts(request.affectedArtifacts ?? []);
-        if (task.planned_artifacts.length > 0 && artifacts.length === 0) throw new GovernanceError('TaskTransitionInvalid', 'At least one observed artifact is required. Name the changed artifacts when completing the task.');
-        task.status = 'completed'; task.evidence.verification = this.evidence(request.evidence!); task.observed_artifacts = artifacts;
+        const obtained = this.obtainEvidence(request, settings, 'verification', outcome);
+        if (obtained.evidence.exitCode !== 0) this.invalidTransition(request.action, prior, obtained.observed);
+        task.status = 'completed'; task.evidence.verification = obtained.evidence; task.observed_artifacts = artifacts; observed = obtained.observed;
       } else {
         if (!['in-progress', 'red-observed', 'green-observed'].includes(prior) || !request.blocker?.trim()) this.invalidTransition(request.action, prior);
         if (request.blocker.length > 2_000) throw new GovernanceError('InvalidParams', 'Task blocker exceeds 2000 characters');
@@ -400,15 +479,87 @@ export class WorkflowEngineService {
       spec.updated_at = new Date().toISOString();
       await commitSpec(spec);
       const handoff = await this.publishHandoff(request.projectRoot, request.featureName);
-      return { featureName: request.featureName, taskNumber: request.taskNumber, taskState: task.status, revision: implementation.revision, nextAction: this.resolveNextAction(spec), handoff };
+      return {
+        featureName: request.featureName, taskNumber: request.taskNumber, taskState: task.status, revision: implementation.revision, nextAction: this.resolveNextAction(spec), handoff,
+        evidenceMode: settings.mode,
+        ...(observed ? { observed } : {}),
+        ...(settings.warnings.length > 0 ? { warnings: settings.warnings } : {}),
+      };
     });
+  }
+
+  private async evidenceSettings(projectRoot: string): Promise<EvidenceSettings> {
+    return resolveEvidenceSettings(this.environment, await readProjectConfig(projectRoot, this.fileSystem));
+  }
+
+  /** A RED may be recorded again only over an engine observation that did not prove an assertion failure. */
+  private canRecordRed(red: ExecutionEvidence | undefined, prior: TaskStatus): boolean {
+    if (prior === 'in-progress') return true;
+    return prior === 'red-observed' && red?.source === 'engine' && red.redClassification !== 'assertion';
+  }
+
+  /** Runs the command with no lock but the evidence-run lock held; a timeout or spawn failure writes nothing. */
+  private async runEvidence(argv: readonly string[], projectRoot: string, settings: EvidenceSettings): Promise<ObservedEvidence> {
+    if (!this.evidenceRunner) throw new GovernanceError('EvidenceRunnerUnavailable', 'No evidence runner is wired into the workflow engine, so the server cannot run the command.');
+    const outcome = await this.evidenceRunner.run({ argv, projectRoot, settings, serverEnv: this.environment });
+    if (outcome.kind === 'timed-out') {
+      throw new GovernanceError('EvidenceRunTimedOut', `The evidence command did not finish within ${settings.timeoutMs} ms.`, {
+        observed: { outputExcerpt: outcome.outputExcerpt, durationMs: outcome.durationMs, truncated: outcome.truncated },
+      });
+    }
+    if (outcome.kind === 'spawn-failed') {
+      throw new GovernanceError('TaskTransitionInvalid', `The evidence command could not start (${outcome.reason}). Fix the program name or PATH, then submit the action again.`, {
+        observed: { spawnFailed: outcome.reason, outputExcerpt: outcome.outputExcerpt, durationMs: outcome.durationMs },
+      });
+    }
+    return outcome;
+  }
+
+  /** The observed run when one happened; otherwise caller evidence, accepted only in self-reported mode. */
+  private obtainEvidence(
+    request: RecordTaskProgressRequest,
+    settings: EvidenceSettings,
+    slot: 'red' | 'green' | 'verification',
+    outcome: ObservedEvidence | undefined,
+  ): { evidence: ExecutionEvidence; observed?: ObservedEvidenceResult } {
+    if (outcome) return { evidence: this.engineEvidence(outcome, slot), observed: this.observation(outcome, slot) };
+    if (settings.mode === 'verified') {
+      throw new GovernanceError('SelfReportedEvidenceRejected', 'Verified evidence mode is on. Pass the test command as run.argv; the server runs it and records the observed exit code.');
+    }
+    if (!request.evidence) throw new GovernanceError('TaskTransitionInvalid', 'Evidence is required for this action. Run the test through run.argv, or supply an evidence object in self-reported mode.');
+    return { evidence: this.evidence(request.evidence) };
+  }
+
+  private observation(outcome: ObservedEvidence, slot: 'red' | 'green' | 'verification'): ObservedEvidenceResult {
+    return {
+      exitCode: outcome.exitCode, outputSha256: outcome.outputSha256, outputExcerpt: outcome.outputExcerpt, durationMs: outcome.durationMs,
+      truncated: outcome.truncated, redactions: outcome.redactions,
+      ...(slot === 'red' ? { classification: outcome.redClassification.classification } : {}),
+    };
+  }
+
+  private engineEvidence(outcome: ObservedEvidence, slot: 'red' | 'green' | 'verification'): ExecutionEvidence {
+    return {
+      command: outcome.command.slice(0, 500),
+      exitCode: outcome.exitCode,
+      summary: outcome.outputExcerpt.trim().length === 0 ? '(no output)' : outcome.outputExcerpt.slice(0, 2_000),
+      observedAt: new Date().toISOString(),
+      source: 'engine',
+      argv: [...outcome.argv],
+      outputSha256: outcome.outputSha256,
+      durationMs: outcome.durationMs,
+      outputExcerpt: outcome.outputExcerpt,
+      truncated: outcome.truncated,
+      redactions: outcome.redactions,
+      ...(slot === 'red' ? { redClassification: outcome.redClassification.classification } : {}),
+    };
   }
   async getFeatureStatus(request: FeatureRequest): Promise<DurableFeatureStatus> {
     return this.withLockedFeature(
       request.projectRoot,
       request.featureName,
       false,
-      async ({ featureRoot, spec }) => this.buildStatus(request.featureName, featureRoot, spec),
+      async ({ projectRoot, featureRoot, spec }) => this.buildStatus(projectRoot, request.featureName, featureRoot, spec),
     );
   }
 
@@ -478,11 +629,27 @@ export class WorkflowEngineService {
           revision: spec.implementation.revision,
           tasks: Object.fromEntries(Object.entries(spec.implementation.tasks).map(([id, task]) => [
             id,
-            { status: task.status, tddRequired: task.tdd_required, acceptanceCriteria: criteria[id] ?? '' },
+            {
+              status: task.status,
+              tddRequired: task.tdd_required,
+              acceptanceCriteria: criteria[id] ?? '',
+              ...(task.evidence.red ? { red: this.advisoryRed(task.evidence.red) } : {}),
+            },
           ])),
         },
       };
     });
+  }
+
+  private advisoryRed(red: ExecutionEvidence): AdvisoryRedEntry {
+    return {
+      source: red.source ?? 'caller',
+      command: red.command,
+      exitCode: red.exitCode,
+      ...(red.outputExcerpt !== undefined ? { outputExcerpt: red.outputExcerpt } : {}),
+      ...(red.outputSha256 !== undefined ? { outputSha256: red.outputSha256 } : {}),
+      ...(red.redClassification !== undefined ? { redClassification: red.redClassification } : {}),
+    };
   }
 
   async loadProject(request: FeatureRequest): Promise<Project> {
@@ -496,6 +663,19 @@ export class WorkflowEngineService {
       const design = await this.requireArtifact(featureRoot, 'design');
       return this.validator.validateDesign(design, requirements);
     });
+  }
+
+  /** Serializes task actions on one feature, including the evidence command, without holding the feature lock. */
+  private async withEvidenceRunLock<T>(projectRoot: string, featureName: string, action: () => Promise<T>): Promise<T> {
+    if (!this.fileSystem) throw new GovernanceError('StateInvariantViolation', 'FileSystemPort is required');
+    const resolver = new SpecPathResolver(this.fileSystem);
+    const resolved = await resolver.resolve(projectRoot, featureName);
+    if (!(await this.fileSystem.exists(resolved.featureRoot))) {
+      throw new GovernanceError('StateInvariantViolation', `Feature metadata not found: ${featureName}`);
+    }
+    const lockPath = path.join(resolved.featureRoot, EVIDENCE_RUN_LOCK);
+    await resolver.assertContained(resolved.featureRoot, lockPath);
+    return withFilesystemLock(lockPath, () => action());
   }
 
   private async withLockedFeature<T>(
@@ -651,7 +831,7 @@ export class WorkflowEngineService {
     return spec;
   }
 
-  private async buildStatus(featureName: string, featureRoot: string, spec: WorkflowSpecV5): Promise<DurableFeatureStatus> {
+  private async buildStatus(projectRoot: string, featureName: string, featureRoot: string, spec: WorkflowSpecV5): Promise<DurableFeatureStatus> {
     const phases = {} as DurableFeatureStatus['phases'];
     const blockers: string[] = [];
     const driftedPhases = new Set<ApprovablePhase>();
@@ -665,8 +845,23 @@ export class WorkflowEngineService {
       if (record.approved && drift) blockers.push(`${phase} artifact drift`);
     }
     const cp = spec.checkpoints.test_cases;
-    const implementation = spec.implementation ? { revision: spec.implementation.revision, ...this.implementationCounts(spec.implementation) } : undefined;
-    return { featureName, phase: spec.phase, currentPhase: spec.phase, nextAction: this.resolveNextAction(spec, driftedPhases), blockers, phases, checkpoint: { required: cp.required, reviewed: cp.reviewed, reviewedRevision: cp.reviewed_revision, reviewedArtifactSha256: cp.reviewed_artifact_sha256 }, implementation };
+    const implementation = spec.implementation
+      ? { revision: spec.implementation.revision, ...this.implementationCounts(spec.implementation), tasks: this.taskEvidenceStatuses(spec.implementation) }
+      : undefined;
+    const evidenceMode = (await this.evidenceSettings(projectRoot)).mode;
+    return { featureName, phase: spec.phase, currentPhase: spec.phase, nextAction: this.resolveNextAction(spec, driftedPhases), blockers, phases, checkpoint: { required: cp.required, reviewed: cp.reviewed, reviewedRevision: cp.reviewed_revision, reviewedArtifactSha256: cp.reviewed_artifact_sha256 }, implementation, evidenceMode };
+  }
+
+  private taskEvidenceStatuses(implementation: NonNullable<WorkflowSpecV5['implementation']>): Record<string, TaskEvidenceStatus> {
+    return Object.fromEntries(Object.entries(implementation.tasks).map(([id, task]) => {
+      const evidence: Record<string, EvidenceSource> = {};
+      for (const slot of ['red', 'green', 'verification'] as const) {
+        const entry = task.evidence[slot];
+        if (entry) evidence[slot] = entry.source ?? 'caller';
+      }
+      const classification = task.evidence.red?.redClassification;
+      return [id, { status: task.status, evidence, ...(classification ? { redClassification: classification } : {}) }];
+    }));
   }
 
   private resolveNextAction(
@@ -1012,7 +1207,12 @@ export class WorkflowEngineService {
   private legacyPhaseValue(value: string): WorkflowPhase { if (value.startsWith('tasks')) return WorkflowPhase.TASKS; if (value.startsWith('design')) return WorkflowPhase.DESIGN; if (value.startsWith('requirements')) return WorkflowPhase.REQUIREMENTS; return WorkflowPhase.INIT; }
   private implementationCounts(value: NonNullable<WorkflowSpecV5['implementation']>) { const tasks = Object.values(value.tasks); return { completed: tasks.filter((t) => t.status === 'completed').length, total: tasks.length, active: tasks.filter((t) => ['in-progress', 'red-observed', 'green-observed'].includes(t.status)).length, blocked: tasks.filter((t) => t.status === 'blocked').length }; }
   private allComplete(value: NonNullable<WorkflowSpecV5['implementation']>): boolean { const tasks = Object.values(value.tasks); return tasks.length > 0 && tasks.every((task) => task.status === 'completed'); }
-  private invalidTransition(action: string, status: TaskStatus): never { throw new GovernanceError('TaskTransitionInvalid', `Cannot ${action} from ${status}. Select a task action valid for its current status.`); }
+  private invalidTransition(action: string, status: TaskStatus, observed?: ObservedEvidenceResult): never {
+    if (observed) {
+      throw new GovernanceError('TaskTransitionInvalid', `Cannot ${action} from ${status}: the command exited with code ${observed.exitCode}, which does not satisfy this action. Read the observed output before continuing.`, { observed });
+    }
+    throw new GovernanceError('TaskTransitionInvalid', `Cannot ${action} from ${status}. Select a task action valid for its current status.`);
+  }
   private evidence(value: { command: string; exitCode: number; summary: string }): ExecutionEvidence {
     if (
       typeof value.command !== 'string'
@@ -1025,7 +1225,7 @@ export class WorkflowEngineService {
     ) {
       throw new GovernanceError('InvalidParams', 'Execution evidence is invalid');
     }
-    return { ...value, observedAt: new Date().toISOString() };
+    return { ...value, observedAt: new Date().toISOString(), source: 'caller' };
   }
   private normalizeArtifacts(values: string[]): string[] { const output = [...new Set(values.map((value) => value.trim()).filter(Boolean))]; for (const value of output) if (!this.isProjectRelativePath(value)) throw new GovernanceError('InvalidParams', `Invalid affected artifact path: ${value}`); return output; }
   private requireAtomicFileSystem(): FileSystemPort & { writeFileAtomic(filePath: string, content: string): Promise<void> } { if (!this.fileSystem?.writeFileAtomic) throw new GovernanceError('StateInvariantViolation', 'Atomic filesystem writes are required'); return this.fileSystem as FileSystemPort & { writeFileAtomic(filePath: string, content: string): Promise<void> }; }
@@ -1225,24 +1425,22 @@ export class WorkflowEngineService {
 
   private normalizeV5Evidence(value: unknown, reference: string): ExecutionEvidence {
     const evidence = this.requireSpecRecord(value, reference);
-    if (
-      typeof evidence.command !== 'string'
-      || evidence.command.length === 0
-      || evidence.command.length > 500
-      || !Number.isInteger(evidence.exit_code)
-      || typeof evidence.summary !== 'string'
-      || evidence.summary.length === 0
-      || evidence.summary.length > 2_000
-      || typeof evidence.observed_at !== 'string'
-    ) {
-      throw new GovernanceError('StateInvariantViolation', `${reference} is invalid`);
-    }
-    return {
+    const normalized = {
       command: evidence.command,
-      exitCode: evidence.exit_code as number,
+      exitCode: evidence.exit_code,
       summary: evidence.summary,
       observedAt: evidence.observed_at,
-    };
+      source: evidence.source,
+      argv: evidence.argv,
+      outputSha256: evidence.output_sha256,
+      durationMs: evidence.duration_ms,
+      outputExcerpt: evidence.output_excerpt,
+      truncated: evidence.truncated,
+      redactions: evidence.redactions,
+      redClassification: evidence.red_classification,
+    } as unknown as ExecutionEvidence;
+    this.assertExecutionEvidence(normalized, reference);
+    return Object.fromEntries(Object.entries(normalized).filter(([, field]) => field !== undefined)) as unknown as ExecutionEvidence;
   }
 
   private requireSpecRecord(value: unknown, reference: string): Record<string, unknown> {
@@ -1500,9 +1698,44 @@ export class WorkflowEngineService {
       || value.summary.trim().length === 0
       || value.summary.length > 2_000
       || typeof value.observedAt !== 'string'
+      || !this.evidenceExtensionsAreValid(value)
     ) {
       throw new GovernanceError('StateInvariantViolation', `${reference} is invalid`);
     }
+  }
+
+  /** Optional fields are checked whenever present; an engine entry must carry argv, hash, and duration. */
+  private evidenceExtensionsAreValid(value: ExecutionEvidence): boolean {
+    const engine = value.source === 'engine';
+    const checks: Array<[required: boolean, field: unknown, valid: (field: unknown) => boolean]> = [
+      [false, value.source, (field) => field === 'engine' || field === 'caller'],
+      [engine, value.argv, (field) => Array.isArray(field) && field.length > 0 && field.every((element) => typeof element === 'string' && element.length > 0)],
+      [engine, value.outputSha256, (field) => typeof field === 'string' && /^[a-f0-9]{64}$/.test(field)],
+      [engine, value.durationMs, isNonNegativeInteger],
+      [false, value.outputExcerpt, (field) => typeof field === 'string' && field.length <= 8_192],
+      [false, value.truncated, (field) => typeof field === 'boolean'],
+      [false, value.redactions, isNonNegativeInteger],
+      [false, value.redClassification, (field) => ['setup', 'assertion', 'ambiguous'].includes(String(field))],
+    ];
+    return checks.every(([required, field, valid]) => (field === undefined ? !required : valid(field)));
+  }
+
+  private persistedEvidence(value: ExecutionEvidence): Record<string, unknown> {
+    const optional = <T>(key: string, field: T | undefined): Record<string, T> => (field === undefined ? {} : { [key]: field });
+    return {
+      command: value.command,
+      exit_code: value.exitCode,
+      summary: value.summary,
+      observed_at: value.observedAt,
+      ...optional('source', value.source),
+      ...optional('argv', value.argv ? [...value.argv] : undefined),
+      ...optional('output_sha256', value.outputSha256),
+      ...optional('duration_ms', value.durationMs),
+      ...optional('output_excerpt', value.outputExcerpt),
+      ...optional('truncated', value.truncated),
+      ...optional('redactions', value.redactions),
+      ...optional('red_classification', value.redClassification),
+    };
   }
 
   private specBytes(spec: WorkflowSpecV5): string {
@@ -1529,12 +1762,7 @@ export class WorkflowEngineService {
         for (const key of ['red', 'green', 'verification'] as const) {
           const value = task.evidence[key];
           if (!value) continue;
-          task.evidence[key] = {
-            command: value.command,
-            exit_code: value.exitCode,
-            summary: value.summary,
-            observed_at: value.observedAt,
-          } as unknown as ExecutionEvidence;
+          task.evidence[key] = this.persistedEvidence(value) as unknown as ExecutionEvidence;
         }
       }
     }
@@ -1573,6 +1801,7 @@ export class WorkflowEngineService {
       'spec.json',
       '.phase-submit.json',
       '.workflow.lock',
+      EVIDENCE_RUN_LOCK,
       ...PHASES.map((phase) => `${phase}.md`),
     ].map((name) => resolver.assertContained(featureRoot, path.join(featureRoot, name))));
   }

@@ -19,7 +19,11 @@ export const TYPES = {
   PlatformAdapter: Symbol.for("PlatformAdapter"),
   JevHttpPort: Symbol.for("JevHttpPort"),
   GitPort: Symbol.for("GitPort"),
+  /** Kept only so wiring tests can assert the old binding is gone. */
   JevEnvironment: Symbol.for("JevEnvironment"),
+  ProcessPort: Symbol.for("ProcessPort"),
+  ProcessEnvironment: Symbol.for("ProcessEnvironment"),
+  EvidenceRunner: Symbol.for("EvidenceRunner"),
 
   // Application services
   ProjectService: Symbol.for("ProjectService"),

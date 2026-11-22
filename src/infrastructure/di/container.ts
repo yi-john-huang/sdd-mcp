@@ -90,7 +90,8 @@ import { TemplateService } from "../../application/services/TemplateService.js";
 import { QualityService } from "../../application/services/QualityService.js";
 import { QualityGateService } from "../../application/services/QualityGateService.js";
 import { WorkflowEngineService } from "../../application/services/WorkflowEngineService.js";
-import { JevAdvisoryService, type JevEnvironment } from "../../application/services/JevAdvisoryService.js";
+import { JevAdvisoryService } from "../../application/services/JevAdvisoryService.js";
+import { bindEvidence } from "./evidence-bindings.js";
 import { ProjectInitializationService } from "../../application/services/ProjectInitializationService.js";
 import { WorkflowValidationService } from "../../application/services/WorkflowValidationService.js";
 import { CodebaseAnalysisService } from "../../application/services/CodebaseAnalysisService.js";
@@ -131,7 +132,8 @@ export function createContainer(): Container {
   // JEV advisory checks: HTTPS and git are ports so tests can replace them.
   container.bind<JevHttpPort>(TYPES.JevHttpPort).to(FetchJevHttpAdapter);
   container.bind<GitPort>(TYPES.GitPort).to(NodeGitAdapter);
-  container.bind<JevEnvironment>(TYPES.JevEnvironment).toConstantValue(process.env);
+  // Verified execution evidence: the process port, the runner, and the environment JEV shares.
+  bindEvidence(container, process.env);
 
   // Bind template ports
   container

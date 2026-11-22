@@ -96,6 +96,29 @@ export interface GitPort {
   run(args: readonly string[], cwd: string, input?: Buffer): Promise<GitResult>;
 }
 
+export interface ProcessRunRequest {
+  /** `argv[0]` is the program, resolved through `env.PATH`; the rest are literal arguments. */
+  readonly argv: readonly string[];
+  readonly cwd: string;
+  readonly env: Readonly<Record<string, string>>;
+  readonly timeoutMs: number;
+  readonly maxOutputBytes: number;
+}
+
+/**
+ * `output` is stdout and stderr interleaved in arrival order, capped at `maxOutputBytes`;
+ * `totalOutputBytes` counts everything the program wrote, including bytes dropped after the cap.
+ */
+export type ProcessRunResult =
+  | { readonly kind: 'exited'; readonly exitCode: number; readonly output: Buffer; readonly truncated: boolean; readonly totalOutputBytes: number; readonly durationMs: number }
+  | { readonly kind: 'timed-out'; readonly output: Buffer; readonly truncated: boolean; readonly totalOutputBytes: number; readonly durationMs: number }
+  | { readonly kind: 'spawn-failed'; readonly reason: 'not-found' | 'permission' | 'other'; readonly output: Buffer; readonly durationMs: number };
+
+export interface ProcessPort {
+  /** Runs one program without a shell, with no stdin. Never rejects. */
+  run(request: ProcessRunRequest): Promise<ProcessRunResult>;
+}
+
 export interface TaskTracker {
   getTasks(projectId: string): Promise<Task[]>;
   updateTask(projectId: string, taskId: string, completed: boolean): Promise<void>;

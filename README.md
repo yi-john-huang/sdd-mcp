@@ -249,6 +249,16 @@ Every packaged entrypoint exposes the same 17 tools:
 
 `sdd-jev-check` is opt-in and advisory. It is off by default and never changes workflow state. For a PR or branch review, its code checks accept an optional `baseRef` to judge committed changes. See [Optional JEV advisory](docs/WORKFLOW.md#optional-jev-advisory).
 
+Task evidence is verified by default. `sdd-spec-impl` takes the test command as `run.argv`. The server runs the command and records the observed exit code, so an agent cannot type a passing result.
+
+- The server runs the command without a shell. The program must be on an allowlist. Secret-like environment variables do not reach the command.
+- The server rejects an argument that contains a NUL byte, a carriage return, or a line feed.
+- On Windows, `npm`, `npx`, `yarn`, and `pnpm` are `.cmd` files. The server runs them through `cmd.exe` and escapes every argument.
+- One command can run for up to 600 s. The Codex registration sets `tool_timeout_sec = 660`, so Codex waits for the result. Other hosts must also wait at least as long as the evidence timeout.
+- Status and JEV checks stay available while a command runs.
+
+Set `SDD_EVIDENCE_MODE=self-reported` for the 5.5.0 behavior. See [Verified execution evidence](docs/WORKFLOW.md#verified-execution-evidence).
+
 Feature-scoped tools use `featureName`; v5 payloads bind phase mutations and approvals to exact revisions and artifact hashes. This inventory is for MCP integrators and runtime maintainers—not end-user workflow instructions. Hosts discover installed Skills, and the installer supports `--list`.
 
 ## Integrator/runtime reference: compact continuation
@@ -300,6 +310,8 @@ npm install
 npm run build
 npm test
 ```
+
+CI runs on the maintainer's self-hosted runners: one macOS host and one Lima Linux VM. A workflow run from an outside contributor needs maintainer approval.
 
 Releases are automated. A merge from `develop` to `master` bumps the version, tags it, and publishes it to npm. See [docs/RELEASING.md](docs/RELEASING.md).
 

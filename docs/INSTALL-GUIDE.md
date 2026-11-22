@@ -203,7 +203,7 @@ Claude Code lean installs skills with native current-turn model and effort overr
 | Steering | `.spec/steering/` | `.spec/steering/` | `.spec/steering/` |
 | Runtime registration | `.mcp.json` plus `.claude/settings.json` allow | `.codex/config.toml` | `.omp/mcp.json` |
 
-The installer merges only its `sdd-mcp` entry. It preserves unrelated config, comments, and Claude permission rules. The installer preserves a malformed config or a conflicting same-name server byte-for-byte. The installation is then incomplete.
+The installer merges only its `sdd-mcp` entry. It preserves unrelated config, comments, and Claude permission rules. The Codex entry, from `install` or `setup-global`, sets `tool_timeout_sec = 660`. Codex otherwise stops waiting for a tool result after 60 s, and a verified-evidence command can run for up to 600 s. The installer preserves a malformed config or a conflicting same-name server byte-for-byte. The installation is then incomplete.
 
 After reload and trust, use `/sdd-requirements <feature>` in Claude Code, `$sdd-requirements <feature>` in Codex, or `/skill:sdd-requirements <feature>` in OMP. Continue with the native design, tasks, and implement Skills after each explicit human gate. End users do not call MCP tools or paste workflow JSON.
 

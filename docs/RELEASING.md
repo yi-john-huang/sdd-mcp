@@ -16,7 +16,17 @@ flowchart LR
 3. You review and merge the pull request.
 4. `release-publish.yml` runs on `master`. It builds and tests the package. Then it publishes `X.Y.Z` to npm and creates the `vX.Y.Z` tag and GitHub Release.
 
-`ci.yml` builds and tests every pull request to `develop` or `master`, and every push to `develop`.
+`ci.yml` builds and tests every pull request to `develop` or `master`, and every push to `develop`. It runs two jobs on self-hosted runners with the label `sdd-mcp`:
+
+| Job | Runner | How it runs |
+|---|---|---|
+| `test-macos` | The maintainer's macOS host | Directly, with Node.js 24 from `actions/setup-node` |
+| `test-linux` | A Lima Linux VM (ARM64) on that host | `docker run --init` in the `js-ci-runner` image, as the runner's non-root user |
+
+- The Linux job does not use a job-level `container:`. GitHub JavaScript actions such as `actions/checkout` cannot run in an Alpine container on an ARM64 runner.
+- `--init` gives the container a process that reaps orphans. Without it, a killed grandchild stays a zombie and the process-tree test fails.
+- The repository is public. A workflow run from any outside contributor needs maintainer approval before it can start on these machines. Read the diff before you approve.
+- `release-prepare.yml` and `release-publish.yml` stay on GitHub-hosted runners, because npm trusted publishing needs a GitHub-hosted runner.
 
 ## How the version is chosen
 

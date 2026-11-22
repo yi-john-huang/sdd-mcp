@@ -115,6 +115,60 @@ describe('documented MCP tool contract', () => {
   });
 });
 
+describe('documented verified execution evidence', () => {
+  const skill = read('skills/sdd-implement/SKILL.md');
+  const reference = read('skills/sdd-implement/REFERENCE.md');
+
+  it('tells the agent to pass the test command and lets the server observe the exit code', () => {
+    expect(skill).toContain('run.argv');
+    expect(skill).toMatch(/server (?:runs|executes) (?:it|the command)[^.]*(?:observed|records)/i);
+    expect(skill).not.toContain('Record the observed command, non-zero exit code');
+    expect(skill).not.toMatch(/record(?:ed|s)? the (?:observed )?(?:command, )?(?:non-)?zero exit code/i);
+  });
+
+  it('runs the JEV red check after RED is recorded and names the setup re-record path', () => {
+    expect(skill).not.toContain('Before recording, internally run the JEV `red` check');
+    expect(skill.indexOf('run.argv')).toBeGreaterThan(-1);
+    expect(skill.indexOf('JEV `red`')).toBeGreaterThan(skill.indexOf('run.argv'));
+    expect(skill).toMatch(/`setup`[^.]*record(?:ing)? RED again/i);
+    expect(skill).toMatch(/excerpt/);
+  });
+
+  it('shows run.argv in the progress example and never an agent-typed exit code', () => {
+    expect(reference).toMatch(/run:\s*\{\s*argv:/);
+    expect(reference).not.toMatch(/exitCode/);
+    expect(reference).not.toMatch(/non-zero exit code, and failure summary/);
+  });
+
+  it('documents the settings, the allowlist, the errors, and the rollback', () => {
+    const deployment = read('DEPLOYMENT.md');
+    const workflow = read('docs/WORKFLOW.md');
+    for (const content of [deployment, workflow]) {
+      expect(content).toContain('SDD_EVIDENCE_MODE');
+      expect(content).toContain('SDD_EVIDENCE_TIMEOUT_MS');
+      expect(content).toMatch(/evidence\.allowedCommands|"allowedCommands"/);
+      expect(content).toMatch(/evidence\.passEnv|"passEnv"/);
+      expect(content).toMatch(/\bdotnet\b/);
+    }
+    expect(workflow).toContain('## Verified execution evidence');
+    for (const code of ['SelfReportedEvidenceRejected', 'EvidenceCommandNotAllowed', 'EvidenceRunTimedOut', 'EvidenceRunnerUnavailable']) {
+      expect(workflow).toContain(code);
+    }
+    expect(workflow).toMatch(/self-reported/);
+    expect(workflow).toMatch(/record RED again/);
+    expect(read('ARCHITECTURE.md')).toMatch(/ProcessPort.*NodeProcessAdapter.*EvidenceSettings.*ProjectConfig.*EvidenceRunner/s);
+    expect(read('README.md')).toContain('#verified-execution-evidence');
+  });
+
+  it('records the verified default and the opt-out in the changelog under Unreleased', () => {
+    const unreleased = read('CHANGELOG.md').split('## [5.5.0]')[0]!;
+    expect(unreleased).toMatch(/evidence mode is `verified`/);
+    expect(unreleased).toContain('SDD_EVIDENCE_MODE=self-reported');
+    expect(unreleased).toContain('run.argv');
+    expect(unreleased).toMatch(/schema version stays 5/);
+  });
+});
+
 describe('documented JEV advisory feature', () => {
   const workflow = read('docs/WORKFLOW.md');
 

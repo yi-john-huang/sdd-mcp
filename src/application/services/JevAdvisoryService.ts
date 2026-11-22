@@ -48,7 +48,7 @@ export class JevAdvisoryService {
     @inject(TYPES.WorkflowEngineService) private readonly engine: AdvisoryEngine,
     @inject(TYPES.FileSystemPort) private readonly fileSystem: FileSystemPort,
     @inject(TYPES.LoggerPort) private readonly logger: LoggerPort,
-    @inject(TYPES.JevEnvironment) private readonly env: JevEnvironment,
+    @inject(TYPES.ProcessEnvironment) private readonly env: JevEnvironment,
   ) {
     this.store = new JevSidecarStore(fileSystem, logger);
     this.exchange = new JevExchange(http, this.store, logger);
@@ -109,19 +109,28 @@ export class JevAdvisoryService {
     return ready ? snapshot : undefined;
   }
 
-  /** A2: classify RED evidence locally; only ambiguous evidence is sent. Never affects record-red. */
+  /**
+   * A2: classify RED evidence locally; only ambiguous evidence is sent. Never affects record-red.
+   * An engine-observed RED outranks anything the caller typed: its excerpt is judged and its hash binds the sidecar.
+   */
   private async redCheck(request: JevCheckRequest, context: ExchangeContext): Promise<JevCheckResult> {
-    const { taskNumber, testName, evidence } = request;
-    if (!taskNumber || !testName || !evidence || evidence.exitCode === 0) return skippedResult('red', 'not-ready');
+    const { taskNumber, testName } = request;
+    if (!taskNumber || !testName) return skippedResult('red', 'not-ready');
     const snapshot = await this.engine.readAdvisorySnapshot({ projectRoot: request.projectRoot, featureName: request.featureName ?? '', phase: 'tasks' });
     const task = snapshot.implementation?.tasks[taskNumber];
-    if (!task || task.status !== 'in-progress' || !task.tddRequired) return skippedResult('red', 'not-ready');
+    if (!task || !task.tddRequired) return skippedResult('red', 'not-ready');
+    const engineRed = task.status === 'red-observed' && task.red?.source === 'engine' ? task.red : undefined;
+    const callerReady = task.status === 'in-progress' && request.evidence !== undefined && request.evidence.exitCode !== 0;
+    if (!engineRed && !callerReady) return skippedResult('red', 'not-ready');
 
+    const evidence = engineRed ? { command: engineRed.command, summary: engineRed.outputExcerpt ?? '' } : request.evidence!;
     const binding = {
       questionSetVersion: QUESTION_SET_VERSION,
-      evidenceSha256: sha256(JSON.stringify([taskNumber, testName, evidence.command, evidence.summary])),
+      evidenceSha256: engineRed?.outputSha256 ?? sha256(JSON.stringify([taskNumber, testName, evidence.command, evidence.summary])),
     };
-    const local = classifyRedEvidence(evidence.command, evidence.summary);
+    const local: RedClassificationResult = engineRed?.redClassification
+      ? { classification: engineRed.redClassification }
+      : classifyRedEvidence(evidence.command, evidence.summary);
     if (local.classification !== 'ambiguous') return this.localRed(request, context, binding, local);
 
     const built = buildRedExchange(taskNumber, testName, evidence, task.acceptanceCriteria);
