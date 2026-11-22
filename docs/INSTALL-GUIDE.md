@@ -84,9 +84,9 @@ For local release testing, use an absolute npm **file spec**. Do not use a bare 
 ```bash
 npm run build
 npm pack --pack-destination /absolute/temp
-SDD_MCP_PACKAGE=file:/absolute/temp/sdd-mcp-server-5.5.0.tgz ./bootstrap.sh
+SDD_MCP_PACKAGE=file:/absolute/temp/sdd-mcp-server-6.0.0.tgz ./bootstrap.sh
 # Independent cross-platform path, without the wrapper:
-npx -y file:/absolute/temp/sdd-mcp-server-5.5.0.tgz setup-global
+npx -y file:/absolute/temp/sdd-mcp-server-6.0.0.tgz setup-global
 ```
 
 Use fresh, distinct temporary home, config, and project directories for each path. Pass `HOME`, `CLAUDE_CONFIG_DIR`, `CODEX_HOME`, and the OMP profile and agent settings to the child process. Control `omp` discovery on `PATH`. Then an unrelated installed host cannot select real user state. Rerun both commands. Check the pinned entries, the rendered references, and the unchanged Claude settings. Then exercise conflicts and Skills failures. Native npm 11.12.1 attempts to execute a bare `/absolute/package.tgz` (exit 126). The explicit `file:` syntax is the verified package-resolution path.
@@ -203,7 +203,7 @@ Claude Code lean installs skills with native current-turn model and effort overr
 | Steering | `.spec/steering/` | `.spec/steering/` | `.spec/steering/` |
 | Runtime registration | `.mcp.json` plus `.claude/settings.json` allow | `.codex/config.toml` | `.omp/mcp.json` |
 
-The installer merges only its `sdd-mcp` entry. It preserves unrelated config, comments, and Claude permission rules. The installer preserves a malformed config or a conflicting same-name server byte-for-byte. The installation is then incomplete.
+The installer merges only its `sdd-mcp` entry. It preserves unrelated config, comments, and Claude permission rules. The Codex entry, from `install` or `setup-global`, sets `tool_timeout_sec = 660`. Codex otherwise stops waiting for a tool result after 60 s, and a verified-evidence command can run for up to 600 s. The installer preserves a malformed config or a conflicting same-name server byte-for-byte. The installation is then incomplete.
 
 After reload and trust, use `/sdd-requirements <feature>` in Claude Code, `$sdd-requirements <feature>` in Codex, or `/skill:sdd-requirements <feature>` in OMP. Continue with the native design, tasks, and implement Skills after each explicit human gate. End users do not call MCP tools or paste workflow JSON.
 
@@ -211,9 +211,9 @@ Manual skill syntax is `/skill:<name>` in OMP, `/<name>` in Claude Code, and `$<
 
 ### Published-host smoke
 
-This smoke requires `npx` to resolve `sdd-mcp-server@5.5.0`. The package must be published or otherwise resolvable. Repository CI cannot substitute a real host trust prompt. Follow these steps:
+This smoke requires `npx` to resolve `sdd-mcp-server@6.0.0`. The package must be published or otherwise resolvable. Repository CI cannot substitute a real host trust prompt. Follow these steps:
 
-1. In a clean temporary repository, run `npx sdd-mcp-server@5.5.0 install --profile lean --target <claude-code|codex|omp>`.
+1. In a clean temporary repository, run `npx sdd-mcp-server@6.0.0 install --profile lean --target <claude-code|codex|omp>`.
 2. Reload the selected host. Accept project trust once.
 3. Invoke only the host-native requirements Skill shown above.
 4. Approve the artifact explicitly.
@@ -257,7 +257,7 @@ Do not select a target only because its files already exist. Select the host tha
 
 ```bash
 # Replace <target> with claude-code, codex, or omp
-npx sdd-mcp-server@5.5.0 install \
+npx sdd-mcp-server@6.0.0 install \
   --profile full \
   --target <target> \
   --refresh-generated
@@ -287,7 +287,7 @@ The refresh rebuilds only the selected package-owned set. It removes recognized 
 After the one-time migration, rerun the install with the same target and profile. Omit `--refresh-generated`:
 
 ```bash
-npx sdd-mcp-server@5.5.0 install --profile full --target <target>
+npx sdd-mcp-server@6.0.0 install --profile full --target <target>
 ```
 
 The ownership manifest then upgrades unchanged package files automatically. It continues to preserve modified files.

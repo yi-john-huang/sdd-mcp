@@ -25,9 +25,11 @@ build/
 # AI tool configs
 .serena/
 
-# JEV code-review sidecars (per-diff hashes; spec-phase sidecars stay tracked)
+# JEV code-review sidecars (per-diff hashes; same entries the installer writes)
 .spec/reviews/
 .spec/specs/*/review/jev-review-*
+# This repository also keeps spec-phase JEV sidecars local (installed projects still track them)
+.spec/specs/*/review/jev-*
 
 # Generated SDD agent installs
 # Created by: npx sdd-mcp-server@latest install --all

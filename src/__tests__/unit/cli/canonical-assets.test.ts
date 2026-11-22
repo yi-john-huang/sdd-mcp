@@ -99,8 +99,9 @@ describe('canonical progressive assets', () => {
 
     expect(tasks).toMatch(/saved test-case-review choice is authoritative/i);
     expect(tasks).toMatch(/separate from approval/i);
-    expect(implement).toMatch(/record.*non-zero exit code/is);
-    expect(implement).toMatch(/record.*zero exit code/is);
+    expect(implement).toMatch(/run\.argv/);
+    expect(implement).toMatch(/server runs it.*observed exit code/is);
+    expect(implement).toMatch(/never type an exit code/i);
     expect(implement).toMatch(/affected project-relative artifacts/i);
     expect(implement).toMatch(/resume.*persisted/is);
   });

@@ -218,6 +218,45 @@ describe('ContextCompactionService v4', () => {
     expect(result.content).toContain('Continue task 1.2 from red-observed');
     expect(result.payloadEstimatedTokens).toBeLessThanOrEqual(2048);
   });
+  it('labels completed tasks as verified or self-reported once any evidence is recorded', async () => {
+    const entry = (source: 'engine' | 'caller' | undefined, exitCode: number) => ({
+      command: 'npm test', exit_code: exitCode, summary: 'x', observed_at: '2026-11-21T10:00:00.000Z', ...(source ? { source } : {}),
+    });
+    const implementationSpec = (tasks: Record<string, unknown>) => JSON.stringify({
+      feature_name: featureName,
+      phase: 'implementation',
+      approvals: {
+        requirements: { generated: true, approved: true },
+        design: { generated: true, approved: true },
+        tasks: { generated: true, approved: true },
+      },
+      workflow_options: { review_test_cases: false },
+      checkpoints: { test_cases: { required: false, reviewed: false } },
+      implementation: { revision: 7, tasks },
+    });
+    await writeFile(path.join(featureRoot, 'spec.json'), implementationSpec({
+      '1.1': { status: 'completed', evidence: { red: entry('engine', 1), green: entry('engine', 0), verification: entry('engine', 0) } },
+      '1.2': { status: 'completed', evidence: { verification: entry('caller', 0) } },
+      '1.3': { status: 'completed', evidence: { red: entry('engine', 1), green: entry(undefined, 0), verification: entry('engine', 0) } },
+      '1.4': { status: 'red-observed', evidence: { red: entry('engine', 1) } },
+    }), 'utf8');
+    const labelled = await service.loadContext({ projectRoot, featureName, phase: 'implementation' });
+    expect(labelled.content).toContain('- 1.1: completed (verified)');
+    expect(labelled.content).toContain('- 1.2: completed (self-reported)');
+    expect(labelled.content).toContain('- 1.3: completed (self-reported)');
+    expect(labelled.content).toContain('- 1.4: red-observed');
+    expect(labelled.content).not.toContain('1.4: red-observed (');
+    expect(labelled.payloadEstimatedTokens).toBeLessThanOrEqual(2048);
+
+    await writeFile(path.join(featureRoot, 'spec.json'), implementationSpec({
+      '1.1': { status: 'completed' },
+      '1.2': { status: 'completed' },
+    }), 'utf8');
+    const unlabelled = await service.loadContext({ projectRoot, featureName, phase: 'implementation' });
+    expect(unlabelled.content).toContain('Completed: 2/2');
+    expect(unlabelled.content).not.toContain('1.1: completed');
+  });
+
   it('bounds persisted blocker text in compact implementation progress', async () => {
     await writeFile(path.join(featureRoot, 'spec.json'), JSON.stringify({
       feature_name: featureName,

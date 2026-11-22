@@ -316,6 +316,7 @@ export class SDDToolAdapter {
       action: args.action as "start" | "record-red" | "record-green" | "complete" | "block",
       expectedRevision: args.expectedRevision as number,
       evidence: args.evidence as { command: string; exitCode: number; summary: string } | undefined,
+      run: args.run as { argv: readonly string[] } | undefined,
       affectedArtifacts: args.affectedArtifacts as string[] | undefined,
       blocker: args.blocker as string | undefined,
     });

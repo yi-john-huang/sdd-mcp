@@ -5,7 +5,7 @@
 
 A Model Context Protocol server and target-native installer for governed Spec-Driven Development (SDD) in Claude Code, Codex, and Oh My Pi (OMP).
 
-> **v5.4.0** — The new `output-clarity-ladder` skill makes explanation, summary, and teaching replies easier to check. It is the only skill the model applies without a command, and it ships English, Japanese, and Traditional Chinese guidance. Runtime blockers and errors now state the next action. Releases are automated: a merge to `master` publishes to npm with provenance. Claude Code requires 2.1.284+ for the pinned 5.5 defaults.
+> **v6.0.0** — Task evidence is now verified. The server runs each RED, GREEN, and completion test command from `run.argv` and records the exit code it observes, so an agent cannot type a passing result. This is a breaking default: set `SDD_EVIDENCE_MODE=self-reported` to keep the 5.5.0 behavior. Optional JEV advisory checks (from 5.5.0) can judge RED validity from the recorded output. Claude Code requires 2.1.284+ for the pinned 5.5 model defaults.
 
 ## Why sdd-mcp?
 
@@ -125,12 +125,12 @@ Use this path when the repository has never had sdd-mcp-generated guidance. The 
 
 ```bash
 # Recommended explicit lean installation
-npx sdd-mcp-server@5.5.0 install --profile lean --target claude-code
-npx sdd-mcp-server@5.5.0 install --profile lean --target codex
-npx sdd-mcp-server@5.5.0 install --profile lean --target omp
+npx sdd-mcp-server@6.0.0 install --profile lean --target claude-code
+npx sdd-mcp-server@6.0.0 install --profile lean --target codex
+npx sdd-mcp-server@6.0.0 install --profile lean --target omp
 
 # Interactive full installation: choose Claude Code, Codex, or OMP
-npx sdd-mcp-server@5.5.0 install --profile full
+npx sdd-mcp-server@6.0.0 install --profile full
 ```
 
 Use the local entrypoint only when this checkout itself is the intended project install. It does not repair personal runtime connection. Build once, then install explicitly:
@@ -214,7 +214,7 @@ Use this path when the project already contains generated sdd-mcp files from an 
 
 ```bash
 # Replace <target> with claude-code, codex, or omp
-npx sdd-mcp-server@5.5.0 install \
+npx sdd-mcp-server@6.0.0 install \
   --profile full \
   --target <target> \
   --refresh-generated
@@ -248,6 +248,16 @@ Every packaged entrypoint exposes the same 17 tools:
 17. `sdd-jev-check`
 
 `sdd-jev-check` is opt-in and advisory. It is off by default and never changes workflow state. For a PR or branch review, its code checks accept an optional `baseRef` to judge committed changes. See [Optional JEV advisory](docs/WORKFLOW.md#optional-jev-advisory).
+
+Task evidence is verified by default. `sdd-spec-impl` takes the test command as `run.argv`. The server runs the command and records the observed exit code, so an agent cannot type a passing result.
+
+- The server runs the command without a shell. The program must be on an allowlist. Secret-like environment variables do not reach the command.
+- The server rejects an argument that contains a NUL byte, a carriage return, or a line feed.
+- On Windows, `npm`, `npx`, `yarn`, and `pnpm` are `.cmd` files. The server runs them through `cmd.exe` and escapes every argument.
+- One command can run for up to 600 s. The Codex registration sets `tool_timeout_sec = 660`, so Codex waits for the result. Other hosts must also wait at least as long as the evidence timeout.
+- Status and JEV checks stay available while a command runs.
+
+Set `SDD_EVIDENCE_MODE=self-reported` for the 5.5.0 behavior. See [Verified execution evidence](docs/WORKFLOW.md#verified-execution-evidence).
 
 Feature-scoped tools use `featureName`; v5 payloads bind phase mutations and approvals to exact revisions and artifact hashes. This inventory is for MCP integrators and runtime maintainers—not end-user workflow instructions. Hosts discover installed Skills, and the installer supports `--list`.
 
@@ -300,6 +310,8 @@ npm install
 npm run build
 npm test
 ```
+
+CI runs on the maintainer's self-hosted runners: one macOS host and one Lima Linux VM. A workflow run from an outside contributor needs maintainer approval.
 
 Releases are automated. A merge from `develop` to `master` bumps the version, tags it, and publishes it to npm. See [docs/RELEASING.md](docs/RELEASING.md).
 

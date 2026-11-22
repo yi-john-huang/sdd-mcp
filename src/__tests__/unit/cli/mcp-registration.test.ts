@@ -114,6 +114,8 @@ describe('MCP runtime registration', () => {
       required: true,
       default_tools_approval_mode: 'auto',
       startup_timeout_sec: 30,
+      // Outlasts the longest evidence command (600 s) so Codex never abandons a running record action.
+      tool_timeout_sec: 660,
     });
     expect(result.registration.managedRegionSha256).toMatch(/^[a-f0-9]{64}$/);
     const adopted = await registerRuntimeLocked(root, 'codex', getTargetPolicy('codex').defaultPaths);

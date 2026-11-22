@@ -40,6 +40,17 @@ const evidence = {
   required: ['command', 'exitCode', 'summary'],
   additionalProperties: false,
 };
+const run = {
+  type: 'object',
+  properties: {
+    argv: {
+      type: 'array', minItems: 1, maxItems: 64,
+      items: { type: 'string', minLength: 1, maxLength: 4096, pattern: '^[^\\u0000\\r\\n]+$' },
+    },
+  },
+  required: ['argv'],
+  additionalProperties: false,
+};
 const affectedArtifacts = {
   type: 'array', maxItems: 100, uniqueItems: true,
   items: { type: 'string', minLength: 1, maxLength: 500, pattern: '^(?![/\\\\])(?![A-Za-z]:)(?!.*(?:^|[/\\\\])\\.\\.(?:[/\\\\]|$))(?!.*\\u0000).+$' },
@@ -146,18 +157,18 @@ export const SDD_TOOL_DEFINITIONS: ReadonlyArray<Tool & { name: SDDToolName }> =
   { name: 'sdd-validate-design', description: 'Validate design artifact', inputSchema: featureSchema() },
   { name: 'sdd-validate-gap', description: 'Analyze the implementation gap', inputSchema: featureSchema() },
   {
-    name: 'sdd-spec-impl', description: 'Record governed implementation task progress',
+    name: 'sdd-spec-impl', description: 'Record governed implementation task progress. In verified evidence mode, pass the test command as run.argv; the server runs it and records the observed exit code.',
     inputSchema: {
       type: 'object',
       properties: {
         featureName, taskNumber: { type: 'string', minLength: 1, maxLength: 50, pattern: '^\\d+(?:\\.\\d+)*$' },
         action: { type: 'string', enum: ['start', 'record-red', 'record-green', 'complete', 'block'] },
-        expectedRevision: revision, evidence, affectedArtifacts,
+        expectedRevision: revision, evidence, run, affectedArtifacts,
         blocker: { type: 'string', minLength: 1, maxLength: 2000 },
       },
       required: ['featureName', 'taskNumber', 'action', 'expectedRevision'], additionalProperties: false,
       allOf: [
-        { if: { properties: { action: { enum: ['record-red', 'record-green', 'complete'] } }, required: ['action'] }, then: { required: ['evidence'] } },
+        { if: { properties: { action: { enum: ['record-red', 'record-green', 'complete'] } }, required: ['action'] }, then: { anyOf: [{ required: ['evidence'] }, { required: ['run'] }] } },
         { if: { properties: { action: { const: 'complete' } }, required: ['action'] }, then: { required: ['affectedArtifacts'] } },
         { if: { properties: { action: { const: 'block' } }, required: ['action'] }, then: { required: ['blocker'] } },
       ],

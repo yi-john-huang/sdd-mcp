@@ -101,7 +101,8 @@ interface WorkflowSpec {
   reviewCompleted: boolean;
   implementation?: {
     revision: number;
-    tasks: Record<string, { status: string; blocker?: string; dependencies: string[] }>;
+    /** `evidenceSources` lists who observed each recorded entry: `engine` or `caller`. */
+    tasks: Record<string, { status: string; blocker?: string; dependencies: string[]; evidenceSources: string[] }>;
   };
 }
 interface DocumentSnapshot { name: string; relativePath: string; absolutePath: string; content: string }
@@ -326,10 +327,15 @@ export class ContextCompactionService {
               const dependencies = Array.isArray(task.dependencies)
                 ? task.dependencies.filter((dependency): dependency is string => typeof dependency === 'string')
                 : [];
+              const evidence = this.optionalRecord(task.evidence);
+              const evidenceSources = ['red', 'green', 'verification']
+                .filter((slot) => evidence[slot] !== undefined)
+                .map((slot) => (this.optionalRecord(evidence[slot]).source === 'engine' ? 'engine' : 'caller'));
               return [taskNumber, {
                 status: typeof task.status === 'string' ? task.status : 'pending',
                 blocker: typeof task.blocker === 'string' ? task.blocker : undefined,
                 dependencies,
+                evidenceSources,
               }];
             })),
           }
@@ -590,10 +596,20 @@ export class ContextCompactionService {
     const completed = tasks.filter(([, task]) => task.status === 'completed').length;
     const active = tasks.filter(([, task]) => ['in-progress', 'red-observed', 'green-observed'].includes(task.status));
     const blocked = tasks.filter(([, task]) => task.status === 'blocked');
-    const details = [...active, ...blocked].slice(0, 20)
-      .map(([taskNumber, task]) => `- ${taskNumber}: ${task.status}${this.blockerSummary(task.blocker)}`)
+    // Completed tasks are listed only once evidence exists, so features without it render exactly as before.
+    const anyEvidence = tasks.some(([, task]) => task.evidenceSources.length > 0);
+    const done = anyEvidence ? tasks.filter(([, task]) => task.status === 'completed') : [];
+    const details = [...done, ...active, ...blocked].slice(0, 20)
+      .map(([taskNumber, task]) => `- ${taskNumber}: ${task.status}${this.evidenceLabel(task)}${this.blockerSummary(task.blocker)}`)
       .join('\n');
     return `- Revision: ${spec.implementation.revision}\n- Completed: ${completed}/${tasks.length}\n- Active: ${active.length}\n- Blocked: ${blocked.length}${details ? `\n${details}` : ''}`;
+  }
+
+  /** A completed task is `verified` only when every recorded entry was observed by the engine. */
+  private evidenceLabel(task: { status: string; evidenceSources: string[] }): string {
+    if (task.status !== 'completed') return '';
+    const verified = task.evidenceSources.length > 0 && task.evidenceSources.every((source) => source === 'engine');
+    return verified ? ' (verified)' : ' (self-reported)';
   }
 
   private blockerSummary(blocker: string | undefined): string {

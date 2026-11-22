@@ -1,7 +1,11 @@
 import { mkdir, readdir, readFile, writeFile } from 'node:fs/promises';
 import path from 'node:path';
+import { ContextCompactionService } from '../../../application/services/ContextCompactionService';
+import { EvidenceRunner } from '../../../application/services/EvidenceRunner';
 import { JevAdvisoryService, type JevEnvironment } from '../../../application/services/JevAdvisoryService';
 import type { JevCheckRequest, JevEvidenceInput } from '../../../application/services/JevCheckTypes';
+import { WorkflowEngineService } from '../../../application/services/WorkflowEngineService';
+import { ScriptedProcessPort, exited } from '../workflow/evidence-harness';
 import {
   FIXTURE_DESIGN, FIXTURE_REQUIREMENTS, FIXTURE_TASKS, FakeGitPort, FakeJevHttpPort, TEST_KEY, benignAnswers,
   createEngineProject, silentLogger, snapshotTree, type EngineProject,
@@ -158,6 +162,68 @@ describe('JevAdvisoryService RED validity check', () => {
       expect(await service().check({ ...request(AMBIGUOUS), evidence: undefined })).toMatchObject({ status: 'skipped', skipReason: 'not-ready' });
       expect(await service().check(request(TS_ERROR, { testName: undefined }))).toMatchObject({ status: 'skipped', skipReason: 'not-ready' });
       expect(await service().check(request({ ...TS_ERROR, exitCode: 0 }))).toMatchObject({ status: 'skipped', skipReason: 'not-ready' });
+      expect(http.calls).toHaveLength(0);
+    });
+  });
+
+  describe('engine-sourced RED', () => {
+    /** A second engine over the same project that can run commands through a scripted port. */
+    const engineWithRunner = (output: string): WorkflowEngineService => new WorkflowEngineService(
+      { save: async () => undefined, findById: async () => null, findByPath: async () => null, list: async () => [], delete: async () => undefined },
+      new ContextCompactionService(project.fileSystem, silentLogger()),
+      silentLogger(),
+      project.fileSystem,
+      new EvidenceRunner(new ScriptedProcessPort([exited(output, 1)])),
+      { SDD_EVIDENCE_MODE: 'self-reported' },
+    );
+    const recordEngineRed = async (output: string): Promise<void> => {
+      await startTask(project);
+      const snapshot = await project.engine.readAdvisorySnapshot({ projectRoot: project.root, featureName: project.feature, phase: 'tasks' });
+      await engineWithRunner(output).recordTaskProgress({
+        projectRoot: project.root, featureName: project.feature, taskNumber: '1.1', action: 'record-red',
+        expectedRevision: snapshot.implementation!.revision, run: { argv: ['npx', 'jest', 'order.test.ts'] },
+      });
+    };
+    const persistedRed = async (): Promise<Record<string, unknown>> => {
+      const spec = JSON.parse(await readFile(path.join(project.root, '.spec', 'specs', project.feature, 'spec.json'), 'utf8'));
+      return spec.implementation.tasks['1.1'].evidence.red;
+    };
+
+    it('sends the persisted excerpt, not the caller summary, and binds the sidecar to the output hash', async () => {
+      await recordEngineRed('1 test failed in 0.4s');
+      const result = await service().check(request({ command: 'ignored', exitCode: 1, summary: 'all good' }));
+      expect(result).toMatchObject({ status: 'answered', classification: 'ambiguous' });
+      expect(http.calls).toHaveLength(1);
+      expect(http.calls[0].body).toContain('1 test failed in 0.4s');
+      expect(http.calls[0].body).not.toContain('all good');
+      const red = await persistedRed();
+      const sidecar = JSON.parse(await readFile(path.join(reviewDir(), (await sidecarFiles()).find((name) => name.startsWith('jev-red-'))!), 'utf8'));
+      expect(sidecar.binding.evidenceSha256).toBe(red.output_sha256);
+    });
+
+    it('works without any caller evidence once an engine entry exists', async () => {
+      await recordEngineRed('1 test failed in 0.4s');
+      const result = await service().check(request(undefined));
+      expect(result).toMatchObject({ status: 'answered' });
+      expect(http.calls).toHaveLength(1);
+    });
+
+    it('flags a persisted setup classification locally instead of skipping it', async () => {
+      await recordEngineRed("Error: Cannot find module './order'");
+      await expect(persistedRed()).resolves.toMatchObject({ red_classification: 'setup' });
+      const result = await service().check(request(undefined));
+      expect(result).toMatchObject({ status: 'answered', flagged: ['1.1'], classification: 'setup' });
+      expect(http.calls).toHaveLength(0);
+    });
+
+    it('still skips a red-observed task whose entry came from the caller', async () => {
+      await startTask(project);
+      const snapshot = await project.engine.readAdvisorySnapshot({ projectRoot: project.root, featureName: project.feature, phase: 'tasks' });
+      await project.engine.recordTaskProgress({
+        projectRoot: project.root, featureName: project.feature, taskNumber: '1.1', action: 'record-red',
+        expectedRevision: snapshot.implementation!.revision, evidence: AMBIGUOUS,
+      });
+      expect(await service().check(request(AMBIGUOUS))).toMatchObject({ status: 'skipped', skipReason: 'not-ready' });
       expect(http.calls).toHaveLength(0);
     });
   });
