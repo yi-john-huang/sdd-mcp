@@ -220,6 +220,34 @@ describe('WorkflowEngineService evidence gate', () => {
       expect(outcomes.find((code) => code !== 'ok')).toMatch(/^(RevisionConflict|LockTimeout)$/);
       expect(order[0]).toBe('other');
     });
+
+    it('should leave the feature readable while the command runs', async () => {
+      let workflow: WorkflowEngineService;
+      let statusDuringRun: unknown;
+      const port = {
+        run: async () => {
+          statusDuringRun = await workflow.getFeatureStatus({ projectRoot, featureName: FEATURE })
+            .then((status) => status.implementation?.tasks['1.1']?.status, (error: { code?: string }) => error.code);
+          return exited(ASSERTION_OUTPUT, 1);
+        },
+      };
+      workflow = engine({ port });
+      const started = await progress(workflow, '1.1', 0).start();
+      await expect(progress(workflow, '1.1', started.revision).red({ run: RUN })).resolves.toMatchObject({ taskState: 'red-observed' });
+      expect(statusDuringRun).toBe('in-progress');
+    });
+
+    it('should still reject any other task action on the feature while a command runs, without running it', async () => {
+      const port = new ScriptedProcessPort([exited(ASSERTION_OUTPUT, 1)], 3_000);
+      const workflow = engine({ port });
+      const first = await progress(workflow, '1.1', 0).start();
+      const running = progress(workflow, '1.1', first.revision).red({ run: RUN });
+      await new Promise((resolve) => setTimeout(resolve, 200));
+      await expect(workflow.recordTaskProgress({ projectRoot, featureName: FEATURE, taskNumber: '1.1', action: 'block', blocker: 'x', expectedRevision: first.revision }))
+        .rejects.toEqual(failing('LockTimeout'));
+      await expect(running).resolves.toMatchObject({ taskState: 'red-observed' });
+      expect(port.requests).toHaveLength(1);
+    }, 15_000);
   });
 
   describe('overhead', () => {

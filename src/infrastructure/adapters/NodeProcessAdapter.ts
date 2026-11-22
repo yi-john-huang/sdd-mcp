@@ -1,10 +1,13 @@
 import { execFile, spawn, type ChildProcess } from 'node:child_process';
+import { statSync } from 'node:fs';
 import os from 'node:os';
 import { injectable } from 'inversify';
 import type { ProcessPort, ProcessRunRequest, ProcessRunResult } from '../../domain/ports.js';
+import { windowsSpawnPlan, type SpawnPlan } from './windowsSpawnPlan.js';
 
 const TERM_GRACE_MS = 2000;
-const IS_WINDOWS = process.platform === 'win32';
+/** How long to wait for output after the program exits before a descendant holding stdio is cut off. */
+const EXIT_DRAIN_MS = 1000;
 
 /** The Windows process-tree termination command for a pid. */
 export function windowsKillArgv(pid: number): readonly string[] {
@@ -53,10 +56,10 @@ class BoundedOutput {
   }
 }
 
-function killTree(child: ChildProcess, signal: NodeJS.Signals): void {
+function killTree(child: ChildProcess, signal: NodeJS.Signals, windows: boolean): void {
   if (child.pid === undefined) return;
   try {
-    if (IS_WINDOWS) {
+    if (windows) {
       const [program, ...args] = windowsKillArgv(child.pid);
       execFile(program, args, { windowsHide: true }, () => undefined);
     } else {
@@ -67,9 +70,39 @@ function killTree(child: ChildProcess, signal: NodeJS.Signals): void {
   }
 }
 
-/** Runs one program without a shell; every failure becomes a result variant. */
+const isFile = (file: string): boolean => {
+  try {
+    return statSync(file).isFile();
+  } catch {
+    return false;
+  }
+};
+
+export interface NodeProcessAdapterOptions {
+  readonly platform?: NodeJS.Platform;
+  readonly spawnProcess?: typeof spawn;
+  readonly isFile?: (file: string) => boolean;
+}
+
+/** Runs one program without a general shell; every failure becomes a result variant. */
 @injectable()
 export class NodeProcessAdapter implements ProcessPort {
+  private readonly windows: boolean;
+  private readonly spawnProcess: typeof spawn;
+  private readonly isFile: (file: string) => boolean;
+
+  constructor(options: NodeProcessAdapterOptions = {}) {
+    this.windows = (options.platform ?? process.platform) === 'win32';
+    this.spawnProcess = options.spawnProcess ?? spawn;
+    this.isFile = options.isFile ?? isFile;
+  }
+
+  /** Windows cannot spawn a .cmd or .bat file without cmd.exe, so those run through an escaped cmd.exe line. */
+  private plan(request: ProcessRunRequest): SpawnPlan {
+    if (this.windows) return windowsSpawnPlan(request.argv, request.env, this.isFile);
+    return { file: request.argv[0], args: request.argv.slice(1), windowsVerbatimArguments: false };
+  }
+
   run(request: ProcessRunRequest): Promise<ProcessRunResult> {
     const started = Date.now();
     const output = new BoundedOutput(request.maxOutputBytes);
@@ -86,13 +119,15 @@ export class NodeProcessAdapter implements ProcessPort {
 
       let child: ChildProcess;
       try {
-        child = spawn(request.argv[0], request.argv.slice(1), {
+        const plan = this.plan(request);
+        child = this.spawnProcess(plan.file, [...plan.args], {
           cwd: request.cwd,
           env: { ...request.env },
           shell: false,
           windowsHide: true,
+          windowsVerbatimArguments: plan.windowsVerbatimArguments,
           stdio: ['ignore', 'pipe', 'pipe'],
-          detached: !IS_WINDOWS,
+          detached: !this.windows,
         });
       } catch (error) {
         settle({ kind: 'spawn-failed', reason: spawnFailureReason(error as NodeJS.ErrnoException), output: output.bytes(), durationMs: elapsed() });
@@ -104,12 +139,25 @@ export class NodeProcessAdapter implements ProcessPort {
 
       const termTimer = setTimeout(() => {
         timedOut = true;
-        killTree(child, 'SIGTERM');
+        killTree(child, 'SIGTERM', this.windows);
       }, request.timeoutMs);
-      const killTimer = setTimeout(() => killTree(child, 'SIGKILL'), request.timeoutMs + TERM_GRACE_MS);
+      const killTimer = setTimeout(() => killTree(child, 'SIGKILL', this.windows), request.timeoutMs + TERM_GRACE_MS);
+      let drainTimer: NodeJS.Timeout | undefined;
       const clearTimers = (): void => {
         clearTimeout(termTimer);
         clearTimeout(killTimer);
+        clearTimeout(drainTimer);
+      };
+      const finish = (code: number | null, signal: NodeJS.Signals | null): void => {
+        clearTimers();
+        const bytes = output.bytes();
+        if (timedOut) {
+          // The pending SIGKILL timer was just cleared; members that ignored SIGTERM must not outlive the run.
+          killTree(child, 'SIGKILL', this.windows);
+          settle({ kind: 'timed-out', output: bytes, truncated: output.truncated, totalOutputBytes: output.total, durationMs: elapsed() });
+          return;
+        }
+        settle({ kind: 'exited', exitCode: code ?? signalExitCode(signal), output: bytes, truncated: output.truncated, totalOutputBytes: output.total, durationMs: elapsed() });
       };
 
       child.on('error', (error: NodeJS.ErrnoException) => {
@@ -117,15 +165,16 @@ export class NodeProcessAdapter implements ProcessPort {
         settle({ kind: 'spawn-failed', reason: spawnFailureReason(error), output: output.bytes(), durationMs: elapsed() });
       });
 
-      child.on('close', (code, signal) => {
-        clearTimers();
-        const bytes = output.bytes();
-        if (timedOut) {
-          settle({ kind: 'timed-out', output: bytes, truncated: output.truncated, totalOutputBytes: output.total, durationMs: elapsed() });
-          return;
-        }
-        settle({ kind: 'exited', exitCode: code ?? signalExitCode(signal), output: bytes, truncated: output.truncated, totalOutputBytes: output.total, durationMs: elapsed() });
+      // 'close' waits for every holder of the pipes. A descendant that left the process group can hold them
+      // forever, so after the program itself exits, the result settles within EXIT_DRAIN_MS regardless.
+      child.on('exit', (code, signal) => {
+        drainTimer = setTimeout(() => {
+          child.stdout?.destroy();
+          child.stderr?.destroy();
+          finish(code, signal);
+        }, EXIT_DRAIN_MS);
       });
+      child.on('close', finish);
     });
   }
 }

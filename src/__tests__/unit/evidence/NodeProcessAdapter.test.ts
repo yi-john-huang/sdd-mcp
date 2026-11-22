@@ -1,4 +1,7 @@
+import type { spawn, SpawnOptions } from 'node:child_process';
+import { EventEmitter } from 'node:events';
 import os from 'node:os';
+import { PassThrough } from 'node:stream';
 import path from 'node:path';
 import type { ProcessRunRequest, ProcessRunResult } from '../../../domain/ports';
 import { NodeProcessAdapter, windowsKillArgv } from '../../../infrastructure/adapters/NodeProcessAdapter';
@@ -95,6 +98,51 @@ describe('NodeProcessAdapter', () => {
       await expect(waitUntilGone(grandchild, 1000)).resolves.toBe(true);
     });
 
+    (process.platform === 'win32' ? it.skip : it)('should kill a group member that ignores SIGTERM after the program exits on timeout', async () => {
+      const script = [
+        "const { spawn } = require('node:child_process');",
+        "const child = spawn(process.execPath, ['-e', \"process.on('SIGTERM', () => {}); setTimeout(() => {}, 60000)\"], { stdio: 'ignore' });",
+        'process.stdout.write(String(child.pid));',
+        'setTimeout(() => {}, 60000);',
+      ].join(' ');
+      const result = await adapter.run(nodeScript(script, { timeoutMs: 1000 }));
+      expect(result.kind).toBe('timed-out');
+      const stubborn = Number(result.output.toString('utf8'));
+      await expect(waitUntilGone(stubborn, 1000)).resolves.toBe(true);
+    });
+
+    describe('when a descendant escapes the process group and keeps stdout open', () => {
+      const escapee = (thenScript: string): string => [
+        "const { spawn } = require('node:child_process');",
+        "const g = spawn(process.execPath, ['-e', 'setTimeout(() => {}, 60000)'], { detached: true, stdio: ['ignore', 'inherit', 'inherit'] });",
+        'process.stdout.write(String(g.pid)); g.unref();',
+        thenScript,
+      ].join(' ');
+      const posixIt = process.platform === 'win32' ? it.skip : it;
+      const escaped: number[] = [];
+      afterEach(() => {
+        for (const pid of escaped.splice(0)) {
+          try { process.kill(pid, 'SIGKILL'); } catch { /* already gone */ }
+        }
+      });
+
+      posixIt('should still report the exit code soon after the program exits', async () => {
+        const started = Date.now();
+        const result = await adapter.run(nodeScript(escapee('setTimeout(() => process.exit(3), 50);'), { timeoutMs: 30_000 }));
+        escaped.push(Number(result.output.toString('utf8')));
+        expect(result).toMatchObject({ kind: 'exited', exitCode: 3 });
+        expect(Date.now() - started).toBeLessThan(5_000);
+      });
+
+      posixIt('should still settle as timed-out after the program is killed', async () => {
+        const started = Date.now();
+        const result = await adapter.run(nodeScript(escapee('setTimeout(() => {}, 60000);'), { timeoutMs: 1_000 }));
+        escaped.push(Number(result.output.toString('utf8')));
+        expect(result.kind).toBe('timed-out');
+        expect(Date.now() - started).toBeLessThan(6_000);
+      });
+    });
+
     it('should report spawn-failed not-found for a missing program', async () => {
       const result = await adapter.run(request({ argv: ['definitely-not-a-program-xyz', '--version'] }));
       expect(result).toMatchObject({ kind: 'spawn-failed', reason: 'not-found' });
@@ -112,6 +160,38 @@ describe('NodeProcessAdapter', () => {
         env: { PATH: process.env.PATH ?? '', PROBE: 'present' },
       }));
       expect(result.output.toString('utf8')).toBe('present');
+    });
+  });
+
+  describe('on Windows', () => {
+    const fakeSpawn = () => {
+      const calls: Array<{ file: string; args: readonly string[]; options: SpawnOptions }> = [];
+      const spawnProcess = ((file: string, args: readonly string[], options: SpawnOptions) => {
+        calls.push({ file, args, options });
+        const child = Object.assign(new EventEmitter(), { stdout: new PassThrough(), stderr: new PassThrough(), pid: undefined });
+        setImmediate(() => { child.emit('exit', 0, null); child.emit('close', 0, null); });
+        return child;
+      }) as unknown as typeof spawn;
+      return { calls, spawnProcess };
+    };
+
+    it('should start a .cmd shim through cmd.exe with verbatim, escaped arguments and no process group', async () => {
+      const { calls, spawnProcess } = fakeSpawn();
+      const windows = new NodeProcessAdapter({ platform: 'win32', spawnProcess, isFile: (file) => file === 'C:\\n\\npm.cmd' });
+      const result = await windows.run(request({ argv: ['npm', 'test', 'a&b'], env: { PATH: 'C:\\n' } }));
+      expect(result).toMatchObject({ kind: 'exited', exitCode: 0 });
+      expect(calls).toHaveLength(1);
+      expect(calls[0].file).toBe('cmd.exe');
+      expect(calls[0].args.slice(0, 3)).toEqual(['/d', '/s', '/c']);
+      expect(calls[0].args[3]).toContain('^"a^&b^"');
+      expect(calls[0].options).toMatchObject({ shell: false, windowsVerbatimArguments: true, detached: false });
+    });
+
+    it('should start an .exe directly with its resolved path', async () => {
+      const { calls, spawnProcess } = fakeSpawn();
+      const windows = new NodeProcessAdapter({ platform: 'win32', spawnProcess, isFile: (file) => file === 'C:\\n\\node.exe' });
+      await windows.run(request({ argv: ['node', '-v'], env: { PATH: 'C:\\n' } }));
+      expect(calls[0]).toMatchObject({ file: 'C:\\n\\node.exe', args: ['-v'], options: { windowsVerbatimArguments: false } });
     });
   });
 

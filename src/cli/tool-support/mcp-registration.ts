@@ -5,6 +5,7 @@ import { applyEdits, modify, parse as parseJsonc, parseTree, type Node as JsoncN
 import { parse as parseToml } from 'smol-toml';
 import { atomicWriteFile } from '../../utils/atomicWrite.js';
 import { PACKAGE_VERSION } from '../../shared/version.js';
+import { MAX_EVIDENCE_TIMEOUT_MS } from '../../application/services/EvidenceSettings.js';
 import type { InstallTarget, ResolvedInstallPaths } from '../install-target.js';
 import { PreservingWriter, validateDestinationPath } from '../utils/preserving-writer.js';
 export interface RuntimeRegistrationRecord {
@@ -40,6 +41,8 @@ export interface RuntimeRegistrationResult {
 const SERVER_NAME = 'sdd-mcp' as const;
 const COMMAND = 'npx';
 const ARGS = ['-y', `sdd-mcp-server@${PACKAGE_VERSION}`] as const;
+/** Codex abandons a tool call after 60 s by default; the longest evidence command plus one minute keeps record actions intact. */
+const CODEX_TOOL_TIMEOUT_SEC = MAX_EVIDENCE_TIMEOUT_MS / 1000 + 60;
 const START_MARKER = '# >>> sdd-mcp managed runtime';
 export async function installRuntimeRegistration(
   projectRoot: string,
@@ -236,9 +239,10 @@ function prepareCodex(prior: Buffer | null, configPath: string, previous?: Runti
     required: true,
     default_tools_approval_mode: 'auto',
     startup_timeout_sec: 30,
+    tool_timeout_sec: CODEX_TOOL_TIMEOUT_SEC,
   };
   const existing = ((parsed.mcp_servers as Record<string, unknown> | undefined) ?? {})[SERVER_NAME];
-  const block = `${START_MARKER}\n[mcp_servers.'sdd-mcp']\ncommand = "npx"\nargs = ["-y", "sdd-mcp-server@${PACKAGE_VERSION}"]\nrequired = true\ndefault_tools_approval_mode = "auto"\nstartup_timeout_sec = 30\n${END_MARKER}\n`;
+  const block = `${START_MARKER}\n[mcp_servers.'sdd-mcp']\ncommand = "npx"\nargs = ["-y", "sdd-mcp-server@${PACKAGE_VERSION}"]\nrequired = true\ndefault_tools_approval_mode = "auto"\nstartup_timeout_sec = 30\ntool_timeout_sec = ${CODEX_TOOL_TIMEOUT_SEC}\n${END_MARKER}\n`;
   if (starts.length === 0) {
     if (existing !== undefined) {
       throw new RuntimeRegistrationConflictError(configPath, 'unmanaged-entry');

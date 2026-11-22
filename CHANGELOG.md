@@ -17,6 +17,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Breaking default: evidence mode is `verified`. In this mode an evidence object without `run` is rejected with `SelfReportedEvidenceRejected`. Set `SDD_EVIDENCE_MODE=self-reported` (or `.spec/sdd-config.json` `{"evidence":{"mode":"self-reported"}}`) to keep the 5.5.0 behavior, where caller evidence is saved with `source: "caller"`. Existing `spec.json` files stay readable: the evidence entry is additive and an entry without `source` reads as `caller`; the schema version stays 5.
 - `sdd-implement` now passes the test command as `run.argv` for RED, GREEN, and COMPLETE, reads the returned excerpt and classification, and runs the JEV `red` check after RED is recorded. A RED classified `setup` or `ambiguous` may be recorded again after the test is fixed; an `assertion` RED is final.
 - The JEV `red` check judges the engine's persisted excerpt when one exists and binds its sidecar to the output hash; the caller summary is ignored in that case.
+- The evidence command runs under a per-feature evidence-run lock instead of the feature lock, so `sdd-status`, JEV checks, and handoff reads no longer fail with `LockTimeout` while tests run. Task actions on one feature still run one command at a time.
+- A run settles within 1 s after the program exits, even when a descendant that left the process group keeps stdout open. On timeout, group members that ignored SIGTERM are killed.
+- On Windows, `npm`, `npx`, `yarn`, and `pnpm` resolve through `PATH` and `PATHEXT`; `.cmd` and `.bat` files run through `cmd.exe /d /s /c` with escaped arguments, because Node cannot spawn them without a shell.
+- The Codex registration sets `tool_timeout_sec = 660`, so Codex waits for the longest evidence command instead of abandoning it after its 60 s default.
 - The MCP contract stays at 17 tools. `sdd-spec-impl` gains the optional `run` input; the 5.5.0 request shape remains valid.
 
 ## [5.5.0] - 2026-10-20

@@ -11,7 +11,7 @@ export type ProcessEnvironment = Readonly<Record<string, string | undefined>>;
  * workflow engine and JEV both read. Kept apart from the container so tests can load it.
  */
 export function bindEvidence(container: Container, environment: ProcessEnvironment): void {
-  container.bind<ProcessPort>(TYPES.ProcessPort).to(NodeProcessAdapter).inSingletonScope();
+  container.bind<ProcessPort>(TYPES.ProcessPort).toDynamicValue(() => new NodeProcessAdapter()).inSingletonScope();
   container.bind<ProcessEnvironment>(TYPES.ProcessEnvironment).toConstantValue(environment);
   container
     .bind<EvidenceRunner>(TYPES.EvidenceRunner)

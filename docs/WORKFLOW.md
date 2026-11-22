@@ -147,7 +147,9 @@ The server runs each task's test command itself and records what it observed. Th
 - RED needs a non-zero exit code. GREEN and COMPLETE need zero. When the observed code does not fit the action, the result is `TaskTransitionInvalid`, the error details carry the observation, and `spec.json` is unchanged.
 - The RED excerpt is classified `setup`, `assertion`, or `ambiguous`. After a `setup` or `ambiguous` RED, the agent can fix the test and record RED again; the new observation replaces the old one. An `assertion` RED is final.
 - The JEV `red` check runs after RED is recorded and judges the persisted excerpt, not a summary the agent wrote.
-- One evidence command runs per feature at a time. A second request for the same feature waits for the feature lock and then reports `RevisionConflict` or `LockTimeout`.
+- One evidence command runs per feature at a time. A second task action for the same feature waits up to 2 s for the evidence-run lock and then reports `RevisionConflict` or `LockTimeout`; it never starts a second command.
+- The command runs outside the feature lock. Status, JEV checks, and the handoff stay readable while it runs. The transition is checked before the run and again before the result is saved.
+- A host must wait for the tool result at least as long as the longest command. The Codex registration sets `tool_timeout_sec = 660`; Codex otherwise stops waiting after 60 s.
 
 ### Settings
 
@@ -161,7 +163,7 @@ The environment variable wins over the project setting. An unrecognized value fa
 
 ### Allowed programs and environment
 
-- The program in `run.argv[0]` must be on the allowlist after its directory and any `.cmd`, `.exe`, or `.bat` suffix are removed. The default list is `node`, `npm`, `npx`, `pnpm`, `yarn`, `bun`, `jest`, `vitest`, `tsc`, `pytest`, `python`, `python3`, `go`, `cargo`, `make`, `mvn`, `gradle`, and `dotnet`. `evidence.allowedCommands` replaces it. Shells such as `sh` and `bash` are never allowed, and `argv` is never interpreted by a shell.
+- The program in `run.argv[0]` must be on the allowlist after its directory and any `.cmd`, `.exe`, or `.bat` suffix are removed. The default list is `node`, `npm`, `npx`, `pnpm`, `yarn`, `bun`, `jest`, `vitest`, `tsc`, `pytest`, `python`, `python3`, `go`, `cargo`, `make`, `mvn`, `gradle`, and `dotnet`. `evidence.allowedCommands` replaces it. Shells such as `sh` and `bash` are never allowed, and `argv` is never interpreted by a shell. One exception exists on Windows: a program that resolves to a `.cmd` or `.bat` file (`npm`, `npx`, `yarn`, `pnpm`) cannot start without `cmd.exe`, so it runs through `cmd.exe /d /s /c` with every argument quoted and every `cmd` metacharacter escaped.
 - The test process receives the server environment without `SDD_JEV_API_KEY` and without any variable whose name ends a word with `KEY`, `TOKEN`, `SECRET`, `PASSWORD`, `PASSWD`, or `CREDENTIAL(S)` (joined forms such as `OPENAI_APIKEY` included) or holds `PAT` as a word. Names listed in `evidence.passEnv` pass through. `CI=1` is set when `CI` is unset.
 
 ### Errors
