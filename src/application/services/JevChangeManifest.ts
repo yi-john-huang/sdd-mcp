@@ -7,6 +7,8 @@ import { resolveRange, type ResolvedRange } from './JevBaseRef.js';
 export interface ManifestEntry {
   path: string;
   token: string;
+  /** The git file mode when it is not a regular file's `100644`: `100755`, `120000`, or `160000`. JEV manifests drop it. */
+  mode?: string;
 }
 
 export interface RangeIdentity {
@@ -30,12 +32,14 @@ const SIDECAR_PATH = /^\.spec\/(?:reviews\/|specs\/[^/]+\/review\/)/;
 
 const text = (stdout: Buffer): string[] => stdout.toString('utf8').split('\0').filter((part) => part.length > 0);
 
-type EntryKind = 'file' | 'symlink' | 'directory' | 'deleted' | 'other';
+type EntryKind = 'file' | 'executable' | 'symlink' | 'directory' | 'deleted' | 'other';
+
+const EXECUTE_BITS = 0o111;
 
 async function kindOf(root: string, file: string): Promise<EntryKind> {
   try {
     const info = await lstat(path.join(root, file));
-    if (info.isFile()) return 'file';
+    if (info.isFile()) return (info.mode & EXECUTE_BITS) !== 0 ? 'executable' : 'file';
     if (info.isSymbolicLink()) return 'symlink';
     return info.isDirectory() ? 'directory' : 'other';
   } catch {
@@ -90,7 +94,10 @@ async function workingTreeBlobs(git: GitPort, root: string, files: string[]): Pr
 }
 
 function finish(entries: ManifestEntry[], base: string | null): ChangeManifest {
-  const kept = entries.filter((entry) => !SIDECAR_PATH.test(entry.path)).sort((a, b) => (a.path < b.path ? -1 : a.path > b.path ? 1 : 0));
+  const kept = entries
+    .filter((entry) => !SIDECAR_PATH.test(entry.path))
+    .map(({ path: file, token }) => ({ path: file, token }))
+    .sort((a, b) => (a.path < b.path ? -1 : a.path > b.path ? 1 : 0));
   if (kept.length === 0) return { status: 'empty' };
   if (kept.length > MAX_PATHS) return UNAVAILABLE;
   const manifest = kept.map((entry) => `${entry.path}\0${entry.token}\n`).join('');
@@ -100,27 +107,38 @@ function finish(entries: ManifestEntry[], base: string | null): ChangeManifest {
 /**
  * One token per changed path, as `git add` would store it. `recordedIn` is the commit a nested
  * repository's gitlink is compared with: HEAD for working-tree reviews, the merge base for ranges.
+ * A path in `deleted` that a plain directory now occupies is deleted: `git add` would drop it.
  */
-async function tokenEntries(git: GitPort, root: string, paths: readonly string[], recordedIn: string): Promise<ManifestEntry[] | undefined> {
+async function tokenEntries(
+  git: GitPort,
+  root: string,
+  paths: readonly string[],
+  recordedIn: string,
+  deleted: ReadonlySet<string> = new Set(),
+): Promise<ManifestEntry[] | undefined> {
   const present: string[] = [];
+  const executable = new Set<string>();
   const entries: ManifestEntry[] = [];
   for (const file of paths) {
     const kind = await kindOf(root, file);
-    if (kind === 'file') present.push(file);
-    else if (kind === 'deleted') entries.push({ path: file, token: DELETED });
+    if (kind === 'file' || kind === 'executable') {
+      present.push(file);
+      if (kind === 'executable') executable.add(file);
+    } else if (kind === 'deleted') entries.push({ path: file, token: DELETED });
     else if (kind === 'symlink') {
       const blob = await symlinkBlob(git, root, file);
       if (!blob) return undefined;
-      entries.push({ path: file, token: blob });
+      entries.push({ path: file, token: blob, mode: '120000' });
     } else if (kind === 'directory') {
       const commit = await gitlinkCommit(git, root, file, recordedIn);
-      if (commit) entries.push({ path: file, token: commit });
+      if (commit) entries.push({ path: file, token: commit, mode: '160000' });
+      else if (deleted.has(file)) entries.push({ path: file, token: DELETED });
     }
     // Other entry types (sockets, FIFOs) cannot be staged and are skipped.
   }
   const blobs = await workingTreeBlobs(git, root, present);
   if (!blobs) return undefined;
-  for (const [file, blob] of blobs) entries.push({ path: file, token: blob });
+  for (const [file, blob] of blobs) entries.push({ path: file, token: blob, ...(executable.has(file) ? { mode: '100755' } : {}) });
   return entries;
 }
 
@@ -128,11 +146,17 @@ const STATUS_ARGS = ['-c', 'status.renames=false', 'status', '--porcelain=v1', '
 
 // An untracked embedded repository is listed with a trailing slash; `git add` records it without one.
 const statusPath = (record: string): string => record.slice(3).replace(/\/$/, '');
+const deletedPaths = (records: readonly string[]): Set<string> =>
+  new Set(records.filter((record) => record[0] === 'D' || record[1] === 'D').map(statusPath));
+
+async function statusEntries(git: GitPort, root: string, records: readonly string[]): Promise<ManifestEntry[] | undefined> {
+  return tokenEntries(git, root, records.map(statusPath), 'HEAD', deletedPaths(records));
+}
 
 async function reviewEntries(git: GitPort, root: string): Promise<ManifestEntry[] | undefined> {
   const status = await git.run(STATUS_ARGS, root);
   if (!status.ok) return undefined;
-  return tokenEntries(git, root, text(status.stdout).map(statusPath), 'HEAD');
+  return statusEntries(git, root, text(status.stdout));
 }
 
 /**
@@ -146,9 +170,9 @@ export async function dirtyEntries(
 ): Promise<{ status: 'ok'; entries: ManifestEntry[] } | { status: 'too-many' } | { status: 'failed' }> {
   const status = await git.run(pathspec ? [...STATUS_ARGS, '--', pathspec] : STATUS_ARGS, root);
   if (!status.ok) return { status: 'failed' };
-  const paths = text(status.stdout).map(statusPath);
-  if (paths.length > MAX_PATHS) return { status: 'too-many' };
-  const entries = await tokenEntries(git, root, paths, 'HEAD');
+  const records = text(status.stdout);
+  if (records.length > MAX_PATHS) return { status: 'too-many' };
+  const entries = await statusEntries(git, root, records);
   return entries ? { status: 'ok', entries } : { status: 'failed' };
 }
 

@@ -24,13 +24,16 @@ function isRelativePosixPath(value: unknown, allowEmpty = false): value is strin
     && !value.split('/').includes('..');
 }
 
+const NON_REGULAR_MODE = /^(?:100755|120000|160000)$/;
+
 function isDirtyEntry(value: unknown): value is TreeDirtyEntry {
   if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
   const entry = value as Record<string, unknown>;
-  return Object.keys(entry).every((key) => key === 'path' || key === 'token')
+  return Object.keys(entry).every((key) => key === 'path' || key === 'token' || key === 'mode')
     && isRelativePosixPath(entry.path)
     && typeof entry.token === 'string'
-    && (entry.token === 'deleted' || GIT_OBJECT_ID.test(entry.token));
+    && (entry.token === 'deleted' || GIT_OBJECT_ID.test(entry.token))
+    && (entry.mode === undefined || NON_REGULAR_MODE.test(String(entry.mode)));
 }
 
 function isValidBound(binding: Extract<TreeBinding, { status: 'bound' }>): boolean {
@@ -86,7 +89,7 @@ export function serializeTreeBinding(binding: TreeBinding): Record<string, unkno
     sha256: binding.sha256,
     head: binding.head,
     prefix: binding.prefix,
-    ...(binding.dirty === undefined ? {} : { dirty: binding.dirty.map(({ path, token }) => ({ path, token })) }),
+    ...(binding.dirty === undefined ? {} : { dirty: binding.dirty.map(({ path, token, mode }) => ({ path, token, ...(mode ? { mode } : {}) })) }),
     ...(binding.dirtyTruncated === undefined ? {} : { dirty_truncated: binding.dirtyTruncated }),
   };
 }

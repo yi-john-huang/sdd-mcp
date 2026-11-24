@@ -84,6 +84,18 @@ describe('change manifest', () => {
     expect(staged.diffSha256).toBe(review.diffSha256);
   });
 
+  it('represents a tracked file replaced by a directory as deleted, matching a full stage', async () => {
+    commitBase();
+    fs.rmSync(path.join(repo, 'src/old.ts'));
+    write('src/old.ts/inner.ts', 'export const inner = 1;\n');
+    const review = await buildReviewManifest(new NodeGitAdapter(), repo);
+    git('add', '-A');
+    const staged = await buildStagedManifest(new NodeGitAdapter(), repo);
+    if (review.status !== 'ok' || staged.status !== 'ok') throw new Error('expected ok manifests');
+    expect(review.entries).toContainEqual({ path: 'src/old.ts', token: 'deleted' });
+    expect(staged.diffSha256).toBe(review.diffSha256);
+  });
+
   it('does not write to the index or the object store', async () => {
     commitBase();
     write('src/a.ts', 'export const a = 2;\n');

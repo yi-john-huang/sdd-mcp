@@ -186,7 +186,7 @@ The environment variable wins over the project setting. An unrecognized value fa
 
 ### Evidence binding
 
-When the project is a git repository, the server binds evidence to the working tree. A binding is a SHA-256 over the `HEAD` tree plus every dirty or untracked path and its content hash. `.spec/specs/` and `.spec/reviews/` are left out, so workflow writes do not count as changes. Observation has a 10 s deadline and at most 2,000 dirty paths; beyond that the binding is `unavailable`.
+When the project is a git repository, the server binds evidence to the working tree. A binding is a SHA-256 over the `HEAD` tree plus every dirty or untracked path with its content hash and git file mode, so a mode-only change such as `chmod +x` counts. `.spec/specs/` and `.spec/reviews/` are left out, so workflow writes do not count as changes. Observation has a 10 s deadline and at most 2,000 dirty paths; beyond that the binding is `unavailable`.
 
 - **Start:** `start` stores the tree as `start_tree` on the task.
 - **Continuity:** GREEN must run the same `argv` as RED, and the tree must differ from the RED tree. Otherwise the result is `EvidenceContinuityViolation`.

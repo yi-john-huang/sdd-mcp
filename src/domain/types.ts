@@ -88,6 +88,8 @@ export type TreeUnavailableReason = 'not-a-git-repo' | 'git-unavailable' | 'git-
 export interface TreeDirtyEntry {
   readonly path: string;
   readonly token: string;
+  /** The git file mode when it is not `100644`: `100755`, `120000`, or `160000`. */
+  readonly mode?: string;
 }
 
 /** A content-addressed fingerprint of the project's working tree, or why none could be taken. */

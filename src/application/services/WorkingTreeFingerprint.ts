@@ -17,6 +17,10 @@ export const DEFAULT_TREE_DEADLINE_MS = 10_000;
 /** Spec state and JEV sidecars are workflow records, not project content. */
 const EXCLUDED = ['.spec/specs/', '.spec/reviews/'] as const;
 const DELETED = 'deleted';
+const REGULAR_FILE_MODE = '100644';
+
+/** The fingerprint value of one path: its object id, prefixed with its git mode unless it is a regular file. */
+const entryValue = (mode: string, id: string): string => (mode === REGULAR_FILE_MODE ? id : `${mode} ${id}`);
 
 class Unavailable extends Error {
   constructor(readonly reason: TreeUnavailableReason) {
@@ -57,10 +61,10 @@ async function baseMap(git: GitPort, { top, prefix }: Location, commit: string |
   const args = ['ls-tree', '-r', '-z', '--full-tree', commit, ...(prefix ? ['--', prefix] : [])];
   const listing = await required(git, args, top, 'git-failed');
   for (const record of listing.toString('utf8').split('\0')) {
-    const match = /^\d+ \w+ ([0-9a-f]+)\t(.*)$/s.exec(record);
+    const match = /^(\d+) \w+ ([0-9a-f]+)\t(.*)$/s.exec(record);
     if (!match) continue;
-    const file = (match[2] as string).slice(prefix.length);
-    if (!excluded(file)) map.set(file, match[1] as string);
+    const file = (match[3] as string).slice(prefix.length);
+    if (!excluded(file)) map.set(file, entryValue(match[1] as string, match[2] as string));
   }
   return map;
 }
@@ -71,16 +75,16 @@ async function liveDirty(git: GitPort, { top, prefix }: Location): Promise<TreeD
   if (result.status === 'failed') throw new Unavailable('git-failed');
   return result.entries
     .filter((entry) => entry.path.startsWith(prefix))
-    .map((entry) => ({ path: entry.path.slice(prefix.length), token: entry.token }))
+    .map((entry) => ({ path: entry.path.slice(prefix.length), token: entry.token, ...(entry.mode ? { mode: entry.mode } : {}) }))
     .filter((entry) => !excluded(entry.path))
     .sort(byPath);
 }
 
 function overlay(base: ReadonlyMap<string, string>, dirty: readonly TreeDirtyEntry[]): Map<string, string> {
   const map = new Map(base);
-  for (const { path, token } of dirty) {
+  for (const { path, token, mode } of dirty) {
     if (token === DELETED) map.delete(path);
-    else map.set(path, token);
+    else map.set(path, entryValue(mode ?? REGULAR_FILE_MODE, token));
   }
   return map;
 }

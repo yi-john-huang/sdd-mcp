@@ -57,6 +57,11 @@ describe('observeTree', () => {
     ['an edit', () => write('src/a.ts', 'export const a = 3;\n')],
     ['an added file', () => write('src/c.ts', 'export const c = 1;\n')],
     ['a deleted file', () => fs.rmSync(path.join(repo, 'src/b.ts'))],
+    ['a mode-only change', () => fs.chmodSync(path.join(repo, 'src/a.ts'), 0o755)],
+    ['a tracked file replaced by an empty directory', () => {
+      fs.rmSync(path.join(repo, 'src/b.ts'));
+      fs.mkdirSync(path.join(repo, 'src/b.ts'));
+    }],
   ])('changes the hash on %s', async (...[, change]) => {
     const before = await bound();
     change();
@@ -162,6 +167,27 @@ describe('changedPaths', () => {
     write('src/c.ts', 'export const c = 1;\n');
     fs.rmSync(path.join(repo, 'src/b.ts'));
     expect(await changedPaths(adapter, repo, from)).toEqual({ status: 'ok', paths: ['src/a.ts', 'src/b.ts', 'src/c.ts'] });
+  });
+
+  it('reports a mode-only change, and nothing once it is committed', async () => {
+    const from = await bound();
+    fs.chmodSync(path.join(repo, 'src/a.ts'), 0o755);
+    expect(await changedPaths(adapter, repo, from)).toEqual({ status: 'ok', paths: ['src/a.ts'] });
+    const dirty = await bound();
+    commit('chmod');
+    expect(await changedPaths(adapter, repo, dirty)).toEqual({ status: 'ok', paths: [] });
+    expect((await bound()).sha256).toBe(dirty.sha256);
+  });
+
+  it('reports a file replaced by a directory, and nothing once it is committed', async () => {
+    const from = await bound();
+    fs.rmSync(path.join(repo, 'src/b.ts'));
+    write('src/b.ts/inner.ts', 'export const inner = 1;\n');
+    expect(await changedPaths(adapter, repo, from)).toEqual({ status: 'ok', paths: ['src/b.ts', 'src/b.ts/inner.ts'] });
+    const dirty = await bound();
+    commit('file to directory');
+    expect(await changedPaths(adapter, repo, dirty)).toEqual({ status: 'ok', paths: [] });
+    expect((await bound()).sha256).toBe(dirty.sha256);
   });
 
   it('reports no paths when nothing changed', async () => {
