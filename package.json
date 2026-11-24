@@ -1,6 +1,6 @@
 {
   "name": "sdd-mcp-server",
-  "version": "6.0.0",
+  "version": "6.1.0",
   "description": "MCP server for spec-driven development workflows across AI-agent CLIs and IDEs",
   "main": "dist/index.js",
   "bin": {
@@ -41,7 +41,8 @@
     "test:watch": "jest --watch",
     "test:coverage": "jest --coverage",
     "test:ci": "jest --coverage --ci --runInBand --watchAll=false --passWithNoTests",
-    "lint": "eslint src --ext .ts",
+    "lint": "node scripts/lint-ratchet.mjs",
+    "lint:baseline": "node scripts/lint-ratchet.mjs --lower",
     "lint:fix": "eslint src --ext .ts --fix",
     "typecheck": "tsc --noEmit",
     "validate": "npm run typecheck && npm run lint && npm run test:ci"

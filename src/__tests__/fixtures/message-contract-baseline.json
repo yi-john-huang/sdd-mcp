@@ -11,22 +11,27 @@
     "src/application/services/WorkflowEngineService.ts": {
       "codes": [
         "ArtifactDrift",
+        "EvidenceContinuityViolation",
         "EvidenceRunTimedOut",
         "EvidenceRunnerUnavailable",
         "InvalidParams",
         "LegacyStateConflict",
         "LegacyTaskConflict",
+        "ObservedArtifactMismatch",
         "PhaseNotApproved",
         "PhaseValidationFailed",
         "RecoveryConflict",
+        "RedSetupFailure",
         "RevisionConflict",
         "SelfReportedEvidenceRejected",
         "StateInvariantViolation",
         "TaskDependencyIncomplete",
-        "TaskTransitionInvalid"
+        "TaskTransitionInvalid",
+        "VerifyCommandMismatch"
       ],
       "numbers": {
         "ArtifactDrift": [],
+        "EvidenceContinuityViolation": [],
         "EvidenceRunTimedOut": [],
         "EvidenceRunnerUnavailable": [],
         "InvalidParams": [
@@ -41,13 +46,16 @@
         ],
         "LegacyTaskConflict": [
           "1000",
+          "1000",
           "5"
         ],
+        "ObservedArtifactMismatch": [],
         "PhaseNotApproved": [],
         "PhaseValidationFailed": [],
         "RecoveryConflict": [
           "5"
         ],
+        "RedSetupFailure": [],
         "RevisionConflict": [],
         "SelfReportedEvidenceRejected": [],
         "StateInvariantViolation": [
@@ -56,7 +64,8 @@
           "5"
         ],
         "TaskDependencyIncomplete": [],
-        "TaskTransitionInvalid": []
+        "TaskTransitionInvalid": [],
+        "VerifyCommandMismatch": []
       }
     },
     "src/application/services/WorkflowValidationService.ts": {
@@ -99,13 +108,17 @@
         "InvalidArtifactPath": [],
         "InvalidListValue": [],
         "InvalidTaskId": [
+          "50",
           "50"
         ],
         "InvalidTaskTitle": [
+          "500",
           "500"
         ],
         "InvalidTdd": [],
         "ListTooLong": [
+          "100",
+          "100",
           "100",
           "100"
         ],
@@ -113,6 +126,7 @@
         "MissingMetadata": [],
         "RequirementsMissing": [],
         "TaskLimitExceeded": [
+          "1000",
           "1000"
         ],
         "TaskMissing": [],

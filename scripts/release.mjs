@@ -112,6 +112,8 @@ export function applyVersion({ root, from, released, to, date }) {
     '.claude-plugin/plugin.json': (file) => updateJsonVersion(file, to),
     'src/shared/version.ts': (file) => updateText(file, (text) =>
       text.replace(/PACKAGE_VERSION = '[^']*'/, `PACKAGE_VERSION = '${to}'`)),
+    '.spec/steering/tech.md': (file) => updateText(file, (text) =>
+      text.replace(/^- Current version: `[^`]*`/m, `- Current version: \`${to}\``)),
     'README.md': (file) => updateText(file, pin),
     'docs/INSTALL-GUIDE.md': (file) => updateText(file, pin),
     'CHANGELOG.md': (file) => {

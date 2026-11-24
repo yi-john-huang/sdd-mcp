@@ -14,6 +14,8 @@ $sdd-requirements <feature-name> → explicit approval → $sdd-design → expli
 
 Each Skill restores durable status and approved compact context, performs validation and persistence internally, and asks for required human decisions. Do not ask the user to call MCP tools or paste workflow JSON.
 
+Parallel slices need one git worktree per slice; while evidence mode is verified, implementation slices run serially. After a repeated agent failure, invoke `$sdd-correct` to fix it at the strongest tier: structure, then lint or CI, then a test, and only then rule text.
+
 ## Installed Components
 
 Native Codex installs use `.agents/` and `.codex/`; compatibility integrations may reference other effective paths below. Read the referenced files for full details.

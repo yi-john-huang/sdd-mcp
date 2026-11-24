@@ -10,7 +10,7 @@ Work inline in the current turn.
 
 ## Execution Mode
 
-Never create a serial specialist or split work to justify agents. Only when project agents are installed and at least two independent slices exist, ask once per session, in the user's language, "inline or project agent for this run?" and reuse the answer; never ask again or per phase. Agent mode: one `specialistDepth: 1` handoff per slice, no nesting or retry; on failure record one fallback and finish in the parent.
+Never create a serial specialist or split work to justify agents. Only when project agents are installed and at least two independent slices exist, ask once per session, in the user's language, "inline or project agent for this run?" and reuse the answer; never ask again or per phase. Parallel slices need one git worktree per slice. Agent mode: one `specialistDepth: 1` handoff per slice, no nesting or retry; on failure record one fallback and finish in the parent.
 
 ## Required Workflow
 

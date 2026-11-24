@@ -1,0 +1,3 @@
+error[E0425]: cannot find function `create_order` in this scope
+  --> src/lib.rs:12:17
+error: could not compile `order` (lib test) due to 1 previous error

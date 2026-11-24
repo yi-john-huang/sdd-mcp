@@ -1,0 +1,3 @@
+order_test.go:4:2: no required module provides package example.com/missing; to add it:
+	go get example.com/missing
+FAIL	example.com/order [setup failed]

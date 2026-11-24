@@ -5,6 +5,8 @@ import { TYPES } from '../../infrastructure/di/types.js';
 import { FileSystemPort, LoggerPort } from '../../domain/ports.js';
 import { PhaseApprovals, Project } from '../../domain/types.js';
 import { SpecPathResolver } from './SpecPathResolver.js';
+import { resolveEvidenceSettings } from './EvidenceSettings.js';
+import { readProjectConfig } from './ProjectConfig.js';
 
 export type ContextLoadMode = 'compact' | 'standard' | 'full';
 export type ApprovablePhase = keyof PhaseApprovals;
@@ -104,6 +106,8 @@ interface WorkflowSpec {
     /** `evidenceSources` lists who observed each recorded entry: `engine` or `caller`. */
     tasks: Record<string, { status: string; blocker?: string; dependencies: string[]; evidenceSources: string[] }>;
   };
+  /** The project verify command, shown in the implementation handoff so a resumed agent completes with it. */
+  verifyCommand?: readonly string[];
 }
 interface DocumentSnapshot { name: string; relativePath: string; absolutePath: string; content: string }
 interface SelectedState { phase: EffectivePhase; status: PhaseStatus; documents: DocumentSnapshot[] }
@@ -174,6 +178,7 @@ export class ContextCompactionService {
     const specPath = path.join(resolved.featureRoot, 'spec.json');
     await resolver.assertContained(resolved.featureRoot, specPath);
     const spec = await this.readSpec(specPath, request.featureName);
+    if (spec.implementation) spec.verifyCommand = await this.verifyCommand(request.projectRoot);
     const selected = await this.selectState(resolved.featureRoot, spec, request, resolver);
     const sourceCharacters = selected.documents.reduce((total, document) => total + document.content.length, 0);
     const sourceFingerprint = this.hash(JSON.stringify({
@@ -184,6 +189,7 @@ export class ContextCompactionService {
       reviewRequired: spec.reviewRequired,
       reviewCompleted: spec.reviewCompleted,
       implementation: spec.implementation,
+      verifyCommand: spec.verifyCommand,
       sources: selected.documents.map(({ relativePath, content }) => [relativePath, content]),
     }));
     const fingerprint = this.hash(JSON.stringify({
@@ -602,7 +608,13 @@ export class ContextCompactionService {
     const details = [...done, ...active, ...blocked].slice(0, 20)
       .map(([taskNumber, task]) => `- ${taskNumber}: ${task.status}${this.evidenceLabel(task)}${this.blockerSummary(task.blocker)}`)
       .join('\n');
-    return `- Revision: ${spec.implementation.revision}\n- Completed: ${completed}/${tasks.length}\n- Active: ${active.length}\n- Blocked: ${blocked.length}${details ? `\n${details}` : ''}`;
+    const verify = spec.verifyCommand ? `\n- Verify command: ${spec.verifyCommand.join(' ')}` : '';
+    return `- Revision: ${spec.implementation.revision}\n- Completed: ${completed}/${tasks.length}\n- Active: ${active.length}\n- Blocked: ${blocked.length}${verify}${details ? `\n${details}` : ''}`;
+  }
+
+  /** Read from project config alone: the command is not affected by environment overrides. */
+  private async verifyCommand(projectRoot: string): Promise<readonly string[] | undefined> {
+    return resolveEvidenceSettings({}, await readProjectConfig(projectRoot, this.fileSystem)).verifyCommand;
   }
 
   /** A completed task is `verified` only when every recorded entry was observed by the engine. */

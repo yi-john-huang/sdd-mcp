@@ -22,11 +22,11 @@ Use this route for a bounded bug fix, refactor, or enhancement with clear accept
 
 ## Execution Mode
 
-Work inline in the current turn. Only when project agents are installed and at least two independent slices exist, ask once per session, in the user's language, "inline or project agent for this run?" and reuse the answer; never ask again or per phase. Agent mode: one `specialistDepth: 1` handoff per slice, no nesting or retry; on failure record one fallback and finish in the parent. Never split work to justify agents.
+Work inline in the current turn. Only when project agents are installed and at least two independent slices exist, ask once per session, in the user's language, "inline or project agent for this run?" and reuse the answer; never ask again or per phase. Parallel slices need one git worktree per slice. Agent mode: one `specialistDepth: 1` handoff per slice, no nesting or retry; on failure record one fallback and finish in the parent. Never split work to justify agents.
 
 ## Output
 
-Report changed paths, behavior protected, failing and passing focused test evidence, security considerations, and unresolved blockers. Execution report: mode (inline|project-agent; asked|reused|not offered), agents started and whether parallel, configured model/effort per agent (never claim unobserved values), and any fallback to the parent.
+Report changed paths, behavior protected, failing and passing focused test evidence, security considerations, `Unverified / Could Not Run` (each skipped check with its reason, or `None`), and unresolved blockers. Execution report: mode (inline|project-agent; asked|reused|not offered), agents started and whether parallel, configured model/effort per agent (never claim unobserved values), and any fallback to the parent.
 
 ## Optional Reference
 

@@ -22,7 +22,7 @@ const FORWARDED: ReadonlyArray<{ file: string; code: string; count: number; reas
 /** A next-action sentence starts with one of these imperative verbs. */
 const ACTION_VERBS = [
   'Add', 'Answer', 'Approve', 'Change', 'Complete', 'Continue', 'Correct', 'Declare', 'Fix', 'Give', 'Inspect',
-  'List', 'Load', 'Make', 'Merge', 'Move', 'Name', 'Read', 'Record', 'Reload', 'Remove', 'Rename', 'Reread',
+  'List', 'Load', 'Make', 'Merge', 'Move', 'Name', 'Omit', 'Read', 'Record', 'Reload', 'Remove', 'Rename', 'Reread',
   'Restore', 'Resubmit', 'Resolve', 'Retry', 'Revise', 'Run', 'Select', 'Shorten', 'Split', 'Start', 'Submit',
   'Use', 'Wait', 'Write',
 ] as const;
@@ -31,6 +31,7 @@ const ACTION_VERBS = [
 const RECOVERABLE_ENGINE_CODES: ReadonlySet<string> = new Set([
   'ArtifactDrift', 'LegacyStateConflict', 'LegacyTaskConflict', 'PhaseNotApproved', 'PhaseValidationFailed',
   'RecoveryConflict', 'RevisionConflict', 'TaskDependencyIncomplete', 'TaskTransitionInvalid',
+  'RedSetupFailure', 'EvidenceContinuityViolation', 'ObservedArtifactMismatch', 'VerifyCommandMismatch',
 ]);
 
 const REQUIRES_NEXT_ACTION: Readonly<Record<(typeof MESSAGE_FILES)[number], (entry: ExtractedMessage) => boolean>> = {

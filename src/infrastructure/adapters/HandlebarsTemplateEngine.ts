@@ -17,8 +17,8 @@ export class HandlebarsTemplateEngine implements TemplateEngine {
     return compiledTemplate(data);
   }
 
-  registerHelper(name: string, helper: (...args: unknown[]) => string): void {
-    Handlebars.registerHelper(name, helper);
+  registerHelper(name: string, helper: (...args: never[]) => string): void {
+    Handlebars.registerHelper(name, helper as Handlebars.HelperDelegate);
   }
 
   private registerDefaultHelpers(): void {

@@ -23,7 +23,7 @@ export interface TemplateRendererPort {
   compile(template: string, name?: string): Promise<CompiledTemplate>;
   render(templateName: string, data: TemplateData, context: TemplateContext): Promise<string>;
   renderString(template: string, data: TemplateData, context: TemplateContext): Promise<string>;
-  registerHelper(name: string, helper: (...args: unknown[]) => unknown): void;
+  registerHelper(name: string, helper: (...args: never[]) => unknown): void;
   registerPartial(name: string, template: string): Promise<void>;
   clearCache(): void;
 }

@@ -46,7 +46,7 @@ function parseOwner(bytes: string): LockOwner | undefined {
     const value = JSON.parse(bytes) as Partial<LockOwner>;
     if (
       typeof value.token !== 'string' || value.token.length === 0
-      || !Number.isSafeInteger(value.pid) || value.pid <= 0
+      || typeof value.pid !== 'number' || !Number.isSafeInteger(value.pid) || value.pid <= 0
       || typeof value.hostname !== 'string' || value.hostname.length === 0
     ) return undefined;
     return value as LockOwner;

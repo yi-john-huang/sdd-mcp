@@ -253,12 +253,14 @@ describe('WorkflowEngineService evidence gate', () => {
   describe('overhead', () => {
     /** 20 transitions (start, RED, GREEN, complete on 5 tasks); `verified` uses an instant port, otherwise caller evidence. */
     async function timeTwentyTransitions(perfRoot: string, featureName: string, verified: boolean): Promise<number> {
+      // RED and GREEN run the same command, as continuity requires; every third run (each task's RED) fails.
+      let runs = 0;
       const workflow = verified
-        ? engine({ port: { run: async (request) => (request.argv[1] === 'red' ? exited(ASSERTION_OUTPUT, 1) : exited('PASS\n', 0)) } })
+        ? engine({ port: { run: async () => (runs++ % 3 === 0 ? exited(ASSERTION_OUTPUT, 1) : exited('PASS\n', 0)) } })
         : engine({ env: { SDD_EVIDENCE_MODE: 'self-reported' } });
       await prepareImplementation(workflow, perfRoot, featureName, independentTasks(5));
       const proof = (step: 'red' | 'green' | 'verify') => (verified
-        ? { run: { argv: ['npm', step] } }
+        ? { run: { argv: ['npm', step === 'verify' ? 'run' : 'test', ...(step === 'verify' ? ['verify'] : [])] } }
         : { evidence: { command: `npm ${step}`, exitCode: step === 'red' ? 1 : 0, summary: step } });
       const startedAt = Date.now();
       let revision = 0;

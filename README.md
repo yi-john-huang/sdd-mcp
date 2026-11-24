@@ -15,6 +15,8 @@ Skills own the requirements, design, task-planning, and TDD method. Skills also 
 User -> Skill -> MCP -> .spec
 ```
 
+The runtime does not trust what an agent reports. It runs each RED, GREEN, and completion command itself, blocks GREEN after a RED that failed on setup, requires GREEN to rerun the RED command on a changed tree, checks completion artifacts against git, and reports changes made after the last verification. A configured `evidence.verifyCommand` fixes the completion command. When an agent repeats a mistake, `sdd-correct` turns it into a gate, a check, or a test before it adds rule text.
+
 ## Is sdd-mcp the right fit?
 
 No workflow tool is best for every team. Each one makes a different trade-off between control, speed, and reach. Pick the option that matches your situation.
@@ -125,12 +127,12 @@ Use this path when the repository has never had sdd-mcp-generated guidance. The 
 
 ```bash
 # Recommended explicit lean installation
-npx sdd-mcp-server@6.0.0 install --profile lean --target claude-code
-npx sdd-mcp-server@6.0.0 install --profile lean --target codex
-npx sdd-mcp-server@6.0.0 install --profile lean --target omp
+npx sdd-mcp-server@6.1.0 install --profile lean --target claude-code
+npx sdd-mcp-server@6.1.0 install --profile lean --target codex
+npx sdd-mcp-server@6.1.0 install --profile lean --target omp
 
 # Interactive full installation: choose Claude Code, Codex, or OMP
-npx sdd-mcp-server@6.0.0 install --profile full
+npx sdd-mcp-server@6.1.0 install --profile full
 ```
 
 Use the local entrypoint only when this checkout itself is the intended project install. It does not repair personal runtime connection. Build once, then install explicitly:
@@ -181,6 +183,7 @@ SDD workflow skills are explicit commands and do not activate implicitly from or
 |---|---|---|---|
 | Small task | `/simple-task` | `$simple-task` | `/skill:simple-task` |
 | Formal SDD | `/sdd-requirements` → `/sdd-design` → `/sdd-tasks` → `/sdd-implement` | `$sdd-requirements` → `$sdd-design` → `$sdd-tasks` → `$sdd-implement` | `/skill:sdd-requirements` → `/skill:sdd-design` → `/skill:sdd-tasks` → `/skill:sdd-implement` |
+| Fix a repeated agent failure | `/sdd-correct` | `$sdd-correct` | `/skill:sdd-correct` |
 | Clearer replies (automatic) | `/output-clarity-ladder` | `$output-clarity-ladder` | `/skill:output-clarity-ladder` |
 
 `output-clarity-ladder` makes explanation, summary, and teaching replies easier to check. It writes about 80% of the way to ASD-STE100 and uses a diagram, HTML page, or video only when that format is easier to understand. It ships English rules plus Japanese (`ja`) and Traditional Chinese (`zh-TW`) guidance. It does not check an approved-word list, and it does not make output ASD-STE100 conformant.
@@ -214,7 +217,7 @@ Use this path when the project already contains generated sdd-mcp files from an 
 
 ```bash
 # Replace <target> with claude-code, codex, or omp
-npx sdd-mcp-server@6.0.0 install \
+npx sdd-mcp-server@6.1.0 install \
   --profile full \
   --target <target> \
   --refresh-generated
@@ -311,7 +314,7 @@ npm run build
 npm test
 ```
 
-CI runs on the maintainer's self-hosted runners: one macOS host and one Lima Linux VM. A workflow run from an outside contributor needs maintainer approval.
+CI runs `npm run build`, `npm run typecheck` (strict TypeScript), `npm run lint` (a lint ratchet that fails on any new warning), and `npm test` on the maintainer's self-hosted runners: one macOS host and one Lima Linux VM. A workflow run from an outside contributor needs maintainer approval.
 
 Releases are automated. A merge from `develop` to `master` bumps the version, tags it, and publishes it to npm. See [docs/RELEASING.md](docs/RELEASING.md).
 

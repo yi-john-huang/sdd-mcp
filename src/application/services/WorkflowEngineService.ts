@@ -5,12 +5,12 @@ import path from 'node:path';
 import { injectable, inject, optional } from 'inversify';
 import { TYPES } from '../../infrastructure/di/types.js';
 import {
-  ExecutionEvidence, PhaseRecord, Project, TaskStatus, WorkflowPhase, type EvidenceClassification, type EvidenceSource,
+  ExecutionEvidence, PhaseRecord, Project, TaskStatus, WorkflowPhase, type EvidenceClassification, type EvidenceSource, type TreeBinding,
 } from '../../domain/types.js';
 import type { EvidenceRunner, ObservedEvidence } from './EvidenceRunner.js';
 import { resolveEvidenceSettings, type EvidenceMode, type EvidenceSettings } from './EvidenceSettings.js';
 import { readProjectConfig } from './ProjectConfig.js';
-import { ProjectRepository, LoggerPort, FileSystemPort } from '../../domain/ports.js';
+import { ProjectRepository, LoggerPort, FileSystemPort, type GitPort } from '../../domain/ports.js';
 import {
   ContextCompactionService,
   type ApprovablePhase,
@@ -20,6 +20,9 @@ import {
 import { InvalidFeatureNameError, SpecPathResolver, validateFeatureName } from './SpecPathResolver.js';
 import { WorkflowValidationService, taskAcceptanceCriteria, type DesignValidationResult } from './WorkflowValidationService.js';
 import { GovernanceError } from './WorkflowErrors.js';
+import { assertTreeBinding, parseTreeBinding, serializeTreeBinding } from './TreeBindingCodec.js';
+import { DEFAULT_TREE_DEADLINE_MS, compareTree } from './WorkingTreeFingerprint.js';
+import { unmatchedArtifacts } from './ObservedArtifactCheck.js';
 import { FilesystemLockCompromisedError, withFilesystemLock } from '../../utils/withFilesystemLock.js';
 
 const PHASES: ApprovablePhase[] = ['requirements', 'design', 'tasks'];
@@ -27,6 +30,26 @@ const JOURNAL_LIMIT = 4 * 1024 * 1024;
 const JOURNAL_FILE_LIMIT = 24 * 1024 * 1024;
 const PHASE_CONTENT_CHARACTER_LIMIT = 1_048_576;
 const EVIDENCE_ACTIONS: ReadonlySet<string> = new Set(['record-red', 'record-green', 'complete']);
+const TREE_ACTIONS: ReadonlySet<string> = new Set(['start', 'record-red', 'record-green', 'complete']);
+
+/** What a transition check needs beyond the spec: the tree observed for this action and the resolved settings. */
+interface TransitionContext {
+  readonly tree: TreeBinding | undefined;
+  readonly settings: EvidenceSettings;
+  /** Completion artifacts with no change since start; undefined when the check could not run. */
+  readonly unmatched?: readonly string[];
+}
+
+const MAX_DRIFT_PATHS = 50;
+
+const sameArgv = (a: readonly string[], b: readonly string[]): boolean => a.length === b.length && a.every((element, index) => element === b[index]);
+
+/** Attaches the observed tree; only the verification record keeps dirty entries, which drift and artifact checks rebuild. */
+function bindEvidence(evidence: ExecutionEvidence, tree: TreeBinding | undefined, keepDirty: boolean): ExecutionEvidence {
+  if (!tree) return evidence;
+  if (tree.status === 'unavailable' || keepDirty) return { ...evidence, workingTree: tree };
+  return { ...evidence, workingTree: { status: 'bound', sha256: tree.sha256, head: tree.head, prefix: tree.prefix } };
+}
 /** Held for a whole task action, command included, so one feature never runs two evidence commands at once. */
 const EVIDENCE_RUN_LOCK = '.evidence-run.lock';
 
@@ -81,13 +104,28 @@ export interface DurableFeatureStatus {
   readonly implementation?: { revision: number; completed: number; total: number; active: number; blocked: number; tasks?: Readonly<Record<string, TaskEvidenceStatus>> };
   /** The mode the server resolved for this project: who may supply task evidence. */
   readonly evidenceMode?: EvidenceMode;
+  /** The project's fixed completion command, when `.spec/sdd-config.json` sets a valid one. */
+  readonly verifyCommand?: readonly string[];
+  /** Paths changed since the latest verified completion; status reports, the human decides. */
+  readonly verificationDrift?: VerificationDrift;
+  /** Present when a completed task exists but the tree cannot be compared, so silence is never read as verified. */
+  readonly verificationBinding?: 'unavailable';
+}
+export interface VerificationDrift {
+  readonly taskNumber: string;
+  readonly changedPaths: readonly string[];
+  readonly pathsTruncated: boolean;
+  readonly pathsUnavailable?: true;
 }
 /** Per-task view of recorded evidence: which side observed each entry. */
 export interface TaskEvidenceStatus {
   readonly status: TaskStatus;
   readonly evidence: { readonly red?: EvidenceSource; readonly green?: EvidenceSource; readonly verification?: EvidenceSource };
   readonly redClassification?: EvidenceClassification;
+  /** `bound` when the latest evidence (or the start, before any evidence) carries a working-tree fingerprint. */
+  readonly binding: TreeBindingStatus;
 }
+export type TreeBindingStatus = 'bound' | 'unbound';
 /** Read-only view for advisory checks; carries no handle that can mutate workflow state. */
 export interface AdvisorySnapshot {
   readonly featureName: string;
@@ -140,10 +178,11 @@ interface WorkflowSpecV5 extends Record<string, unknown> {
     tasks: Record<string, {
       title: string; tdd_required: boolean; dependencies: string[]; status: TaskStatus; blocker?: string;
       blocked_from?: 'in-progress' | 'red-observed' | 'green-observed'; evidence: { red?: ExecutionEvidence; green?: ExecutionEvidence; verification?: ExecutionEvidence };
-      planned_artifacts: string[]; observed_artifacts: string[];
+      planned_artifacts: string[]; observed_artifacts: string[]; start_tree?: TreeBinding;
     }>;
   };
 }
+type SpecTask = NonNullable<WorkflowSpecV5['implementation']>['tasks'][string];
 interface JournalBytes { base64: string; sha256: string }
 interface SubmissionJournal { schema_version: 1; spec: { prior: JournalBytes; next: JournalBytes }; artifact: { prior: JournalBytes | null; next: JournalBytes } }
 const VALIDATION_STATUSES = new Set(['not-run', 'passed', 'failed', 'legacy-accepted'] as const);
@@ -170,7 +209,12 @@ export class WorkflowEngineService {
     @inject(TYPES.EvidenceRunner) @optional() private readonly evidenceRunner?: EvidenceRunner,
     /** The server environment for evidence settings and child processes; `{}` when not injected. */
     @inject(TYPES.ProcessEnvironment) @optional() private readonly environment: Readonly<Record<string, string | undefined>> = {},
+    /** Read-only git for working-tree bindings; without it every binding is unavailable. */
+    @inject(TYPES.GitPort) @optional() private readonly git?: GitPort,
   ) {}
+
+  /** The working-tree observation deadline; tests shorten it. */
+  private readonly treeDeadlineMs: number = DEFAULT_TREE_DEADLINE_MS;
 
   async initializeFeature(request: InitializeFeatureRequest): Promise<Project> {
     validateFeatureName(request.featureName);
@@ -380,7 +424,7 @@ export class WorkflowEngineService {
           return Object.entries(current.tasks).map(([id, task]) => ({ id, ...task }));
         })();
         if (parsed.length === 0) throw new GovernanceError('LegacyTaskConflict', 'Tasks artifact contains no executable leaf tasks. Add at least one executable task in the tasks phase Skill.');
-        const taskStates: WorkflowSpecV5['implementation']['tasks'] = {};
+        const taskStates: NonNullable<WorkflowSpecV5['implementation']>['tasks'] = {};
         for (const task of parsed) {
           taskStates[task.id] = {
             title: task.title, tdd_required: task.tddRequired, dependencies: [...task.dependencies],
@@ -406,24 +450,63 @@ export class WorkflowEngineService {
    * The command itself runs outside the feature lock, which stays free for status, JEV, and handoff reads;
    * the transition is checked before the run and again, against the current revision, before the commit.
    */
-  async recordTaskProgress(request: RecordTaskProgressRequest): Promise<RecordTaskProgressResult> {
-    return this.withEvidenceRunLock(request.projectRoot, request.featureName, async () => {
-      const outcome = request.run && EVIDENCE_ACTIONS.has(request.action) ? await this.observeBeforeCommit(request, request.run) : undefined;
-      return this.commitTaskProgress(request, outcome);
+  async recordTaskProgress(original: RecordTaskProgressRequest): Promise<RecordTaskProgressResult> {
+    return this.withEvidenceRunLock(original.projectRoot, original.featureName, async () => {
+      const request = await this.withVerifyCommand(original);
+      // The tree is observed before the command runs and outside the feature lock, so status reads stay free.
+      const { tree, unmatched } = await this.observeForAction(request);
+      const outcome = request.run && EVIDENCE_ACTIONS.has(request.action) ? await this.observeBeforeCommit(request, request.run, tree, unmatched) : undefined;
+      return this.commitTaskProgress(request, outcome, tree, unmatched);
     });
   }
 
-  private async observeBeforeCommit(request: RecordTaskProgressRequest, run: NonNullable<RecordTaskProgressRequest['run']>): Promise<ObservedEvidence> {
+  /** In verified mode, completion without a run uses the project verify command; the transition check compares any run with it. */
+  private async withVerifyCommand(request: RecordTaskProgressRequest): Promise<RecordTaskProgressRequest> {
+    if (request.action !== 'complete' || request.run) return request;
+    const settings = await this.evidenceSettings(path.resolve(request.projectRoot));
+    return settings.mode === 'verified' && settings.verifyCommand ? { ...request, run: { argv: [...settings.verifyCommand] } } : request;
+  }
+
+  /**
+   * One tree scan for a tree action. For completion with a bound start and current tree, also the named artifacts
+   * that did not change since start; undefined when either tree is unbound or the path set is unavailable,
+   * and the 6.0.0 rule then applies.
+   */
+  private async observeForAction(request: RecordTaskProgressRequest): Promise<{ tree?: TreeBinding; unmatched?: readonly string[] }> {
+    if (!TREE_ACTIONS.has(request.action)) return {};
+    const projectRoot = path.resolve(request.projectRoot);
+    const start = request.action === 'complete' && this.git && this.fileSystem
+      ? await this.withLockedFeature(request.projectRoot, request.featureName, false, async ({ spec }) => spec.implementation?.tasks[request.taskNumber]?.start_tree)
+      : undefined;
+    const { tree, changed } = await compareTree(this.git, projectRoot, start, this.treeDeadlineMs);
+    if (request.action !== 'complete' || tree.status !== 'bound' || changed.status !== 'ok' || !this.fileSystem) return { tree };
+    const fileSystem = this.fileSystem;
+    const specsRoot = path.join(projectRoot, '.spec', 'specs');
+    // A spec path only needs to exist, so a symlink out of the specs root must not satisfy it.
+    const specPathExists = async (file: string): Promise<boolean> => {
+      const absolute = path.join(projectRoot, file);
+      try {
+        await new SpecPathResolver(fileSystem).assertContained(specsRoot, absolute);
+      } catch {
+        return false;
+      }
+      return fileSystem.exists(absolute);
+    };
+    return { tree, unmatched: await unmatchedArtifacts(this.normalizeArtifacts(request.affectedArtifacts ?? []), changed.paths, specPathExists) };
+  }
+
+  private async observeBeforeCommit(request: RecordTaskProgressRequest, run: NonNullable<RecordTaskProgressRequest['run']>, tree: TreeBinding | undefined, unmatched: readonly string[] | undefined): Promise<ObservedEvidence> {
     const { projectRoot, settings } = await this.withLockedFeature(request.projectRoot, request.featureName, false, async ({ projectRoot, featureRoot, spec }) => {
       await this.assertNoApprovedArtifactDrift(featureRoot, spec);
-      this.assertTransition(spec, request);
-      return { projectRoot, settings: await this.evidenceSettings(projectRoot) };
+      const settings = await this.evidenceSettings(projectRoot);
+      this.assertTransition(spec, request, { tree, settings, unmatched });
+      return { projectRoot, settings };
     });
     return this.runEvidence(run.argv, projectRoot, settings);
   }
 
   /** Every precondition of the action, without mutating the spec. */
-  private assertTransition(spec: WorkflowSpecV5, request: RecordTaskProgressRequest) {
+  private assertTransition(spec: WorkflowSpecV5, request: RecordTaskProgressRequest, context: TransitionContext) {
     const implementation = spec.implementation;
     if (!implementation) throw new GovernanceError('TaskTransitionInvalid', 'Implementation has not started. Start implementation before changing task state.');
     if (implementation.revision !== request.expectedRevision) throw new GovernanceError('RevisionConflict', 'Implementation revision is stale. Reload status and submit again with the current revision.');
@@ -432,13 +515,19 @@ export class WorkflowEngineService {
     const incomplete = task.dependencies.filter((dependency) => implementation.tasks[dependency]?.status !== 'completed');
     if (request.action === 'start' && incomplete.length > 0) throw new GovernanceError('TaskDependencyIncomplete', 'Task dependencies are incomplete. Complete the listed dependency tasks first.', { dependencies: incomplete });
     const prior = task.status;
-    this.assertEvidenceActionAllowed(task, request, prior);
+    this.assertEvidenceActionAllowed(task, request, prior, context.settings.mode);
+    this.assertContinuity(task, request, context);
+    this.assertVerifyCommand(request, context.settings);
+    if (request.action === 'complete' && context.unmatched && context.unmatched.length > 0) {
+      throw new GovernanceError('ObservedArtifactMismatch', 'Name only artifacts that changed since the task started. Remove the listed paths or make the change first.', { unmatched: [...context.unmatched] });
+    }
     return { implementation, task, prior };
   }
 
-  private assertEvidenceActionAllowed(task: WorkflowSpecV5['implementation']['tasks'][string], request: RecordTaskProgressRequest, prior: TaskStatus): void {
+  private assertEvidenceActionAllowed(task: NonNullable<WorkflowSpecV5['implementation']>['tasks'][string], request: RecordTaskProgressRequest, prior: TaskStatus, mode: EvidenceMode): void {
     if (request.action === 'record-red' && (!task.tdd_required || !this.canRecordRed(task.evidence.red, prior))) this.invalidTransition(request.action, prior);
     if (request.action === 'record-green' && (!task.tdd_required || prior !== 'red-observed')) this.invalidTransition(request.action, prior);
+    if (request.action === 'record-green' && mode === 'verified') this.assertRedNotSetup(task.evidence.red);
     if (request.action !== 'complete') return;
     if (prior !== (task.tdd_required ? 'green-observed' : 'in-progress')) this.invalidTransition(request.action, prior);
     if (task.planned_artifacts.length > 0 && this.normalizeArtifacts(request.affectedArtifacts ?? []).length === 0) {
@@ -446,29 +535,29 @@ export class WorkflowEngineService {
     }
   }
 
-  private async commitTaskProgress(request: RecordTaskProgressRequest, outcome: ObservedEvidence | undefined): Promise<RecordTaskProgressResult> {
+  private async commitTaskProgress(request: RecordTaskProgressRequest, outcome: ObservedEvidence | undefined, tree: TreeBinding | undefined, unmatched: readonly string[] | undefined): Promise<RecordTaskProgressResult> {
     return this.withLockedFeature(request.projectRoot, request.featureName, true, async ({ projectRoot, featureRoot, spec, commitSpec }) => {
       await this.assertNoApprovedArtifactDrift(featureRoot, spec);
       const settings = await this.evidenceSettings(projectRoot);
       let observed: ObservedEvidenceResult | undefined;
-      const { implementation, task, prior } = this.assertTransition(spec, request);
+      const { implementation, task, prior } = this.assertTransition(spec, request, { tree, settings, unmatched });
       if (request.action === 'start') {
-        if (prior === 'pending') task.status = 'in-progress';
+        if (prior === 'pending') { task.status = 'in-progress'; if (tree) task.start_tree = tree; }
         else if (prior === 'blocked' && task.blocked_from) { task.status = task.blocked_from; delete task.blocker; delete task.blocked_from; }
         else this.invalidTransition(request.action, prior);
       } else if (request.action === 'record-red') {
         const obtained = this.obtainEvidence(request, settings, 'red', outcome);
         if (obtained.evidence.exitCode === 0) this.invalidTransition(request.action, prior, obtained.observed);
-        task.status = 'red-observed'; task.evidence.red = obtained.evidence; observed = obtained.observed;
+        task.status = 'red-observed'; task.evidence.red = bindEvidence(obtained.evidence, tree, false); observed = obtained.observed;
       } else if (request.action === 'record-green') {
         const obtained = this.obtainEvidence(request, settings, 'green', outcome);
         if (obtained.evidence.exitCode !== 0) this.invalidTransition(request.action, prior, obtained.observed);
-        task.status = 'green-observed'; task.evidence.green = obtained.evidence; observed = obtained.observed;
+        task.status = 'green-observed'; task.evidence.green = bindEvidence(obtained.evidence, tree, false); observed = obtained.observed;
       } else if (request.action === 'complete') {
         const artifacts = this.normalizeArtifacts(request.affectedArtifacts ?? []);
         const obtained = this.obtainEvidence(request, settings, 'verification', outcome);
         if (obtained.evidence.exitCode !== 0) this.invalidTransition(request.action, prior, obtained.observed);
-        task.status = 'completed'; task.evidence.verification = obtained.evidence; task.observed_artifacts = artifacts; observed = obtained.observed;
+        task.status = 'completed'; task.evidence.verification = bindEvidence(obtained.evidence, tree, true); task.observed_artifacts = artifacts; observed = obtained.observed;
       } else {
         if (!['in-progress', 'red-observed', 'green-observed'].includes(prior) || !request.blocker?.trim()) this.invalidTransition(request.action, prior);
         if (request.blocker.length > 2_000) throw new GovernanceError('InvalidParams', 'Task blocker exceeds 2000 characters');
@@ -490,6 +579,39 @@ export class WorkflowEngineService {
 
   private async evidenceSettings(projectRoot: string): Promise<EvidenceSettings> {
     return resolveEvidenceSettings(this.environment, await readProjectConfig(projectRoot, this.fileSystem));
+  }
+
+  /**
+   * In verified mode, GREEN must run the command RED ran, on a working tree that changed since RED.
+   * Each part is skipped when RED lacks the matching record (an argv or a bound tree).
+   */
+  private assertContinuity(task: SpecTask, request: RecordTaskProgressRequest, context: TransitionContext): void {
+    const red = task.evidence.red;
+    if (request.action !== 'record-green' || context.settings.mode !== 'verified' || !request.run || red?.source !== 'engine') return;
+    if (red.argv && !sameArgv(red.argv, request.run.argv)) {
+      throw new GovernanceError('EvidenceContinuityViolation', 'Run GREEN with the same run.argv that RED used. Record RED again first if the test command must change.', { reason: 'argv-mismatch', expectedArgv: [...red.argv] });
+    }
+    const before = red.workingTree;
+    const now = context.tree;
+    if (before?.status === 'bound' && now?.status === 'bound' && before.sha256 === now.sha256) {
+      throw new GovernanceError('EvidenceContinuityViolation', 'Change the implementation before recording GREEN. The working tree matches the tree RED observed.', { reason: 'unchanged-tree' });
+    }
+  }
+
+  /** A configured verify command is the only completion command in verified mode. */
+  private assertVerifyCommand(request: RecordTaskProgressRequest, settings: EvidenceSettings): void {
+    const verifyCommand = settings.verifyCommand;
+    if (request.action !== 'complete' || settings.mode !== 'verified' || !verifyCommand || !request.run) return;
+    if (!sameArgv(verifyCommand, request.run.argv)) {
+      throw new GovernanceError('VerifyCommandMismatch', 'Omit run, or pass the project verify command for completion. The configured command is in details.verifyCommand.', { verifyCommand: [...verifyCommand] });
+    }
+  }
+
+  /** An engine RED that failed at setup proves nothing about behavior, so it cannot unlock GREEN in verified mode; self-reported mode is the rollback. */
+  private assertRedNotSetup(red: ExecutionEvidence | undefined): void {
+    if (red?.source === 'engine' && red.redClassification === 'setup') {
+      throw new GovernanceError('RedSetupFailure', 'Fix the test setup so the test fails on an assertion. Record RED again before recording GREEN.');
+    }
   }
 
   /** A RED may be recorded again only over an engine observation that did not prove an assertion failure. */
@@ -555,12 +677,48 @@ export class WorkflowEngineService {
     };
   }
   async getFeatureStatus(request: FeatureRequest): Promise<DurableFeatureStatus> {
-    return this.withLockedFeature(
+    return this.featureStatus(request, true);
+  }
+
+  /** Drift needs git work outside the feature lock, so the list view skips it to keep its cost flat. */
+  private async featureStatus(request: FeatureRequest, withDrift: boolean): Promise<DurableFeatureStatus> {
+    const { status, anchor } = await this.withLockedFeature(
       request.projectRoot,
       request.featureName,
       false,
-      async ({ projectRoot, featureRoot, spec }) => this.buildStatus(projectRoot, request.featureName, featureRoot, spec),
+      async ({ projectRoot, featureRoot, spec }) => ({
+        status: await this.buildStatus(projectRoot, request.featureName, featureRoot, spec),
+        anchor: withDrift ? this.latestVerification(spec) : undefined,
+      }),
     );
+    return anchor ? { ...status, ...(await this.verificationDrift(path.resolve(request.projectRoot), anchor)) } : status;
+  }
+
+  /** The completed task whose verification was observed last, with its tree when one was bound. */
+  private latestVerification(spec: WorkflowSpecV5): { taskNumber: string; tree: TreeBinding | undefined } | undefined {
+    let latest: { taskNumber: string; tree: TreeBinding | undefined; observedAt: string } | undefined;
+    for (const [taskNumber, task] of Object.entries(spec.implementation?.tasks ?? {})) {
+      const verification = task.evidence.verification;
+      if (task.status !== 'completed' || !verification) continue;
+      if (!latest || verification.observedAt > latest.observedAt) latest = { taskNumber, tree: verification.workingTree, observedAt: verification.observedAt };
+    }
+    return latest && { taskNumber: latest.taskNumber, tree: latest.tree };
+  }
+
+  /** Compares the live tree with the latest verified one; never writes spec.json. */
+  private async verificationDrift(
+    projectRoot: string,
+    anchor: { taskNumber: string; tree: TreeBinding | undefined },
+  ): Promise<Pick<DurableFeatureStatus, 'verificationDrift' | 'verificationBinding'>> {
+    const verified = anchor.tree;
+    if (verified?.status !== 'bound' || !this.git) return { verificationBinding: 'unavailable' };
+    const { tree: current, changed } = await compareTree(this.git, projectRoot, verified, this.treeDeadlineMs);
+    if (current.status !== 'bound') return { verificationBinding: 'unavailable' };
+    if (current.sha256 === verified.sha256) return {};
+    const drift: VerificationDrift = changed.status === 'ok'
+      ? { taskNumber: anchor.taskNumber, changedPaths: changed.paths.slice(0, MAX_DRIFT_PATHS), pathsTruncated: changed.paths.length > MAX_DRIFT_PATHS }
+      : { taskNumber: anchor.taskNumber, changedPaths: [], pathsTruncated: false, pathsUnavailable: true };
+    return { verificationDrift: drift };
   }
 
   async loadFeatureContext(request: ContextLoadRequest): Promise<ContextLoadResult> {
@@ -589,7 +747,7 @@ export class WorkflowEngineService {
       }
       const candidate = path.join(root, name);
       if ((await this.fileSystem.stat(candidate)).isDirectory()) {
-        statuses.push(await this.getFeatureStatus({ projectRoot: request.projectRoot, featureName: name }));
+        statuses.push(await this.featureStatus({ projectRoot: request.projectRoot, featureName: name }, false));
       }
     }
     return statuses;
@@ -848,8 +1006,13 @@ export class WorkflowEngineService {
     const implementation = spec.implementation
       ? { revision: spec.implementation.revision, ...this.implementationCounts(spec.implementation), tasks: this.taskEvidenceStatuses(spec.implementation) }
       : undefined;
-    const evidenceMode = (await this.evidenceSettings(projectRoot)).mode;
-    return { featureName, phase: spec.phase, currentPhase: spec.phase, nextAction: this.resolveNextAction(spec, driftedPhases), blockers, phases, checkpoint: { required: cp.required, reviewed: cp.reviewed, reviewedRevision: cp.reviewed_revision, reviewedArtifactSha256: cp.reviewed_artifact_sha256 }, implementation, evidenceMode };
+    const settings = await this.evidenceSettings(projectRoot);
+    return {
+      featureName, phase: spec.phase, currentPhase: spec.phase, nextAction: this.resolveNextAction(spec, driftedPhases), blockers, phases,
+      checkpoint: { required: cp.required, reviewed: cp.reviewed, reviewedRevision: cp.reviewed_revision, reviewedArtifactSha256: cp.reviewed_artifact_sha256 },
+      implementation, evidenceMode: settings.mode,
+      ...(settings.verifyCommand ? { verifyCommand: [...settings.verifyCommand] } : {}),
+    };
   }
 
   private taskEvidenceStatuses(implementation: NonNullable<WorkflowSpecV5['implementation']>): Record<string, TaskEvidenceStatus> {
@@ -860,7 +1023,9 @@ export class WorkflowEngineService {
         if (entry) evidence[slot] = entry.source ?? 'caller';
       }
       const classification = task.evidence.red?.redClassification;
-      return [id, { status: task.status, evidence, ...(classification ? { redClassification: classification } : {}) }];
+      const latest = task.evidence.verification?.workingTree ?? task.evidence.green?.workingTree ?? task.evidence.red?.workingTree ?? task.start_tree;
+      const binding: TreeBindingStatus = latest?.status === 'bound' ? 'bound' : 'unbound';
+      return [id, { status: task.status, evidence, ...(classification ? { redClassification: classification } : {}), binding }];
     }));
   }
 
@@ -1413,6 +1578,7 @@ export class WorkflowEngineService {
         evidence,
         planned_artifacts: plannedArtifacts,
         observed_artifacts: observedArtifacts,
+        ...(task.start_tree === undefined ? {} : { start_tree: parseTreeBinding(task.start_tree, `${taskNumber}.start_tree`) }),
       };
     }
     return {
@@ -1438,6 +1604,7 @@ export class WorkflowEngineService {
       truncated: evidence.truncated,
       redactions: evidence.redactions,
       redClassification: evidence.red_classification,
+      workingTree: evidence.working_tree === undefined ? undefined : parseTreeBinding(evidence.working_tree, `${reference}.working_tree`),
     } as unknown as ExecutionEvidence;
     this.assertExecutionEvidence(normalized, reference);
     return Object.fromEntries(Object.entries(normalized).filter(([, field]) => field !== undefined)) as unknown as ExecutionEvidence;
@@ -1604,7 +1771,9 @@ export class WorkflowEngineService {
       this.assertPersistedArtifactPaths(task.observed_artifacts, `${taskNumber}.observed_artifacts`);
       for (const [evidenceType, evidence] of Object.entries(task.evidence)) {
         this.assertExecutionEvidence(evidence, `${taskNumber}.evidence.${evidenceType}`);
+        if (evidence.workingTree) assertTreeBinding(evidence.workingTree, `${taskNumber}.evidence.${evidenceType}.working_tree`);
       }
+      if (task.start_tree) assertTreeBinding(task.start_tree, `${taskNumber}.start_tree`);
       if (task.status === 'blocked') {
         if (
           !task.blocker
@@ -1735,6 +1904,7 @@ export class WorkflowEngineService {
       ...optional('truncated', value.truncated),
       ...optional('redactions', value.redactions),
       ...optional('red_classification', value.redClassification),
+      ...optional('working_tree', value.workingTree ? serializeTreeBinding(value.workingTree) : undefined),
     };
   }
 
@@ -1759,6 +1929,7 @@ export class WorkflowEngineService {
     const implementation = persisted.implementation as WorkflowSpecV5['implementation'] | undefined;
     if (implementation) {
       for (const task of Object.values(implementation.tasks)) {
+        if (task.start_tree) task.start_tree = serializeTreeBinding(task.start_tree) as unknown as TreeBinding;
         for (const key of ['red', 'green', 'verification'] as const) {
           const value = task.evidence[key];
           if (!value) continue;

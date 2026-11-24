@@ -157,7 +157,7 @@ export const SDD_TOOL_DEFINITIONS: ReadonlyArray<Tool & { name: SDDToolName }> =
   { name: 'sdd-validate-design', description: 'Validate design artifact', inputSchema: featureSchema() },
   { name: 'sdd-validate-gap', description: 'Analyze the implementation gap', inputSchema: featureSchema() },
   {
-    name: 'sdd-spec-impl', description: 'Record governed implementation task progress. In verified evidence mode, pass the test command as run.argv; the server runs it and records the observed exit code.',
+    name: 'sdd-spec-impl', description: 'Record governed implementation task progress. In verified evidence mode, pass the test command as run.argv; the server runs it and records the observed exit code. COMPLETE may omit run when the project configures a verify command.',
     inputSchema: {
       type: 'object',
       properties: {
@@ -168,7 +168,7 @@ export const SDD_TOOL_DEFINITIONS: ReadonlyArray<Tool & { name: SDDToolName }> =
       },
       required: ['featureName', 'taskNumber', 'action', 'expectedRevision'], additionalProperties: false,
       allOf: [
-        { if: { properties: { action: { enum: ['record-red', 'record-green', 'complete'] } }, required: ['action'] }, then: { anyOf: [{ required: ['evidence'] }, { required: ['run'] }] } },
+        { if: { properties: { action: { enum: ['record-red', 'record-green'] } }, required: ['action'] }, then: { anyOf: [{ required: ['evidence'] }, { required: ['run'] }] } },
         { if: { properties: { action: { const: 'complete' } }, required: ['action'] }, then: { required: ['affectedArtifacts'] } },
         { if: { properties: { action: { const: 'block' } }, required: ['action'] }, then: { required: ['blocker'] } },
       ],
@@ -192,7 +192,7 @@ export const SDD_TOOL_DEFINITIONS: ReadonlyArray<Tool & { name: SDDToolName }> =
       required: ['check'], additionalProperties: false,
       allOf: [
         requiredWhenCheck(['requirements', 'design', 'testcases', 'red'], ['featureName']),
-        requiredWhenCheck(['red'], ['taskNumber', 'testName', 'evidence']),
+        requiredWhenCheck(['red'], ['taskNumber', 'testName']),
         requiredWhenCheck(['security'], ['findings']),
         requiredWhenCheck(['principles'], ['units']),
       ],

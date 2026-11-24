@@ -131,6 +131,11 @@ describe('v5 MCP tool inventory', () => {
       await expect(accepts({ ...base, action: 'start' })).resolves.toBe(true);
     });
 
+    it('accepts complete without run or evidence so a project verify command can apply', async () => {
+      await expect(accepts({ ...base, action: 'complete', affectedArtifacts: ['src/a.ts'] })).resolves.toBe(true);
+      await expect(accepts({ ...base, action: 'complete' })).resolves.toBe(false);
+    });
+
     it('rejects run values outside the published bounds before any handler runs', async () => {
       await expect(accepts({ ...base, action: 'record-red', run: { argv: [] } })).resolves.toBe(false);
       await expect(accepts({ ...base, action: 'record-red', run: { argv: ['npm', 'te\u0000st'] } })).resolves.toBe(false);

@@ -114,9 +114,9 @@ SDD "advisors" are project subagents under `.claude/agents`, `.codex/agents`, or
 | Skill | Asks inline vs. project agent? |
 |---|---|
 | `sdd-review`, `sdd-security-check` | Once per session, only if project agents are installed |
-| `sdd-implement`, `sdd-test-gen`, `simple-task` | Once per session, only if project agents are installed and at least two independent slices exist; never split work to justify agents |
+| `sdd-implement`, `sdd-test-gen`, `simple-task` | Once per session, only if project agents are installed and at least two independent slices exist; never split work to justify agents. `sdd-implement` does not offer parallel agents in verified evidence mode |
 | requirements, design, tasks, steering | Never; inline |
-| `sdd-commit` | Never; local |
+| `sdd-commit`, `sdd-correct` | Never; local |
 
 The skill reuses the answer for the rest of the conversation. It does not persist the answer in `spec.json`. A new session asks again. Without installed agents (Claude Code/Codex `lean`), the skill asks nothing and work stays inline.
 
@@ -130,6 +130,8 @@ To verify independently:
 ## Parallel implementation rule
 
 Implementation, TDD, and simple tasks do not create a serial child only to repeat parent work. Delegation is justified only when three conditions hold. At least two independent slices can run concurrently. They are dispatched in one batch. The parent continues a separate slice. A lone child followed by an idle wait is prohibited.
+
+Parallel slices need one git worktree per slice, because the engine binds evidence to one working tree. The implementer agent works only in its assigned worktree and returns a blocker when none is assigned. While evidence mode is `verified`, `sdd-implement` does not offer parallel project-agent mode, so implementation slices run serially in the parent. `sdd-correct` and `sdd-commit` always run inline and never offer agents.
 
 ## Cost and context implications
 
