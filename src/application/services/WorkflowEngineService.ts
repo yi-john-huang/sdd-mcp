@@ -5,7 +5,7 @@ import path from 'node:path';
 import { injectable, inject, optional } from 'inversify';
 import { TYPES } from '../../infrastructure/di/types.js';
 import {
-  ExecutionEvidence, PhaseRecord, Project, TaskStatus, WorkflowPhase, type EvidenceClassification, type EvidenceSource,
+  ExecutionEvidence, PhaseRecord, Project, TaskStatus, WorkflowPhase, type EvidenceClassification, type EvidenceSource, type TreeBinding,
 } from '../../domain/types.js';
 import type { EvidenceRunner, ObservedEvidence } from './EvidenceRunner.js';
 import { resolveEvidenceSettings, type EvidenceMode, type EvidenceSettings } from './EvidenceSettings.js';
@@ -20,6 +20,7 @@ import {
 import { InvalidFeatureNameError, SpecPathResolver, validateFeatureName } from './SpecPathResolver.js';
 import { WorkflowValidationService, taskAcceptanceCriteria, type DesignValidationResult } from './WorkflowValidationService.js';
 import { GovernanceError } from './WorkflowErrors.js';
+import { assertTreeBinding, parseTreeBinding, serializeTreeBinding } from './TreeBindingCodec.js';
 import { FilesystemLockCompromisedError, withFilesystemLock } from '../../utils/withFilesystemLock.js';
 
 const PHASES: ApprovablePhase[] = ['requirements', 'design', 'tasks'];
@@ -140,7 +141,7 @@ interface WorkflowSpecV5 extends Record<string, unknown> {
     tasks: Record<string, {
       title: string; tdd_required: boolean; dependencies: string[]; status: TaskStatus; blocker?: string;
       blocked_from?: 'in-progress' | 'red-observed' | 'green-observed'; evidence: { red?: ExecutionEvidence; green?: ExecutionEvidence; verification?: ExecutionEvidence };
-      planned_artifacts: string[]; observed_artifacts: string[];
+      planned_artifacts: string[]; observed_artifacts: string[]; start_tree?: TreeBinding;
     }>;
   };
 }
@@ -1421,6 +1422,7 @@ export class WorkflowEngineService {
         evidence,
         planned_artifacts: plannedArtifacts,
         observed_artifacts: observedArtifacts,
+        ...(task.start_tree === undefined ? {} : { start_tree: parseTreeBinding(task.start_tree, `${taskNumber}.start_tree`) }),
       };
     }
     return {
@@ -1446,6 +1448,7 @@ export class WorkflowEngineService {
       truncated: evidence.truncated,
       redactions: evidence.redactions,
       redClassification: evidence.red_classification,
+      workingTree: evidence.working_tree === undefined ? undefined : parseTreeBinding(evidence.working_tree, `${reference}.working_tree`),
     } as unknown as ExecutionEvidence;
     this.assertExecutionEvidence(normalized, reference);
     return Object.fromEntries(Object.entries(normalized).filter(([, field]) => field !== undefined)) as unknown as ExecutionEvidence;
@@ -1612,7 +1615,9 @@ export class WorkflowEngineService {
       this.assertPersistedArtifactPaths(task.observed_artifacts, `${taskNumber}.observed_artifacts`);
       for (const [evidenceType, evidence] of Object.entries(task.evidence)) {
         this.assertExecutionEvidence(evidence, `${taskNumber}.evidence.${evidenceType}`);
+        if (evidence.workingTree) assertTreeBinding(evidence.workingTree, `${taskNumber}.evidence.${evidenceType}.working_tree`);
       }
+      if (task.start_tree) assertTreeBinding(task.start_tree, `${taskNumber}.start_tree`);
       if (task.status === 'blocked') {
         if (
           !task.blocker
@@ -1743,6 +1748,7 @@ export class WorkflowEngineService {
       ...optional('truncated', value.truncated),
       ...optional('redactions', value.redactions),
       ...optional('red_classification', value.redClassification),
+      ...optional('working_tree', value.workingTree ? serializeTreeBinding(value.workingTree) : undefined),
     };
   }
 
@@ -1767,6 +1773,7 @@ export class WorkflowEngineService {
     const implementation = persisted.implementation as WorkflowSpecV5['implementation'] | undefined;
     if (implementation) {
       for (const task of Object.values(implementation.tasks)) {
+        if (task.start_tree) task.start_tree = serializeTreeBinding(task.start_tree) as unknown as TreeBinding;
         for (const key of ['red', 'green', 'verification'] as const) {
           const value = task.evidence[key];
           if (!value) continue;

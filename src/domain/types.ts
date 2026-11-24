@@ -82,6 +82,26 @@ export type TaskStatus =
 export type EvidenceSource = 'engine' | 'caller';
 export type EvidenceClassification = 'setup' | 'assertion' | 'ambiguous';
 
+export type TreeUnavailableReason = 'not-a-git-repo' | 'git-unavailable' | 'git-failed' | 'timeout' | 'too-many-changes';
+
+/** One path whose content differs from HEAD, with the git object id `git add` would store, or `deleted`. */
+export interface TreeDirtyEntry {
+  readonly path: string;
+  readonly token: string;
+}
+
+/** A content-addressed fingerprint of the project's working tree, or why none could be taken. */
+export type TreeBinding =
+  | {
+    readonly status: 'bound';
+    readonly sha256: string;
+    readonly head: string | null;
+    readonly prefix: string;
+    readonly dirty?: readonly TreeDirtyEntry[];
+    readonly dirtyTruncated?: boolean;
+  }
+  | { readonly status: 'unavailable'; readonly reason: TreeUnavailableReason };
+
 export interface ExecutionEvidence {
   readonly command: string;
   readonly exitCode: number;
@@ -96,6 +116,8 @@ export interface ExecutionEvidence {
   readonly truncated?: boolean;
   readonly redactions?: number;
   readonly redClassification?: EvidenceClassification;
+  /** The working tree the engine observed just before running the command. */
+  readonly workingTree?: TreeBinding;
 }
 
 export interface ImplementationTaskState {
