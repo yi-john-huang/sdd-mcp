@@ -130,20 +130,17 @@ async function observe(git: GitPort, projectRoot: string): Promise<Observation> 
   return { tree, map, location };
 }
 
-/** Never rejects: any git failure or the deadline yields `unavailable` with a reason. */
-export async function observeTree(git: GitPort | undefined, projectRoot: string, deadlineMs = DEFAULT_TREE_DEADLINE_MS): Promise<TreeBinding> {
-  if (!git) return { status: 'unavailable', reason: 'git-unavailable' };
-  try {
-    return (await withDeadline(observe(git, projectRoot), deadlineMs)).tree;
-  } catch (error) {
-    return { status: 'unavailable', reason: error instanceof Unavailable ? error.reason : 'git-failed' };
-  }
+export interface TreeComparison {
+  readonly tree: TreeBinding;
+  readonly changed: ChangedPaths;
 }
 
-async function diffAgainst(git: GitPort, projectRoot: string, from: BoundTree): Promise<ChangedPaths> {
-  const current = await observe(git, projectRoot);
-  if (current.location.prefix !== from.prefix) return { status: 'unavailable' };
-  const before = overlay(await baseMap(git, current.location, from.head), from.dirty ?? []);
+const UNAVAILABLE_CHANGES: ChangedPaths = { status: 'unavailable' };
+
+async function diffFrom(git: GitPort, current: Observation, from: TreeBinding | undefined): Promise<ChangedPaths> {
+  if (from?.status !== 'bound' || from.dirtyTruncated || !from.dirty || current.location.prefix !== from.prefix) return UNAVAILABLE_CHANGES;
+  if (current.tree.sha256 === from.sha256) return { status: 'ok', paths: [] };
+  const before = overlay(await baseMap(git, current.location, from.head), from.dirty);
   const paths = new Set<string>();
   for (const [file, token] of current.map) if (before.get(file) !== token) paths.add(file);
   for (const file of before.keys()) if (!current.map.has(file)) paths.add(file);
@@ -151,14 +148,31 @@ async function diffAgainst(git: GitPort, projectRoot: string, from: BoundTree): 
 }
 
 /**
- * Paths whose content differs between `from` and the live tree, sorted. Changes committed after `from` count,
- * because the comparison is content to content. Unavailable when `from` cannot be rebuilt.
+ * One scan of the live tree, plus the paths whose content differs from `from` when it is bound and can be rebuilt.
+ * Changes committed after `from` count, because the comparison is content to content.
+ * Never rejects: a git failure or the deadline makes the tree or the path set `unavailable`, each on its own.
  */
-export async function changedPaths(git: GitPort, projectRoot: string, from: BoundTree, deadlineMs = DEFAULT_TREE_DEADLINE_MS): Promise<ChangedPaths> {
-  if (from.dirtyTruncated || !from.dirty) return { status: 'unavailable' };
+export async function compareTree(git: GitPort | undefined, projectRoot: string, from: TreeBinding | undefined, deadlineMs = DEFAULT_TREE_DEADLINE_MS): Promise<TreeComparison> {
+  if (!git) return { tree: { status: 'unavailable', reason: 'git-unavailable' }, changed: UNAVAILABLE_CHANGES };
+  let current: Observation;
   try {
-    return await withDeadline(diffAgainst(git, projectRoot, from), deadlineMs);
-  } catch {
-    return { status: 'unavailable' };
+    current = await withDeadline(observe(git, projectRoot), deadlineMs);
+  } catch (error) {
+    return { tree: { status: 'unavailable', reason: error instanceof Unavailable ? error.reason : 'git-failed' }, changed: UNAVAILABLE_CHANGES };
   }
+  try {
+    return { tree: current.tree, changed: await withDeadline(diffFrom(git, current, from), deadlineMs) };
+  } catch {
+    return { tree: current.tree, changed: UNAVAILABLE_CHANGES };
+  }
+}
+
+/** Never rejects: any git failure or the deadline yields `unavailable` with a reason. */
+export async function observeTree(git: GitPort | undefined, projectRoot: string, deadlineMs = DEFAULT_TREE_DEADLINE_MS): Promise<TreeBinding> {
+  return (await compareTree(git, projectRoot, undefined, deadlineMs)).tree;
+}
+
+/** Paths whose content differs between `from` and the live tree, sorted. Unavailable when `from` cannot be rebuilt. */
+export async function changedPaths(git: GitPort, projectRoot: string, from: BoundTree, deadlineMs = DEFAULT_TREE_DEADLINE_MS): Promise<ChangedPaths> {
+  return (await compareTree(git, projectRoot, from, deadlineMs)).changed;
 }

@@ -21,7 +21,7 @@ import { InvalidFeatureNameError, SpecPathResolver, validateFeatureName } from '
 import { WorkflowValidationService, taskAcceptanceCriteria, type DesignValidationResult } from './WorkflowValidationService.js';
 import { GovernanceError } from './WorkflowErrors.js';
 import { assertTreeBinding, parseTreeBinding, serializeTreeBinding } from './TreeBindingCodec.js';
-import { DEFAULT_TREE_DEADLINE_MS, changedPaths, observeTree } from './WorkingTreeFingerprint.js';
+import { DEFAULT_TREE_DEADLINE_MS, compareTree } from './WorkingTreeFingerprint.js';
 import { unmatchedArtifacts } from './ObservedArtifactCheck.js';
 import { FilesystemLockCompromisedError, withFilesystemLock } from '../../utils/withFilesystemLock.js';
 
@@ -454,8 +454,7 @@ export class WorkflowEngineService {
     return this.withEvidenceRunLock(original.projectRoot, original.featureName, async () => {
       const request = await this.withVerifyCommand(original);
       // The tree is observed before the command runs and outside the feature lock, so status reads stay free.
-      const tree = TREE_ACTIONS.has(request.action) ? await observeTree(this.git, path.resolve(request.projectRoot), this.treeDeadlineMs) : undefined;
-      const unmatched = await this.unmatchedArtifacts(request, tree);
+      const { tree, unmatched } = await this.observeForAction(request);
       const outcome = request.run && EVIDENCE_ACTIONS.has(request.action) ? await this.observeBeforeCommit(request, request.run, tree, unmatched) : undefined;
       return this.commitTaskProgress(request, outcome, tree, unmatched);
     });
@@ -469,19 +468,31 @@ export class WorkflowEngineService {
   }
 
   /**
-   * For completion with a bound start and current tree, the named artifacts that did not change since start.
-   * Undefined when either tree is unbound or the path set is unavailable: the 6.0.0 rule then applies.
+   * One tree scan for a tree action. For completion with a bound start and current tree, also the named artifacts
+   * that did not change since start; undefined when either tree is unbound or the path set is unavailable,
+   * and the 6.0.0 rule then applies.
    */
-  private async unmatchedArtifacts(request: RecordTaskProgressRequest, tree: TreeBinding | undefined): Promise<readonly string[] | undefined> {
-    if (request.action !== 'complete' || tree?.status !== 'bound' || !this.git || !this.fileSystem) return undefined;
-    const start = await this.withLockedFeature(request.projectRoot, request.featureName, false, async ({ spec }) =>
-      spec.implementation?.tasks[request.taskNumber]?.start_tree);
-    if (start?.status !== 'bound') return undefined;
+  private async observeForAction(request: RecordTaskProgressRequest): Promise<{ tree?: TreeBinding; unmatched?: readonly string[] }> {
+    if (!TREE_ACTIONS.has(request.action)) return {};
     const projectRoot = path.resolve(request.projectRoot);
-    const changed = await changedPaths(this.git, projectRoot, start, this.treeDeadlineMs);
-    if (changed.status !== 'ok') return undefined;
+    const start = request.action === 'complete' && this.git && this.fileSystem
+      ? await this.withLockedFeature(request.projectRoot, request.featureName, false, async ({ spec }) => spec.implementation?.tasks[request.taskNumber]?.start_tree)
+      : undefined;
+    const { tree, changed } = await compareTree(this.git, projectRoot, start, this.treeDeadlineMs);
+    if (request.action !== 'complete' || tree.status !== 'bound' || changed.status !== 'ok' || !this.fileSystem) return { tree };
     const fileSystem = this.fileSystem;
-    return unmatchedArtifacts(this.normalizeArtifacts(request.affectedArtifacts ?? []), changed.paths, (file) => fileSystem.exists(path.join(projectRoot, file)));
+    const specsRoot = path.join(projectRoot, '.spec', 'specs');
+    // A spec path only needs to exist, so a symlink out of the specs root must not satisfy it.
+    const specPathExists = async (file: string): Promise<boolean> => {
+      const absolute = path.join(projectRoot, file);
+      try {
+        await new SpecPathResolver(fileSystem).assertContained(specsRoot, absolute);
+      } catch {
+        return false;
+      }
+      return fileSystem.exists(absolute);
+    };
+    return { tree, unmatched: await unmatchedArtifacts(this.normalizeArtifacts(request.affectedArtifacts ?? []), changed.paths, specPathExists) };
   }
 
   private async observeBeforeCommit(request: RecordTaskProgressRequest, run: NonNullable<RecordTaskProgressRequest['run']>, tree: TreeBinding | undefined, unmatched: readonly string[] | undefined): Promise<ObservedEvidence> {
@@ -700,10 +711,10 @@ export class WorkflowEngineService {
     anchor: { taskNumber: string; tree: TreeBinding | undefined },
   ): Promise<Pick<DurableFeatureStatus, 'verificationDrift' | 'verificationBinding'>> {
     const verified = anchor.tree;
-    const current = await observeTree(this.git, projectRoot, this.treeDeadlineMs);
-    if (verified?.status !== 'bound' || current.status !== 'bound' || !this.git) return { verificationBinding: 'unavailable' };
+    if (verified?.status !== 'bound' || !this.git) return { verificationBinding: 'unavailable' };
+    const { tree: current, changed } = await compareTree(this.git, projectRoot, verified, this.treeDeadlineMs);
+    if (current.status !== 'bound') return { verificationBinding: 'unavailable' };
     if (current.sha256 === verified.sha256) return {};
-    const changed = await changedPaths(this.git, projectRoot, verified, this.treeDeadlineMs);
     const drift: VerificationDrift = changed.status === 'ok'
       ? { taskNumber: anchor.taskNumber, changedPaths: changed.paths.slice(0, MAX_DRIFT_PATHS), pathsTruncated: changed.paths.length > MAX_DRIFT_PATHS }
       : { taskNumber: anchor.taskNumber, changedPaths: [], pathsTruncated: false, pathsUnavailable: true };

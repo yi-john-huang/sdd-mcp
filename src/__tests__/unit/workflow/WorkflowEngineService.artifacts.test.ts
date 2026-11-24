@@ -1,10 +1,11 @@
 import { execFileSync } from 'node:child_process';
-import { mkdir, mkdtemp, realpath, rm, writeFile } from 'node:fs/promises';
+import { mkdir, mkdtemp, realpath, rm, symlink, writeFile } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import type { WorkflowEngineService } from '../../../application/services/WorkflowEngineService';
 import { NodeFileSystemAdapter } from '../../../infrastructure/adapters/NodeFileSystemAdapter';
 import { NodeGitAdapter } from '../../../infrastructure/adapters/NodeGitAdapter';
+import type { GitPort, GitResult } from '../../../domain/ports';
 import { ScriptedProcessPort, createEngine, exited, prepareImplementation, specBytes, type EngineOptions } from './evidence-harness';
 
 const FEATURE = 'payments';
@@ -94,6 +95,65 @@ describe('WorkflowEngineService observed artifacts match git changes', () => {
     const { workflow, revision } = await greenObserved();
     await expect(act(workflow, 'complete', revision, { run: RUN, affectedArtifacts: ['src\\order.ts'] }))
       .resolves.toMatchObject({ taskState: 'completed' });
+  });
+
+  it('should reject a .spec/specs artifact that is a symlink leaving the specs root', async () => {
+    const outside = await realpath(await mkdtemp(path.join(os.tmpdir(), 'sdd-outside-')));
+    try {
+      await writeFile(path.join(outside, 'secret.md'), 'x\n');
+      await symlink(path.join(outside, 'secret.md'), path.join(projectRoot, '.spec/specs/payments/link.md'));
+      const { workflow, revision } = await greenObserved();
+      await expect(act(workflow, 'complete', revision, { run: RUN, affectedArtifacts: ['src/order.ts', '.spec/specs/payments/link.md'] }))
+        .rejects.toMatchObject({ code: 'ObservedArtifactMismatch', details: { unmatched: ['.spec/specs/payments/link.md'] } });
+    } finally {
+      await rm(outside, { recursive: true, force: true });
+    }
+  });
+
+  describe('working-tree scans', () => {
+    class CountingGit implements GitPort {
+      scans = 0;
+      private readonly inner = new NodeGitAdapter();
+      run(args: readonly string[], cwd: string, input?: Buffer): Promise<GitResult> {
+        if (args.includes('--show-toplevel')) this.scans += 1;
+        return this.inner.run(args, cwd, input);
+      }
+    }
+
+    it('should scan the tree once at completion', async () => {
+      const git = new CountingGit();
+      const { workflow, revision } = await greenObserved({ git });
+      git.scans = 0;
+      await act(workflow, 'complete', revision, { run: RUN, affectedArtifacts: ['src/order.ts'] });
+      expect(git.scans).toBe(1);
+    });
+
+    it('should scan the tree once for status, with or without drift', async () => {
+      const git = new CountingGit();
+      const { workflow, revision } = await greenObserved({ git });
+      await act(workflow, 'complete', revision, { run: RUN, affectedArtifacts: ['src/order.ts'] });
+      git.scans = 0;
+      await workflow.getFeatureStatus({ projectRoot, featureName: FEATURE });
+      expect(git.scans).toBe(1);
+      await write('src/order.ts', 'export const order = 3;\n');
+      git.scans = 0;
+      const status = await workflow.getFeatureStatus({ projectRoot, featureName: FEATURE });
+      expect(status.verificationDrift?.changedPaths).toEqual(['src/order.ts']);
+      expect(git.scans).toBe(1);
+    });
+
+    it('should not scan for status when the verification is not bound', async () => {
+      const git = new CountingGit();
+      const workflow = createEngine(fileSystem, { port, git });
+      const started = await act(createEngine(fileSystem, { port }), 'start', 0);
+      await write('src/order.test.ts', 'test\n');
+      const red = await act(createEngine(fileSystem, { port }), 'record-red', started.revision, { run: RUN });
+      const green = await act(createEngine(fileSystem, { port }), 'record-green', red.revision, { run: RUN });
+      await act(createEngine(fileSystem, { port }), 'complete', green.revision, { run: RUN, affectedArtifacts: ['src/order.ts'] });
+      git.scans = 0;
+      expect(await workflow.getFeatureStatus({ projectRoot, featureName: FEATURE })).toMatchObject({ verificationBinding: 'unavailable' });
+      expect(git.scans).toBe(0);
+    });
   });
 
   it('should follow the 6.0.0 rule for a task without a bound start_tree', async () => {

@@ -202,6 +202,7 @@ describe('changedPaths', () => {
 
   it('is unavailable when the old HEAD no longer exists', async () => {
     const from = await bound();
+    write('src/a.ts', 'export const a = 6;\n');
     expect(await changedPaths(adapter, repo, { ...from, head: 'f'.repeat(40) })).toEqual({ status: 'unavailable' });
   });
 });
