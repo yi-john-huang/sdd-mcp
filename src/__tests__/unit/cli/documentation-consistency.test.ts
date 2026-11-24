@@ -293,4 +293,19 @@ describe('documented JEV advisory feature', () => {
     expect(unreleased).not.toMatch(/one-based|1-based|inferred/i);
     expect(read('README.md')).toContain('`baseRef`');
   });
+
+  it('gives a quick guide that covers every shipped Skill and is linked from the entry docs', () => {
+    const guide = read('docs/QUICK-GUIDE.md');
+    const skills = fs.readdirSync(path.resolve(process.cwd(), 'skills'))
+      .filter((name) => fs.existsSync(path.resolve(process.cwd(), 'skills', name, 'SKILL.md')));
+
+    expect(skills.length).toBeGreaterThan(0);
+    for (const skill of skills) expect(guide).toContain(`\`/${skill}\``);
+    for (const prefix of ['/', '$', '/skill:']) expect(guide).toContain(`\`${prefix}sdd-requirements`);
+    expect(guide).toMatch(/reload|restart/i);
+    expect(guide).toMatch(/trust/i);
+    expect(guide).not.toMatch(/\b(?:user|you)\s+(?:must|should|can|then)?\s*call\s+`?sdd-(?:init|status|approve|context-load|review-test-cases|spec-impl)/i);
+    expect(read('README.md')).toContain('(docs/QUICK-GUIDE.md)');
+    expect(read('docs/WORKFLOW.md')).toContain('(QUICK-GUIDE.md)');
+  });
 });

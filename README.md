@@ -177,6 +177,8 @@ The six SDD roles are `planner`, `architect`, `reviewer`, `security-auditor`, `i
 
 ## Manual workflow invocation
 
+New to the Skills? The [Quick Guide](docs/QUICK-GUIDE.md) shows when to use each Skill and how to combine them.
+
 SDD workflow skills are explicit commands and do not activate implicitly from ordinary prose. The one exception is `output-clarity-ladder`, which the model applies on its own (see the last row).
 
 | Path | Claude Code | Codex | Oh My Pi |
