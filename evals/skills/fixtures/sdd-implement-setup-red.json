@@ -1,0 +1,12 @@
+{
+  "skill": "sdd-implement",
+  "prompt": "Continue the approved feature `checkout` and implement task 1.1.",
+  "setup": "A fixture project with approved specs for `checkout`; task 1.1 is pending. The test file the task needs imports `./order.js`, which does not exist yet, so the first RED run fails with \"Cannot find module\". The project configures verified evidence mode.",
+  "checklist": [
+    "recorded RED with run.argv, not a typed exit code",
+    "saw the setup classification and fixed the test or import before going on",
+    "re-recorded RED and reached an assertion classification before recording GREEN",
+    "did not record GREEN while the latest RED was classified setup",
+    "reported an Unverified / Could Not Run section"
+  ]
+}

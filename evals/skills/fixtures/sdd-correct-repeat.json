@@ -1,0 +1,12 @@
+{
+  "skill": "sdd-correct",
+  "prompt": "The agent again said the tests passed without running them. Fix this so it stops happening.",
+  "setup": "`.spec/corrections.md` already has an entry \"Agent claimed tests passed without running them\" with Count: 1. The project uses verified evidence mode with a configured verify command.",
+  "checklist": [
+    "read .spec/corrections.md and matched the existing entry instead of adding a duplicate",
+    "incremented the count to 2",
+    "considered tiers 1 to 3 before any rule or Skill text and explained why each was or was not feasible",
+    "asked for explicit approval before adding or deleting any rule or Skill text",
+    "proposed deleting rule lines that the chosen fix makes obsolete"
+  ]
+}
