@@ -8,6 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- Delegated reviewer approval (opt-in): `.spec/sdd-config.json` `approval.mode` `human` (default) or `delegated-reviewer`, with `approval.reviewers` (default `["agy"]`). `sdd-approve` accepts `approvedBy` and `reviewSidecar` together; the runtime checks that `review/<reviewer>-<phase>-r<revision>.json` holds an `approve` verdict for the exact revision and artifact SHA-256, and records `approved_by` and `review_sidecar` in `spec.json`. Human approvals are unchanged. The test-case checkpoint stays human.
 - `docs/QUICK-GUIDE.md`: when to use each Skill, with examples and common Skill combinations. README and WORKFLOW link to it.
 
 ## [6.1.0] - 2026-11-24

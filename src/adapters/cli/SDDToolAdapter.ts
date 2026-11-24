@@ -206,6 +206,8 @@ export class SDDToolAdapter {
       phase: phase as "requirements" | "design" | "tasks",
       expectedRevision: args.expectedRevision as number,
       expectedArtifactSha256: args.expectedArtifactSha256 as string,
+      ...(typeof args.approvedBy === 'string' ? { approvedBy: args.approvedBy } : {}),
+      ...(typeof args.reviewSidecar === 'string' ? { reviewSidecar: args.reviewSidecar } : {}),
     });
   }
 

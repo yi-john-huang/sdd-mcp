@@ -26,15 +26,15 @@ If the runtime is unavailable because of host permission, report an actionable r
 5. Specify responsibilities, interfaces, invariants, persistence/migration, compatibility, authorization, input boundaries, concurrency, failure behavior, and rollback where relevant.
 6. For an unresolved architectural fork, optionally add `## Interface Spike` naming throwaway code under `.spec/specs/<feature>/spike/` and the decision it settled; production code never imports it.
 
-Internally submit the complete Markdown with the exact revision and artifact identity last observed. Submission, not direct file editing, is the canonical write. Present the saved path and concise validation outcome. On failed validation, keep the durable draft, load it explicitly, and revise; do not request approval.
+Internally submit the complete Markdown with the exact revision and artifact identity last observed. Submission is the canonical write. Present the saved path and concise validation outcome. On failed validation, keep the durable draft, load it explicitly, and revise; do not request approval.
 
 ## Human Gate
 
-When validation passes, internally run the JEV `design` check and show its line, if any; it never affects approval. Then ask one explicit question: **“Approve this design?”** Only an unambiguous affirmative answer in this Skill flow permits internal approval of the exact reviewed revision and artifact. Never self-approve. Reread status after approval and report the persisted outcome.
+When validation passes, internally run the JEV `design` check and show its line, if any; it never affects approval. Then ask one explicit question: **“Approve this design?”** Only an unambiguous affirmative answer here or a delegated verdict ([REFERENCE.md](REFERENCE.md)) permits internal approval of the exact reviewed revision and artifact. Never self-approve. Reread status after approval and report the persisted outcome.
 
 ## Specialist Delegation
 
-Target renderers provide the `architect` route. When a native advisor is required, dispatch exactly one compact handoff with `specialistDepth: 1`; include only approved requirements, architecture facts, constraints, and needed decisions. The specialist must not delegate again. Keep the handoff and returned summary at or below 2,048 estimated tokens. If unavailable, record one fallback and continue in the parent without retrying or spawning a generic child.
+Target renderers provide the `architect` route. When a native advisor is required, dispatch exactly one compact handoff with `specialistDepth: 1`; include only approved requirements, architecture facts, constraints, and needed decisions. The specialist must not delegate again. Keep the handoff and returned summary within 2,048 estimated tokens. If unavailable, record one fallback and continue in the parent without retrying or spawning a generic child.
 
 ## Output
 

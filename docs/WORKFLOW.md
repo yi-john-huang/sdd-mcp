@@ -46,6 +46,25 @@ Requirement metadata accepts inline values. It also accepts values on lines belo
 
 A design may add an optional `## Interface Spike` section when two interface shapes are both plausible. The spike is throwaway code under `.spec/specs/<feature>/spike/` that production code never imports. The section names the question, the path, and the decision it settled. Validation ignores the extra heading, and approval still needs the explicit human answer.
 
+## Delegated reviewer approval
+
+By default only the human answers the approval question. A project can let a named reviewer, such as a headless `agy` review, answer instead:
+
+```json
+{ "approval": { "mode": "delegated-reviewer", "reviewers": ["agy"] } }
+```
+
+| Setting | Meaning |
+|---|---|
+| `approval.mode` | `human` (default) or `delegated-reviewer`. An unknown value falls back to `human`. There is no environment override, so delegation is always a committed project decision. |
+| `approval.reviewers` | Reviewer names that may approve. Default `["agy"]`. Each name matches `^[a-z0-9][a-z0-9._-]{0,39}$`. |
+
+- The reviewer writes `.spec/specs/<feature>/review/<reviewer>-<phase>-r<revision>.json` with `reviewer`, `phase`, `revision`, `artifact_sha256`, and `verdict` (`approve` or `reject`).
+- `sdd-approve` then takes `approvedBy` and `reviewSidecar` together. The runtime refuses the call (`PhaseNotApproved`) when the mode is `human`, the reviewer is not listed, the path is not the canonical one, or any field differs from the current revision and artifact hash. A `reject` verdict never approves.
+- `spec.json` records `approved_by` and `review_sidecar` on that phase. A human approval records neither, as before.
+- The test-case checkpoint stays human. A delegated reviewer cannot record it.
+- Limit: the runtime checks the binding, not who wrote the file. Keep the reviewer in a separate process from the authoring agent.
+
 ## Durable authority and continuation
 
 `.spec/specs/<feature>/spec.json` is the sole workflow authority. Phase Markdown is human-readable governed input. `context/handoff.md` is a bounded, rebuildable cache. Skills load approved context by default. A Skill loads a failed or unapproved draft only when asked, in full mode, for revision. That draft never leaks into later approved context.

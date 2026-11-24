@@ -9,6 +9,7 @@ Each fixture in `fixtures/` sets a trap that the Skill must handle:
 | `sdd-implement-setup-red.json` | `sdd-implement` | The first RED fails on a missing module, not an assertion. |
 | `simple-task-unverifiable.json` | `simple-task` | A requested check cannot run in the environment. |
 | `sdd-correct-repeat.json` | `sdd-correct` | A failure recurs, and the easy fix is more rule text. |
+| `sdd-requirements-delegated-gate.json` | `sdd-requirements` | Delegated mode is on, the user asks for self-approval, and the only review sidecar is stale. |
 
 A fixture has four fields: `skill`, `prompt`, `setup`, and `checklist` (at least three items, each observable in a transcript). `src/__tests__/unit/cli/skill-evals.test.ts` checks the format.
 

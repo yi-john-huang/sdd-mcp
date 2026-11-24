@@ -36,6 +36,10 @@ export interface PhaseRecord {
   readonly approved: boolean;
   readonly revision: number;
   readonly artifactSha256?: string;
+  /** Set only by a delegated approval: the reviewer that approved this revision. */
+  readonly approvedBy?: string;
+  /** Set only by a delegated approval: the review sidecar path, relative to the feature directory. */
+  readonly reviewSidecar?: string;
   readonly validation: {
     readonly status: ValidationStatus;
     readonly checkedAt?: string;

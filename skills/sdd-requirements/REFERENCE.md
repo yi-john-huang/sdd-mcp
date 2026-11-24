@@ -39,3 +39,12 @@ Metadata values may begin on the same line as their bold label or on the followi
 ## Quality Checklist
 
 Each requirement has one concern, a stable ID, normative SHALL wording, measurable bounds, positive and failure behavior, and acceptance criteria that do not prescribe incidental implementation. Requirements do not conflict, duplicate one another, hide an undefined actor, or depend on ambiguous timing. Security and compatibility requirements identify an asset or existing contract rather than repeating a generic checklist.
+
+## Delegated Reviewer
+
+Use this only when `.spec/sdd-config.json` sets `approval.mode` to `delegated-reviewer`. Otherwise ask the human.
+
+- A reviewer listed in `approval.reviewers` (default `agy`) may answer the approval question instead of the human. The authoring agent is never the reviewer.
+- The reviewer reads the exact submitted artifact and writes `review/<reviewer>-requirements-r<revision>.json` in the feature directory with `reviewer`, `phase`, `revision`, `artifact_sha256`, and `verdict` (`approve` or `reject`).
+- Only an `approve` verdict for the current revision and hash permits the internal approval call, with `approvedBy` and `reviewSidecar`. The runtime refuses any mismatch.
+- A `reject` verdict is not approval. Report the findings, revise, and resubmit.

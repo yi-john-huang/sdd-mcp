@@ -91,7 +91,7 @@ describe('v5 MCP tool inventory', () => {
   it('binds approval and review to exact revision and hash', () => {
     const approve = tools.find(({ name }) => name === 'sdd-approve')!.tool.inputSchema;
     const review = tools.find(({ name }) => name === 'sdd-review-test-cases')!.tool.inputSchema;
-    expect(Object.keys(approve.properties ?? {})).toEqual(['featureName', 'phase', 'expectedRevision', 'expectedArtifactSha256']);
+    expect(Object.keys(approve.properties ?? {})).toEqual(['featureName', 'phase', 'expectedRevision', 'expectedArtifactSha256', 'approvedBy', 'reviewSidecar']);
     expect(approve.required).toEqual(['featureName', 'phase', 'expectedRevision', 'expectedArtifactSha256']);
     expect(Object.keys(review.properties ?? {})).toEqual(['featureName', 'expectedTasksRevision', 'expectedArtifactSha256']);
     expect(review.required).toEqual(['featureName', 'expectedTasksRevision', 'expectedArtifactSha256']);

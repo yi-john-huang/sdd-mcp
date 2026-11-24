@@ -10,6 +10,7 @@ import {
 import type { EvidenceRunner, ObservedEvidence } from './EvidenceRunner.js';
 import { resolveEvidenceSettings, type EvidenceMode, type EvidenceSettings } from './EvidenceSettings.js';
 import { readProjectConfig } from './ProjectConfig.js';
+import { resolveApprovalSettings, reviewSidecarPath } from './ApprovalSettings.js';
 import { ProjectRepository, LoggerPort, FileSystemPort, type GitPort } from '../../domain/ports.js';
 import {
   ContextCompactionService,
@@ -65,6 +66,10 @@ export type NextAction =
 export interface ApprovalRequest {
   readonly projectRoot: string; readonly featureName: string; readonly phase: ApprovablePhase;
   readonly expectedRevision: number; readonly expectedArtifactSha256: string;
+  /** Delegated approval only: the reviewer name, allowed by `approval.reviewers`. */
+  readonly approvedBy?: string;
+  /** Delegated approval only: `review/<reviewer>-<phase>-r<revision>.json` under the feature directory. */
+  readonly reviewSidecar?: string;
 }
 export interface ReviewTestCasesRequest {
   readonly projectRoot: string; readonly featureName: string;
@@ -77,6 +82,7 @@ export interface HandoffPublication {
 export interface ApprovalResult {
   readonly featureName: string; readonly phase: ApprovablePhase; readonly approved: true;
   readonly canProgressToNext: boolean; readonly handoff: HandoffPublication;
+  readonly approvedBy?: string; readonly reviewSidecar?: string;
 }
 export interface ReviewTestCasesResult {
   readonly featureName: string; readonly reviewed: true; readonly tasksRevision: number;
@@ -196,6 +202,39 @@ const TASK_STATUSES = new Set<TaskStatus>([
   'completed',
 ]);
 
+
+/** Lists the review fields that do not bind an `approve` verdict to this exact revision, or `file` when unreadable. */
+function reviewMismatches(raw: string | null, request: ApprovalRequest, record: PhaseRecord): string[] {
+  let review: Record<string, unknown> | undefined;
+  try {
+    const parsed: unknown = raw !== null && raw.length <= 65_536 ? JSON.parse(raw) : undefined;
+    review = typeof parsed === 'object' && parsed !== null && !Array.isArray(parsed) ? parsed as Record<string, unknown> : undefined;
+  } catch {
+    review = undefined;
+  }
+  if (review === undefined) return ['file'];
+  const expected: Record<string, unknown> = {
+    reviewer: request.approvedBy, phase: request.phase, revision: record.revision, artifact_sha256: record.artifactSha256, verdict: 'approve',
+  };
+  return Object.keys(expected).filter((field) => review[field] !== expected[field]);
+}
+
+/** Reads the optional delegated-approval fields of a persisted phase record. */
+function parseDelegatedApproval(record: Record<string, unknown>, phase: string): { approvedBy?: string; reviewSidecar?: string } {
+  const out: { approvedBy?: string; reviewSidecar?: string } = {};
+  for (const [disk, key] of [['approved_by', 'approvedBy'], ['review_sidecar', 'reviewSidecar']] as const) {
+    const value = record[disk];
+    if (value === undefined) continue;
+    if (typeof value !== 'string') throw new GovernanceError('StateInvariantViolation', `${phase} delegated approval fields must be strings`);
+    out[key] = value;
+  }
+  return out;
+}
+
+/** The delegated-approval fields to echo in a result, or none for a human approval. */
+function delegatedFields(record: PhaseRecord): { approvedBy?: string; reviewSidecar?: string } {
+  return record.approvedBy ? { approvedBy: record.approvedBy, reviewSidecar: record.reviewSidecar } : {};
+}
 
 @injectable()
 export class WorkflowEngineService {
@@ -362,15 +401,50 @@ export class WorkflowEngineService {
           (!checkpoint.reviewed || checkpoint.reviewed_revision !== record.revision || checkpoint.reviewed_artifact_sha256 !== record.artifactSha256)) {
         throw new GovernanceError('PhaseNotApproved', 'The current tasks revision requires explicit test-case review. Record the test-case review decision before approving tasks.');
       }
+      const delegation = await this.resolveDelegatedApproval(request, featureRoot, record);
       if (!record.approved) {
-        spec.approvals[request.phase] = { ...record, approved: true };
+        spec.approvals[request.phase] = {
+          ...record, approved: true, ...delegation,
+        };
         spec.phase = this.phaseValue(request.phase);
         spec.updated_at = new Date().toISOString();
         await commitSpec(spec);
       }
       const handoff = await this.publishHandoff(request.projectRoot, request.featureName);
-      return { featureName: request.featureName, phase: request.phase, approved: true, canProgressToNext: true, handoff };
+      return {
+        featureName: request.featureName, phase: request.phase, approved: true, canProgressToNext: true, handoff,
+        ...delegatedFields(spec.approvals[request.phase]),
+      };
     });
+  }
+
+  /**
+   * Checks a delegated approval. A human approval sends neither field and is unchanged.
+   * The sidecar must hold an `approve` verdict for this exact phase, revision, and artifact SHA-256.
+   */
+  private async resolveDelegatedApproval(
+    request: ApprovalRequest,
+    featureRoot: string,
+    record: PhaseRecord,
+  ): Promise<{ approvedBy: string; reviewSidecar: string } | undefined> {
+    if (request.approvedBy === undefined && request.reviewSidecar === undefined) return undefined;
+    if (request.approvedBy === undefined || request.reviewSidecar === undefined) throw new GovernanceError('InvalidParams', 'approvedBy and reviewSidecar go together. Use both fields, or omit both for a human approval.');
+    const settings = resolveApprovalSettings(await readProjectConfig(request.projectRoot, this.fileSystem));
+    if (settings.mode !== 'delegated-reviewer') {
+      throw new GovernanceError('PhaseNotApproved', 'Delegated approval is off for this project. Use the human approval question, or set approval.mode to delegated-reviewer.');
+    }
+    if (!settings.reviewers.has(request.approvedBy)) {
+      throw new GovernanceError('PhaseNotApproved', 'This reviewer may not approve phases. Add the reviewer to approval.reviewers, or use the human approval question.');
+    }
+    const expected = reviewSidecarPath(request.approvedBy, request.phase, record.revision);
+    if (request.reviewSidecar !== expected) {
+      throw new GovernanceError('PhaseNotApproved', `The review sidecar path must be ${expected}. Write the review to that path and approve again.`);
+    }
+    const mismatched = reviewMismatches(await this.readOptional(path.join(featureRoot, expected)), request, record);
+    if (mismatched.length > 0) {
+      throw new GovernanceError('PhaseNotApproved', 'The review sidecar does not approve this exact revision and artifact. Run the reviewer on the current artifact and approve again.', { sidecar: expected, mismatched });
+    }
+    return { approvedBy: request.approvedBy, reviewSidecar: expected };
   }
 
   async reviewTestCases(request: ReviewTestCasesRequest): Promise<ReviewTestCasesResult> {
@@ -1455,6 +1529,7 @@ export class WorkflowEngineService {
         approved: record.approved,
         revision: record.revision as number,
         artifactSha256: typeof record.artifact_sha256 === 'string' ? record.artifact_sha256 : undefined,
+        ...parseDelegatedApproval(record, phase),
         validation: {
           status: validation.status as PhaseRecord['validation']['status'],
           checkedAt: typeof validation.checked_at === 'string' ? validation.checked_at : undefined,
@@ -1919,6 +1994,8 @@ export class WorkflowEngineService {
         approved: record.approved,
         revision: record.revision,
         ...(record.artifactSha256 ? { artifact_sha256: record.artifactSha256 } : {}),
+        ...(record.approvedBy ? { approved_by: record.approvedBy } : {}),
+        ...(record.reviewSidecar ? { review_sidecar: record.reviewSidecar } : {}),
         validation: {
           status: record.validation.status,
           ...(record.validation.checkedAt ? { checked_at: record.validation.checkedAt } : {}),

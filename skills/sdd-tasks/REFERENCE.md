@@ -27,3 +27,13 @@ When the JEV `testcases` check is active, it asks for a case list once. Send one
 ## Checklist
 
 Every requirement and design component is covered; dependencies form an acyclic order; each behavioral task begins with RED; edge/error/security/migration scenarios appear where relevant; acceptance criteria are measurable; optional test-case review is explicit; no task is merely “finish”, “wire up”, or “add tests”; and approval remains a separate user-visible gate.
+
+## Delegated Reviewer
+
+Use this only when `.spec/sdd-config.json` sets `approval.mode` to `delegated-reviewer`. Otherwise ask the human.
+
+- A reviewer listed in `approval.reviewers` (default `agy`) may answer the approval question instead of the human. The authoring agent is never the reviewer.
+- The reviewer reads the exact submitted artifact and writes `review/<reviewer>-tasks-r<revision>.json` in the feature directory with `reviewer`, `phase`, `revision`, `artifact_sha256`, and `verdict` (`approve` or `reject`).
+- Only an `approve` verdict for the current revision and hash permits the internal approval call, with `approvedBy` and `reviewSidecar`. The runtime refuses any mismatch.
+- A `reject` verdict is not approval. Report the findings, revise, and resubmit.
+- The test-case checkpoint stays human. A delegated reviewer never records it.
