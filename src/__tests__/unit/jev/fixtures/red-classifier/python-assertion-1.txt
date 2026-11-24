@@ -1,0 +1,6 @@
+    def test_creates_order():
+>       assert create_order() == 1
+E       assert 2 == 1
+E        +  where 2 = create_order()
+
+tests/test_order.py:5: AssertionError
