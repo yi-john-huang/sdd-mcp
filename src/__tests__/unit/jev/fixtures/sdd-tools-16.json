@@ -467,7 +467,7 @@
   },
   {
     "name": "sdd-spec-impl",
-    "description": "Record governed implementation task progress. In verified evidence mode, pass the test command as run.argv; the server runs it and records the observed exit code.",
+    "description": "Record governed implementation task progress. In verified evidence mode, pass the test command as run.argv; the server runs it and records the observed exit code. COMPLETE may omit run when the project configures a verify command.",
     "inputSchema": {
       "type": "object",
       "properties": {
@@ -571,8 +571,7 @@
               "action": {
                 "enum": [
                   "record-red",
-                  "record-green",
-                  "complete"
+                  "record-green"
                 ]
               }
             },

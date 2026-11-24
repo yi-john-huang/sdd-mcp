@@ -1,5 +1,5 @@
 import { execFileSync } from 'node:child_process';
-import { mkdir, mkdtemp, realpath, rm, writeFile } from 'node:fs/promises';
+import { mkdir, mkdtemp, readFile, realpath, rm, writeFile } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import type { WorkflowEngineService } from '../../../application/services/WorkflowEngineService';
@@ -162,5 +162,78 @@ describe('WorkflowEngineService RED-to-GREEN continuity', () => {
     const red = await act(workflow, 'record-red', started.revision, { evidence: { command: 'jest', exitCode: 1, summary: ASSERTION_OUTPUT } });
     await expect(act(workflow, 'record-green', red.revision, { evidence: { command: 'other', exitCode: 0, summary: 'pass' } }))
       .resolves.toMatchObject({ taskState: 'green-observed' });
+  });
+});
+
+describe('WorkflowEngineService project verify command', () => {
+  let projectRoot: string;
+  let fileSystem: NodeFileSystemAdapter;
+  const VERIFY = ['npm', 'run', 'verify'];
+  const act = (workflow: WorkflowEngineService, action: 'start' | 'record-red' | 'record-green' | 'complete', expectedRevision: number, extra: object = {}) =>
+    workflow.recordTaskProgress({ projectRoot, featureName: FEATURE, taskNumber: '1.1', action, expectedRevision, ...extra });
+  const configure = (evidence: object) => writeFile(path.join(projectRoot, '.spec', 'sdd-config.json'), JSON.stringify({ evidence }));
+
+  beforeEach(async () => {
+    projectRoot = await mkdtemp(path.join(os.tmpdir(), 'sdd-verify-command-'));
+    fileSystem = new NodeFileSystemAdapter();
+    await prepareImplementation(createEngine(fileSystem), projectRoot, FEATURE);
+  });
+
+  afterEach(async () => { await rm(projectRoot, { recursive: true, force: true }); });
+
+  async function greenObserved(port: ScriptedProcessPort) {
+    const workflow = createEngine(fileSystem, { port });
+    const started = await act(workflow, 'start', 0);
+    const red = await act(workflow, 'record-red', started.revision, { run: RUN });
+    const green = await act(workflow, 'record-green', red.revision, { run: RUN });
+    return { workflow, green };
+  }
+
+  it('should run the configured command when complete omits run and record its exit code', async () => {
+    await configure({ verifyCommand: VERIFY });
+    const port = new ScriptedProcessPort([exited(ASSERTION_OUTPUT, 1), exited(PASS_OUTPUT, 0), exited('all green\n', 0)]);
+    const { workflow, green } = await greenObserved(port);
+    const completed = await act(workflow, 'complete', green.revision, { affectedArtifacts: ['src/order.ts'] });
+    expect(completed).toMatchObject({ taskState: 'completed', observed: { exitCode: 0 } });
+    expect(port.requests[2]?.argv).toEqual(VERIFY);
+  });
+
+  it('should reject a different run for completion before running it', async () => {
+    await configure({ verifyCommand: VERIFY });
+    const port = new ScriptedProcessPort([exited(ASSERTION_OUTPUT, 1), exited(PASS_OUTPUT, 0), exited('ok\n', 0)]);
+    const { workflow, green } = await greenObserved(port);
+    const before = await specBytes(projectRoot, FEATURE);
+    const error = await act(workflow, 'complete', green.revision, { run: { argv: ['npm', 'test'] }, affectedArtifacts: ['src/order.ts'] }).catch((caught: unknown) => caught);
+    expect(error).toMatchObject({ code: 'VerifyCommandMismatch', details: { verifyCommand: VERIFY } });
+    expect(port.requests).toHaveLength(2);
+    expect(await specBytes(projectRoot, FEATURE)).toBe(before);
+  });
+
+  it('should still require run or evidence when no verify command is configured', async () => {
+    const port = new ScriptedProcessPort([exited(ASSERTION_OUTPUT, 1), exited(PASS_OUTPUT, 0)]);
+    const { workflow, green } = await greenObserved(port);
+    await expect(act(workflow, 'complete', green.revision, { affectedArtifacts: ['src/order.ts'] })).rejects.toMatchObject({ code: 'SelfReportedEvidenceRejected' });
+  });
+
+  it('should show the verify command in status and in the implementation handoff', async () => {
+    await configure({ verifyCommand: VERIFY });
+    const port = new ScriptedProcessPort([exited(ASSERTION_OUTPUT, 1), exited(PASS_OUTPUT, 0)]);
+    const { workflow } = await greenObserved(port);
+    const status = await workflow.getFeatureStatus({ projectRoot, featureName: FEATURE });
+    expect(status.verifyCommand).toEqual(VERIFY);
+    const handoff = await readFile(path.join(projectRoot, '.spec', 'specs', FEATURE, 'context', 'handoff.md'), 'utf8');
+    expect(handoff).toContain('- Verify command: npm run verify');
+  });
+
+  it('should reject at commit time when the configured command changed while the command ran', async () => {
+    await configure({ verifyCommand: VERIFY });
+    const swapping = new ScriptedProcessPort([exited(ASSERTION_OUTPUT, 1), exited(PASS_OUTPUT, 0), exited('ok\n', 0)]);
+    const { workflow, green } = await greenObserved(swapping);
+    const original = swapping.run.bind(swapping);
+    swapping.run = async (request) => {
+      await configure({ verifyCommand: ['npm', 'run', 'other'] });
+      return original(request);
+    };
+    await expect(act(workflow, 'complete', green.revision, { affectedArtifacts: ['src/order.ts'] })).rejects.toMatchObject({ code: 'VerifyCommandMismatch' });
   });
 });

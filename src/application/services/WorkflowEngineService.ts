@@ -99,6 +99,8 @@ export interface DurableFeatureStatus {
   readonly implementation?: { revision: number; completed: number; total: number; active: number; blocked: number; tasks?: Readonly<Record<string, TaskEvidenceStatus>> };
   /** The mode the server resolved for this project: who may supply task evidence. */
   readonly evidenceMode?: EvidenceMode;
+  /** The project's fixed completion command, when `.spec/sdd-config.json` sets a valid one. */
+  readonly verifyCommand?: readonly string[];
 }
 /** Per-task view of recorded evidence: which side observed each entry. */
 export interface TaskEvidenceStatus {
@@ -433,13 +435,21 @@ export class WorkflowEngineService {
    * The command itself runs outside the feature lock, which stays free for status, JEV, and handoff reads;
    * the transition is checked before the run and again, against the current revision, before the commit.
    */
-  async recordTaskProgress(request: RecordTaskProgressRequest): Promise<RecordTaskProgressResult> {
-    return this.withEvidenceRunLock(request.projectRoot, request.featureName, async () => {
+  async recordTaskProgress(original: RecordTaskProgressRequest): Promise<RecordTaskProgressResult> {
+    return this.withEvidenceRunLock(original.projectRoot, original.featureName, async () => {
+      const request = await this.withVerifyCommand(original);
       // The tree is observed before the command runs and outside the feature lock, so status reads stay free.
       const tree = TREE_ACTIONS.has(request.action) ? await observeTree(this.git, path.resolve(request.projectRoot), this.treeDeadlineMs) : undefined;
       const outcome = request.run && EVIDENCE_ACTIONS.has(request.action) ? await this.observeBeforeCommit(request, request.run, tree) : undefined;
       return this.commitTaskProgress(request, outcome, tree);
     });
+  }
+
+  /** In verified mode, completion without a run uses the project verify command; the transition check compares any run with it. */
+  private async withVerifyCommand(request: RecordTaskProgressRequest): Promise<RecordTaskProgressRequest> {
+    if (request.action !== 'complete' || request.run) return request;
+    const settings = await this.evidenceSettings(path.resolve(request.projectRoot));
+    return settings.mode === 'verified' && settings.verifyCommand ? { ...request, run: { argv: [...settings.verifyCommand] } } : request;
   }
 
   private async observeBeforeCommit(request: RecordTaskProgressRequest, run: NonNullable<RecordTaskProgressRequest['run']>, tree: TreeBinding | undefined): Promise<ObservedEvidence> {
@@ -464,6 +474,7 @@ export class WorkflowEngineService {
     const prior = task.status;
     this.assertEvidenceActionAllowed(task, request, prior);
     this.assertContinuity(task, request, context);
+    this.assertVerifyCommand(request, context.settings);
     return { implementation, task, prior };
   }
 
@@ -538,6 +549,15 @@ export class WorkflowEngineService {
     const now = context.tree;
     if (before?.status === 'bound' && now?.status === 'bound' && before.sha256 === now.sha256) {
       throw new GovernanceError('EvidenceContinuityViolation', 'Change the implementation before recording GREEN. The working tree matches the tree RED observed.', { reason: 'unchanged-tree' });
+    }
+  }
+
+  /** A configured verify command is the only completion command in verified mode. */
+  private assertVerifyCommand(request: RecordTaskProgressRequest, settings: EvidenceSettings): void {
+    const verifyCommand = settings.verifyCommand;
+    if (request.action !== 'complete' || settings.mode !== 'verified' || !verifyCommand || !request.run) return;
+    if (!sameArgv(verifyCommand, request.run.argv)) {
+      throw new GovernanceError('VerifyCommandMismatch', 'Omit run, or pass the project verify command for completion. The configured command is in details.verifyCommand.', { verifyCommand: [...verifyCommand] });
     }
   }
 
@@ -904,8 +924,13 @@ export class WorkflowEngineService {
     const implementation = spec.implementation
       ? { revision: spec.implementation.revision, ...this.implementationCounts(spec.implementation), tasks: this.taskEvidenceStatuses(spec.implementation) }
       : undefined;
-    const evidenceMode = (await this.evidenceSettings(projectRoot)).mode;
-    return { featureName, phase: spec.phase, currentPhase: spec.phase, nextAction: this.resolveNextAction(spec, driftedPhases), blockers, phases, checkpoint: { required: cp.required, reviewed: cp.reviewed, reviewedRevision: cp.reviewed_revision, reviewedArtifactSha256: cp.reviewed_artifact_sha256 }, implementation, evidenceMode };
+    const settings = await this.evidenceSettings(projectRoot);
+    return {
+      featureName, phase: spec.phase, currentPhase: spec.phase, nextAction: this.resolveNextAction(spec, driftedPhases), blockers, phases,
+      checkpoint: { required: cp.required, reviewed: cp.reviewed, reviewedRevision: cp.reviewed_revision, reviewedArtifactSha256: cp.reviewed_artifact_sha256 },
+      implementation, evidenceMode: settings.mode,
+      ...(settings.verifyCommand ? { verifyCommand: [...settings.verifyCommand] } : {}),
+    };
   }
 
   private taskEvidenceStatuses(implementation: NonNullable<WorkflowSpecV5['implementation']>): Record<string, TaskEvidenceStatus> {

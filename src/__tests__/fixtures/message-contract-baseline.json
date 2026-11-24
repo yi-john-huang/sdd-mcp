@@ -25,7 +25,8 @@
         "SelfReportedEvidenceRejected",
         "StateInvariantViolation",
         "TaskDependencyIncomplete",
-        "TaskTransitionInvalid"
+        "TaskTransitionInvalid",
+        "VerifyCommandMismatch"
       ],
       "numbers": {
         "ArtifactDrift": [],
@@ -61,7 +62,8 @@
           "5"
         ],
         "TaskDependencyIncomplete": [],
-        "TaskTransitionInvalid": []
+        "TaskTransitionInvalid": [],
+        "VerifyCommandMismatch": []
       }
     },
     "src/application/services/WorkflowValidationService.ts": {
