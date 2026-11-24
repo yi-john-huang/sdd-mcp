@@ -2,6 +2,7 @@ import { createHash } from 'node:crypto';
 import type { ProcessPort, ProcessRunResult } from '../../domain/ports.js';
 import type { EvidenceSettings } from './EvidenceSettings.js';
 import { redactSecrets } from './JevRedaction.js';
+import { inlineEvalFlag, programName } from './EvidenceCommandPolicy.js';
 import { classifyRedEvidence, type RedClassificationResult } from './RedEvidenceClassifier.js';
 import { GovernanceError } from './WorkflowErrors.js';
 
@@ -15,8 +16,6 @@ export const MAX_ARG_BYTES = 4096;
  * Dropping a harmless look-alike costs less than leaking a credential; `passEnv` restores any name a test needs.
  */
 const SECRET_ENV_NAME = /(KEY|TOKEN|SECRET|PASSWORD|PASSWD|CREDENTIALS?)(_|$)|(^|_)PAT(_|$)/i;
-const WINDOWS_SUFFIX = /\.(cmd|exe|bat)$/i;
-const PATH_SEPARATORS = /[/\\]/;
 const LINE_BREAK = /[\r\n]/;
 const UTF8_CONTINUATION = 0b1000_0000;
 const UTF8_CONTINUATION_MASK = 0b1100_0000;
@@ -48,18 +47,9 @@ export type EvidenceRunOutcome =
   | { readonly kind: 'timed-out'; readonly outputExcerpt: string; readonly truncated: boolean; readonly redactions: number; readonly durationMs: number }
   | { readonly kind: 'spawn-failed'; readonly reason: 'not-found' | 'permission' | 'other'; readonly outputExcerpt: string; readonly durationMs: number };
 
-const invalid = (message: string): GovernanceError => new GovernanceError('InvalidParams', `Evidence command is invalid: ${message}`);
+export { programName };
 
-/** The bare program name used for the allowlist: no directory, no Windows suffix, lowercased on Windows only. */
-export function programName(argv0: string, platform: NodeJS.Platform = process.platform): string {
-  if (argv0.length === 0 || argv0.includes('\u0000')) throw invalid('the program name is empty or contains NUL');
-  const segments = argv0.split(PATH_SEPARATORS);
-  if (segments.includes('..')) throw invalid('the program path contains a parent segment');
-  const base = segments[segments.length - 1];
-  if (base.length === 0) throw invalid('the program path ends with a separator');
-  const stripped = base.replace(WINDOWS_SUFFIX, '');
-  return platform === 'win32' ? stripped.toLowerCase() : stripped;
-}
+const invalid = (message: string): GovernanceError => new GovernanceError('InvalidParams', `Evidence command is invalid: ${message}`);
 
 /** The server environment minus secrets, plus `passEnv` names and `CI=1` when unset. */
 export function childEnv(serverEnv: Env, settings: EvidenceSettings): Record<string, string> {
@@ -121,6 +111,10 @@ export class EvidenceRunner {
         `"${program}" is not an allowed evidence command. Allowed: ${[...allowed].join(', ')}.`,
         { program, allowedCommands: [...allowed] },
       );
+    }
+    const flag = inlineEvalFlag(request.argv);
+    if (flag !== undefined) {
+      throw new GovernanceError('EvidenceCommandInlineEval', 'Run a project test file instead of inline code. Remove the flag named in details.flag.', { flag });
     }
     const result = await this.processes.run({
       argv: request.argv,

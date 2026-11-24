@@ -178,12 +178,18 @@ describe('packed Skill-governed workflow distribution', () => {
     });
     afterEach(() => rmSync(path.dirname(projectRoot), { recursive: true, force: true }));
 
+    /** Evidence runs a project file, never inline code, so each scenario writes its script into the project. */
+    const script = (name: string, body: string): string => {
+      writeFileSync(path.join(projectRoot, name), body);
+      return name;
+    };
+
     it('runs the command itself, rejects typed exit codes and shells, and keeps the 5.5.0 shape in self-reported mode', async () => {
       const node = process.execPath;
       let revision = await approveAll();
       revision = (await call('sdd-spec-impl', { featureName: feature, taskNumber: '1.1', action: 'start', expectedRevision: revision })).revision as number;
 
-      const red = await call('sdd-spec-impl', { featureName: feature, taskNumber: '1.1', action: 'record-red', expectedRevision: revision, run: { argv: [node, '-e', 'process.stderr.write("Expected: 1\\nReceived: 2\\n"); process.exit(3)'] } });
+      const red = await call('sdd-spec-impl', { featureName: feature, taskNumber: '1.1', action: 'record-red', expectedRevision: revision, run: { argv: [node, script('red.js', 'process.stderr.write("Expected: 1\\nReceived: 2\\n"); process.exit(3);')] } });
       expect(red).toMatchObject({ taskState: 'red-observed', evidenceMode: 'verified', observed: { exitCode: 3, classification: 'assertion' } });
       const redEntry = spec().implementation.tasks['1.1'].evidence.red;
       expect(redEntry).toMatchObject({ exit_code: 3, source: 'engine', red_classification: 'assertion' });
@@ -195,7 +201,7 @@ describe('packed Skill-governed workflow distribution', () => {
       expect(codeOf(typed)).toBe('SelfReportedEvidenceRejected');
       expect(readFileSync(specPath(), 'utf8')).toBe(before);
 
-      const green = await call('sdd-spec-impl', { featureName: feature, taskNumber: '1.1', action: 'record-green', expectedRevision: revision, run: { argv: [node, '-e', 'process.exit(0)'] } });
+      const green = await call('sdd-spec-impl', { featureName: feature, taskNumber: '1.1', action: 'record-green', expectedRevision: revision, run: { argv: [node, script('green.js', 'process.exit(0);')] } });
       expect(green).toMatchObject({ taskState: 'green-observed', observed: { exitCode: 0 } });
       revision = green.revision as number;
 
@@ -216,7 +222,7 @@ describe('packed Skill-governed workflow distribution', () => {
       let revision = await approveAll();
       revision = (await call('sdd-spec-impl', { featureName: feature, taskNumber: '1.1', action: 'start', expectedRevision: revision })).revision as number;
       const chatty = 'process.stdout.write(Buffer.alloc(2 * 1024 * 1024, 120)); process.stdout.write("\\nExpected: 1\\nReceived: 2\\n", () => process.exit(1));';
-      const red = await call('sdd-spec-impl', { featureName: feature, taskNumber: '1.1', action: 'record-red', expectedRevision: revision, run: { argv: [process.execPath, '-e', chatty] } });
+      const red = await call('sdd-spec-impl', { featureName: feature, taskNumber: '1.1', action: 'record-red', expectedRevision: revision, run: { argv: [process.execPath, script('chatty.js', chatty)] } });
       expect(red).toMatchObject({ taskState: 'red-observed', observed: { exitCode: 1, truncated: true } });
       const observed = red.observed as { outputExcerpt: string };
       expect(observed.outputExcerpt).toMatch(/^\[output truncated: 1048576 of \d+ bytes captured\]\n/);
