@@ -2,6 +2,8 @@
 
 SDD-MCP uses one durable workflow. It renders that workflow for Claude Code, Codex, and Oh My Pi (OMP). Users run manual-only workflow Skills. The registered MCP runtime stays behind the Skill boundary.
 
+For a short task-by-task overview of each Skill and common Skill combinations, see the [Quick Guide](QUICK-GUIDE.md).
+
 ## Start in the host
 
 1. Run `npx -y sdd-mcp-server@latest setup-global` once per local user or OMP profile. From a POSIX source checkout, run `./bootstrap.sh` instead. You can select one host with `--target claude-code`, `--target codex`, or `--target omp`. A repository-scoped or team-scoped `install` is an alternative, not a required second step. If you want personal scope, do not run `install` in the `sdd-mcp-server` checkout.
