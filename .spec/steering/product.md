@@ -20,7 +20,7 @@ Make disciplined spec-driven development practical inside AI-assisted engineerin
 4. Human gates - Requirements, design, and tasks approval remain explicit decisions; optional test-case review is a distinct tasks checkpoint.
 5. Context management - Restores approved bounded context and exact implementation progress across sessions; draft content requires explicit revision mode.
 6. Quality and security guidance - Includes Linus-style review, OWASP-oriented checks, TDD guidance, and project-specific steering.
-7. Migration utilities - Continue valid legacy disk workflows through strict normalization while preserving the clean v5 public API.
+7. Migration utilities - Continue valid legacy disk workflows through strict normalization while preserving the current public tool contract.
 
 ## Key Value Propositions
 - Users operate host-native phase Skills rather than backend tools or workflow JSON.

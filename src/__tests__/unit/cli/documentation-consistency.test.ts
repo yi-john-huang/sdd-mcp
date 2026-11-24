@@ -20,6 +20,21 @@ describe('target-aware documentation consistency', () => {
 
 
 
+  it('keeps project steering in step with the package version and tool count', () => {
+    const tech = read('.spec/steering/tech.md');
+    const version = (JSON.parse(read('package.json')) as { version: string }).version;
+    expect(tech).toContain(`Current version: \`${version}\``);
+    expect(tech).toContain(`${SDD_TOOL_NAMES.length}-tool`);
+    expect(SDD_TOOL_NAMES).toHaveLength(17);
+    expect(tech).toMatch(/verified execution evidence/i);
+    expect(tech).toMatch(/JEV/);
+    expect(tech).toMatch(/strict TypeScript/i);
+    expect(tech).toMatch(/lint ratchet/i);
+    for (const file of ['.spec/steering/product.md', '.spec/steering/structure.md']) {
+      expect(read(file)).not.toMatch(/\b5\.0\.0\b|16-tool|\bv5 public API\b/);
+    }
+  });
+
   it('documents both native output trees in architecture and workflow docs', () => {
     const architecture = read('ARCHITECTURE.md');
     const workflow = read('docs/WORKFLOW.md');
