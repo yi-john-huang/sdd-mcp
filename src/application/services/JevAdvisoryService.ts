@@ -57,7 +57,7 @@ export class JevAdvisoryService {
     this.commit = new JevCommitLookup(fileSystem, git, this.store);
   }
 
-  /** Never rejects: every failure becomes a result value. */
+  /** Rejects only with InvalidParams for a caller mistake; every other failure becomes a result value. */
   async check(request: JevCheckRequest): Promise<JevCheckResult> {
     try {
       return await this.run(request);
@@ -122,8 +122,8 @@ export class JevAdvisoryService {
     const snapshot = await this.engine.readAdvisorySnapshot({ projectRoot: request.projectRoot, featureName: request.featureName ?? '', phase: 'tasks' });
     const task = snapshot.implementation?.tasks[taskNumber];
     if (!task || !task.tddRequired) return skippedResult('red', 'not-ready');
-    const engineRed = task.status === 'red-observed' && task.red?.source === 'engine' ? task.red : undefined;
-    if (!engineRed && task.status === 'in-progress' && request.evidence === undefined) {
+    const engineRed = task.red?.source === 'engine' ? task.red : undefined;
+    if (!engineRed && request.evidence === undefined) {
       throw new GovernanceError('InvalidParams', 'Record RED through the engine first, or pass evidence for the red check.');
     }
     const callerReady = task.status === 'in-progress' && request.evidence !== undefined && request.evidence.exitCode !== 0;

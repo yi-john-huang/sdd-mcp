@@ -161,6 +161,14 @@ describe('JevAdvisoryService RED validity check', () => {
       expect(http.calls).toHaveLength(0);
     });
 
+    it('asks for an engine RED or evidence when a pending task has neither', async () => {
+      await project.approve('requirements', await project.submit('requirements', FIXTURE_REQUIREMENTS));
+      await project.approve('design', await project.submit('design', FIXTURE_DESIGN));
+      await project.approve('tasks', await project.submit('tasks', FIXTURE_TASKS));
+      await project.engine.beginImplementation({ projectRoot: project.root, featureName: project.feature });
+      await expect(service().check({ ...request(AMBIGUOUS), evidence: undefined })).rejects.toMatchObject({ code: 'InvalidParams' });
+    });
+
     it('skips a task that is not TDD-required', async () => {
       await startTask(project, '1.1');
       expect(await service().check(request(TS_ERROR, { taskNumber: '1.2' }))).toMatchObject({ status: 'skipped', skipReason: 'not-ready' });
@@ -233,6 +241,28 @@ describe('JevAdvisoryService RED validity check', () => {
       });
       expect(await service().check(request(AMBIGUOUS))).toMatchObject({ status: 'skipped', skipReason: 'not-ready' });
       expect(http.calls).toHaveLength(0);
+    });
+
+    it('asks for evidence when a red-observed task has only a caller RED', async () => {
+      await startTask(project);
+      const snapshot = await project.engine.readAdvisorySnapshot({ projectRoot: project.root, featureName: project.feature, phase: 'tasks' });
+      await project.engine.recordTaskProgress({
+        projectRoot: project.root, featureName: project.feature, taskNumber: '1.1', action: 'record-red',
+        expectedRevision: snapshot.implementation!.revision, evidence: AMBIGUOUS,
+      });
+      await expect(service().check({ ...request(), evidence: undefined })).rejects.toMatchObject({ code: 'InvalidParams' });
+      expect(http.calls).toHaveLength(0);
+    });
+
+    it('still judges the engine RED after GREEN is recorded', async () => {
+      await recordEngineRed('1 test failed in 0.4s');
+      const snapshot = await project.engine.readAdvisorySnapshot({ projectRoot: project.root, featureName: project.feature, phase: 'tasks' });
+      await engineWithRunner('unused').recordTaskProgress({
+        projectRoot: project.root, featureName: project.feature, taskNumber: '1.1', action: 'record-green',
+        expectedRevision: snapshot.implementation!.revision, evidence: { command: 'npx jest order.test.ts', exitCode: 0, summary: 'pass' },
+      });
+      expect(await service().check({ ...request(), evidence: undefined })).toMatchObject({ status: 'answered' });
+      expect(http.calls).toHaveLength(1);
     });
   });
 
