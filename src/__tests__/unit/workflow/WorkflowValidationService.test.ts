@@ -94,6 +94,12 @@ describe('WorkflowValidationService', () => {
     ]));
   });
 
+  it('accepts a design with or without an optional Interface Spike section', () => {
+    const spike = `${design}\n## Interface Spike\nThrowaway code in .spec/specs/checkout/spike/ settled the store interface; production code never imports it.`;
+    expect(service.validateDesign(design, requirements).status).toBe('passed');
+    expect(service.validateDesign(spike, requirements).status).toBe('passed');
+  });
+
   it('validates design headings, traceability, and known Covers IDs', () => {
     expect(service.validateDesign(design, requirements).status).toBe('passed');
     const invalid = design.replaceAll('NFR-1', 'FR-99');

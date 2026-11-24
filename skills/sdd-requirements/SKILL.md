@@ -24,9 +24,9 @@ If durable state reports a conflict or host permission failure, present an actio
 2. Write independently testable EARS requirements. Every requirement uses a unique `### FR-N: ...` or `### NFR-N: ...` section and same-line metadata labels:
    - `**Objective:** ...`
    - `**EARS Specification:** ... SHALL ...`
-   - `**Acceptance Criteria:** 1. ...` with at least one numbered item on the same line.
-3. Replace ambiguous words with observable bounds. Add security, privacy, accessibility, compatibility, errors, and performance only when relevant.
-4. Check completeness, consistency, feasibility, traceability, and testability; run gap analysis when existing code is in scope.
+   - `**Acceptance Criteria:**` followed by a numbered list, on the label line or the next lines.
+3. Replace ambiguous words with observable bounds. Add security, privacy, accessibility, compatibility, errors, and performance when relevant.
+4. Check completeness, consistency, feasibility, traceability, and testability; run gap analysis for existing code.
 
 Internally submit the complete Markdown with the exact revision and artifact identity last observed. Submission, not direct file editing, is the canonical write. Present the saved path and validation result. A failed validation is a durable draft: revise it using the observed draft and identity; do not request approval.
 

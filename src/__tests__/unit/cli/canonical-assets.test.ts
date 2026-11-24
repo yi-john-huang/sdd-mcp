@@ -21,9 +21,9 @@ const skillNames = [
 
 const requiredCoreChecks: Record<typeof skillNames[number], RegExp[]> = {
   'sdd-commit': [/inspect.*changes/i, /never.*secret/i, /focused.*test/i, /verification drift/i, /unverified/i],
-  'sdd-design': [/requirements.*approved/i, /approved compact context/i, /approve this design/i],
+  'sdd-design': [/requirements.*approved/i, /approved compact context/i, /approve this design/i, /## Interface Spike/, /spike\/.*never imports/i],
   'sdd-implement': [/tasks.*approved/i, /red.*green.*refactor/is, /record.*blocker/i, /security/i],
-  'sdd-requirements': [/ears/i, /acceptance criteria/i, /approve these requirements/i],
+  'sdd-requirements': [/ears/i, /acceptance criteria/i, /approve these requirements/i, /label line or the next lines/i],
   'sdd-review': [/correctness/i, /security/i, /verification/i],
   'sdd-security-check': [/owasp/i, /secret/i, /severity/i],
   'sdd-steering': [/preserve.*user/i, /security/i, /validate/i],
@@ -40,6 +40,16 @@ function read(relativePath: string): string {
 function utf8Bytes(content: string): number {
   return Buffer.byteLength(content, 'utf8');
 }
+
+describe('requirements and design Skill wording', () => {
+  it('no longer demands acceptance criteria on the label line', () => {
+    expect(fs.readFileSync(path.resolve(process.cwd(), 'skills/sdd-requirements/SKILL.md'), 'utf8')).not.toMatch(/at least one numbered item on the same line/);
+  });
+
+  it('keeps the interface spike details in the design REFERENCE', () => {
+    expect(fs.readFileSync(path.resolve(process.cwd(), 'skills/sdd-design/REFERENCE.md'), 'utf8')).toMatch(/## Interface Spike/);
+  });
+});
 
 describe('canonical progressive assets', () => {
   it('keeps every skill manual-only, concise, bounded, and safety-complete', () => {
