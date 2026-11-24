@@ -28,15 +28,15 @@ If durable state reports a conflict or host permission failure, present an actio
 3. Replace ambiguous words with observable bounds. Add security, privacy, accessibility, compatibility, errors, and performance when relevant.
 4. Check completeness, consistency, feasibility, traceability, and testability; run gap analysis for existing code.
 
-Internally submit the complete Markdown with the exact revision and artifact identity last observed. Submission, not direct file editing, is the canonical write. Present the saved path and validation result. A failed validation is a durable draft: revise it using the observed draft and identity; do not request approval.
+Internally submit the complete Markdown with the exact revision and artifact identity last observed. Submission is the canonical write. Present the saved path and validation result. A failed validation is a durable draft: revise it using the observed draft and identity; do not request approval.
 
 ## Human Gate
 
-When validation passes, internally run the JEV `requirements` check and show its line, if any; it never affects approval. Then ask one explicit question: **“Approve these requirements?”** Only an unambiguous affirmative answer in this Skill flow permits the internal approval call for the exact reviewed revision and artifact. Never self-approve or treat host tool permission as approval. After approval, reread status and report the persisted outcome.
+When validation passes, internally run the JEV `requirements` check and show its line, if any; it never affects approval. Then ask one explicit question: **“Approve these requirements?”** Only an unambiguous affirmative answer here or a delegated verdict ([REFERENCE.md](REFERENCE.md)) permits the internal approval call for the exact reviewed revision and artifact. Never self-approve or treat host tool permission as approval. After approval, reread status and report the persisted outcome.
 
 ## Specialist Delegation
 
-Target renderers provide the `planner` route. When a native advisor is required, dispatch exactly one compact handoff with `specialistDepth: 1`; include only the goal, verified context, constraints, open decisions, and output contract. The specialist must not delegate again. Keep the handoff and returned summary at or below 2,048 estimated tokens. If unavailable, record one fallback and continue in the parent without retrying or selecting a generic child.
+Target renderers provide the `planner` route. When a native advisor is required, dispatch exactly one compact handoff with `specialistDepth: 1`; include only the goal, verified context, constraints, open decisions, and output contract. The specialist must not delegate again. Keep the handoff and returned summary within 2,048 estimated tokens. If unavailable, record one fallback and continue in the parent without retrying or selecting a generic child.
 
 ## Output
 

@@ -223,6 +223,16 @@
         "expectedArtifactSha256": {
           "type": "string",
           "pattern": "^[a-f0-9]{64}$"
+        },
+        "approvedBy": {
+          "type": "string",
+          "pattern": "^[a-z0-9][a-z0-9._-]{0,39}$",
+          "description": "Delegated approval only: reviewer name allowed by approval.reviewers"
+        },
+        "reviewSidecar": {
+          "type": "string",
+          "pattern": "^review/[a-z0-9._-]{1,120}\\.json$",
+          "description": "Delegated approval only: review/<reviewer>-<phase>-r<revision>.json"
         }
       },
       "required": [

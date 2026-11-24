@@ -58,3 +58,12 @@ Use a spike only when two interface shapes are both plausible and reading code c
 - Keep it to the smallest call sequence that shows the difference: a caller, the candidate interface, and one stub.
 - In the design, add `## Interface Spike` with the question, the path, what the spike showed, and the decision it settled. Cite that decision from the relevant `### D-N` section.
 - Delete or keep the spike folder as the team prefers; the validator ignores it and approval still needs the explicit human answer.
+
+## Delegated Reviewer
+
+Use this only when `.spec/sdd-config.json` sets `approval.mode` to `delegated-reviewer`. Otherwise ask the human.
+
+- A reviewer listed in `approval.reviewers` (default `agy`) may answer the approval question instead of the human. The authoring agent is never the reviewer.
+- The reviewer reads the exact submitted artifact and writes `review/<reviewer>-design-r<revision>.json` in the feature directory with `reviewer`, `phase`, `revision`, `artifact_sha256`, and `verdict` (`approve` or `reject`).
+- Only an `approve` verdict for the current revision and hash permits the internal approval call, with `approvedBy` and `reviewSidecar`. The runtime refuses any mismatch.
+- A `reject` verdict is not approval. Report the findings, revise, and resubmit.

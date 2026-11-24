@@ -10,11 +10,11 @@ The user invokes this Skill; backend lifecycle calls are internal. Never tell th
 
 ## Resolve and Restore
 
-1. Internally resolve status. If no feature name is supplied, resume the sole incomplete feature or ask the user to select when several exist.
+1. Internally resolve status. With no feature name, resume the sole incomplete feature or ask the user to select when several exist.
 2. Design and requirements must be approved. If durable status says otherwise, present the persisted blocker and make no file change.
 3. Load the latest approved compact context before method work. Load an unapproved tasks draft only with full mode and explicit unapproved inclusion.
 4. The saved test-case-review choice is authoritative. Ask once only when status has no choice; reuse it on every revision.
-5. If status reports an observed artifact identity for an orphan or manual edit, read that exact tasks file before revising. Never acknowledge its hash without inspecting it and deliberately incorporating or replacing it.
+5. If status reports an observed artifact identity for an orphan or manual edit, read that exact tasks file before revising. Never acknowledge its hash without inspecting it and incorporating or replacing it.
 
 If the runtime is unavailable by host permission, report a reload/trust or policy blocker; never substitute manual backend instructions.
 
@@ -23,8 +23,8 @@ If the runtime is unavailable by host permission, report a reload/trust or polic
 1. Map every requirement and design decision to small, ordered implementation and verification slices.
 2. Use unique `### N.M ...` task sections with same-line labels `**Covers:**`, `**Dependencies:**`, `**TDD:**`, `**Affected artifacts:**`, `**Acceptance criteria:**`, and `**Verification:**`.
 3. `Covers`, dependencies, and affected artifacts are comma-separated; an empty set is exactly `none`. Dependencies name existing task IDs and must be acyclic.
-4. `TDD` is exactly `required` or `not-applicable — <reason>`. Behavioral work uses RED → GREEN → REFACTOR and covers relevant boundaries, errors, transitions, security, migration, and integration.
-5. Mark concurrency only for genuinely independent slices.
+4. `TDD` is exactly `required` or `not-applicable — <reason>`. Behavioral work uses RED → GREEN → REFACTOR and covers boundaries, errors, transitions, security, migration, and integration.
+5. Mark concurrency only for independent slices.
 
 Internally submit complete Markdown with the exact revision and artifact identity last observed and the persisted review choice. Submission is the canonical write. A failed validation stays a durable draft and cannot advance.
 
@@ -34,11 +34,11 @@ Before the test-case or approval question, internally run the JEV `testcases` ch
 
 If test-case review is required, present the concrete behavior, boundary, and error cases. Only explicit confirmation records the internal checkpoint for the exact tasks revision and artifact. This is separate from approval.
 
-After validation and any required review, ask **“Approve these implementation tasks?”** Only an unambiguous affirmative answer in this Skill flow permits internal approval of the exact reviewed artifact. Never self-approve. Reread status after each checkpoint and approval.
+After validation and any required review, ask **“Approve these implementation tasks?”** Only an unambiguous affirmative answer here or a delegated verdict ([REFERENCE.md](REFERENCE.md)) permits internal approval of the exact reviewed artifact. Never self-approve. Reread status after each checkpoint and approval.
 
 ## Specialist Delegation
 
-Target renderers provide the `planner` route. When a native advisor is required, dispatch exactly one compact handoff with `specialistDepth: 1`; include only approved decisions, constraints, and the task contract. The specialist must not delegate again. Keep handoff and summary at or below 2,048 estimated tokens. If unavailable, record one fallback and continue in the parent without retrying or selecting a generic child.
+Target renderers provide the `planner` route. When a native advisor is required, dispatch exactly one compact handoff with `specialistDepth: 1`; include only approved decisions, constraints, and the task contract. The specialist must not delegate again. Keep handoff and summary within 2,048 estimated tokens. If unavailable, record one fallback and continue in the parent without retrying or selecting a generic child.
 
 ## Output
 
