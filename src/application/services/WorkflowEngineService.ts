@@ -40,6 +40,8 @@ interface TransitionContext {
   readonly unmatched?: readonly string[];
 }
 
+const MAX_DRIFT_PATHS = 50;
+
 const sameArgv = (a: readonly string[], b: readonly string[]): boolean => a.length === b.length && a.every((element, index) => element === b[index]);
 
 /** Attaches the observed tree; only the verification record keeps dirty entries, which drift and artifact checks rebuild. */
@@ -104,6 +106,16 @@ export interface DurableFeatureStatus {
   readonly evidenceMode?: EvidenceMode;
   /** The project's fixed completion command, when `.spec/sdd-config.json` sets a valid one. */
   readonly verifyCommand?: readonly string[];
+  /** Paths changed since the latest verified completion; status reports, the human decides. */
+  readonly verificationDrift?: VerificationDrift;
+  /** Present when a completed task exists but the tree cannot be compared, so silence is never read as verified. */
+  readonly verificationBinding?: 'unavailable';
+}
+export interface VerificationDrift {
+  readonly taskNumber: string;
+  readonly changedPaths: readonly string[];
+  readonly pathsTruncated: boolean;
+  readonly pathsUnavailable?: true;
 }
 /** Per-task view of recorded evidence: which side observed each entry. */
 export interface TaskEvidenceStatus {
@@ -654,12 +666,48 @@ export class WorkflowEngineService {
     };
   }
   async getFeatureStatus(request: FeatureRequest): Promise<DurableFeatureStatus> {
-    return this.withLockedFeature(
+    return this.featureStatus(request, true);
+  }
+
+  /** Drift needs git work outside the feature lock, so the list view skips it to keep its cost flat. */
+  private async featureStatus(request: FeatureRequest, withDrift: boolean): Promise<DurableFeatureStatus> {
+    const { status, anchor } = await this.withLockedFeature(
       request.projectRoot,
       request.featureName,
       false,
-      async ({ projectRoot, featureRoot, spec }) => this.buildStatus(projectRoot, request.featureName, featureRoot, spec),
+      async ({ projectRoot, featureRoot, spec }) => ({
+        status: await this.buildStatus(projectRoot, request.featureName, featureRoot, spec),
+        anchor: withDrift ? this.latestVerification(spec) : undefined,
+      }),
     );
+    return anchor ? { ...status, ...(await this.verificationDrift(path.resolve(request.projectRoot), anchor)) } : status;
+  }
+
+  /** The completed task whose verification was observed last, with its tree when one was bound. */
+  private latestVerification(spec: WorkflowSpecV5): { taskNumber: string; tree: TreeBinding | undefined } | undefined {
+    let latest: { taskNumber: string; tree: TreeBinding | undefined; observedAt: string } | undefined;
+    for (const [taskNumber, task] of Object.entries(spec.implementation?.tasks ?? {})) {
+      const verification = task.evidence.verification;
+      if (task.status !== 'completed' || !verification) continue;
+      if (!latest || verification.observedAt > latest.observedAt) latest = { taskNumber, tree: verification.workingTree, observedAt: verification.observedAt };
+    }
+    return latest && { taskNumber: latest.taskNumber, tree: latest.tree };
+  }
+
+  /** Compares the live tree with the latest verified one; never writes spec.json. */
+  private async verificationDrift(
+    projectRoot: string,
+    anchor: { taskNumber: string; tree: TreeBinding | undefined },
+  ): Promise<Pick<DurableFeatureStatus, 'verificationDrift' | 'verificationBinding'>> {
+    const verified = anchor.tree;
+    const current = await observeTree(this.git, projectRoot, this.treeDeadlineMs);
+    if (verified?.status !== 'bound' || current.status !== 'bound' || !this.git) return { verificationBinding: 'unavailable' };
+    if (current.sha256 === verified.sha256) return {};
+    const changed = await changedPaths(this.git, projectRoot, verified, this.treeDeadlineMs);
+    const drift: VerificationDrift = changed.status === 'ok'
+      ? { taskNumber: anchor.taskNumber, changedPaths: changed.paths.slice(0, MAX_DRIFT_PATHS), pathsTruncated: changed.paths.length > MAX_DRIFT_PATHS }
+      : { taskNumber: anchor.taskNumber, changedPaths: [], pathsTruncated: false, pathsUnavailable: true };
+    return { verificationDrift: drift };
   }
 
   async loadFeatureContext(request: ContextLoadRequest): Promise<ContextLoadResult> {
@@ -688,7 +736,7 @@ export class WorkflowEngineService {
       }
       const candidate = path.join(root, name);
       if ((await this.fileSystem.stat(candidate)).isDirectory()) {
-        statuses.push(await this.getFeatureStatus({ projectRoot: request.projectRoot, featureName: name }));
+        statuses.push(await this.featureStatus({ projectRoot: request.projectRoot, featureName: name }, false));
       }
     }
     return statuses;

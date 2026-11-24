@@ -20,7 +20,7 @@ const skillNames = [
 ] as const;
 
 const requiredCoreChecks: Record<typeof skillNames[number], RegExp[]> = {
-  'sdd-commit': [/inspect.*changes/i, /never.*secret/i, /focused.*test/i],
+  'sdd-commit': [/inspect.*changes/i, /never.*secret/i, /focused.*test/i, /verification drift/i, /unverified/i],
   'sdd-design': [/requirements.*approved/i, /approved compact context/i, /approve this design/i],
   'sdd-implement': [/tasks.*approved/i, /red.*green.*refactor/is, /record.*blocker/i, /security/i],
   'sdd-requirements': [/ears/i, /acceptance criteria/i, /approve these requirements/i],
