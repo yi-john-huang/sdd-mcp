@@ -24,8 +24,8 @@ describe('WorkflowEngineService status evidence sources', () => {
     const status = await createEngine(fileSystem).getFeatureStatus({ projectRoot, featureName: FEATURE });
     expect(status.evidenceMode).toBe('verified');
     expect(status.implementation?.tasks).toEqual({
-      '1.1': { status: 'pending', evidence: {} },
-      '1.2': { status: 'pending', evidence: {} },
+      '1.1': { status: 'pending', evidence: {}, binding: 'unbound' },
+      '1.2': { status: 'pending', evidence: {}, binding: 'unbound' },
     });
     const selfReported = await createEngine(fileSystem, { env: { SDD_EVIDENCE_MODE: 'self-reported' } }).getFeatureStatus({ projectRoot, featureName: FEATURE });
     expect(selfReported.evidenceMode).toBe('self-reported');
@@ -51,7 +51,8 @@ describe('WorkflowEngineService status evidence sources', () => {
       status: 'completed',
       evidence: { red: 'engine', green: 'engine', verification: 'engine' },
       redClassification: 'assertion',
+      binding: 'unbound',
     });
-    expect(status.implementation?.tasks['1.2']).toEqual({ status: 'completed', evidence: { verification: 'caller' } });
+    expect(status.implementation?.tasks['1.2']).toEqual({ status: 'completed', evidence: { verification: 'caller' }, binding: 'unbound' });
   });
 });

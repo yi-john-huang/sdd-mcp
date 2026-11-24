@@ -8,7 +8,7 @@ import { bindEvidence } from '../../../infrastructure/di/evidence-bindings';
 import { TYPES } from '../../../infrastructure/di/types';
 
 /** The engine, runner, and JEV keep their collaborators private; these tests look through that for wiring only. */
-type EngineInternals = { evidenceRunner?: unknown; environment?: unknown };
+type EngineInternals = { evidenceRunner?: unknown; environment?: unknown; git?: unknown };
 type RunnerInternals = { processes?: unknown };
 type JevInternals = { env?: unknown };
 
@@ -41,6 +41,13 @@ describe('bindEvidence', () => {
     const engine = containerWithEvidence(environment).get<WorkflowEngineService>(TYPES.WorkflowEngineService) as unknown as EngineInternals;
     expect(engine.evidenceRunner).toBeInstanceOf(EvidenceRunner);
     expect(engine.environment).toBe(environment);
+  });
+
+  it('should give the workflow engine the bound GitPort for working-tree bindings', () => {
+    const container = containerWithEvidence(environment);
+    const engine = container.get<WorkflowEngineService>(TYPES.WorkflowEngineService) as unknown as EngineInternals;
+    expect(engine.git).toBeDefined();
+    expect(engine.git).toBe(container.get(TYPES.GitPort));
   });
 
   it('should give JEV the same environment under the ProcessEnvironment binding', () => {

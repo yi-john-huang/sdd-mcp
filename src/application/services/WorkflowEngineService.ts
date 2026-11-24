@@ -10,7 +10,7 @@ import {
 import type { EvidenceRunner, ObservedEvidence } from './EvidenceRunner.js';
 import { resolveEvidenceSettings, type EvidenceMode, type EvidenceSettings } from './EvidenceSettings.js';
 import { readProjectConfig } from './ProjectConfig.js';
-import { ProjectRepository, LoggerPort, FileSystemPort } from '../../domain/ports.js';
+import { ProjectRepository, LoggerPort, FileSystemPort, type GitPort } from '../../domain/ports.js';
 import {
   ContextCompactionService,
   type ApprovablePhase,
@@ -21,6 +21,7 @@ import { InvalidFeatureNameError, SpecPathResolver, validateFeatureName } from '
 import { WorkflowValidationService, taskAcceptanceCriteria, type DesignValidationResult } from './WorkflowValidationService.js';
 import { GovernanceError } from './WorkflowErrors.js';
 import { assertTreeBinding, parseTreeBinding, serializeTreeBinding } from './TreeBindingCodec.js';
+import { DEFAULT_TREE_DEADLINE_MS, observeTree } from './WorkingTreeFingerprint.js';
 import { FilesystemLockCompromisedError, withFilesystemLock } from '../../utils/withFilesystemLock.js';
 
 const PHASES: ApprovablePhase[] = ['requirements', 'design', 'tasks'];
@@ -28,6 +29,14 @@ const JOURNAL_LIMIT = 4 * 1024 * 1024;
 const JOURNAL_FILE_LIMIT = 24 * 1024 * 1024;
 const PHASE_CONTENT_CHARACTER_LIMIT = 1_048_576;
 const EVIDENCE_ACTIONS: ReadonlySet<string> = new Set(['record-red', 'record-green', 'complete']);
+const TREE_ACTIONS: ReadonlySet<string> = new Set(['start', 'record-red', 'record-green', 'complete']);
+
+/** Attaches the observed tree; only the verification record keeps dirty entries, which drift and artifact checks rebuild. */
+function bindEvidence(evidence: ExecutionEvidence, tree: TreeBinding | undefined, keepDirty: boolean): ExecutionEvidence {
+  if (!tree) return evidence;
+  if (tree.status === 'unavailable' || keepDirty) return { ...evidence, workingTree: tree };
+  return { ...evidence, workingTree: { status: 'bound', sha256: tree.sha256, head: tree.head, prefix: tree.prefix } };
+}
 /** Held for a whole task action, command included, so one feature never runs two evidence commands at once. */
 const EVIDENCE_RUN_LOCK = '.evidence-run.lock';
 
@@ -88,7 +97,10 @@ export interface TaskEvidenceStatus {
   readonly status: TaskStatus;
   readonly evidence: { readonly red?: EvidenceSource; readonly green?: EvidenceSource; readonly verification?: EvidenceSource };
   readonly redClassification?: EvidenceClassification;
+  /** `bound` when the latest evidence (or the start, before any evidence) carries a working-tree fingerprint. */
+  readonly binding: TreeBindingStatus;
 }
+export type TreeBindingStatus = 'bound' | 'unbound';
 /** Read-only view for advisory checks; carries no handle that can mutate workflow state. */
 export interface AdvisorySnapshot {
   readonly featureName: string;
@@ -171,7 +183,12 @@ export class WorkflowEngineService {
     @inject(TYPES.EvidenceRunner) @optional() private readonly evidenceRunner?: EvidenceRunner,
     /** The server environment for evidence settings and child processes; `{}` when not injected. */
     @inject(TYPES.ProcessEnvironment) @optional() private readonly environment: Readonly<Record<string, string | undefined>> = {},
+    /** Read-only git for working-tree bindings; without it every binding is unavailable. */
+    @inject(TYPES.GitPort) @optional() private readonly git?: GitPort,
   ) {}
+
+  /** The working-tree observation deadline; tests shorten it. */
+  private readonly treeDeadlineMs: number = DEFAULT_TREE_DEADLINE_MS;
 
   async initializeFeature(request: InitializeFeatureRequest): Promise<Project> {
     validateFeatureName(request.featureName);
@@ -409,8 +426,10 @@ export class WorkflowEngineService {
    */
   async recordTaskProgress(request: RecordTaskProgressRequest): Promise<RecordTaskProgressResult> {
     return this.withEvidenceRunLock(request.projectRoot, request.featureName, async () => {
+      // The tree is observed before the command runs and outside the feature lock, so status reads stay free.
+      const tree = TREE_ACTIONS.has(request.action) ? await observeTree(this.git, path.resolve(request.projectRoot), this.treeDeadlineMs) : undefined;
       const outcome = request.run && EVIDENCE_ACTIONS.has(request.action) ? await this.observeBeforeCommit(request, request.run) : undefined;
-      return this.commitTaskProgress(request, outcome);
+      return this.commitTaskProgress(request, outcome, tree);
     });
   }
 
@@ -448,29 +467,29 @@ export class WorkflowEngineService {
     }
   }
 
-  private async commitTaskProgress(request: RecordTaskProgressRequest, outcome: ObservedEvidence | undefined): Promise<RecordTaskProgressResult> {
+  private async commitTaskProgress(request: RecordTaskProgressRequest, outcome: ObservedEvidence | undefined, tree: TreeBinding | undefined): Promise<RecordTaskProgressResult> {
     return this.withLockedFeature(request.projectRoot, request.featureName, true, async ({ projectRoot, featureRoot, spec, commitSpec }) => {
       await this.assertNoApprovedArtifactDrift(featureRoot, spec);
       const settings = await this.evidenceSettings(projectRoot);
       let observed: ObservedEvidenceResult | undefined;
       const { implementation, task, prior } = this.assertTransition(spec, request);
       if (request.action === 'start') {
-        if (prior === 'pending') task.status = 'in-progress';
+        if (prior === 'pending') { task.status = 'in-progress'; if (tree) task.start_tree = tree; }
         else if (prior === 'blocked' && task.blocked_from) { task.status = task.blocked_from; delete task.blocker; delete task.blocked_from; }
         else this.invalidTransition(request.action, prior);
       } else if (request.action === 'record-red') {
         const obtained = this.obtainEvidence(request, settings, 'red', outcome);
         if (obtained.evidence.exitCode === 0) this.invalidTransition(request.action, prior, obtained.observed);
-        task.status = 'red-observed'; task.evidence.red = obtained.evidence; observed = obtained.observed;
+        task.status = 'red-observed'; task.evidence.red = bindEvidence(obtained.evidence, tree, false); observed = obtained.observed;
       } else if (request.action === 'record-green') {
         const obtained = this.obtainEvidence(request, settings, 'green', outcome);
         if (obtained.evidence.exitCode !== 0) this.invalidTransition(request.action, prior, obtained.observed);
-        task.status = 'green-observed'; task.evidence.green = obtained.evidence; observed = obtained.observed;
+        task.status = 'green-observed'; task.evidence.green = bindEvidence(obtained.evidence, tree, false); observed = obtained.observed;
       } else if (request.action === 'complete') {
         const artifacts = this.normalizeArtifacts(request.affectedArtifacts ?? []);
         const obtained = this.obtainEvidence(request, settings, 'verification', outcome);
         if (obtained.evidence.exitCode !== 0) this.invalidTransition(request.action, prior, obtained.observed);
-        task.status = 'completed'; task.evidence.verification = obtained.evidence; task.observed_artifacts = artifacts; observed = obtained.observed;
+        task.status = 'completed'; task.evidence.verification = bindEvidence(obtained.evidence, tree, true); task.observed_artifacts = artifacts; observed = obtained.observed;
       } else {
         if (!['in-progress', 'red-observed', 'green-observed'].includes(prior) || !request.blocker?.trim()) this.invalidTransition(request.action, prior);
         if (request.blocker.length > 2_000) throw new GovernanceError('InvalidParams', 'Task blocker exceeds 2000 characters');
@@ -869,7 +888,9 @@ export class WorkflowEngineService {
         if (entry) evidence[slot] = entry.source ?? 'caller';
       }
       const classification = task.evidence.red?.redClassification;
-      return [id, { status: task.status, evidence, ...(classification ? { redClassification: classification } : {}) }];
+      const latest = task.evidence.verification?.workingTree ?? task.evidence.green?.workingTree ?? task.evidence.red?.workingTree ?? task.start_tree;
+      const binding: TreeBindingStatus = latest?.status === 'bound' ? 'bound' : 'unbound';
+      return [id, { status: task.status, evidence, ...(classification ? { redClassification: classification } : {}), binding }];
     }));
   }
 
