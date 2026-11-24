@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [6.1.0] - 2026-11-24
+
 ### Added
 - GREEN is rejected with `RedSetupFailure` while the latest RED is classified `setup`.
 - Evidence is bound to a content fingerprint of the git working tree: `start` stores `start_tree`, and each evidence entry stores `working_tree`. `sdd-status` reports `binding` per task.

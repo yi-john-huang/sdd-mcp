@@ -96,7 +96,7 @@ npm start
 
 ### Packaging
 - Published package name: `sdd-mcp-server`
-- Current version: `6.0.0`
+- Current version: `6.1.0`
 - Binaries:
   - `sdd-mcp-server` -> `sdd-entry.js`
   - `sdd-install-skills` -> `dist/cli/install-skills.js`
