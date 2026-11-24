@@ -1,4 +1,4 @@
-import { inlineEvalFlag, programName } from './EvidenceCommandPolicy.js';
+import { inlineEvalFlag, programName, runnerRelativePath } from './EvidenceCommandPolicy.js';
 import { validateArgv } from './EvidenceRunner.js';
 import type { ProjectConfig } from './ProjectConfig.js';
 
@@ -95,12 +95,17 @@ function resolveVerifyCommand(value: unknown, allowedCommands: ReadonlySet<strin
   const argv = value as string[];
   try {
     validateArgv(argv);
-    const program = programName(argv[0]);
-    if (!allowedCommands.has(program)) return reject(`runs "${program}", which is not an allowed evidence command`);
-    if (inlineEvalFlag(argv) !== undefined) return reject('evaluates inline code');
   } catch {
     return reject('must have 1 to 64 elements of 1 to 4096 bytes without NUL or line breaks');
   }
+  try {
+    runnerRelativePath(argv[0]);
+  } catch {
+    return reject('must name a bare program or one in a project runner directory');
+  }
+  const program = programName(argv[0]);
+  if (!allowedCommands.has(program)) return reject(`runs "${program}", which is not an allowed evidence command`);
+  if (inlineEvalFlag(argv) !== undefined) return reject('evaluates inline code');
   return Object.freeze([...argv]);
 }
 

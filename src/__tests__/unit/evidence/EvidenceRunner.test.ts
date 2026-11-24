@@ -46,21 +46,23 @@ const codeOf = async (promise: Promise<unknown>): Promise<string | undefined> =>
 };
 
 describe('programName', () => {
-  it.each([
-    ['npm', 'npm'],
-    ['/usr/local/bin/npm', 'npm'],
-    ['npm.cmd', 'npm'],
-    ['C:\\tools\\npm.cmd', 'npm'],
-    ['./node_modules/.bin/jest', 'jest'],
-    ['python3.exe', 'python3'],
-    ['my-runner.sh', 'my-runner.sh'],
-  ])('should resolve %s to %s', (argv0, expected) => {
-    expect(programName(argv0, 'linux')).toBe(expected);
+  it.each<[string, string, NodeJS.Platform]>([
+    ['npm', 'npm', 'linux'],
+    ['/usr/local/bin/npm', 'npm', 'linux'],
+    ['npm.cmd', 'npm.cmd', 'linux'],
+    ['npm.cmd', 'npm', 'win32'],
+    ['C:\\tools\\npm.cmd', 'npm', 'win32'],
+    ['./node_modules/.bin/jest', 'jest', 'linux'],
+    ['python3.exe', 'python3.exe', 'linux'],
+    ['python3.exe', 'python3', 'win32'],
+    ['my-runner.sh', 'my-runner.sh', 'linux'],
+  ])('should resolve %s to %s on %s', (argv0, expected, platform) => {
+    expect(programName(argv0, platform)).toBe(expected);
   });
 
   it('should lowercase only on Windows', () => {
     expect(programName('NPM.CMD', 'win32')).toBe('npm');
-    expect(programName('NPM.CMD', 'linux')).toBe('NPM');
+    expect(programName('NPM.CMD', 'linux')).toBe('NPM.CMD');
   });
 
   it.each([
@@ -132,13 +134,53 @@ describe('EvidenceRunner', () => {
       expect(port.requests).toHaveLength(0);
     });
 
-    it('should accept an allowed program given by path or Windows suffix', async () => {
-      for (const argv0 of ['/usr/local/bin/npm', 'npm.cmd']) {
-        const port = new FakeProcessPort(exited('ok', 0));
-        await new EvidenceRunner(port).run(request({ argv: [argv0, 'test'] }));
-        expect(port.requests).toHaveLength(1);
-        expect(port.requests[0].argv).toEqual([argv0, 'test']);
-      }
+    it.each([
+      ['an absolute path', '/tmp/fakebin/jest'],
+      ['a relative directory outside the runner directories', './fake/jest'],
+      ['a bare relative directory', 'fake/jest'],
+      ['an absolute path to a real tool', '/usr/local/bin/npm'],
+      ['a Windows drive path', 'C:\\tools\\npm'],
+      ['a nested runner-looking directory', 'packages/a/node_modules/.bin/jest'],
+    ])('should reject %s with InvalidParams and never spawn', async (_name, argv0) => {
+      const port = new FakeProcessPort(exited('FAKE_JEST_RAN', 0));
+      await expect(codeOf(new EvidenceRunner(port).run(request({ argv: [argv0, 'test'] })))).resolves.toBe('InvalidParams');
+      expect(port.requests).toHaveLength(0);
+    });
+
+    it('should treat a Windows suffix as part of the name outside Windows', async () => {
+      const port = new FakeProcessPort(exited('ok', 0));
+      await expect(codeOf(new EvidenceRunner(port, { platform: 'linux' }).run(request({ argv: ['jest.cmd'] })))).resolves.toBe('EvidenceCommandNotAllowed');
+      expect(port.requests).toHaveLength(0);
+    });
+
+    it('should accept a Windows suffix on Windows', async () => {
+      const port = new FakeProcessPort(exited('ok', 0));
+      await new EvidenceRunner(port, { platform: 'win32' }).run(request({ argv: ['npm.cmd', 'test'] }));
+      expect(port.requests[0].argv).toEqual(['npm.cmd', 'test']);
+    });
+
+    it.each(['node_modules/.bin/jest', './node_modules/.bin/jest', '.venv/bin/pytest'])('should accept %s when it resolves inside the project', async (argv0) => {
+      const port = new FakeProcessPort(exited('ok', 0));
+      const realpath = (file: string): string => (file === '/project' ? '/project' : `/project/resolved/${file.split('/').pop()}`);
+      await new EvidenceRunner(port, { platform: 'linux', realpath }).run(request({ argv: [argv0] }));
+      expect(port.requests[0].argv).toEqual([argv0]);
+    });
+
+    it('should reject a runner-directory program that resolves outside the project', async () => {
+      const port = new FakeProcessPort(exited('ok', 0));
+      const realpath = (file: string): string => (file === '/project' ? '/project' : '/tmp/fakebin/jest');
+      await expect(codeOf(new EvidenceRunner(port, { platform: 'linux', realpath }).run(request({ argv: ['node_modules/.bin/jest'] })))).resolves.toBe('InvalidParams');
+      expect(port.requests).toHaveLength(0);
+    });
+
+    it('should reject a runner-directory program that does not exist', async () => {
+      const port = new FakeProcessPort(exited('ok', 0));
+      const realpath = (file: string): string => {
+        if (file === '/project') return file;
+        throw Object.assign(new Error('missing'), { code: 'ENOENT' });
+      };
+      await expect(codeOf(new EvidenceRunner(port, { platform: 'linux', realpath }).run(request({ argv: ['node_modules/.bin/jest'] })))).resolves.toBe('InvalidParams');
+      expect(port.requests).toHaveLength(0);
     });
   });
 

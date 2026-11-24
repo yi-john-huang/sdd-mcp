@@ -190,7 +190,7 @@ describe('packed Skill-governed workflow distribution', () => {
     };
 
     it('runs the command itself, rejects typed exit codes and shells, and keeps the 5.5.0 shape in self-reported mode', async () => {
-      const node = process.execPath;
+      const node = 'node';
       let revision = await approveAll();
       revision = (await call('sdd-spec-impl', { featureName: feature, taskNumber: '1.1', action: 'start', expectedRevision: revision })).revision as number;
 
@@ -225,7 +225,7 @@ describe('packed Skill-governed workflow distribution', () => {
     }, 120_000);
 
     it('closes the setup, continuity, verify-command, inline-eval, and drift bypasses in a real git project', async () => {
-      const node = process.execPath;
+      const node = 'node';
       const gitIn = (...args: string[]) => execFileSync('git', args, { cwd: projectRoot, encoding: 'utf8', env: { ...process.env, GIT_CONFIG_GLOBAL: '/dev/null', GIT_CONFIG_SYSTEM: '/dev/null' } });
       gitIn('init', '-q');
       gitIn('config', 'user.email', 't@example.com');
@@ -279,7 +279,7 @@ describe('packed Skill-governed workflow distribution', () => {
       let revision = await approveAll();
       revision = (await call('sdd-spec-impl', { featureName: feature, taskNumber: '1.1', action: 'start', expectedRevision: revision })).revision as number;
       const chatty = 'process.stdout.write(Buffer.alloc(2 * 1024 * 1024, 120)); process.stdout.write("\\nExpected: 1\\nReceived: 2\\n", () => process.exit(1));';
-      const red = await call('sdd-spec-impl', { featureName: feature, taskNumber: '1.1', action: 'record-red', expectedRevision: revision, run: { argv: [process.execPath, script('chatty.js', chatty)] } });
+      const red = await call('sdd-spec-impl', { featureName: feature, taskNumber: '1.1', action: 'record-red', expectedRevision: revision, run: { argv: ['node', script('chatty.js', chatty)] } });
       expect(red).toMatchObject({ taskState: 'red-observed', observed: { exitCode: 1, truncated: true } });
       const observed = red.observed as { outputExcerpt: string };
       expect(observed.outputExcerpt).toMatch(/^\[output truncated: 1048576 of \d+ bytes captured\]\n/);

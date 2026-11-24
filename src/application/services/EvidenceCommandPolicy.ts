@@ -12,18 +12,39 @@ const NODE_EVAL_PREFIXES = ['--eval=', '--print='] as const;
 const PYTHON_VALUE_OPTIONS = new Set(['W', 'X']);
 const NPX_VALUE_OPTIONS: ReadonlySet<string> = new Set(['-p', '--package']);
 const NESTED_PROGRAMS: ReadonlySet<string> = new Set(['node', 'bun', 'python', 'python3']);
+/** The only directories a path-qualified program may name, relative to the project root. */
+export const RUNNER_DIRECTORIES: readonly string[] = ['node_modules/.bin', '.venv/bin', 'venv/bin', '.venv/Scripts', 'venv/Scripts'];
 
 const invalidProgram = (message: string): GovernanceError => new GovernanceError('InvalidParams', `Evidence command is invalid: ${message}`);
 
-/** The bare program name used for the allowlist: no directory, no Windows suffix, lowercased on Windows only. */
-export function programName(argv0: string, platform: NodeJS.Platform = process.platform): string {
+function pathSegments(argv0: string): string[] {
   if (argv0.length === 0 || argv0.includes('\u0000')) throw invalidProgram('the program name is empty or contains NUL');
   const segments = argv0.split(PATH_SEPARATORS);
   if (segments.includes('..')) throw invalidProgram('the program path contains a parent segment');
+  if (segments[segments.length - 1].length === 0) throw invalidProgram('the program path ends with a separator');
+  return segments;
+}
+
+/** The bare program name used for the allowlist: no directory; on Windows only, no .cmd/.exe/.bat suffix and lowercased. */
+export function programName(argv0: string, platform: NodeJS.Platform = process.platform): string {
+  const segments = pathSegments(argv0);
   const base = segments[segments.length - 1];
-  if (base.length === 0) throw invalidProgram('the program path ends with a separator');
-  const stripped = base.replace(WINDOWS_SUFFIX, '');
-  return platform === 'win32' ? stripped.toLowerCase() : stripped;
+  return platform === 'win32' ? base.replace(WINDOWS_SUFFIX, '').toLowerCase() : base;
+}
+
+/**
+ * The project-relative path of a path-qualified program, or undefined for a bare name found on PATH.
+ * Any other directory could hold a look-alike outside the fingerprinted tree, so it is rejected.
+ */
+export function runnerRelativePath(argv0: string): string | undefined {
+  const segments = pathSegments(argv0);
+  if (segments.length === 1) return undefined;
+  const relative = segments[0] === '.' ? segments.slice(1) : segments;
+  const directory = relative.slice(0, -1).join('/');
+  if (!RUNNER_DIRECTORIES.includes(directory)) {
+    throw invalidProgram(`a program path must be a bare name or sit in ${RUNNER_DIRECTORIES.join(', ')}`);
+  }
+  return relative.join('/');
 }
 
 /** The first argument that evaluates inline code, or undefined when the command runs a file or a tool. */

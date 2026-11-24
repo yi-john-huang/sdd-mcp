@@ -142,6 +142,8 @@ describe('resolveEvidenceSettings', () => {
       ['more than 64 elements', Array.from({ length: 65 }, () => 'x')],
       ['a program outside the allowlist', ['sh', '-c', 'exit 0']],
       ['inline eval', ['node', '-e', 'process.exit(0)']],
+      ['an absolute program path', ['/tmp/fakebin/jest']],
+      ['a program outside the runner directories', ['tools/jest']],
     ])('should ignore %s with exactly one warning', (...[, value]) => {
       const settings = resolve({}, { evidence: { verifyCommand: value } });
       expect(settings.verifyCommand).toBeUndefined();

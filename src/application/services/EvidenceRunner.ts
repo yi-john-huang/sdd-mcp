@@ -1,8 +1,10 @@
 import { createHash } from 'node:crypto';
+import { realpathSync } from 'node:fs';
+import path from 'node:path';
 import type { ProcessPort, ProcessRunResult } from '../../domain/ports.js';
 import type { EvidenceSettings } from './EvidenceSettings.js';
 import { redactSecrets } from './JevRedaction.js';
-import { inlineEvalFlag, programName } from './EvidenceCommandPolicy.js';
+import { inlineEvalFlag, programName, runnerRelativePath } from './EvidenceCommandPolicy.js';
 import { classifyRedEvidence, type RedClassificationResult } from './RedEvidenceClassifier.js';
 import { GovernanceError } from './WorkflowErrors.js';
 
@@ -97,13 +99,19 @@ function excerptOf(result: ProcessRunResult): { text: string; redactions: number
 
 const sha256 = (bytes: Buffer): string => createHash('sha256').update(bytes).digest('hex');
 
+export interface EvidenceRunnerOptions {
+  readonly platform?: NodeJS.Platform;
+  readonly realpath?: (file: string) => string;
+}
+
 export class EvidenceRunner {
-  constructor(private readonly processes: ProcessPort) {}
+  constructor(private readonly processes: ProcessPort, private readonly options: EvidenceRunnerOptions = {}) {}
 
   /** Throws only before the process runs; every port result becomes an outcome. */
   async run(request: EvidenceRunRequest): Promise<EvidenceRunOutcome> {
     validateArgv(request.argv);
-    const program = programName(request.argv[0]);
+    const platform = this.options.platform ?? process.platform;
+    const program = programName(request.argv[0], platform);
     const allowed = request.settings.allowedCommands;
     if (!allowed.has(program)) {
       throw new GovernanceError(
@@ -112,7 +120,8 @@ export class EvidenceRunner {
         { program, allowedCommands: [...allowed] },
       );
     }
-    const flag = inlineEvalFlag(request.argv);
+    this.assertInsideProject(request.argv[0], request.projectRoot);
+    const flag = inlineEvalFlag(request.argv, platform);
     if (flag !== undefined) {
       throw new GovernanceError('EvidenceCommandInlineEval', 'Run a project test file instead of inline code. Remove the flag named in details.flag.', { flag });
     }
@@ -125,9 +134,26 @@ export class EvidenceRunner {
     });
     return toOutcome(request.argv, result);
   }
+
+  /** A runner-directory program must resolve, links followed, to a file inside the project root. */
+  private assertInsideProject(argv0: string, projectRoot: string): void {
+    const relative = runnerRelativePath(argv0);
+    if (relative === undefined) return;
+    const realpath = this.options.realpath ?? realpathSync.native;
+    let root: string;
+    let program: string;
+    try {
+      root = realpath(projectRoot);
+      program = realpath(path.join(projectRoot, relative));
+    } catch {
+      throw invalid(`the program ${relative} was not found in the project`);
+    }
+    if (!program.startsWith(root + path.sep)) throw invalid(`the program ${relative} resolves outside the project`);
+  }
 }
 
-function toOutcome(argv: readonly string[], result: ProcessRunResult): EvidenceRunOutcome {
+function toOutcome(
+argv: readonly string[], result: ProcessRunResult): EvidenceRunOutcome {
   const { text, redactions } = excerptOf(result);
   switch (result.kind) {
     case 'exited': {
