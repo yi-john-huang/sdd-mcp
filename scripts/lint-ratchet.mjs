@@ -105,6 +105,8 @@ async function main(argv) {
     process.stderr.write(`New lint warnings above the baseline:\n${outcome.lines.join('\n')}\n${REMEDIATION}\n`);
     return 1;
   }
+  const removed = Object.entries(baseline).reduce((sum, [key, count]) => sum + Math.max(0, count - (current[key] ?? 0)), 0);
+  if (removed > 0) process.stdout.write(`Lint warnings dropped by ${removed} below the baseline. Run npm run lint:baseline to lower it.\n`);
   return 0;
 }
 

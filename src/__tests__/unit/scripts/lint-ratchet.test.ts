@@ -1,5 +1,5 @@
 import { execFileSync, spawnSync } from 'node:child_process';
-import { mkdtemp, writeFile } from 'node:fs/promises';
+import { mkdtemp, readFile, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
@@ -79,6 +79,21 @@ describe('lint ratchet', () => {
       expect(outcome.stderr).toContain(missing);
       expect(outcome.stderr).toContain('--init');
     });
+
+    it('passes and tells the maintainer how to lower the baseline when warnings drop', async () => {
+      const current = JSON.parse(await readFile(path.join(process.cwd(), 'scripts/lint-baseline.json'), 'utf8')) as Record<string, number>;
+      const higher = path.join(dir, 'higher.json');
+      await writeFile(higher, JSON.stringify({ ...current, 'src/removed.ts|no-x': 1 }));
+      const outcome = run(higher);
+      expect(outcome.status).toBe(0);
+      expect(outcome.stdout).toContain('npm run lint:baseline');
+    }, 120_000);
+
+    it('prints nothing when the baseline matches', () => {
+      const outcome = run(path.join(process.cwd(), 'scripts/lint-baseline.json'));
+      expect(outcome.status).toBe(0);
+      expect(outcome.stdout).toBe('');
+    }, 120_000);
 
     it('exits 2 and names the file when the baseline is malformed', async () => {
       const malformed = path.join(dir, 'malformed.json');
