@@ -490,7 +490,7 @@ describe('model-invocable output-clarity-ladder rendering', () => {
     expect(renderOmpSkillRouting()).not.toContain('output-clarity-ladder');
   });
 
-  it('renders the 11 workflow skills byte-identically to the pre-change baseline', () => {
+  it('renders the 12 workflow skills byte-identically to the pre-change baseline', () => {
     const baseline: Record<string, string> = JSON.parse(
       fs.readFileSync(path.join(__dirname, 'fixtures', 'workflow-skill-render-baseline.json'), 'utf8'),
     );
@@ -502,7 +502,7 @@ describe('model-invocable output-clarity-ladder rendering', () => {
       for (const target of ['claude-code', 'omp', 'codex'] as const) actual[`${name}:${target}`] = hash(renderTargetSkill(target, name, src));
       actual[`${name}:codex-policy`] = hash(renderCodexSkillPolicy(name));
     }
-    expect(Object.keys(actual)).toHaveLength(44);
+    expect(Object.keys(actual)).toHaveLength(48);
     expect(actual).toEqual(baseline);
   });
 });

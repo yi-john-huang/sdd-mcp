@@ -50,12 +50,12 @@ describe('skill execution guidance', () => {
     expect(content).not.toMatch(/ask once per session/i);
   });
 
-  it.each(['sdd-requirements', 'sdd-design', 'sdd-tasks', 'sdd-steering', 'sdd-steering-custom', 'sdd-review', 'sdd-security-check', 'sdd-implement', 'sdd-test-gen', 'simple-task'])('%s reports execution mode, agents, parallelism, routes, and fallbacks', skill => {
+  it.each(['sdd-requirements', 'sdd-design', 'sdd-tasks', 'sdd-steering', 'sdd-steering-custom', 'sdd-review', 'sdd-security-check', 'sdd-implement', 'sdd-test-gen', 'simple-task', 'sdd-correct'])('%s reports execution mode, agents, parallelism, routes, and fallbacks', skill => {
     const content = fs.readFileSync(path.resolve(process.cwd(), 'skills', skill, 'SKILL.md'), 'utf8');
     expect(content).toMatch(/Execution report: mode \(inline\|project-agent; asked\|reused\|not offered\), agents started and whether parallel, configured model\/effort per agent \(never claim unobserved values\), and any fallback to the parent/);
   });
 
-  it.each(['sdd-implement', 'sdd-test-gen', 'simple-task', 'sdd-commit'])(
+  it.each(['sdd-implement', 'sdd-test-gen', 'simple-task', 'sdd-commit', 'sdd-correct'])(
     '%s remains inline for serial work',
     skill => {
       const content = fs.readFileSync(

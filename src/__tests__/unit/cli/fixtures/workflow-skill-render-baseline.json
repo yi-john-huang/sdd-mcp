@@ -42,5 +42,9 @@
   "simple-task:claude-code": "fbfa99929421bf9f593ebdec7ad04b27d12c8520d5b9357c49b4e62985906150",
   "simple-task:omp": "3cad6ea4e0dddc535be60482f7c279abc227cd82ab3e93760d4e583cd80f8416",
   "simple-task:codex": "3cad6ea4e0dddc535be60482f7c279abc227cd82ab3e93760d4e583cd80f8416",
-  "simple-task:codex-policy": "62bb31b870ae92888cf48584bb3ceaa0c5a56a91eea2038598b67d8c4e75fc45"
+  "simple-task:codex-policy": "62bb31b870ae92888cf48584bb3ceaa0c5a56a91eea2038598b67d8c4e75fc45",
+  "sdd-correct:claude-code": "8a23371bea246682f24a4448a8662dfd616618fdafd028334c9881ef77c2e311",
+  "sdd-correct:omp": "8a23371bea246682f24a4448a8662dfd616618fdafd028334c9881ef77c2e311",
+  "sdd-correct:codex": "8a23371bea246682f24a4448a8662dfd616618fdafd028334c9881ef77c2e311",
+  "sdd-correct:codex-policy": "62bb31b870ae92888cf48584bb3ceaa0c5a56a91eea2038598b67d8c4e75fc45"
 }

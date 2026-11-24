@@ -7,6 +7,7 @@ const agentRoot = path.join(root, 'agents');
 
 const skillNames = [
   'sdd-commit',
+  'sdd-correct',
   'sdd-design',
   'sdd-implement',
   'sdd-requirements',
@@ -21,6 +22,11 @@ const skillNames = [
 
 const requiredCoreChecks: Record<typeof skillNames[number], RegExp[]> = {
   'sdd-commit': [/inspect.*changes/i, /never.*secret/i, /focused.*test/i, /verification drift/i, /unverified/i],
+  'sdd-correct': [
+    /\.spec\/corrections\.md/, /structure.*lint.*test.*rule or Skill text/is,
+    /second occurrence|count is at least 2/i, /irreversible or security-relevant/i,
+    /explicit approval/i, /obsolete.*delet/is, /simple-task/,
+  ],
   'sdd-design': [/requirements.*approved/i, /approved compact context/i, /approve this design/i, /## Interface Spike/, /spike\/.*never imports/i],
   'sdd-implement': [
     /tasks.*approved/i, /red.*green.*refactor/is, /record.*blocker/i, /security/i,
@@ -58,6 +64,10 @@ describe('requirements and design Skill wording', () => {
     expect(reference).toMatch(/## Mandatory Checks/);
     expect(reference).toMatch(/## REFACTOR/);
     expect(reference).toMatch(/## Not-Applicable Tasks/);
+  });
+
+  it('keeps sdd-correct at or below 3,000 bytes', () => {
+    expect(Buffer.byteLength(fs.readFileSync(path.resolve(process.cwd(), 'skills/sdd-correct/SKILL.md'), 'utf8'))).toBeLessThanOrEqual(3_000);
   });
 
   it('keeps the interface spike details in the design REFERENCE', () => {
