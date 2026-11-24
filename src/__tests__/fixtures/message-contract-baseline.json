@@ -19,6 +19,7 @@
         "PhaseNotApproved",
         "PhaseValidationFailed",
         "RecoveryConflict",
+        "RedSetupFailure",
         "RevisionConflict",
         "SelfReportedEvidenceRejected",
         "StateInvariantViolation",
@@ -41,6 +42,7 @@
         ],
         "LegacyTaskConflict": [
           "1000",
+          "1000",
           "5"
         ],
         "PhaseNotApproved": [],
@@ -48,6 +50,7 @@
         "RecoveryConflict": [
           "5"
         ],
+        "RedSetupFailure": [],
         "RevisionConflict": [],
         "SelfReportedEvidenceRejected": [],
         "StateInvariantViolation": [
@@ -99,13 +102,17 @@
         "InvalidArtifactPath": [],
         "InvalidListValue": [],
         "InvalidTaskId": [
+          "50",
           "50"
         ],
         "InvalidTaskTitle": [
+          "500",
           "500"
         ],
         "InvalidTdd": [],
         "ListTooLong": [
+          "100",
+          "100",
           "100",
           "100"
         ],
@@ -113,6 +120,7 @@
         "MissingMetadata": [],
         "RequirementsMissing": [],
         "TaskLimitExceeded": [
+          "1000",
           "1000"
         ],
         "TaskMissing": [],
