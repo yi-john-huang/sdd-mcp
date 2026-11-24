@@ -1,0 +1,1133 @@
+{
+  "schema_version": 5,
+  "feature_name": "workflow-trust-hardening",
+  "description": "## Original Description\nClose the workflow, verification, and environment gaps identified by reviewing sdd-mcp v6.0.0 against the \"Let AI Work\" five-layer defense pyramid (Structure, Machine Checks, Run & Verify, Minimal Text, Human Review). P0: block record-green after a setup-classified RED; bind RED/GREEN/complete evidence to a working-tree diff hash with RED→GREEN argv continuity and git-checked observed artifacts, surfacing post-verification code drift in status and commit; add a project-configured fixed verification entrypoint, reject inline-eval commands (node -e, python -c) in verified mode, and extend the RED classifier to Python, Go, Rust, JVM, and .NET; enforce typecheck and lint in CI with a no-new-violations strictness ratchet; refresh stale steering. P1: require isolated workspaces plus a hard stop-list and retry budget for parallel implementation; prune Layer 4 rule text, retire non-executable paper hooks, fix stale skill wording and the sdd-jev-check red evidence schema; require honest Unverified/Could-Not-Run reporting; add an environment-correction workflow implementing the four-tier ladder and the two-occurrence rule. P2: skill blind-test harness, optional interface-first or prototype spike in design, and incremental legacy cleanup. Keep human approval gates and token discipline intact, and update all relevant documentation.\n\n## Core Features (What)\nAll P0 and P1 gaps plus light P2: (1) structural evidence hardening — block GREEN after setup RED, diff-hash binding with RED→GREEN argv continuity, git-checked observed artifacts, post-verification drift in status/commit; (2) fixed verification entrypoint in .spec/sdd-config.json, inline-eval rejection in verified mode, multi-language RED classifier; (3) CI typecheck+lint with a no-new-violations ratchet and refreshed steering; (4) parallel implementation isolation, stop-list and retry budget, Layer 4 rule pruning, paper-hook retirement, stale wording and sdd-jev-check red schema fixes, honest Unverified reporting; (5) a new /sdd-correct skill for the four-tier correction ladder and two-occurrence rule; plus a lightweight skill blind-test rubric and an optional interface-first/prototype spike in sdd-design. P2-3 legacy cleanup (removing root documentGenerator.js/specGenerator.js/atomicWrite.js and the moduleLoader bridge, modularizing the 1,970-line WorkflowEngineService) is deferred to a follow-up feature. Burning down the 324 pre-existing lint warnings, auto-merge, weakening sdd-approve or sdd-review-test-cases human gates, and default verifier subagents are out of scope.\n\n## Success Criteria\nEach P0 bypass has an automated test that fails before the change and passes after; CI runs build, typecheck, lint, and test on Linux and macOS; lint introduces zero new warnings versus a committed baseline; documentation-consistency, skill size-budget, render-baseline, and message-contract tests pass; human approval gates behave unchanged.",
+  "language": "en",
+  "phase": "implementation-completed",
+  "created_at": "2026-11-23T16:52:14.455Z",
+  "updated_at": "2026-11-24T01:49:32.658Z",
+  "approvals": {
+    "requirements": {
+      "generated": true,
+      "approved": true,
+      "revision": 1,
+      "artifact_sha256": "79b7b24cccedfce8c036c153649d286569aae88081ef1ee77a48ba8bc046ac7d",
+      "validation": {
+        "status": "passed",
+        "checked_at": "2026-11-23T16:58:08.293Z",
+        "blockers": []
+      }
+    },
+    "design": {
+      "generated": true,
+      "approved": true,
+      "revision": 1,
+      "artifact_sha256": "f8de770ff02cd73758bd0bd68b4a7499d11190978124dfd287fa91256689c577",
+      "validation": {
+        "status": "passed",
+        "checked_at": "2026-11-23T17:14:57.641Z",
+        "blockers": []
+      }
+    },
+    "tasks": {
+      "generated": true,
+      "approved": true,
+      "revision": 1,
+      "artifact_sha256": "01ff905ecef55db117474672e7f715f66a1d0c126ba445a5ffeda3b4f4e205ae",
+      "validation": {
+        "status": "passed",
+        "checked_at": "2026-11-23T22:36:56.851Z",
+        "blockers": []
+      }
+    }
+  },
+  "workflow_options": {
+    "review_test_cases": true
+  },
+  "checkpoints": {
+    "test_cases": {
+      "required": true,
+      "reviewed": true,
+      "reviewed_at": "2026-11-24T00:12:30.666Z",
+      "reviewed_revision": 1,
+      "reviewed_artifact_sha256": "01ff905ecef55db117474672e7f715f66a1d0c126ba445a5ffeda3b4f4e205ae"
+    }
+  },
+  "implementation": {
+    "revision": 102,
+    "tasks_revision": 1,
+    "legacy_imported": false,
+    "tasks": {
+      "1.1": {
+        "title": "Turn on TypeScript strict mode",
+        "tdd_required": true,
+        "dependencies": [],
+        "status": "completed",
+        "evidence": {
+          "red": {
+            "command": "npx jest src/__tests__/unit/cli/tsconfig-strict.test.ts",
+            "exit_code": 1,
+            "summary": "2 failed: expect(compilerOptions.strict).toBe(true) received false; strict-family flags explicitly false",
+            "observed_at": "2026-11-24T00:14:50.398Z"
+          },
+          "green": {
+            "command": "npx jest src/__tests__/unit/cli/tsconfig-strict.test.ts",
+            "exit_code": 0,
+            "summary": "2 passed after enabling strict, noImplicitReturns, noEmitOnError; tsc --noEmit and npm run build exit 0",
+            "observed_at": "2026-11-24T00:16:23.160Z"
+          },
+          "verification": {
+            "command": "npm run typecheck && npm run build && npm test",
+            "exit_code": 0,
+            "summary": "tsc --noEmit and build exit 0; 90 suites, 1517 tests passed with strict mode on",
+            "observed_at": "2026-11-24T00:18:10.491Z"
+          }
+        },
+        "planned_artifacts": [
+          "tsconfig.json",
+          "src/__tests__/unit/cli/tsconfig-strict.test.ts",
+          "src/application/services",
+          "src/infrastructure",
+          "src/cli",
+          "src/domain"
+        ],
+        "observed_artifacts": [
+          "tsconfig.json",
+          "jest.config.js",
+          "src/__tests__/unit/cli/tsconfig-strict.test.ts",
+          "src/application/services/TemplateService.ts",
+          "src/application/services/WorkflowEngineService.ts",
+          "src/infrastructure/adapters/HandlebarsTemplateEngine.ts",
+          "src/infrastructure/i18n/I18nextService.ts",
+          "src/infrastructure/mcp/MCPServer.ts",
+          "src/infrastructure/mcp/ToolRegistry.ts",
+          "src/infrastructure/plugins/PluginManager.ts",
+          "src/infrastructure/templates/HandlebarsRenderer.ts",
+          "src/domain/ports.ts",
+          "src/domain/templates/index.ts",
+          "src/utils/withFilesystemLock.ts",
+          "src/types/write-file-atomic.d.ts"
+        ]
+      },
+      "1.2": {
+        "title": "Lint no-new-warnings ratchet",
+        "tdd_required": true,
+        "dependencies": [
+          "1.1"
+        ],
+        "status": "completed",
+        "evidence": {
+          "red": {
+            "command": "npx jest src/__tests__/unit/scripts/lint-ratchet.test.ts",
+            "exit_code": 1,
+            "summary": "7 failed: scripts/lint-ratchet.mjs does not exist, so countWarnings/compare/lower and the baseline exit-code cases fail",
+            "observed_at": "2026-11-24T00:36:19.273Z"
+          },
+          "green": {
+            "command": "npx jest src/__tests__/unit/scripts/lint-ratchet.test.ts",
+            "exit_code": 0,
+            "summary": "7 passed: counting, increase and new-file failures, decrease pass, lower never raises, missing/malformed baseline exit 2",
+            "observed_at": "2026-11-24T00:36:49.895Z"
+          },
+          "verification": {
+            "command": "npx jest src/__tests__/unit/scripts && npm run lint",
+            "exit_code": 0,
+            "summary": "35 script tests passed; npm run lint (ratchet) exits 0 against the new 316-warning baseline in 43 files",
+            "observed_at": "2026-11-24T00:36:59.671Z"
+          }
+        },
+        "planned_artifacts": [
+          "scripts/lint-ratchet.mjs",
+          "scripts/lint-baseline.json",
+          "package.json",
+          "src/__tests__/unit/scripts/lint-ratchet.test.ts"
+        ],
+        "observed_artifacts": [
+          "scripts/lint-ratchet.mjs",
+          "scripts/lint-baseline.json",
+          "package.json",
+          "src/__tests__/unit/scripts/lint-ratchet.test.ts"
+        ]
+      },
+      "1.3": {
+        "title": "CI runs typecheck and lint",
+        "tdd_required": true,
+        "dependencies": [
+          "1.2"
+        ],
+        "status": "completed",
+        "evidence": {
+          "red": {
+            "command": "npx jest src/__tests__/unit/cli/ci-workflow.test.ts",
+            "exit_code": 1,
+            "summary": "3 failed: expect(typecheck index).toBeGreaterThanOrEqual(0) received -1 in both jobs; Linux command lacks typecheck and lint",
+            "observed_at": "2026-11-24T00:37:13.387Z"
+          },
+          "green": {
+            "command": "npx jest src/__tests__/unit/cli/ci-workflow.test.ts",
+            "exit_code": 0,
+            "summary": "3 passed: both jobs run typecheck and lint before npm test; Linux command chained with &&",
+            "observed_at": "2026-11-24T00:37:20.189Z"
+          },
+          "verification": {
+            "command": "npx jest src/__tests__/unit/cli/ci-workflow.test.ts",
+            "exit_code": 0,
+            "summary": "3 passed; ci.yml runs typecheck and lint before tests in test-linux and test-macos",
+            "observed_at": "2026-11-24T00:37:23.185Z"
+          }
+        },
+        "planned_artifacts": [
+          ".github/workflows/ci.yml",
+          "src/__tests__/unit/cli/ci-workflow.test.ts"
+        ],
+        "observed_artifacts": [
+          ".github/workflows/ci.yml",
+          "src/__tests__/unit/cli/ci-workflow.test.ts"
+        ]
+      },
+      "2.1": {
+        "title": "New public error codes and message contract",
+        "tdd_required": true,
+        "dependencies": [
+          "1.3"
+        ],
+        "status": "completed",
+        "evidence": {
+          "red": {
+            "command": "npx jest src/__tests__/unit/workflow/WorkflowErrors.test.ts",
+            "exit_code": 1,
+            "summary": "5 failed: foreign errors with the 5 new codes serialize as InternalError instead of passing through; expected code RedSetupFailure etc.",
+            "observed_at": "2026-11-24T00:37:43.157Z"
+          },
+          "green": {
+            "command": "npx jest src/__tests__/unit/workflow/WorkflowErrors.test.ts",
+            "exit_code": 0,
+            "summary": "12 passed: all five new codes pass through serializeToolError as public codes",
+            "observed_at": "2026-11-24T00:37:53.459Z"
+          },
+          "verification": {
+            "command": "npx jest src/__tests__/unit/workflow/WorkflowErrors.test.ts src/__tests__/unit/workflow/message-clarity-bounds.test.ts src/__tests__/unit/workflow/message-contract.test.ts && npm run typecheck",
+            "exit_code": 0,
+            "summary": "40 passed; typecheck clean. Codes public, Omit verb and the 4 engine codes added to the clarity test; baseline regeneration happens as throw sites land",
+            "observed_at": "2026-11-24T00:37:57.507Z"
+          }
+        },
+        "planned_artifacts": [
+          "src/application/services/WorkflowErrors.ts",
+          "src/__tests__/unit/workflow/WorkflowErrors.test.ts",
+          "src/__tests__/unit/workflow/message-clarity-bounds.test.ts",
+          "src/__tests__/fixtures/message-contract-baseline.json",
+          "scripts/generate-message-baseline.ts"
+        ],
+        "observed_artifacts": [
+          "src/application/services/WorkflowErrors.ts",
+          "src/__tests__/unit/workflow/WorkflowErrors.test.ts",
+          "src/__tests__/unit/workflow/message-clarity-bounds.test.ts"
+        ]
+      },
+      "2.2": {
+        "title": "Tree-binding types and persistence",
+        "tdd_required": true,
+        "dependencies": [
+          "2.1"
+        ],
+        "status": "completed",
+        "evidence": {
+          "red": {
+            "command": "npx jest src/__tests__/unit/workflow/WorkflowEngineService.tree-binding.test.ts",
+            "exit_code": 1,
+            "summary": "11 failed, 1 passed: start_tree and working_tree dropped on rewrite (Expected JSON string, Received undefined); malformed bindings resolve instead of StateInvariantViolation. Existing-spec compatibility case passes.",
+            "observed_at": "2026-11-24T01:05:10.873Z"
+          },
+          "green": {
+            "command": "npx jest src/__tests__/unit/workflow/WorkflowEngineService.tree-binding.test.ts",
+            "exit_code": 0,
+            "summary": "12 passed: start_tree and working_tree survive rewrites byte-stable; 8 malformed binding shapes raise StateInvariantViolation; every schema-v5 repo spec loads, all specs unchanged",
+            "observed_at": "2026-11-24T01:06:01.858Z"
+          },
+          "verification": {
+            "command": "npm run typecheck && npm run lint && npm test",
+            "exit_code": 0,
+            "summary": "typecheck clean, lint ratchet passes after splitting isValidBound, 1597 tests pass (146 workflow tests after refactor)",
+            "observed_at": "2026-11-24T01:07:01.809Z"
+          }
+        },
+        "planned_artifacts": [
+          "src/domain/types.ts",
+          "src/application/services/WorkflowEngineService.ts",
+          "src/__tests__/unit/workflow/WorkflowEngineService.tree-binding.test.ts"
+        ],
+        "observed_artifacts": [
+          "src/domain/types.ts",
+          "src/application/services/TreeBindingCodec.ts",
+          "src/application/services/WorkflowEngineService.ts",
+          "src/__tests__/unit/workflow/WorkflowEngineService.tree-binding.test.ts"
+        ]
+      },
+      "2.3": {
+        "title": "Content-addressed working-tree fingerprint",
+        "tdd_required": true,
+        "dependencies": [
+          "2.2"
+        ],
+        "status": "completed",
+        "evidence": {
+          "red": {
+            "command": "npx jest src/__tests__/unit/evidence/WorkingTreeFingerprint.test.ts",
+            "exit_code": 1,
+            "summary": "18 failed, 1 passed: stub observeTree returns unavailable git-unavailable; expected bound hashes, prefix paths, truncation, timeout and not-a-git-repo reasons, and changedPaths lists",
+            "observed_at": "2026-11-24T01:08:16.113Z"
+          },
+          "green": {
+            "command": "npx jest src/__tests__/unit/evidence/WorkingTreeFingerprint.test.ts src/__tests__/unit/jev/JevChangeManifest.test.ts",
+            "exit_code": 0,
+            "summary": "48 passed: commit-stable hash, edit/add/delete detection, .spec/specs and ignored exclusion, subdirectory prefix, unborn repo, 200 truncation and 2000 too-many, unavailable reasons incl. timeout <1s, repo observed <2s, changedPaths incl. mid-task commits; manifest tests unchanged",
+            "observed_at": "2026-11-24T01:09:30.614Z"
+          },
+          "verification": {
+            "command": "npm run typecheck && npm run lint && npm test",
+            "exit_code": 0,
+            "summary": "typecheck clean, lint ratchet passes, 1616 tests pass",
+            "observed_at": "2026-11-24T01:10:11.851Z"
+          }
+        },
+        "planned_artifacts": [
+          "src/application/services/WorkingTreeFingerprint.ts",
+          "src/application/services/JevChangeManifest.ts",
+          "src/__tests__/unit/evidence/WorkingTreeFingerprint.test.ts",
+          "src/__tests__/unit/jev/JevChangeManifest.test.ts"
+        ],
+        "observed_artifacts": [
+          "src/application/services/WorkingTreeFingerprint.ts",
+          "src/application/services/JevChangeManifest.ts",
+          "src/__tests__/unit/evidence/WorkingTreeFingerprint.test.ts"
+        ]
+      },
+      "2.4": {
+        "title": "Inline-eval command policy in the evidence runner",
+        "tdd_required": true,
+        "dependencies": [
+          "2.1"
+        ],
+        "status": "completed",
+        "evidence": {
+          "red": {
+            "command": "npx jest src/__tests__/unit/evidence/EvidenceCommandPolicy.test.ts",
+            "exit_code": 1,
+            "summary": "25 failed, 12 passed: every reject case Expected \"-e\" etc. Received undefined from the stub; runner test expected code EvidenceCommandInlineEval",
+            "observed_at": "2026-11-24T00:40:53.611Z"
+          },
+          "green": {
+            "command": "npx jest src/__tests__/unit/evidence/EvidenceCommandPolicy.test.ts src/__tests__/unit/evidence/EvidenceRunner.test.ts",
+            "exit_code": 0,
+            "summary": "77 passed: 24 reject forms incl. win32 node.exe/NODE.EXE, python -Bc, npx node -e, npm exec -- python -c; 11 accept forms; runner throws EvidenceCommandInlineEval with 0 process calls",
+            "observed_at": "2026-11-24T01:00:25.609Z"
+          },
+          "verification": {
+            "command": "npm run typecheck && npm run lint && npm test",
+            "exit_code": 0,
+            "summary": "typecheck clean, lint ratchet passes, 94 suites / 1573 tests pass; e2e evidence scenarios now run project script files instead of node -e",
+            "observed_at": "2026-11-24T01:02:10.245Z"
+          }
+        },
+        "planned_artifacts": [
+          "src/application/services/EvidenceCommandPolicy.ts",
+          "src/application/services/EvidenceRunner.ts",
+          "src/__tests__/unit/evidence/EvidenceCommandPolicy.test.ts",
+          "src/__tests__/unit/evidence/EvidenceRunner.test.ts"
+        ],
+        "observed_artifacts": [
+          "src/application/services/EvidenceCommandPolicy.ts",
+          "src/application/services/EvidenceRunner.ts",
+          "src/__tests__/unit/evidence/EvidenceCommandPolicy.test.ts",
+          "src/__tests__/unit/cli/governed-workflow.e2e.test.ts"
+        ]
+      },
+      "2.5": {
+        "title": "Project verify command setting",
+        "tdd_required": true,
+        "dependencies": [
+          "2.4"
+        ],
+        "status": "completed",
+        "evidence": {
+          "red": {
+            "command": "npx jest src/__tests__/unit/evidence/EvidenceSettings.test.ts",
+            "exit_code": 1,
+            "summary": "11 failed, 26 passed: verifyCommand Expected ['npm','test'] Received undefined; invalid values expected 1 warning Received 0",
+            "observed_at": "2026-11-24T01:02:41.020Z"
+          },
+          "green": {
+            "command": "npx jest src/__tests__/unit/evidence/EvidenceSettings.test.ts",
+            "exit_code": 0,
+            "summary": "37 passed: valid verifyCommand resolves; string, empty, non-string, NUL, line break, >64, disallowed program, inline eval each ignored with one warning; env cannot override",
+            "observed_at": "2026-11-24T01:02:54.558Z"
+          },
+          "verification": {
+            "command": "npm run typecheck && npm run lint && npm test",
+            "exit_code": 0,
+            "summary": "typecheck clean, lint ratchet passes, 1585 tests pass",
+            "observed_at": "2026-11-24T01:03:40.839Z"
+          }
+        },
+        "planned_artifacts": [
+          "src/application/services/EvidenceSettings.ts",
+          "src/__tests__/unit/evidence/EvidenceSettings.test.ts"
+        ],
+        "observed_artifacts": [
+          "src/application/services/EvidenceSettings.ts",
+          "src/application/services/EvidenceRunner.ts",
+          "src/__tests__/unit/evidence/EvidenceSettings.test.ts"
+        ]
+      },
+      "2.6": {
+        "title": "Multi-language RED classifier",
+        "tdd_required": true,
+        "dependencies": [
+          "1.3"
+        ],
+        "status": "completed",
+        "evidence": {
+          "red": {
+            "command": "npx jest src/__tests__/unit/jev/RedEvidenceClassifier.fixtures.test.ts",
+            "exit_code": 1,
+            "summary": "18 failed, 9 passed: Python, Go, Rust, JVM, and .NET setup and assertion fixtures classify as ambiguous instead of their named class",
+            "observed_at": "2026-11-24T01:28:29.707Z"
+          },
+          "green": {
+            "command": "npx jest src/__tests__/unit/jev/RedEvidenceClassifier",
+            "exit_code": 0,
+            "summary": "47 passed: all 20 fixtures (2 setup + 2 assertion for Python, Go, Rust, JVM, .NET) classify by file name with a named pattern; setup still wins; unmatched stays ambiguous; existing classifier tests unchanged",
+            "observed_at": "2026-11-24T01:28:41.902Z"
+          },
+          "verification": {
+            "command": "npm run typecheck && npm run lint && npm test",
+            "exit_code": 0,
+            "summary": "typecheck clean, lint exit 0, 1674 tests pass",
+            "observed_at": "2026-11-24T01:29:21.658Z"
+          }
+        },
+        "planned_artifacts": [
+          "src/application/services/RedEvidenceClassifier.ts",
+          "src/__tests__/unit/jev/fixtures/red-classifier",
+          "src/__tests__/unit/jev/RedEvidenceClassifier.fixtures.test.ts"
+        ],
+        "observed_artifacts": [
+          "src/application/services/RedEvidenceClassifier.ts",
+          "src/__tests__/unit/jev/fixtures/red-classifier",
+          "src/__tests__/unit/jev/RedEvidenceClassifier.fixtures.test.ts"
+        ]
+      },
+      "3.1": {
+        "title": "Setup-classified RED blocks GREEN",
+        "tdd_required": true,
+        "dependencies": [
+          "2.1"
+        ],
+        "status": "completed",
+        "evidence": {
+          "red": {
+            "command": "npx jest src/__tests__/unit/workflow/WorkflowEngineService.trust-gates.test.ts",
+            "exit_code": 1,
+            "summary": "1 failed, 3 passed: 'should reject GREEN after a setup RED' — Received promise resolved instead of rejected (6.0.0 bypass proven)",
+            "observed_at": "2026-11-24T00:38:31.612Z"
+          },
+          "green": {
+            "command": "npx jest src/__tests__/unit/workflow/WorkflowEngineService.trust-gates.test.ts",
+            "exit_code": 0,
+            "summary": "4 passed: setup RED blocks GREEN with RedSetupFailure, 1 runner call, spec.json unchanged; re-RED, ambiguous, self-reported paths allowed",
+            "observed_at": "2026-11-24T00:39:08.192Z"
+          },
+          "verification": {
+            "command": "npm run typecheck && npm run lint && npx jest src/__tests__/unit/workflow src/__tests__/unit/cli/governed-workflow.e2e.test.ts",
+            "exit_code": 0,
+            "summary": "typecheck clean, lint ratchet passes after extracting assertRedNotSetup, 140 workflow and e2e tests pass; message baseline regenerated",
+            "observed_at": "2026-11-24T00:40:08.041Z"
+          }
+        },
+        "planned_artifacts": [
+          "src/application/services/WorkflowEngineService.ts",
+          "src/__tests__/unit/workflow/WorkflowEngineService.trust-gates.test.ts"
+        ],
+        "observed_artifacts": [
+          "src/application/services/WorkflowEngineService.ts",
+          "src/__tests__/unit/workflow/WorkflowEngineService.trust-gates.test.ts",
+          "src/__tests__/fixtures/message-contract-baseline.json"
+        ]
+      },
+      "3.2": {
+        "title": "Bind every task action to the working tree",
+        "tdd_required": true,
+        "dependencies": [
+          "2.2",
+          "2.3"
+        ],
+        "status": "completed",
+        "evidence": {
+          "red": {
+            "command": "npx jest src/__tests__/unit/workflow/WorkflowEngineService.tree-binding.test.ts",
+            "exit_code": 1,
+            "summary": "4 failed, 13 passed: start_tree and working_tree absent (Received undefined), no timeout/git-unavailable binding recorded, status has no binding field. Blocked-resume case passes vacuously until bindings exist.",
+            "observed_at": "2026-11-24T01:11:36.692Z"
+          },
+          "green": {
+            "command": "npx jest src/__tests__/unit/workflow/WorkflowEngineService.tree-binding.test.ts",
+            "exit_code": 0,
+            "summary": "17 passed: start_tree and per-evidence working_tree stored (dirty only on start and verification), blocked resume keeps start_tree, hanging git gives timeout binding and the action succeeds, no git port gives git-unavailable, status binding bound/unbound",
+            "observed_at": "2026-11-24T01:12:44.847Z"
+          },
+          "verification": {
+            "command": "npm run typecheck && npm run lint && npm test",
+            "exit_code": 0,
+            "summary": "typecheck clean, lint ratchet passes, 1622 tests pass incl. container wiring of GitPort into the engine",
+            "observed_at": "2026-11-24T01:13:30.666Z"
+          }
+        },
+        "planned_artifacts": [
+          "src/application/services/WorkflowEngineService.ts",
+          "src/infrastructure/di/container.ts",
+          "src/__tests__/unit/workflow/WorkflowEngineService.tree-binding.test.ts",
+          "src/__tests__/unit/evidence/container-wiring.test.ts"
+        ],
+        "observed_artifacts": [
+          "src/application/services/WorkflowEngineService.ts",
+          "src/__tests__/unit/workflow/WorkflowEngineService.tree-binding.test.ts",
+          "src/__tests__/unit/workflow/WorkflowEngineService.status.test.ts",
+          "src/__tests__/unit/workflow/evidence-harness.ts",
+          "src/__tests__/unit/evidence/container-wiring.test.ts"
+        ]
+      },
+      "3.3": {
+        "title": "RED-to-GREEN continuity",
+        "tdd_required": true,
+        "dependencies": [
+          "3.1",
+          "3.2"
+        ],
+        "status": "completed",
+        "evidence": {
+          "red": {
+            "command": "npx jest src/__tests__/unit/workflow/WorkflowEngineService.trust-gates.test.ts",
+            "exit_code": 1,
+            "summary": "3 failed, 7 passed: GREEN with a different argv and GREEN on the unchanged tree both resolve on 6.0.0 code instead of EvidenceContinuityViolation (bypasses proven)",
+            "observed_at": "2026-11-24T01:14:17.632Z"
+          },
+          "green": {
+            "command": "npx jest src/__tests__/unit/workflow/WorkflowEngineService.trust-gates.test.ts",
+            "exit_code": 0,
+            "summary": "10 passed: argv mismatch and unchanged tree rejected with EvidenceContinuityViolation before the run (1 runner call, spec unchanged); changed tree accepted; unbound RED skips only the tree check; self-reported skips both",
+            "observed_at": "2026-11-24T01:14:50.297Z"
+          },
+          "verification": {
+            "command": "npm run typecheck && npm run lint && npm test",
+            "exit_code": 0,
+            "summary": "typecheck clean, lint ratchet passes, 1628 tests pass; message baseline regenerated; overhead and e2e tests now run one command for RED and GREEN",
+            "observed_at": "2026-11-24T01:16:56.788Z"
+          }
+        },
+        "planned_artifacts": [
+          "src/application/services/WorkflowEngineService.ts",
+          "src/__tests__/unit/workflow/WorkflowEngineService.trust-gates.test.ts"
+        ],
+        "observed_artifacts": [
+          "src/application/services/WorkflowEngineService.ts",
+          "src/__tests__/unit/workflow/WorkflowEngineService.trust-gates.test.ts",
+          "src/__tests__/unit/workflow/WorkflowEngineService.evidence.test.ts",
+          "src/__tests__/unit/cli/governed-workflow.e2e.test.ts",
+          "src/__tests__/fixtures/message-contract-baseline.json"
+        ]
+      },
+      "3.4": {
+        "title": "Complete through the project verify command",
+        "tdd_required": true,
+        "dependencies": [
+          "2.5",
+          "3.2"
+        ],
+        "status": "completed",
+        "evidence": {
+          "red": {
+            "command": "npx jest src/__tests__/unit/workflow/WorkflowEngineService.trust-gates.test.ts src/__tests__/unit/runtime/SDDToolAdapter.inventory.test.ts",
+            "exit_code": 1,
+            "summary": "5 failed, 33 passed: complete without run rejected by schema and engine (SelfReportedEvidenceRejected), mismatched run accepted, status/handoff lack the verify command, commit-time change not caught",
+            "observed_at": "2026-11-24T01:18:00.917Z"
+          },
+          "green": {
+            "command": "npx jest src/__tests__/unit/workflow/WorkflowEngineService.trust-gates.test.ts src/__tests__/unit/runtime/SDDToolAdapter.inventory.test.ts src/__tests__/unit/context",
+            "exit_code": 0,
+            "summary": "71 passed: complete without run runs the verify command; mismatched run rejected with VerifyCommandMismatch before running; unset command keeps SelfReportedEvidenceRejected; status and handoff show the command; commit-time change rejected; schema accepts complete without run",
+            "observed_at": "2026-11-24T01:18:43.547Z"
+          },
+          "verification": {
+            "command": "npm run typecheck && npm run lint && npm test",
+            "exit_code": 0,
+            "summary": "typecheck clean, lint exit 0, 1634 tests pass; message baseline and the 16-tool JEV fixture regenerated for the relaxed sdd-spec-impl schema",
+            "observed_at": "2026-11-24T01:20:10.250Z"
+          }
+        },
+        "planned_artifacts": [
+          "src/application/services/WorkflowEngineService.ts",
+          "src/application/services/ContextCompactionService.ts",
+          "src/infrastructure/mcp/sddToolDefinitions.ts",
+          "src/__tests__/unit/workflow/WorkflowEngineService.trust-gates.test.ts",
+          "src/__tests__/unit/runtime/SDDToolAdapter.inventory.test.ts",
+          "src/__tests__/unit/context/ContextCompactionService.test.ts"
+        ],
+        "observed_artifacts": [
+          "src/application/services/WorkflowEngineService.ts",
+          "src/application/services/ContextCompactionService.ts",
+          "src/infrastructure/mcp/sddToolDefinitions.ts",
+          "src/__tests__/unit/workflow/WorkflowEngineService.trust-gates.test.ts",
+          "src/__tests__/unit/runtime/SDDToolAdapter.inventory.test.ts",
+          "src/__tests__/unit/jev/fixtures/sdd-tools-16.json",
+          "src/__tests__/fixtures/message-contract-baseline.json"
+        ]
+      },
+      "3.5": {
+        "title": "Observed artifacts match git changes",
+        "tdd_required": true,
+        "dependencies": [
+          "3.2",
+          "2.1"
+        ],
+        "status": "completed",
+        "evidence": {
+          "red": {
+            "command": "npx jest src/__tests__/unit/workflow/WorkflowEngineService.artifacts.test.ts",
+            "exit_code": 1,
+            "summary": "3 failed, 4 passed: completion naming an unchanged path, 25 unchanged paths, and a missing .spec/specs path all resolve on 6.0.0 code instead of ObservedArtifactMismatch (bypass proven)",
+            "observed_at": "2026-11-24T01:20:59.734Z"
+          },
+          "green": {
+            "command": "npx jest src/__tests__/unit/workflow/WorkflowEngineService.artifacts.test.ts",
+            "exit_code": 0,
+            "summary": "7 passed: unchanged path rejected with ObservedArtifactMismatch before the verification runs (2 runner calls, spec unchanged), at most 20 listed, changed files/parents/mid-task commits accepted, existing .spec/specs path accepted and missing one rejected, backslash paths normalized, no start_tree follows the 6.0.0 rule",
+            "observed_at": "2026-11-24T01:21:27.337Z"
+          },
+          "verification": {
+            "command": "npm run typecheck && npm run lint && npm test",
+            "exit_code": 0,
+            "summary": "typecheck clean, lint ratchet passes, 1641 tests pass; message baseline regenerated",
+            "observed_at": "2026-11-24T01:22:05.942Z"
+          }
+        },
+        "planned_artifacts": [
+          "src/application/services/WorkflowEngineService.ts",
+          "src/__tests__/unit/workflow/WorkflowEngineService.artifacts.test.ts"
+        ],
+        "observed_artifacts": [
+          "src/application/services/ObservedArtifactCheck.ts",
+          "src/application/services/WorkflowEngineService.ts",
+          "src/__tests__/unit/workflow/WorkflowEngineService.artifacts.test.ts",
+          "src/__tests__/fixtures/message-contract-baseline.json"
+        ]
+      },
+      "3.6": {
+        "title": "Drift after verification in status and commit",
+        "tdd_required": true,
+        "dependencies": [
+          "3.2"
+        ],
+        "status": "completed",
+        "evidence": {
+          "red": {
+            "command": "npx jest src/__tests__/unit/workflow/WorkflowEngineService.status.test.ts src/__tests__/unit/cli/canonical-assets.test.ts",
+            "exit_code": 1,
+            "summary": "4 failed: status has no verificationDrift after a post-completion edit (Received undefined), no verificationBinding when git fails, no 50-path cap; sdd-commit lacks /verification drift/ text",
+            "observed_at": "2026-11-24T01:22:52.892Z"
+          },
+          "green": {
+            "command": "npx jest src/__tests__/unit/workflow/WorkflowEngineService.status.test.ts src/__tests__/unit/cli/canonical-assets.test.ts",
+            "exit_code": 0,
+            "summary": "16 passed: post-completion edit reports verificationDrift with task and path; commit without edit reports none; status never writes spec.json and list status skips drift; git failure reports verificationBinding unavailable; 60 changes capped to 50 with pathsTruncated; sdd-commit drift text present",
+            "observed_at": "2026-11-24T01:23:18.932Z"
+          },
+          "verification": {
+            "command": "npm run typecheck && npm run lint && npm test",
+            "exit_code": 0,
+            "summary": "typecheck clean, lint exit 0, 1646 tests pass; render baseline regenerated for the 3 sdd-commit entries only",
+            "observed_at": "2026-11-24T01:24:48.155Z"
+          }
+        },
+        "planned_artifacts": [
+          "src/application/services/WorkflowEngineService.ts",
+          "skills/sdd-commit/SKILL.md",
+          "src/__tests__/unit/workflow/WorkflowEngineService.status.test.ts",
+          "src/__tests__/unit/cli/canonical-assets.test.ts",
+          "src/__tests__/unit/cli/fixtures/workflow-skill-render-baseline.json"
+        ],
+        "observed_artifacts": [
+          "src/application/services/WorkflowEngineService.ts",
+          "skills/sdd-commit/SKILL.md",
+          "src/__tests__/unit/workflow/WorkflowEngineService.status.test.ts",
+          "src/__tests__/unit/cli/canonical-assets.test.ts",
+          "src/__tests__/unit/cli/fixtures/workflow-skill-render-baseline.json"
+        ]
+      },
+      "3.7": {
+        "title": "End-to-end verified flow without inline eval",
+        "tdd_required": true,
+        "dependencies": [
+          "2.4",
+          "3.3",
+          "3.4",
+          "3.5",
+          "3.6"
+        ],
+        "status": "completed",
+        "evidence": {
+          "red": {
+            "command": "npx jest src/__tests__/unit/cli/governed-workflow.e2e.test.ts -t \"closes the setup\" (engine sources temporarily at 648d1fd, pre-gate)",
+            "exit_code": 1,
+            "summary": "1 failed: Expected \"RedSetupFailure\" Received \"TaskTransitionInvalid\" — the packed pre-gate server lets GREEN through the setup gate; sources restored to HEAD afterwards",
+            "observed_at": "2026-11-24T01:26:34.625Z"
+          },
+          "green": {
+            "command": "npx jest src/__tests__/unit/cli/governed-workflow.e2e.test.ts",
+            "exit_code": 0,
+            "summary": "7 passed on current code: the real git flow rejects setup-RED GREEN, node -e, unchanged-tree GREEN, and a mismatched completion run; completes through the verify command; reports drift after an edit",
+            "observed_at": "2026-11-24T01:27:00.076Z"
+          },
+          "verification": {
+            "command": "npm run typecheck && npm run lint && npm test",
+            "exit_code": 0,
+            "summary": "typecheck clean, lint exit 0, 1647 tests pass including the new real-git e2e flow",
+            "observed_at": "2026-11-24T01:27:40.425Z"
+          }
+        },
+        "planned_artifacts": [
+          "src/__tests__/unit/cli/governed-workflow.e2e.test.ts",
+          "src/__tests__/unit/cli/fixtures/verified-project"
+        ],
+        "observed_artifacts": [
+          "src/__tests__/unit/cli/governed-workflow.e2e.test.ts",
+          "src/__tests__/unit/cli/fixtures/verified-project"
+        ]
+      },
+      "3.8": {
+        "title": "JEV red check without evidence",
+        "tdd_required": true,
+        "dependencies": [
+          "1.3"
+        ],
+        "status": "completed",
+        "evidence": {
+          "red": {
+            "command": "npx jest src/__tests__/unit/jev/sddJevCheckTool.test.ts src/__tests__/unit/jev/JevAdvisoryService.red.test.ts",
+            "exit_code": 1,
+            "summary": "2 failed, 58 passed: schema rejects red without evidence (expected true, received false); in-progress task without evidence resolves to a not-ready skip instead of rejecting with InvalidParams",
+            "observed_at": "2026-11-24T01:29:46.677Z"
+          },
+          "green": {
+            "command": "npx jest src/__tests__/unit/jev",
+            "exit_code": 0,
+            "summary": "648 passed: red schema no longer requires evidence; in-progress task without evidence raises InvalidParams with the record-RED message; engine RED path and other not-ready skips unchanged",
+            "observed_at": "2026-11-24T01:30:43.362Z"
+          },
+          "verification": {
+            "command": "npm run typecheck && npm run lint && npm test",
+            "exit_code": 0,
+            "summary": "typecheck clean, lint exit 0, 1675 tests pass; the 16-tool fixture is unaffected (sdd-jev-check is the 17th tool)",
+            "observed_at": "2026-11-24T01:31:23.547Z"
+          }
+        },
+        "planned_artifacts": [
+          "src/infrastructure/mcp/sddToolDefinitions.ts",
+          "src/application/services/JevAdvisoryService.ts",
+          "src/__tests__/unit/jev/sddJevCheckTool.test.ts",
+          "src/__tests__/unit/jev/JevAdvisoryService.red.test.ts"
+        ],
+        "observed_artifacts": [
+          "src/infrastructure/mcp/sddToolDefinitions.ts",
+          "src/application/services/JevAdvisoryService.ts",
+          "src/__tests__/unit/jev/sddJevCheckTool.test.ts",
+          "src/__tests__/unit/jev/JevAdvisoryService.red.test.ts"
+        ]
+      },
+      "4.1": {
+        "title": "Prune rule text",
+        "tdd_required": true,
+        "dependencies": [
+          "1.3"
+        ],
+        "status": "completed",
+        "evidence": {
+          "red": {
+            "command": "npx jest src/__tests__/unit/rules/rules-size.test.ts",
+            "exit_code": 1,
+            "summary": "7 failed, 4 passed: rules total 10759 bytes (expected <= 6000); kebab-case, strict-mode, bcrypt, AAA template, coverage percentages, and the anti-pattern table are still present",
+            "observed_at": "2026-11-24T01:31:49.913Z"
+          },
+          "green": {
+            "command": "npx jest src/__tests__/unit/rules src/__tests__/unit/jev/JevQuestionCatalog.test.ts src/__tests__/unit/cli",
+            "exit_code": 0,
+            "summary": "379 passed: rules total 3814 bytes (<= 6000); frontmatter kept; removed content absent; JEV principle headings still exist verbatim",
+            "observed_at": "2026-11-24T01:33:00.941Z"
+          },
+          "verification": {
+            "command": "npm run typecheck && npm run lint && npm test",
+            "exit_code": 0,
+            "summary": "typecheck clean, lint exit 0, 1686 tests pass",
+            "observed_at": "2026-11-24T01:33:38.570Z"
+          }
+        },
+        "planned_artifacts": [
+          "rules/coding-style.md",
+          "rules/error-handling.md",
+          "rules/security.md",
+          "rules/testing.md",
+          "src/__tests__/unit/rules/rules-size.test.ts"
+        ],
+        "observed_artifacts": [
+          "rules/coding-style.md",
+          "rules/error-handling.md",
+          "rules/security.md",
+          "rules/testing.md",
+          "src/__tests__/unit/rules/rules-size.test.ts"
+        ]
+      },
+      "4.2": {
+        "title": "Retire paper hooks",
+        "tdd_required": true,
+        "dependencies": [
+          "1.3"
+        ],
+        "status": "completed",
+        "evidence": {
+          "red": {
+            "command": "npx jest src/__tests__/unit/hooks src/__tests__/unit/cli/target-installers.test.ts src/__tests__/unit/cli/preserving-writer.test.ts",
+            "exit_code": 1,
+            "summary": "5 failed, 79 passed: hooks still mention --skip-validation, SDD_TDD_STRICT, and both retired hook names; HookLoader lists 7 hooks instead of 5. The reinstall test already passes, as D-17 expects (existing writer behavior).",
+            "observed_at": "2026-11-24T01:34:34.517Z"
+          },
+          "green": {
+            "command": "npx jest src/__tests__/unit/hooks src/__tests__/unit/cli/target-installers.test.ts src/__tests__/unit/cli/preserving-writer.test.ts",
+            "exit_code": 0,
+            "summary": "84 passed: no hook mentions the bypass flag, the strictness variable, or the retired names; 5 hooks ship; reinstall over a 6.0.0 layout removes the unmodified copy and reports the edited copy obsolete-modified",
+            "observed_at": "2026-11-24T01:34:45.015Z"
+          },
+          "verification": {
+            "command": "npm run typecheck && npm run lint && npm test",
+            "exit_code": 0,
+            "summary": "typecheck clean, lint exit 0, 1692 tests pass",
+            "observed_at": "2026-11-24T01:35:24.607Z"
+          }
+        },
+        "planned_artifacts": [
+          "hooks/pre-tool-use/validate-sdd-workflow.md",
+          "hooks/pre-tool-use/check-test-coverage.md",
+          "hooks/session-end/remind-uncommitted-changes.md",
+          "src/__tests__/unit/hooks/hook-text.test.ts",
+          "src/__tests__/unit/cli/target-installers.test.ts",
+          "src/__tests__/unit/cli/preserving-writer.test.ts"
+        ],
+        "observed_artifacts": [
+          "hooks/pre-tool-use/validate-sdd-workflow.md",
+          "hooks/pre-tool-use/check-test-coverage.md",
+          "hooks/session-end/remind-uncommitted-changes.md",
+          "src/__tests__/unit/hooks/hook-text.test.ts",
+          "src/__tests__/unit/cli/target-installers.test.ts"
+        ]
+      },
+      "4.3": {
+        "title": "Requirements and design Skill wording",
+        "tdd_required": true,
+        "dependencies": [
+          "1.3"
+        ],
+        "status": "completed",
+        "evidence": {
+          "red": {
+            "command": "npx jest src/__tests__/unit/workflow/WorkflowValidationService.test.ts src/__tests__/unit/cli/canonical-assets.test.ts",
+            "exit_code": 1,
+            "summary": "3 failed, 21 passed: sdd-requirements still says 'at least one numbered item on the same line'; sdd-design and its REFERENCE lack the Interface Spike text. Validator cases for both criteria shapes and the spike section already pass (D-22: validator accepts extra headings).",
+            "observed_at": "2026-11-24T01:35:47.231Z"
+          },
+          "green": {
+            "command": "npx jest src/__tests__/unit/workflow/WorkflowValidationService.test.ts src/__tests__/unit/cli/canonical-assets.test.ts src/__tests__/unit/cli/target-installers.test.ts",
+            "exit_code": 0,
+            "summary": "57 passed: requirements wording allows criteria on the label line or the next lines; design describes the optional Interface Spike and REFERENCE holds the details; Skills are 3989 and 3977 bytes; render baseline regenerated for the two Skills",
+            "observed_at": "2026-11-24T01:36:21.466Z"
+          },
+          "verification": {
+            "command": "npm run typecheck && npm run lint && npm test",
+            "exit_code": 0,
+            "summary": "typecheck clean, lint exit 0, 1695 tests pass",
+            "observed_at": "2026-11-24T01:37:01.330Z"
+          }
+        },
+        "planned_artifacts": [
+          "skills/sdd-requirements/SKILL.md",
+          "skills/sdd-design/SKILL.md",
+          "skills/sdd-design/REFERENCE.md",
+          "src/__tests__/unit/workflow/WorkflowValidationService.test.ts",
+          "src/__tests__/unit/cli/canonical-assets.test.ts",
+          "src/__tests__/unit/cli/fixtures/workflow-skill-render-baseline.json"
+        ],
+        "observed_artifacts": [
+          "skills/sdd-requirements/SKILL.md",
+          "skills/sdd-design/SKILL.md",
+          "skills/sdd-design/REFERENCE.md",
+          "src/__tests__/unit/workflow/WorkflowValidationService.test.ts",
+          "src/__tests__/unit/cli/canonical-assets.test.ts",
+          "src/__tests__/unit/cli/fixtures/workflow-skill-render-baseline.json"
+        ]
+      },
+      "4.4": {
+        "title": "Isolation, stop-list, retry budget, and honest reporting text",
+        "tdd_required": true,
+        "dependencies": [
+          "3.4",
+          "3.6"
+        ],
+        "status": "completed",
+        "evidence": {
+          "red": {
+            "command": "npx jest src/__tests__/unit/cli/canonical-assets.test.ts",
+            "exit_code": 1,
+            "summary": "3 failed, 9 passed: sdd-implement lacks worktree, stop-list, 3 failed GREEN, Unverified / Could Not Run, decision log, and verify-command text; sdd-review lacks 'unconfirmed'; implementer.md has 4 result sections, not 5; Mandatory Checks still in the Skill",
+            "observed_at": "2026-11-24T01:37:36.840Z"
+          },
+          "green": {
+            "command": "npx jest src/__tests__/unit/cli/canonical-assets.test.ts src/__tests__/unit/cli/skill-delegation.test.ts src/__tests__/unit/jev/JevSkillText.test.ts src/__tests__/unit/cli/target-installers.test.ts",
+            "exit_code": 0,
+            "summary": "126 passed: worktree and verified no-parallel rule, five stop-list actions, 3 failed GREEN, Unverified / Could Not Run, decision log, COMPLETE verify-command text present; implementer has 5 result sections; sdd-review requires reproducible command or 'unconfirmed'; Mandatory Checks, REFACTOR, and not-applicable detail moved to REFERENCE; sdd-implement 3974 bytes; delegation and JEV regexes still pass; render baseline regenerated",
+            "observed_at": "2026-11-24T01:38:49.079Z"
+          },
+          "verification": {
+            "command": "npm run typecheck && npm run lint && npm test",
+            "exit_code": 0,
+            "summary": "typecheck clean, lint exit 0, 1696 tests pass",
+            "observed_at": "2026-11-24T01:39:28.697Z"
+          }
+        },
+        "planned_artifacts": [
+          "skills/sdd-implement/SKILL.md",
+          "skills/sdd-implement/REFERENCE.md",
+          "agents/implementer.md",
+          "skills/simple-task/SKILL.md",
+          "skills/sdd-review/SKILL.md",
+          "src/__tests__/unit/cli/canonical-assets.test.ts",
+          "src/__tests__/unit/cli/fixtures/workflow-skill-render-baseline.json"
+        ],
+        "observed_artifacts": [
+          "skills/sdd-implement/SKILL.md",
+          "skills/sdd-implement/REFERENCE.md",
+          "agents/implementer.md",
+          "skills/simple-task/SKILL.md",
+          "skills/sdd-test-gen/SKILL.md",
+          "skills/sdd-review/SKILL.md",
+          "src/__tests__/unit/cli/canonical-assets.test.ts",
+          "src/__tests__/unit/cli/fixtures/workflow-skill-render-baseline.json"
+        ]
+      },
+      "4.5": {
+        "title": "`sdd-correct` Skill",
+        "tdd_required": true,
+        "dependencies": [
+          "4.4"
+        ],
+        "status": "completed",
+        "evidence": {
+          "red": {
+            "command": "npx jest src/__tests__/unit/cli src/__tests__/unit/context src/__tests__/unit/SteeringContextLoader.test.ts",
+            "exit_code": 1,
+            "summary": "3 failed, 395 passed against a stub sdd-correct Skill: method text missing (expected /.spec\\/corrections.md/), Execution report line missing, render baseline lacks the 4 sdd-correct entries (12 workflow skills, 48 keys). The two corrections.md exclusion tests pass as D-20 predicts (neither loader reads the file).",
+            "observed_at": "2026-11-24T01:41:04.390Z"
+          },
+          "green": {
+            "command": "npx jest src/__tests__/unit/cli src/__tests__/unit/context src/__tests__/unit/SteeringContextLoader.test.ts src/__tests__/unit/jev/JevSkillText.test.ts",
+            "exit_code": 0,
+            "summary": "447 passed: sdd-correct (2064 bytes) has the four tiers in order, the second-occurrence and irreversible/security exceptions, explicit approval, obsolete-line deletion, the Execution report line, and runs inline; all Skills total 36710 bytes (<= 40000); render baseline has 48 entries; corrections.md is never loaded",
+            "observed_at": "2026-11-24T01:41:48.423Z"
+          },
+          "verification": {
+            "command": "npm run typecheck && npm run lint && npm test",
+            "exit_code": 0,
+            "summary": "typecheck clean, lint exit 0, 1701 tests pass",
+            "observed_at": "2026-11-24T01:42:26.934Z"
+          }
+        },
+        "planned_artifacts": [
+          "skills/sdd-correct/SKILL.md",
+          "skills/sdd-correct/REFERENCE.md",
+          "src/__tests__/unit/cli/canonical-assets.test.ts",
+          "src/__tests__/unit/cli/skill-delegation.test.ts",
+          "src/__tests__/unit/cli/fixtures/workflow-skill-render-baseline.json",
+          "src/__tests__/unit/context/ContextCompactionService.test.ts",
+          "src/__tests__/unit/SteeringContextLoader.test.ts"
+        ],
+        "observed_artifacts": [
+          "skills/sdd-correct/SKILL.md",
+          "skills/sdd-correct/REFERENCE.md",
+          "src/__tests__/unit/cli/canonical-assets.test.ts",
+          "src/__tests__/unit/cli/skill-delegation.test.ts",
+          "src/__tests__/unit/cli/target-installers.test.ts",
+          "src/__tests__/unit/cli/fixtures/workflow-skill-render-baseline.json",
+          "src/__tests__/unit/context/ContextCompactionService.test.ts",
+          "src/__tests__/unit/SteeringContextLoader.test.ts"
+        ]
+      },
+      "4.6": {
+        "title": "Skill blind-test kit",
+        "tdd_required": true,
+        "dependencies": [
+          "4.5"
+        ],
+        "status": "completed",
+        "evidence": {
+          "red": {
+            "command": "npx jest src/__tests__/unit/cli/skill-evals.test.ts",
+            "exit_code": 1,
+            "summary": "2 failed, 2 passed: expected at least 3 fixtures (received 0); README lacks ## Run, ## Blinding, and ## Result Template. Package files already exclude evals.",
+            "observed_at": "2026-11-24T01:42:43.501Z"
+          },
+          "green": {
+            "command": "npx jest src/__tests__/unit/cli/skill-evals.test.ts",
+            "exit_code": 0,
+            "summary": "4 passed: three fixtures (sdd-implement setup-RED, simple-task unverifiable check, sdd-correct repeat) with skill/prompt/setup and 4-5 checklist items naming existing Skills; README has Run, Blinding, and Result Template; evals not in package files",
+            "observed_at": "2026-11-24T01:43:04.633Z"
+          },
+          "verification": {
+            "command": "npm run typecheck && npm run lint && npm test",
+            "exit_code": 0,
+            "summary": "typecheck clean, lint exit 0, 1705 tests pass",
+            "observed_at": "2026-11-24T01:43:43.940Z"
+          }
+        },
+        "planned_artifacts": [
+          "evals/skills/README.md",
+          "evals/skills/fixtures/sdd-implement-setup-red.json",
+          "evals/skills/fixtures/simple-task-unverifiable.json",
+          "evals/skills/fixtures/sdd-correct-repeat.json",
+          "src/__tests__/unit/cli/skill-evals.test.ts"
+        ],
+        "observed_artifacts": [
+          "evals/skills/README.md",
+          "evals/skills/fixtures/sdd-implement-setup-red.json",
+          "evals/skills/fixtures/simple-task-unverifiable.json",
+          "evals/skills/fixtures/sdd-correct-repeat.json",
+          "src/__tests__/unit/cli/skill-evals.test.ts"
+        ]
+      },
+      "4.7": {
+        "title": "Steering refresh and drift test",
+        "tdd_required": true,
+        "dependencies": [
+          "1.3"
+        ],
+        "status": "completed",
+        "evidence": {
+          "red": {
+            "command": "npx jest src/__tests__/unit/cli/documentation-consistency.test.ts",
+            "exit_code": 1,
+            "summary": "1 failed, 27 passed: Expected substring \"Current version: `6.0.0`\" — tech.md still says 5.0.0 and a 16-tool contract",
+            "observed_at": "2026-11-24T01:44:05.419Z"
+          },
+          "green": {
+            "command": "npx jest src/__tests__/unit/cli/documentation-consistency.test.ts",
+            "exit_code": 0,
+            "summary": "28 passed: tech.md says Current version 6.0.0 and a 17-tool contract, and describes verified execution evidence, JEV, strict TypeScript, and the lint ratchet; product.md and structure.md have no stale version or tool count",
+            "observed_at": "2026-11-24T01:44:19.431Z"
+          },
+          "verification": {
+            "command": "npm run typecheck && npm run lint && npm test",
+            "exit_code": 0,
+            "summary": "typecheck clean, lint exit 0, 1706 tests pass",
+            "observed_at": "2026-11-24T01:44:57.695Z"
+          }
+        },
+        "planned_artifacts": [
+          ".spec/steering/tech.md",
+          ".spec/steering/product.md",
+          ".spec/steering/structure.md",
+          "src/__tests__/unit/cli/documentation-consistency.test.ts"
+        ],
+        "observed_artifacts": [
+          ".spec/steering/tech.md",
+          ".spec/steering/product.md",
+          "src/__tests__/unit/cli/documentation-consistency.test.ts"
+        ]
+      },
+      "5.1": {
+        "title": "Documentation for every change",
+        "tdd_required": true,
+        "dependencies": [
+          "3.7",
+          "3.8",
+          "4.1",
+          "4.2",
+          "4.3",
+          "4.6",
+          "4.7"
+        ],
+        "status": "completed",
+        "evidence": {
+          "red": {
+            "command": "npx jest src/__tests__/unit/cli/documentation-consistency.test.ts",
+            "exit_code": 1,
+            "summary": "3 failed, 28 passed: WORKFLOW.md lacks the five new error rows, evidence.verifyCommand, Evidence binding, worktree rule, Skill changes, and sdd-correct; routing and root guidance lack the worktree rule and /sdd-correct; ARCHITECTURE, DEPLOYMENT, CHANGELOG Unreleased, and README lack the new terms",
+            "observed_at": "2026-11-24T01:45:21.906Z"
+          },
+          "green": {
+            "command": "npx jest src/__tests__/unit/cli/documentation-consistency.test.ts src/__tests__/unit/cli/root-guidance.test.ts",
+            "exit_code": 0,
+            "summary": "38 passed: WORKFLOW names the five new codes, evidence.verifyCommand, inline-eval rule, Evidence binding, worktree rule, Skill changes kit, and sdd-correct; routing, AGENTS, both templates, and root-guidance state the worktree rule and sdd-correct; ARCHITECTURE, DEPLOYMENT, CHANGELOG Unreleased, and README updated",
+            "observed_at": "2026-11-24T01:46:50.163Z"
+          },
+          "verification": {
+            "command": "npm run typecheck && npm run lint && npm test",
+            "exit_code": 0,
+            "summary": "typecheck clean, lint exit 0, 1709 tests pass",
+            "observed_at": "2026-11-24T01:47:30.970Z"
+          }
+        },
+        "planned_artifacts": [
+          "docs/WORKFLOW.md",
+          "docs/MODEL-ROUTING.md",
+          "README.md",
+          "ARCHITECTURE.md",
+          "DEPLOYMENT.md",
+          "CHANGELOG.md",
+          "AGENTS.md",
+          "templates/CLAUDE.md",
+          "templates/codex-AGENTS.md",
+          "src/cli/tool-support/root-guidance.ts",
+          "src/__tests__/unit/cli/documentation-consistency.test.ts",
+          "src/__tests__/unit/cli/root-guidance.test.ts"
+        ],
+        "observed_artifacts": [
+          "docs/WORKFLOW.md",
+          "docs/MODEL-ROUTING.md",
+          "README.md",
+          "ARCHITECTURE.md",
+          "DEPLOYMENT.md",
+          "CHANGELOG.md",
+          "AGENTS.md",
+          "templates/CLAUDE.md",
+          "templates/codex-AGENTS.md",
+          "src/cli/tool-support/root-guidance.ts",
+          "src/__tests__/unit/cli/documentation-consistency.test.ts"
+        ]
+      },
+      "5.2": {
+        "title": "Final verification and compatibility proof",
+        "tdd_required": false,
+        "dependencies": [
+          "5.1"
+        ],
+        "status": "completed",
+        "evidence": {
+          "verification": {
+            "command": "npm run build && npm run typecheck && npm run lint && npm test",
+            "exit_code": 0,
+            "summary": "chain exit 0, 101 suites and 1709 tests pass. Approval and test-case review tests have no diff from the 6.0.0 base and no approval code line changed. All 14 features report the same sdd-status outcome from the rebuilt server as from a 6.0.0 build (5 legacy features fail identically on both). Local CI proof in a throwaway worktree: one type error makes tsc exit 2; one new no-explicit-any warning makes the lint ratchet exit 1.",
+            "observed_at": "2026-11-24T01:49:32.658Z"
+          }
+        },
+        "planned_artifacts": [],
+        "observed_artifacts": []
+      }
+    }
+  }
+}
