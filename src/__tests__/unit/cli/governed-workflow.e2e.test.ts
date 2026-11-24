@@ -224,6 +224,57 @@ describe('packed Skill-governed workflow distribution', () => {
       expect(status).toMatchObject({ evidenceMode: 'verified', implementation: { tasks: { '1.1': { evidence: { red: 'engine', green: 'engine', verification: 'caller' } } } } });
     }, 120_000);
 
+    it('closes the setup, continuity, verify-command, inline-eval, and drift bypasses in a real git project', async () => {
+      const node = process.execPath;
+      const gitIn = (...args: string[]) => execFileSync('git', args, { cwd: projectRoot, encoding: 'utf8', env: { ...process.env, GIT_CONFIG_GLOBAL: '/dev/null', GIT_CONFIG_SYSTEM: '/dev/null' } });
+      gitIn('init', '-q');
+      gitIn('config', 'user.email', 't@example.com');
+      gitIn('config', 'user.name', 'T');
+      gitIn('config', 'commit.gpgsign', 'false');
+      writeFileSync(path.join(projectRoot, 'README.md'), '# fixture\n');
+      gitIn('add', '-A');
+      gitIn('commit', '-q', '-m', 'base');
+      const testArgv = [node, '--test', 'order.test.js'];
+      mkdirSync(path.join(projectRoot, '.spec'), { recursive: true });
+      writeFileSync(path.join(projectRoot, '.spec', 'sdd-config.json'), JSON.stringify({ evidence: { verifyCommand: testArgv } }));
+      const step = async (action: string, extra: Record<string, unknown>): Promise<Record<string, unknown>> =>
+        call('sdd-spec-impl', { featureName: feature, taskNumber: '1.1', action, expectedRevision: revision, ...extra });
+
+      let revision = await approveAll();
+      revision = (await step('start', {})).revision as number;
+
+      // The test file exists but the module it imports does not: a setup failure.
+      writeFileSync(path.join(projectRoot, 'order.test.js'), readFileSync(path.join(__dirname, 'fixtures', 'verified-project', 'order.test.js')));
+      const setupRed = await step('record-red', { run: { argv: testArgv } });
+      expect(setupRed).toMatchObject({ taskState: 'red-observed', observed: { classification: 'setup' } });
+      revision = setupRed.revision as number;
+      expect(codeOf(await step('record-green', { run: { argv: testArgv } }))).toBe('RedSetupFailure');
+
+      expect(codeOf(await step('record-red', { run: { argv: [node, '-e', 'process.exit(1)'] } }))).toBe('EvidenceCommandInlineEval');
+
+      writeFileSync(path.join(projectRoot, 'order.js'), 'module.exports = 2;\n');
+      const red = await step('record-red', { run: { argv: testArgv } });
+      expect(red).toMatchObject({ taskState: 'red-observed', observed: { classification: 'assertion' } });
+      revision = red.revision as number;
+
+      const unchanged = await step('record-green', { run: { argv: testArgv } });
+      expect(unchanged).toMatchObject({ code: 'EvidenceContinuityViolation', details: { reason: 'unchanged-tree' } });
+
+      writeFileSync(path.join(projectRoot, 'order.js'), 'module.exports = 1;\n');
+      const green = await step('record-green', { run: { argv: testArgv } });
+      expect(green).toMatchObject({ taskState: 'green-observed', observed: { exitCode: 0 } });
+      revision = green.revision as number;
+
+      expect(codeOf(await step('complete', { run: { argv: [node, '--test'] }, affectedArtifacts: ['order.js'] }))).toBe('VerifyCommandMismatch');
+      const completed = await step('complete', { affectedArtifacts: ['order.js', 'order.test.js'] });
+      expect(completed).toMatchObject({ taskState: 'completed', observed: { exitCode: 0 } });
+      expect(spec().implementation.tasks['1.1'].evidence.verification).toMatchObject({ source: 'engine', argv: testArgv });
+
+      writeFileSync(path.join(projectRoot, 'order.js'), 'module.exports = 1; // edited after verification\n');
+      const status = await call('sdd-status', { featureName: feature });
+      expect(status).toMatchObject({ verifyCommand: testArgv, verificationDrift: { taskNumber: '1.1', changedPaths: ['order.js'] } });
+    }, 180_000);
+
     it('caps a chatty command at 1 MiB and says so in the saved excerpt', async () => {
       let revision = await approveAll();
       revision = (await call('sdd-spec-impl', { featureName: feature, taskNumber: '1.1', action: 'start', expectedRevision: revision })).revision as number;
