@@ -28,7 +28,7 @@ This hook checks for uncommitted changes and reminds the developer before the se
      • src/__tests__/hooks/HookLoader.test.ts
 
    Untracked:
-     • hooks/pre-tool-use/validate-sdd-workflow.md
+     • docs/notes.md
 
    Consider committing your changes before ending the session.
    Run: /sdd-commit to create a commit with proper message

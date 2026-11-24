@@ -155,6 +155,27 @@ describe('target-specific installers', () => {
     expect(fs.existsSync(path.join(root, '.omp/mcp.json'))).toBe(false);
   });
 
+  it('removes retired 6.0.0 hooks on reinstall and reports a modified copy as obsolete-modified', async () => {
+    const retired = ['validate-sdd-workflow', 'check-test-coverage'].map((name) => ({
+      name, description: name, event: 'pre-tool-use', path: sourceFile(sourceRoot, `hooks/pre-tool-use/${name}.md`, `# ${name}`),
+    }));
+    const install = (hooks: object[]) => {
+      const sources = makeSources(sourceRoot);
+      sources.hookLoader.listComponents.mockResolvedValue(hooks);
+      return installClaudeCodeTarget({ projectRoot: root, paths: getTargetPolicy('claude-code').defaultPaths, components: ['hooks'], sources, rootGuidanceContent: '# g\n' });
+    };
+    const kept = { name: 'load-context', description: 'Load', event: 'session-start', path: path.join(sourceRoot, 'hooks/session-start/load-context.md') };
+    await install([kept, ...retired]);
+    const installed = (name: string) => path.join(root, '.claude/hooks/pre-tool-use', `${name}.md`);
+    fs.writeFileSync(installed('check-test-coverage'), 'user edit');
+
+    const report = await install([kept]);
+    expect(fs.existsSync(installed('validate-sdd-workflow'))).toBe(false);
+    expect(fs.readFileSync(installed('check-test-coverage'), 'utf8')).toBe('user edit');
+    expect(report.conflicts).toEqual([expect.objectContaining({ reason: 'obsolete-modified' })]);
+    expect(fs.existsSync(path.join(root, '.claude/hooks/session-start/load-context.md'))).toBe(true);
+  });
+
   it('installs only native Claude Code artifacts and renders pinned models', async () => {
     const report = await installClaudeCodeTarget({
       projectRoot: root,
