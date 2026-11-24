@@ -135,6 +135,23 @@ async function reviewEntries(git: GitPort, root: string): Promise<ManifestEntry[
   return tokenEntries(git, root, text(status.stdout).map(statusPath), 'HEAD');
 }
 
+/**
+ * Tracked-modified, deleted, and untracked non-ignored paths under an optional pathspec, each with the token
+ * `git add` would store. `root` must be the repository top level. More than 2000 paths is `too-many`.
+ */
+export async function dirtyEntries(
+  git: GitPort,
+  root: string,
+  pathspec?: string,
+): Promise<{ status: 'ok'; entries: ManifestEntry[] } | { status: 'too-many' } | { status: 'failed' }> {
+  const status = await git.run(pathspec ? [...STATUS_ARGS, '--', pathspec] : STATUS_ARGS, root);
+  if (!status.ok) return { status: 'failed' };
+  const paths = text(status.stdout).map(statusPath);
+  if (paths.length > MAX_PATHS) return { status: 'too-many' };
+  const entries = await tokenEntries(git, root, paths, 'HEAD');
+  return entries ? { status: 'ok', entries } : { status: 'failed' };
+}
+
 /** Every path that differs between the merge base and the working tree, plus untracked files. */
 async function rangeEntries(git: GitPort, root: string, range: RangeIdentity): Promise<ManifestEntry[] | undefined> {
   const diff = await git.run(['diff', '--name-status', '--no-renames', '--no-ext-diff', '-z', range.rangeBaseCommit, '--'], root);
