@@ -17,6 +17,7 @@
         "InvalidParams",
         "LegacyStateConflict",
         "LegacyTaskConflict",
+        "ObservedArtifactMismatch",
         "PhaseNotApproved",
         "PhaseValidationFailed",
         "RecoveryConflict",
@@ -48,6 +49,7 @@
           "1000",
           "5"
         ],
+        "ObservedArtifactMismatch": [],
         "PhaseNotApproved": [],
         "PhaseValidationFailed": [],
         "RecoveryConflict": [

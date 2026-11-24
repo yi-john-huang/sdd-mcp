@@ -21,7 +21,8 @@ import { InvalidFeatureNameError, SpecPathResolver, validateFeatureName } from '
 import { WorkflowValidationService, taskAcceptanceCriteria, type DesignValidationResult } from './WorkflowValidationService.js';
 import { GovernanceError } from './WorkflowErrors.js';
 import { assertTreeBinding, parseTreeBinding, serializeTreeBinding } from './TreeBindingCodec.js';
-import { DEFAULT_TREE_DEADLINE_MS, observeTree } from './WorkingTreeFingerprint.js';
+import { DEFAULT_TREE_DEADLINE_MS, changedPaths, observeTree } from './WorkingTreeFingerprint.js';
+import { unmatchedArtifacts } from './ObservedArtifactCheck.js';
 import { FilesystemLockCompromisedError, withFilesystemLock } from '../../utils/withFilesystemLock.js';
 
 const PHASES: ApprovablePhase[] = ['requirements', 'design', 'tasks'];
@@ -35,6 +36,8 @@ const TREE_ACTIONS: ReadonlySet<string> = new Set(['start', 'record-red', 'recor
 interface TransitionContext {
   readonly tree: TreeBinding | undefined;
   readonly settings: EvidenceSettings;
+  /** Completion artifacts with no change since start; undefined when the check could not run. */
+  readonly unmatched?: readonly string[];
 }
 
 const sameArgv = (a: readonly string[], b: readonly string[]): boolean => a.length === b.length && a.every((element, index) => element === b[index]);
@@ -440,8 +443,9 @@ export class WorkflowEngineService {
       const request = await this.withVerifyCommand(original);
       // The tree is observed before the command runs and outside the feature lock, so status reads stay free.
       const tree = TREE_ACTIONS.has(request.action) ? await observeTree(this.git, path.resolve(request.projectRoot), this.treeDeadlineMs) : undefined;
-      const outcome = request.run && EVIDENCE_ACTIONS.has(request.action) ? await this.observeBeforeCommit(request, request.run, tree) : undefined;
-      return this.commitTaskProgress(request, outcome, tree);
+      const unmatched = await this.unmatchedArtifacts(request, tree);
+      const outcome = request.run && EVIDENCE_ACTIONS.has(request.action) ? await this.observeBeforeCommit(request, request.run, tree, unmatched) : undefined;
+      return this.commitTaskProgress(request, outcome, tree, unmatched);
     });
   }
 
@@ -452,11 +456,27 @@ export class WorkflowEngineService {
     return settings.mode === 'verified' && settings.verifyCommand ? { ...request, run: { argv: [...settings.verifyCommand] } } : request;
   }
 
-  private async observeBeforeCommit(request: RecordTaskProgressRequest, run: NonNullable<RecordTaskProgressRequest['run']>, tree: TreeBinding | undefined): Promise<ObservedEvidence> {
+  /**
+   * For completion with a bound start and current tree, the named artifacts that did not change since start.
+   * Undefined when either tree is unbound or the path set is unavailable: the 6.0.0 rule then applies.
+   */
+  private async unmatchedArtifacts(request: RecordTaskProgressRequest, tree: TreeBinding | undefined): Promise<readonly string[] | undefined> {
+    if (request.action !== 'complete' || tree?.status !== 'bound' || !this.git || !this.fileSystem) return undefined;
+    const start = await this.withLockedFeature(request.projectRoot, request.featureName, false, async ({ spec }) =>
+      spec.implementation?.tasks[request.taskNumber]?.start_tree);
+    if (start?.status !== 'bound') return undefined;
+    const projectRoot = path.resolve(request.projectRoot);
+    const changed = await changedPaths(this.git, projectRoot, start, this.treeDeadlineMs);
+    if (changed.status !== 'ok') return undefined;
+    const fileSystem = this.fileSystem;
+    return unmatchedArtifacts(this.normalizeArtifacts(request.affectedArtifacts ?? []), changed.paths, (file) => fileSystem.exists(path.join(projectRoot, file)));
+  }
+
+  private async observeBeforeCommit(request: RecordTaskProgressRequest, run: NonNullable<RecordTaskProgressRequest['run']>, tree: TreeBinding | undefined, unmatched: readonly string[] | undefined): Promise<ObservedEvidence> {
     const { projectRoot, settings } = await this.withLockedFeature(request.projectRoot, request.featureName, false, async ({ projectRoot, featureRoot, spec }) => {
       await this.assertNoApprovedArtifactDrift(featureRoot, spec);
       const settings = await this.evidenceSettings(projectRoot);
-      this.assertTransition(spec, request, { tree, settings });
+      this.assertTransition(spec, request, { tree, settings, unmatched });
       return { projectRoot, settings };
     });
     return this.runEvidence(run.argv, projectRoot, settings);
@@ -475,6 +495,9 @@ export class WorkflowEngineService {
     this.assertEvidenceActionAllowed(task, request, prior);
     this.assertContinuity(task, request, context);
     this.assertVerifyCommand(request, context.settings);
+    if (request.action === 'complete' && context.unmatched && context.unmatched.length > 0) {
+      throw new GovernanceError('ObservedArtifactMismatch', 'Name only artifacts that changed since the task started. Remove the listed paths or make the change first.', { unmatched: [...context.unmatched] });
+    }
     return { implementation, task, prior };
   }
 
@@ -489,12 +512,12 @@ export class WorkflowEngineService {
     }
   }
 
-  private async commitTaskProgress(request: RecordTaskProgressRequest, outcome: ObservedEvidence | undefined, tree: TreeBinding | undefined): Promise<RecordTaskProgressResult> {
+  private async commitTaskProgress(request: RecordTaskProgressRequest, outcome: ObservedEvidence | undefined, tree: TreeBinding | undefined, unmatched: readonly string[] | undefined): Promise<RecordTaskProgressResult> {
     return this.withLockedFeature(request.projectRoot, request.featureName, true, async ({ projectRoot, featureRoot, spec, commitSpec }) => {
       await this.assertNoApprovedArtifactDrift(featureRoot, spec);
       const settings = await this.evidenceSettings(projectRoot);
       let observed: ObservedEvidenceResult | undefined;
-      const { implementation, task, prior } = this.assertTransition(spec, request, { tree, settings });
+      const { implementation, task, prior } = this.assertTransition(spec, request, { tree, settings, unmatched });
       if (request.action === 'start') {
         if (prior === 'pending') { task.status = 'in-progress'; if (tree) task.start_tree = tree; }
         else if (prior === 'blocked' && task.blocked_from) { task.status = task.blocked_from; delete task.blocker; delete task.blocked_from; }
