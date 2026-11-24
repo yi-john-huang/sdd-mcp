@@ -11,6 +11,7 @@
     "src/application/services/WorkflowEngineService.ts": {
       "codes": [
         "ArtifactDrift",
+        "EvidenceContinuityViolation",
         "EvidenceRunTimedOut",
         "EvidenceRunnerUnavailable",
         "InvalidParams",
@@ -28,6 +29,7 @@
       ],
       "numbers": {
         "ArtifactDrift": [],
+        "EvidenceContinuityViolation": [],
         "EvidenceRunTimedOut": [],
         "EvidenceRunnerUnavailable": [],
         "InvalidParams": [

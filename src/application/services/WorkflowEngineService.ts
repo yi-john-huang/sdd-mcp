@@ -31,6 +31,14 @@ const PHASE_CONTENT_CHARACTER_LIMIT = 1_048_576;
 const EVIDENCE_ACTIONS: ReadonlySet<string> = new Set(['record-red', 'record-green', 'complete']);
 const TREE_ACTIONS: ReadonlySet<string> = new Set(['start', 'record-red', 'record-green', 'complete']);
 
+/** What a transition check needs beyond the spec: the tree observed for this action and the resolved settings. */
+interface TransitionContext {
+  readonly tree: TreeBinding | undefined;
+  readonly settings: EvidenceSettings;
+}
+
+const sameArgv = (a: readonly string[], b: readonly string[]): boolean => a.length === b.length && a.every((element, index) => element === b[index]);
+
 /** Attaches the observed tree; only the verification record keeps dirty entries, which drift and artifact checks rebuild. */
 function bindEvidence(evidence: ExecutionEvidence, tree: TreeBinding | undefined, keepDirty: boolean): ExecutionEvidence {
   if (!tree) return evidence;
@@ -157,6 +165,7 @@ interface WorkflowSpecV5 extends Record<string, unknown> {
     }>;
   };
 }
+type SpecTask = NonNullable<WorkflowSpecV5['implementation']>['tasks'][string];
 interface JournalBytes { base64: string; sha256: string }
 interface SubmissionJournal { schema_version: 1; spec: { prior: JournalBytes; next: JournalBytes }; artifact: { prior: JournalBytes | null; next: JournalBytes } }
 const VALIDATION_STATUSES = new Set(['not-run', 'passed', 'failed', 'legacy-accepted'] as const);
@@ -428,22 +437,23 @@ export class WorkflowEngineService {
     return this.withEvidenceRunLock(request.projectRoot, request.featureName, async () => {
       // The tree is observed before the command runs and outside the feature lock, so status reads stay free.
       const tree = TREE_ACTIONS.has(request.action) ? await observeTree(this.git, path.resolve(request.projectRoot), this.treeDeadlineMs) : undefined;
-      const outcome = request.run && EVIDENCE_ACTIONS.has(request.action) ? await this.observeBeforeCommit(request, request.run) : undefined;
+      const outcome = request.run && EVIDENCE_ACTIONS.has(request.action) ? await this.observeBeforeCommit(request, request.run, tree) : undefined;
       return this.commitTaskProgress(request, outcome, tree);
     });
   }
 
-  private async observeBeforeCommit(request: RecordTaskProgressRequest, run: NonNullable<RecordTaskProgressRequest['run']>): Promise<ObservedEvidence> {
+  private async observeBeforeCommit(request: RecordTaskProgressRequest, run: NonNullable<RecordTaskProgressRequest['run']>, tree: TreeBinding | undefined): Promise<ObservedEvidence> {
     const { projectRoot, settings } = await this.withLockedFeature(request.projectRoot, request.featureName, false, async ({ projectRoot, featureRoot, spec }) => {
       await this.assertNoApprovedArtifactDrift(featureRoot, spec);
-      this.assertTransition(spec, request);
-      return { projectRoot, settings: await this.evidenceSettings(projectRoot) };
+      const settings = await this.evidenceSettings(projectRoot);
+      this.assertTransition(spec, request, { tree, settings });
+      return { projectRoot, settings };
     });
     return this.runEvidence(run.argv, projectRoot, settings);
   }
 
   /** Every precondition of the action, without mutating the spec. */
-  private assertTransition(spec: WorkflowSpecV5, request: RecordTaskProgressRequest) {
+  private assertTransition(spec: WorkflowSpecV5, request: RecordTaskProgressRequest, context: TransitionContext) {
     const implementation = spec.implementation;
     if (!implementation) throw new GovernanceError('TaskTransitionInvalid', 'Implementation has not started. Start implementation before changing task state.');
     if (implementation.revision !== request.expectedRevision) throw new GovernanceError('RevisionConflict', 'Implementation revision is stale. Reload status and submit again with the current revision.');
@@ -453,6 +463,7 @@ export class WorkflowEngineService {
     if (request.action === 'start' && incomplete.length > 0) throw new GovernanceError('TaskDependencyIncomplete', 'Task dependencies are incomplete. Complete the listed dependency tasks first.', { dependencies: incomplete });
     const prior = task.status;
     this.assertEvidenceActionAllowed(task, request, prior);
+    this.assertContinuity(task, request, context);
     return { implementation, task, prior };
   }
 
@@ -472,7 +483,7 @@ export class WorkflowEngineService {
       await this.assertNoApprovedArtifactDrift(featureRoot, spec);
       const settings = await this.evidenceSettings(projectRoot);
       let observed: ObservedEvidenceResult | undefined;
-      const { implementation, task, prior } = this.assertTransition(spec, request);
+      const { implementation, task, prior } = this.assertTransition(spec, request, { tree, settings });
       if (request.action === 'start') {
         if (prior === 'pending') { task.status = 'in-progress'; if (tree) task.start_tree = tree; }
         else if (prior === 'blocked' && task.blocked_from) { task.status = task.blocked_from; delete task.blocker; delete task.blocked_from; }
@@ -511,6 +522,23 @@ export class WorkflowEngineService {
 
   private async evidenceSettings(projectRoot: string): Promise<EvidenceSettings> {
     return resolveEvidenceSettings(this.environment, await readProjectConfig(projectRoot, this.fileSystem));
+  }
+
+  /**
+   * In verified mode, GREEN must run the command RED ran, on a working tree that changed since RED.
+   * Each part is skipped when RED lacks the matching record (an argv or a bound tree).
+   */
+  private assertContinuity(task: SpecTask, request: RecordTaskProgressRequest, context: TransitionContext): void {
+    const red = task.evidence.red;
+    if (request.action !== 'record-green' || context.settings.mode !== 'verified' || !request.run || red?.source !== 'engine') return;
+    if (red.argv && !sameArgv(red.argv, request.run.argv)) {
+      throw new GovernanceError('EvidenceContinuityViolation', 'Run GREEN with the same run.argv that RED used. Record RED again first if the test command must change.', { reason: 'argv-mismatch', expectedArgv: [...red.argv] });
+    }
+    const before = red.workingTree;
+    const now = context.tree;
+    if (before?.status === 'bound' && now?.status === 'bound' && before.sha256 === now.sha256) {
+      throw new GovernanceError('EvidenceContinuityViolation', 'Change the implementation before recording GREEN. The working tree matches the tree RED observed.', { reason: 'unchanged-tree' });
+    }
   }
 
   /** An engine RED that failed at setup proves nothing about behavior, so it cannot unlock GREEN. */

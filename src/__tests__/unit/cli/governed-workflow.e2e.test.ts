@@ -178,6 +178,11 @@ describe('packed Skill-governed workflow distribution', () => {
     });
     afterEach(() => rmSync(path.dirname(projectRoot), { recursive: true, force: true }));
 
+    /** A test that fails with an assertion until order.js exports 1; RED and GREEN run this same file. */
+    const orderTest = (): string => {
+      script('order.js', 'module.exports = 2;\n');
+      return script('order.test.js', 'const actual = require("./order.js");\nif (actual !== 1) { process.stderr.write(`Expected: 1\\nReceived: ${actual}\\n`); process.exit(3); }\n');
+    };
     /** Evidence runs a project file, never inline code, so each scenario writes its script into the project. */
     const script = (name: string, body: string): string => {
       writeFileSync(path.join(projectRoot, name), body);
@@ -189,7 +194,7 @@ describe('packed Skill-governed workflow distribution', () => {
       let revision = await approveAll();
       revision = (await call('sdd-spec-impl', { featureName: feature, taskNumber: '1.1', action: 'start', expectedRevision: revision })).revision as number;
 
-      const red = await call('sdd-spec-impl', { featureName: feature, taskNumber: '1.1', action: 'record-red', expectedRevision: revision, run: { argv: [node, script('red.js', 'process.stderr.write("Expected: 1\\nReceived: 2\\n"); process.exit(3);')] } });
+      const red = await call('sdd-spec-impl', { featureName: feature, taskNumber: '1.1', action: 'record-red', expectedRevision: revision, run: { argv: [node, orderTest()] } });
       expect(red).toMatchObject({ taskState: 'red-observed', evidenceMode: 'verified', observed: { exitCode: 3, classification: 'assertion' } });
       const redEntry = spec().implementation.tasks['1.1'].evidence.red;
       expect(redEntry).toMatchObject({ exit_code: 3, source: 'engine', red_classification: 'assertion' });
@@ -201,7 +206,8 @@ describe('packed Skill-governed workflow distribution', () => {
       expect(codeOf(typed)).toBe('SelfReportedEvidenceRejected');
       expect(readFileSync(specPath(), 'utf8')).toBe(before);
 
-      const green = await call('sdd-spec-impl', { featureName: feature, taskNumber: '1.1', action: 'record-green', expectedRevision: revision, run: { argv: [node, script('green.js', 'process.exit(0);')] } });
+      script('order.js', 'module.exports = 1;\n');
+      const green = await call('sdd-spec-impl', { featureName: feature, taskNumber: '1.1', action: 'record-green', expectedRevision: revision, run: { argv: [node, 'order.test.js'] } });
       expect(green).toMatchObject({ taskState: 'green-observed', observed: { exitCode: 0 } });
       revision = green.revision as number;
 
