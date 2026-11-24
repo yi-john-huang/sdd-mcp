@@ -97,7 +97,7 @@ export class I18nextService implements I18nService {
           prefix: this.config.interpolation.prefix,
           suffix: this.config.interpolation.suffix,
           formatSeparator: this.config.interpolation.formatSeparator,
-          format: (value: unknown, format: string | undefined, language: string) => {
+          format: (value: unknown, format: string | undefined, language: string | undefined) => {
             if (!format) return String(value);
             return this.config.interpolation.format(value, format, language as SupportedLanguage);
           }

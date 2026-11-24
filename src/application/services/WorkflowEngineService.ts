@@ -380,7 +380,7 @@ export class WorkflowEngineService {
           return Object.entries(current.tasks).map(([id, task]) => ({ id, ...task }));
         })();
         if (parsed.length === 0) throw new GovernanceError('LegacyTaskConflict', 'Tasks artifact contains no executable leaf tasks. Add at least one executable task in the tasks phase Skill.');
-        const taskStates: WorkflowSpecV5['implementation']['tasks'] = {};
+        const taskStates: NonNullable<WorkflowSpecV5['implementation']>['tasks'] = {};
         for (const task of parsed) {
           taskStates[task.id] = {
             title: task.title, tdd_required: task.tddRequired, dependencies: [...task.dependencies],
@@ -436,7 +436,7 @@ export class WorkflowEngineService {
     return { implementation, task, prior };
   }
 
-  private assertEvidenceActionAllowed(task: WorkflowSpecV5['implementation']['tasks'][string], request: RecordTaskProgressRequest, prior: TaskStatus): void {
+  private assertEvidenceActionAllowed(task: NonNullable<WorkflowSpecV5['implementation']>['tasks'][string], request: RecordTaskProgressRequest, prior: TaskStatus): void {
     if (request.action === 'record-red' && (!task.tdd_required || !this.canRecordRed(task.evidence.red, prior))) this.invalidTransition(request.action, prior);
     if (request.action === 'record-green' && (!task.tdd_required || prior !== 'red-observed')) this.invalidTransition(request.action, prior);
     if (request.action !== 'complete') return;

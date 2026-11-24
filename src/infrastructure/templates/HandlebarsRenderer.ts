@@ -113,8 +113,8 @@ export class HandlebarsRenderer implements TemplateRendererPort {
     }
   }
 
-  registerHelper(name: string, helper: (...args: unknown[]) => unknown): void {
-    this.handlebarsInstance.registerHelper(name, helper);
+  registerHelper(name: string, helper: (...args: never[]) => unknown): void {
+    this.handlebarsInstance.registerHelper(name, helper as Handlebars.HelperDelegate);
     this.logger.debug('Template helper registered', { name });
   }
 

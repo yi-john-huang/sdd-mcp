@@ -39,6 +39,19 @@ export interface TemplateServiceOptions {
   readonly atomic?: boolean;
 }
 
+interface GeneratedTask {
+  title: string;
+  subtasks: string[];
+  requirements: string;
+}
+
+interface GeneratedTasks {
+  development: GeneratedTask[];
+  integration: GeneratedTask[];
+  quality: GeneratedTask[];
+  deployment: GeneratedTask[];
+}
+
 @injectable()
 export class TemplateService {
   constructor(
@@ -866,8 +879,8 @@ ${tasks.deployment.map((task, index) => `- [ ] ${index + 1}. ${task.title}
     return config || 'Build configuration to be defined';
   }
 
-  private generateImplementationTasks(packageJson: any, projectAnalysis: any): any {
-    const tasks = {
+  private generateImplementationTasks(packageJson: any, projectAnalysis: any): GeneratedTasks {
+    const tasks: GeneratedTasks = {
       development: [],
       integration: [],
       quality: [],
@@ -876,7 +889,7 @@ ${tasks.deployment.map((task, index) => `- [ ] ${index + 1}. ${task.title}
 
     // Development tasks
     if (projectAnalysis.hasSource) {
-      (tasks.development as any).push({
+      tasks.development.push({
         title: 'Implement Core Modules',
         subtasks: ['Set up module structure', 'Implement business logic', 'Add error handling'],
         requirements: 'FR-1, FR-2'
@@ -884,7 +897,7 @@ ${tasks.deployment.map((task, index) => `- [ ] ${index + 1}. ${task.title}
     }
 
     if (packageJson.dependencies?.express) {
-      (tasks.development as any).push({
+      tasks.development.push({
         title: 'Develop API Endpoints',
         subtasks: ['Create route handlers', 'Add middleware', 'Implement validation'],
         requirements: 'FR-2'
@@ -893,7 +906,7 @@ ${tasks.deployment.map((task, index) => `- [ ] ${index + 1}. ${task.title}
 
     // Integration tasks
     if (packageJson.dependencies?.mongodb || packageJson.dependencies?.mongoose) {
-      (tasks.integration as any).push({
+      tasks.integration.push({
         title: 'Database Integration',
         subtasks: ['Set up database connection', 'Create data models', 'Implement queries'],
         requirements: 'NFR-2'
@@ -902,7 +915,7 @@ ${tasks.deployment.map((task, index) => `- [ ] ${index + 1}. ${task.title}
 
     // Quality tasks
     if (packageJson.scripts?.test) {
-      (tasks.quality as any).push({
+      tasks.quality.push({
         title: 'Test Implementation',
         subtasks: ['Write unit tests', 'Add integration tests', 'Ensure test coverage'],
         requirements: 'FR-3, NFR-3'
@@ -910,7 +923,7 @@ ${tasks.deployment.map((task, index) => `- [ ] ${index + 1}. ${task.title}
     }
 
     if (packageJson.scripts?.lint) {
-      (tasks.quality as any).push({
+      tasks.quality.push({
         title: 'Code Quality Assurance',
         subtasks: ['Run linting checks', 'Fix code style issues', 'Add documentation'],
         requirements: 'NFR-3'
@@ -919,14 +932,14 @@ ${tasks.deployment.map((task, index) => `- [ ] ${index + 1}. ${task.title}
 
     // Deployment tasks
     if (packageJson.scripts?.build) {
-      (tasks.deployment as any).push({
+      tasks.deployment.push({
         title: 'Build and Package',
         subtasks: ['Run build process', 'Optimize for production', 'Create deployment artifacts'],
         requirements: 'NFR-1'
       });
     }
 
-    (tasks.deployment as any).push({
+    tasks.deployment.push({
       title: 'Deployment Configuration',
       subtasks: ['Set up environment variables', 'Configure production settings', 'Deploy to target environment'],
       requirements: 'NFR-1, NFR-2'

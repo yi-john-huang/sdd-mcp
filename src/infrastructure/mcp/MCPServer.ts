@@ -117,7 +117,10 @@ export class MCPServer {
       const correlationId = uuidv4();
       
       if (request.params.name !== tool.name) {
-        return;
+        return {
+          content: [{ type: 'text' as const, text: JSON.stringify({ code: 'UnknownTool', message: `Tool ${request.params.name} is not registered here.` }) }],
+          isError: true as const
+        };
       }
 
       this.logger.info('Executing tool', {
