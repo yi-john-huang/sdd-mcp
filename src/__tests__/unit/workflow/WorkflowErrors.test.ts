@@ -33,6 +33,11 @@ describe('workflow error serialization', () => {
     'EvidenceCommandNotAllowed',
     'EvidenceRunTimedOut',
     'EvidenceRunnerUnavailable',
+    'RedSetupFailure',
+    'EvidenceContinuityViolation',
+    'ObservedArtifactMismatch',
+    'VerifyCommandMismatch',
+    'EvidenceCommandInlineEval',
   ])('passes the %s evidence code through to the tool result', (code) => {
     expect(serializeToolError(new GovernanceError(code as never, 'why', { observed: { exitCode: 1 } }))).toEqual({ code, message: 'why', details: { observed: { exitCode: 1 } } });
     expect(serializeToolError(Object.assign(new Error('foreign'), { code }))).toEqual({ code, message: 'foreign' });
