@@ -767,6 +767,7 @@ export class PluginManager implements IPluginManager {
             lastCall = now;
             return fn(...args);
           }
+          return undefined;
         }) as T;
       }
     };

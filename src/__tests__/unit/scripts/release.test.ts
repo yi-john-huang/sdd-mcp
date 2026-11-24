@@ -93,6 +93,8 @@ describe('applyVersion', () => {
     await mkdir(path.join(root, '.claude-plugin'));
     await mkdir(path.join(root, 'docs'));
     await mkdir(path.join(root, 'src/shared'), { recursive: true });
+    await mkdir(path.join(root, '.spec/steering'), { recursive: true });
+    await writeFile(path.join(root, '.spec/steering/tech.md'), '# Tech\n\n- Current version: `5.3.0`\n- Node.js 20 or later\n');
     await writeFile(path.join(root, 'package.json'), JSON.stringify({ name: 'sdd-mcp-server', version: '5.3.0' }, null, 2) + '\n');
     await writeFile(path.join(root, 'package-lock.json'), JSON.stringify({
       name: 'sdd-mcp-server', version: '5.3.0', lockfileVersion: 3,
@@ -120,9 +122,10 @@ describe('applyVersion', () => {
     const changed = call('applyVersion', { root, from: '5.3.0', released: '5.3.0', to: '5.4.0', date: '2026-10-05' });
 
     expect(changed.sort()).toEqual([
-      '.claude-plugin/plugin.json', 'CHANGELOG.md', 'README.md', 'docs/INSTALL-GUIDE.md',
+      '.claude-plugin/plugin.json', '.spec/steering/tech.md', 'CHANGELOG.md', 'README.md', 'docs/INSTALL-GUIDE.md',
       'package-lock.json', 'package.json', 'src/shared/version.ts',
     ]);
+    expect(await read(root, '.spec/steering/tech.md')).toBe('# Tech\n\n- Current version: `5.4.0`\n- Node.js 20 or later\n');
     expect(JSON.parse(await read(root, 'package.json')).version).toBe('5.4.0');
     const lock = JSON.parse(await read(root, 'package-lock.json'));
     expect([lock.version, lock.packages[''].version, lock.packages['node_modules/estraverse'].version]).toEqual(['5.4.0', '5.4.0', '5.3.0']);

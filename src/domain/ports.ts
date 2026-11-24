@@ -26,7 +26,7 @@ export interface FileSystemPort {
 export interface TemplateEngine {
   compile(template: string): Promise<TemplateFunction>;
   render(template: string, data: Record<string, unknown>): Promise<string>;
-  registerHelper(name: string, helper: (...args: unknown[]) => string): void;
+  registerHelper(name: string, helper: (...args: never[]) => string): void;
 }
 
 export interface TemplateFunction {

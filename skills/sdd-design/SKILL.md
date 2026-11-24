@@ -23,7 +23,8 @@ If the runtime is unavailable because of host permission, report an actionable r
 2. Define data ownership and flow before components. Choose the simplest fitting architecture and explain trade-offs.
 3. Include exact headings `## Requirements Traceability`, `## Architecture and Data Flow`, `## Components and Interfaces`, `## Failure Handling`, and `## Verification`.
 4. Give each decision a unique `### D-N: ...` section with same-line labels `**Covers:**`, `**Decision:**`, `**Failure behavior:**`, and `**Verification:**`. `Covers` is a comma-separated list of known requirement IDs.
-5. Specify responsibilities, interfaces, dependencies, invariants, persistence/migration, compatibility, authorization, input boundaries, concurrency, failure behavior, rollback, and verification where relevant.
+5. Specify responsibilities, interfaces, invariants, persistence/migration, compatibility, authorization, input boundaries, concurrency, failure behavior, and rollback where relevant.
+6. For an unresolved architectural fork, optionally add `## Interface Spike` naming throwaway code under `.spec/specs/<feature>/spike/` and the decision it settled; production code never imports it.
 
 Internally submit the complete Markdown with the exact revision and artifact identity last observed. Submission, not direct file editing, is the canonical write. Present the saved path and concise validation outcome. On failed validation, keep the durable draft, load it explicitly, and revise; do not request approval.
 
@@ -41,4 +42,4 @@ Return the canonical saved path, traceable decisions, concise validation evidenc
 
 ## Optional Reference
 
-Read [REFERENCE.md](REFERENCE.md) only for the exact design shape, component template, checklist, or pattern comparison.
+Read [REFERENCE.md](REFERENCE.md) only for the exact design shape, component template, checklist, pattern comparison, or interface spike.

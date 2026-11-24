@@ -202,7 +202,7 @@ export class ToolRegistry {
 
     return {
       name: handler.tool.name,
-      description: handler.tool.description,
+      description: handler.tool.description ?? '',
       inputSchema: handler.tool.inputSchema,
       examples
     };

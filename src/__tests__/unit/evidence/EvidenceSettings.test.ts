@@ -122,6 +122,47 @@ describe('resolveEvidenceSettings', () => {
     });
   });
 
+  describe('verifyCommand', () => {
+    it('should resolve a valid configured argv with no warning', () => {
+      const settings = resolve({}, { evidence: { verifyCommand: ['npm', 'test'] } });
+      expect(settings.verifyCommand).toEqual(['npm', 'test']);
+      expect(settings.warnings).toEqual([]);
+    });
+
+    it('should leave verifyCommand undefined when it is not configured', () => {
+      expect(resolve().verifyCommand).toBeUndefined();
+    });
+
+    it.each<[string, unknown]>([
+      ['a string', 'npm test'],
+      ['an empty array', []],
+      ['a non-string element', ['npm', 3]],
+      ['an element with a NUL', ['npm', 'te\u0000st']],
+      ['an element with a line break', ['npm', 'te\nst']],
+      ['more than 64 elements', Array.from({ length: 65 }, () => 'x')],
+      ['a program outside the allowlist', ['sh', '-c', 'exit 0']],
+      ['inline eval', ['node', '-e', 'process.exit(0)']],
+      ['an absolute program path', ['/tmp/fakebin/jest']],
+      ['a program outside the runner directories', ['tools/jest']],
+    ])('should ignore %s with exactly one warning', (...[, value]) => {
+      const settings = resolve({}, { evidence: { verifyCommand: value } });
+      expect(settings.verifyCommand).toBeUndefined();
+      expect(settings.warnings).toHaveLength(1);
+      expect(settings.warnings[0]).toContain('evidence.verifyCommand');
+    });
+
+    it('should check the program against a project allowlist', () => {
+      const settings = resolve({}, { evidence: { allowedCommands: ['make'], verifyCommand: ['npm', 'test'] } });
+      expect(settings.verifyCommand).toBeUndefined();
+      expect(settings.warnings).toHaveLength(1);
+    });
+
+    it('should not be overridden by any environment variable', () => {
+      const settings = resolve({ SDD_EVIDENCE_VERIFY_COMMAND: 'node -e 1', SDD_VERIFY_COMMAND: 'x' }, { evidence: { verifyCommand: ['npm', 'test'] } });
+      expect(settings.verifyCommand).toEqual(['npm', 'test']);
+    });
+  });
+
   describe('serialization', () => {
     it('should expose only mode and timeout through JSON.stringify and toString', () => {
       const settings = resolve(

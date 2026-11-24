@@ -49,3 +49,12 @@ Verification:
 - alternatives explain why simpler options were rejected;
 - diagrams clarify real flow rather than decorate the document;
 - rollout and rollback preserve valid existing state.
+
+## Interface Spike
+
+Use a spike only when two interface shapes are both plausible and reading code cannot settle the choice.
+
+- Put throwaway code under `.spec/specs/<feature>/spike/`. Production code never imports it, and the spike is not a deliverable.
+- Keep it to the smallest call sequence that shows the difference: a caller, the candidate interface, and one stub.
+- In the design, add `## Interface Spike` with the question, the path, what the spike showed, and the decision it settled. Cite that decision from the relevant `### D-N` section.
+- Delete or keep the spike folder as the team prefers; the validator ignores it and approval still needs the explicit human answer.

@@ -1,0 +1,3 @@
+# example.com/order [example.com/order.test]
+./order_test.go:8:9: undefined: CreateOrder
+FAIL	example.com/order [build failed]

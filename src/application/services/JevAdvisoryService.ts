@@ -19,6 +19,7 @@ import { JevSidecarStore, type JevSidecar } from './JevSidecarStore.js';
 import { readProjectJevSetting, resolveJevSettings, type JevSettings } from './JevSettings.js';
 import { validateFeatureName } from './SpecPathResolver.js';
 import type { AdvisorySnapshot } from './WorkflowEngineService.js';
+import { GovernanceError } from './WorkflowErrors.js';
 
 /** The only slice of the workflow engine JEV may use: a read-only snapshot. */
 export interface AdvisoryEngine {
@@ -56,11 +57,13 @@ export class JevAdvisoryService {
     this.commit = new JevCommitLookup(fileSystem, git, this.store);
   }
 
-  /** Never rejects: every failure becomes a result value. */
+  /** Rejects only with InvalidParams for a caller mistake; every other failure becomes a result value. */
   async check(request: JevCheckRequest): Promise<JevCheckResult> {
     try {
       return await this.run(request);
     } catch (error) {
+      // A caller mistake surfaces through the normal tool error path; every other failure stays advisory.
+      if (error instanceof GovernanceError && error.code === 'InvalidParams') throw error;
       this.logger.warn('JEV check failed locally', { check: request.check, errorName: error instanceof Error ? error.name : 'Error' });
       return skippedResult(request.check, 'not-ready');
     }
@@ -119,7 +122,10 @@ export class JevAdvisoryService {
     const snapshot = await this.engine.readAdvisorySnapshot({ projectRoot: request.projectRoot, featureName: request.featureName ?? '', phase: 'tasks' });
     const task = snapshot.implementation?.tasks[taskNumber];
     if (!task || !task.tddRequired) return skippedResult('red', 'not-ready');
-    const engineRed = task.status === 'red-observed' && task.red?.source === 'engine' ? task.red : undefined;
+    const engineRed = task.red?.source === 'engine' ? task.red : undefined;
+    if (!engineRed && request.evidence === undefined) {
+      throw new GovernanceError('InvalidParams', 'Record RED through the engine first, or pass evidence for the red check.');
+    }
     const callerReady = task.status === 'in-progress' && request.evidence !== undefined && request.evidence.exitCode !== 0;
     if (!engineRed && !callerReady) return skippedResult('red', 'not-ready');
 

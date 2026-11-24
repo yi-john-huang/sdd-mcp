@@ -2,6 +2,7 @@ import { execFile } from 'node:child_process';
 import { injectable } from 'inversify';
 import type { GitPort, GitResult } from '../../domain/ports.js';
 
+/** Per-call limits; an over-limit call fails safe, and tree binding then reports `unavailable` (see docs/WORKFLOW.md). */
 const GIT_TIMEOUT_MS = 3000;
 const GIT_MAX_BUFFER = 4 * 1024 * 1024;
 

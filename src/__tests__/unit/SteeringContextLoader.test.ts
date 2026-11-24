@@ -28,6 +28,16 @@ describe("SteeringContextLoader", () => {
   });
 
   describe("loadContext", () => {
+    it("should never read the project correction log", async () => {
+      mockFileSystem.exists.mockResolvedValue(true);
+      mockFileSystem.readFile.mockResolvedValue("a".repeat(250));
+      await loader.loadContext("/test/project");
+      const touched = [...mockFileSystem.exists.mock.calls, ...mockFileSystem.readFile.mock.calls].map(([file]) => String(file));
+      expect(touched.length).toBeGreaterThan(0);
+      expect(touched.filter((file) => file.includes("corrections.md"))).toEqual([]);
+    });
+
+
     it("should return default context when projectPath is null", async () => {
       const result = await loader.loadContext();
 

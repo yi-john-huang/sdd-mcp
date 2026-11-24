@@ -10,7 +10,7 @@
 - **Package manager:** npm with `package-lock.json`
 
 ### Core Frameworks and Protocols
-- **Model Context Protocol SDK:** One compiled stdio server with an exact 16-tool v5 integrator contract.
+- **Model Context Protocol SDK:** One compiled stdio server with an exact 17-tool integrator contract (16 workflow tools plus the advisory `sdd-jev-check`).
 - **Inversify:** Dependency injection container for clean architecture wiring.
 - **Handlebars:** Template rendering for generated documents and project artifacts.
 - **AJV and Zod:** Runtime validation for schemas and structured input.
@@ -60,6 +60,10 @@ Domain ports live in `src/domain/ports.ts` and are implemented in infrastructure
 - `src/cli/tool-support/` contains Claude Code, Codex, and OMP render/install strategies; `src/cli/utils/` contains managed ownership, atomic persistence, and generated-ignore boundaries.
 - `src/application/services/ContextCompactionService.ts` handles phase-aware bounded context, SHA-256 fingerprints, ETags, and canonical handoff repair.
 - `src/application/services/WorkflowEngineService.ts` treats `.spec/specs/*/spec.json` as workflow authority across server restarts.
+- `src/application/services/EvidenceRunner.ts`, `EvidenceCommandPolicy.ts`, and `EvidenceSettings.ts` provide verified execution evidence: the server runs allowlisted `run.argv` commands (never a shell or inline `-e` code) and records the observed exit code, output hash, and excerpt. An optional `evidence.verifyCommand` fixes the completion command.
+- `src/application/services/WorkingTreeFingerprint.ts` and `ObservedArtifactCheck.ts` bind evidence to a content fingerprint of the git working tree. The engine rejects GREEN on an unchanged tree or a different command, rejects completion artifacts that did not change, and status reports drift after the latest verification.
+- `src/application/services/RedEvidenceClassifier.ts` classifies RED output as `setup` or `assertion` for JavaScript, Python, Go, Rust, JVM, and .NET; GREEN is blocked while the latest RED is `setup`.
+- `src/application/services/Jev*.ts` implement JEV, an advisory second-opinion check (`sdd-jev-check`) that never blocks a workflow transition.
 
 ### Workflow Responsibility Boundary
 - Canonical `skills/sdd-{requirements,design,tasks,implement}/` owns method, artifact composition, concise validation presentation, and explicit human gates.
@@ -83,7 +87,8 @@ npm start
 | `npm run build` | Compile TypeScript into `dist/` |
 | `npm run start` | Run the compiled server |
 | `npm run typecheck` | Run `tsc --noEmit` |
-| `npm run lint` | Run ESLint over `src/**/*.ts` |
+| `npm run lint` | Run the lint ratchet: ESLint over `src/**/*.ts`, failing on any error or on any warning count above `scripts/lint-baseline.json` |
+| `npm run lint:baseline` | Lower the lint baseline after warnings are fixed; it never raises a count |
 | `npm run test` | Run Jest |
 | `npm run test:unit` | Run unit tests only; quote the ignore pattern in zsh if invoking manually |
 | `npm run test:coverage` | Generate coverage reports |
@@ -91,7 +96,7 @@ npm start
 
 ### Packaging
 - Published package name: `sdd-mcp-server`
-- Current version: `5.0.0`
+- Current version: `6.0.0`
 - Binaries:
   - `sdd-mcp-server` -> `sdd-entry.js`
   - `sdd-install-skills` -> `dist/cli/install-skills.js`
@@ -107,7 +112,8 @@ The Docker build is multi-stage:
 The production image is intended to run with a minimal attack surface and no shell.
 
 ## Quality Standards
-- Keep `npm run typecheck` passing before delivery.
+- Strict TypeScript: `tsconfig.json` sets `strict`, `noImplicitReturns`, and `noEmitOnError`, and `npm run typecheck` must pass.
+- The lint ratchet blocks new warnings per file and rule; CI runs build, typecheck, lint, and tests on Linux and macOS.
 - Use focused Jest unit tests for workflow, installer, context, validation, and service behavior.
 - Maintain the configured global coverage threshold of 80% for branches, functions, lines, and statements in coverage runs.
 - Use existing port/service abstractions before adding new infrastructure dependencies.

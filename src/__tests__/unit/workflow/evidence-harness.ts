@@ -3,7 +3,7 @@ import path from 'node:path';
 import { ContextCompactionService } from '../../../application/services/ContextCompactionService';
 import { EvidenceRunner } from '../../../application/services/EvidenceRunner';
 import { WorkflowEngineService } from '../../../application/services/WorkflowEngineService';
-import type { LoggerPort, ProcessPort, ProcessRunRequest, ProcessRunResult, ProjectRepository } from '../../../domain/ports';
+import type { GitPort, LoggerPort, ProcessPort, ProcessRunRequest, ProcessRunResult, ProjectRepository } from '../../../domain/ports';
 import type { Project } from '../../../domain/types';
 import { NodeFileSystemAdapter } from '../../../infrastructure/adapters/NodeFileSystemAdapter';
 
@@ -95,11 +95,17 @@ export interface EngineOptions {
   readonly port?: ProcessPort;
   readonly env?: Readonly<Record<string, string | undefined>>;
   readonly withoutRunner?: boolean;
+  /** Git for working-tree bindings; absent means every binding is unavailable, as in 6.0.0 wiring. */
+  readonly git?: GitPort;
+  /** Overrides the 10 s working-tree deadline so timeout tests stay fast. */
+  readonly treeDeadlineMs?: number;
 }
 
 export function createEngine(fileSystem: NodeFileSystemAdapter, options: EngineOptions = {}): WorkflowEngineService {
   const runner = options.withoutRunner ? undefined : new EvidenceRunner(options.port ?? new ScriptedProcessPort([exited('', 0)]));
-  return new WorkflowEngineService(repository(), new ContextCompactionService(fileSystem, logger), logger, fileSystem, runner, options.env ?? {});
+  const engine = new WorkflowEngineService(repository(), new ContextCompactionService(fileSystem, logger), logger, fileSystem, runner, options.env ?? {}, options.git);
+  if (options.treeDeadlineMs !== undefined) Object.assign(engine, { treeDeadlineMs: options.treeDeadlineMs });
+  return engine;
 }
 
 /** Drives a feature through approved requirements, design, and tasks into implementation. */

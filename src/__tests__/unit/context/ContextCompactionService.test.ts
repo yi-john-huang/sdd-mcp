@@ -54,6 +54,16 @@ describe('ContextCompactionService v4', () => {
 
   afterEach(async () => { await rm(projectRoot, { recursive: true, force: true }); });
 
+  it('never loads the project correction log into feature context', async () => {
+    const marker = 'CORRECTION_LOG_MARKER_DO_NOT_LOAD';
+    await writeFile(path.join(projectRoot, '.spec', 'corrections.md'), `# Corrections\n- ${marker}\n`, 'utf8');
+    await writeSpec({ requirements: { generated: true, approved: false }, design: { generated: false, approved: false }, tasks: { generated: false, approved: false } });
+    const init = await service.loadContext({ projectRoot, featureName });
+    const full = await service.loadContext({ projectRoot, featureName, mode: 'full', phase: 'requirements', includeUnapproved: true });
+    expect(init.content).not.toContain(marker);
+    expect(full.content).not.toContain(marker);
+  });
+
   it('returns bounded init state and excludes generated unapproved drafts by default', async () => {
     const init = await service.loadContext({ projectRoot, featureName });
     expect(init.effectivePhase).toBe('init');

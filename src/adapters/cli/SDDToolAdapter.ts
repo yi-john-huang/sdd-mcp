@@ -323,7 +323,7 @@ export class SDDToolAdapter {
   }
 
 
-  /** Advisory only: the service never throws and never touches workflow state. */
+  /** Advisory only: never touches workflow state, and throws only InvalidParams for a caller mistake. */
   private async handleJevCheck(args: Record<string, unknown>): Promise<unknown> {
     return this.jevService.check({
       check: args.check as JevCheckKind,

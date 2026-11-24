@@ -1,0 +1,4 @@
+=== RUN   TestTotal
+--- FAIL: TestTotal (0.00s)
+    total_test.go:21: total = 7, want 9
+FAIL

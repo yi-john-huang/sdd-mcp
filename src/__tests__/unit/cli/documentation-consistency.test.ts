@@ -20,6 +20,66 @@ describe('target-aware documentation consistency', () => {
 
 
 
+  it('documents the workflow trust gates, the verify command, and sdd-correct', () => {
+    const workflow = read('docs/WORKFLOW.md');
+    for (const code of ['RedSetupFailure', 'EvidenceContinuityViolation', 'ObservedArtifactMismatch', 'VerifyCommandMismatch', 'EvidenceCommandInlineEval']) {
+      expect(workflow).toContain(`| \`${code}\` |`);
+    }
+    expect(workflow).toContain('evidence.verifyCommand');
+    expect(workflow).toMatch(/### Evidence binding/);
+    expect(workflow).toMatch(/inline.*(-e|--eval)/is);
+    expect(workflow).toMatch(/one git worktree per slice/i);
+    expect(workflow).toMatch(/### Skill changes/);
+    expect(workflow).toContain('evals/skills');
+    expect(workflow).toContain('sdd-correct');
+  });
+
+  it('keeps the requirements reference link with requirements, and the verify command in DEPLOYMENT', () => {
+    const paragraphs = read('docs/WORKFLOW.md').split(/\n\n+/);
+    const link = paragraphs.find((paragraph) => paragraph.includes('[Requirements Reference]'));
+    expect(link).toBeDefined();
+    expect(link).not.toContain('Interface Spike');
+    expect(read('DEPLOYMENT.md')).toContain('evidence.verifyCommand');
+  });
+
+  it('states the parallel restriction and /sdd-correct in routing and root guidance', () => {
+    for (const file of ['docs/MODEL-ROUTING.md', 'AGENTS.md', 'templates/CLAUDE.md', 'templates/codex-AGENTS.md', 'src/cli/tool-support/root-guidance.ts']) {
+      const content = read(file);
+      expect({ file, worktree: /one git worktree per slice/i.test(content), correct: /sdd-correct/.test(content) })
+        .toEqual({ file, worktree: true, correct: true });
+    }
+  });
+
+  it('describes the binding components, CI steps, and the release entry', () => {
+    const architecture = read('ARCHITECTURE.md');
+    for (const term of ['WorkingTreeFingerprint', 'EvidenceCommandPolicy', 'verificationDrift']) expect(architecture).toContain(term);
+    const deployment = read('DEPLOYMENT.md');
+    expect(deployment).toContain('npm run lint:baseline');
+    expect(deployment).toMatch(/npm run typecheck[\s\S]*npm run lint[\s\S]*npm test/);
+    const unreleased = read('CHANGELOG.md').split(/\n## \[/)[1] ?? '';
+    expect(unreleased).toMatch(/^Unreleased\]/);
+    for (const term of ['RedSetupFailure', 'verifyCommand', 'drift', 'sdd-correct', 'lint ratchet', 'schema version 5', '17 tools', 'Rollback']) {
+      expect(unreleased).toContain(term);
+    }
+    const readme = read('README.md');
+    expect(readme).toContain('sdd-correct');
+  });
+
+  it('keeps project steering in step with the package version and tool count', () => {
+    const tech = read('.spec/steering/tech.md');
+    const version = (JSON.parse(read('package.json')) as { version: string }).version;
+    expect(tech).toContain(`Current version: \`${version}\``);
+    expect(tech).toContain(`${SDD_TOOL_NAMES.length}-tool`);
+    expect(SDD_TOOL_NAMES).toHaveLength(17);
+    expect(tech).toMatch(/verified execution evidence/i);
+    expect(tech).toMatch(/JEV/);
+    expect(tech).toMatch(/strict TypeScript/i);
+    expect(tech).toMatch(/lint ratchet/i);
+    for (const file of ['.spec/steering/product.md', '.spec/steering/structure.md']) {
+      expect(read(file)).not.toMatch(/\b5\.0\.0\b|16-tool|\bv5 public API\b/);
+    }
+  });
+
   it('documents both native output trees in architecture and workflow docs', () => {
     const architecture = read('ARCHITECTURE.md');
     const workflow = read('docs/WORKFLOW.md');

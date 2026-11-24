@@ -1,0 +1,4 @@
+thread 'tests::creates_order' panicked at src/lib.rs:20:9:
+assertion `left == right` failed
+  left: 2
+ right: 1

@@ -1,0 +1,3 @@
+[ERROR] COMPILATION ERROR :
+[ERROR] /work/src/test/java/OrderTest.java:[12,9] cannot find symbol
+  symbol:   class Order

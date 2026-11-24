@@ -49,6 +49,7 @@ The planner always counts from the released tag. So a rerun gives the same targe
 - `package.json` and `package-lock.json` (root entries only)
 - `.claude-plugin/plugin.json`
 - `src/shared/version.ts`
+- The `Current version:` line in `.spec/steering/tech.md`
 - The pinned `sdd-mcp-server@X.Y.Z` commands and `sdd-mcp-server-X.Y.Z.tgz` names in `README.md` and `docs/INSTALL-GUIDE.md`
 - `CHANGELOG.md`: the `[Unreleased]` entries move into a dated `[X.Y.Z]` section, and an empty `[Unreleased]` section stays on top
 

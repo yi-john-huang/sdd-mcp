@@ -16,7 +16,9 @@ Each Skill restores durable status and approved compact context, performs valida
 
 ## Model execution
 
-Claude applies the routed model to the current skill turn: Opus for requirements, design, review, and security; Sonnet for implementation and TDD. Execute in this turn and do not spawn a second specialist merely to switch models. Commit work remains in the current turn.
+Claude applies the routed model to the current skill turn: Opus for requirements, design, review, and security; Sonnet for implementation and TDD. Execute in this turn and do not spawn a second specialist merely to switch models. Commit work remains in the current turn. Parallel slices need one git worktree per slice; while evidence mode is verified, implementation slices run serially.
+
+After a repeated agent failure, invoke `/sdd-correct` to fix it at the strongest tier: structure, then lint or CI, then a test, and only then rule text.
 
 ## Installed components
 

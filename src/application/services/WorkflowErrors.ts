@@ -17,6 +17,11 @@ export type GovernanceErrorCode =
   | 'EvidenceCommandNotAllowed'
   | 'EvidenceRunTimedOut'
   | 'EvidenceRunnerUnavailable'
+  | 'RedSetupFailure'
+  | 'EvidenceContinuityViolation'
+  | 'ObservedArtifactMismatch'
+  | 'VerifyCommandMismatch'
+  | 'EvidenceCommandInlineEval'
   | 'InternalError';
 
 export class GovernanceError extends Error {
@@ -56,6 +61,11 @@ const PUBLIC_ERROR_CODES = new Set<string>([
   'EvidenceCommandNotAllowed',
   'EvidenceRunTimedOut',
   'EvidenceRunnerUnavailable',
+  'RedSetupFailure',
+  'EvidenceContinuityViolation',
+  'ObservedArtifactMismatch',
+  'VerifyCommandMismatch',
+  'EvidenceCommandInlineEval',
   'ContextBudgetTooSmall',
   'ContextBudgetExceeded',
   'ContextSourceError',

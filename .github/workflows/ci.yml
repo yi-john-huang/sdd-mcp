@@ -29,7 +29,7 @@ jobs:
       # so the files it writes in the workspace stay removable by the next checkout. `--init` adds a
       # PID 1 that reaps orphans; without it, killed grandchildren stay zombies and the process-tree
       # kill test sees them as alive.
-      - name: Build and test in the js-ci-runner image
+      - name: Build, typecheck, lint, and test in the js-ci-runner image
         run: |
           mkdir -p "$HOME/.cache/sdd-mcp-npm"
           docker run --rm --init --pull always \
@@ -37,7 +37,7 @@ jobs:
             -v "$PWD:/work" -w /work \
             -v "$HOME/.cache/sdd-mcp-npm:/tmp/home/.npm" \
             ghcr.io/yi-john-huang/js-ci-runner/ci:0.1 \
-            sh -c 'node --version && id && npm ci && npm run build && npm test'
+            sh -c 'node --version && id && npm ci && npm run build && npm run typecheck && npm run lint && npm test'
 
   test-macos:
     if: github.event_name == 'push' || github.event.pull_request.head.repo.full_name == github.repository
@@ -50,4 +50,6 @@ jobs:
       - run: node --version && id
       - run: npm ci
       - run: npm run build
+      - run: npm run typecheck
+      - run: npm run lint
       - run: npm test
