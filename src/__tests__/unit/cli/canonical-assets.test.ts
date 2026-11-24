@@ -22,15 +22,20 @@ const skillNames = [
 const requiredCoreChecks: Record<typeof skillNames[number], RegExp[]> = {
   'sdd-commit': [/inspect.*changes/i, /never.*secret/i, /focused.*test/i, /verification drift/i, /unverified/i],
   'sdd-design': [/requirements.*approved/i, /approved compact context/i, /approve this design/i, /## Interface Spike/, /spike\/.*never imports/i],
-  'sdd-implement': [/tasks.*approved/i, /red.*green.*refactor/is, /record.*blocker/i, /security/i],
+  'sdd-implement': [
+    /tasks.*approved/i, /red.*green.*refactor/is, /record.*blocker/i, /security/i,
+    /one git worktree per slice/i, /verified.*do not offer parallel/i,
+    /## Stop and Escalate/, /deploy or publish/i, /data deletion/i, /force-push/i, /external messages/i, /credential changes/i,
+    /3 failed GREEN/, /Unverified \/ Could Not Run/, /decision log/i, /COMPLETE.*omit.*run.*verify command/is,
+  ],
   'sdd-requirements': [/ears/i, /acceptance criteria/i, /approve these requirements/i, /label line or the next lines/i],
-  'sdd-review': [/correctness/i, /security/i, /verification/i],
+  'sdd-review': [/correctness/i, /security/i, /verification/i, /reproducible command or test/i, /unconfirmed/i],
   'sdd-security-check': [/owasp/i, /secret/i, /severity/i],
   'sdd-steering': [/preserve.*user/i, /security/i, /validate/i],
   'sdd-steering-custom': [/fileName/i, /\.md/, /preserve.*user/i],
   'sdd-tasks': [/design.*approved/i, /test.case.review/i, /approve these implementation tasks/i],
-  'sdd-test-gen': [/failing.*test/i, /observable.*behavior/i, /focused.*test/i],
-  'simple-task': [/failing.*test/i, /security/i, /focused.*test/i],
+  'sdd-test-gen': [/failing.*test/i, /observable.*behavior/i, /focused.*test/i, /one git worktree per slice/i],
+  'simple-task': [/failing.*test/i, /security/i, /focused.*test/i, /Unverified \/ Could Not Run/, /one git worktree per slice/i],
 };
 
 function read(relativePath: string): string {
@@ -44,6 +49,15 @@ function utf8Bytes(content: string): number {
 describe('requirements and design Skill wording', () => {
   it('no longer demands acceptance criteria on the label line', () => {
     expect(fs.readFileSync(path.resolve(process.cwd(), 'skills/sdd-requirements/SKILL.md'), 'utf8')).not.toMatch(/at least one numbered item on the same line/);
+  });
+
+  it('moves the REFACTOR, not-applicable, and Mandatory Checks detail into the implement REFERENCE', () => {
+    const skill = fs.readFileSync(path.resolve(process.cwd(), 'skills/sdd-implement/SKILL.md'), 'utf8');
+    const reference = fs.readFileSync(path.resolve(process.cwd(), 'skills/sdd-implement/REFERENCE.md'), 'utf8');
+    expect(skill).not.toContain('## Mandatory Checks');
+    expect(reference).toMatch(/## Mandatory Checks/);
+    expect(reference).toMatch(/## REFACTOR/);
+    expect(reference).toMatch(/## Not-Applicable Tasks/);
   });
 
   it('keeps the interface spike details in the design REFERENCE', () => {
@@ -145,6 +159,13 @@ describe('canonical progressive assets', () => {
       expect(content).toMatch(/verification evidence/i);
       expect(content).toMatch(/unresolved blockers/i);
       expect(content).toMatch(/2,048 estimated tokens/i);
+      if (file === 'implementer.md') {
+        expect(content.match(/^\d\. \*\*/gm)).toHaveLength(5);
+        expect(content).toMatch(/Unverified \/ Could Not Run/);
+        expect(content).toMatch(/assigned worktree/i);
+        expect(content).toMatch(/3 failed GREEN/);
+        expect(content).toMatch(/deploy or publish.*data deletion.*force-push.*external messages.*credential changes/is);
+      }
       totalBytes += utf8Bytes(content);
     }
     expect(totalBytes).toBeLessThanOrEqual(18_000);

@@ -19,6 +19,8 @@ Complete only the independent slice in the handoff. Reuse existing patterns and 
 
 Do not spawn or delegate. If the slice depends on an unprovided contract or overlaps another slice, return a blocker to the parent instead of guessing.
 
+Work only in the assigned worktree; if none is assigned for a parallel slice, return a blocker. Never deploy or publish, run data deletion outside the slice, force-push, send external messages, or make credential changes. After 3 failed GREEN attempts, or before touching files outside the slice, stop and return a blocker.
+
 ## Result Contract
 
 Return at most 2,048 estimated tokens with exactly these sections:
@@ -26,4 +28,5 @@ Return at most 2,048 estimated tokens with exactly these sections:
 1. **Decisions** — implementation choices that affect the contract.
 2. **Affected artifacts** — paths changed.
 3. **Verification evidence** — RED/GREEN commands and observed results.
-4. **Unresolved blockers** — remaining work or `None`.
+4. **Unverified / Could Not Run** — each skipped check with its reason, or `None`.
+5. **Unresolved blockers** — remaining work or `None`.

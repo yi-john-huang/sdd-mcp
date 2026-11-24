@@ -2,6 +2,22 @@
 
 Read only when a detailed checklist is needed for the current task.
 
+## Mandatory Checks
+
+- Preserve approved interfaces and existing conventions; update every affected caller.
+- Test boundaries, errors, invariants, transitions, and precedence, not implementation plumbing.
+- Validate untrusted input, enforce authorization, avoid injection, protect secrets and sensitive logs, and fail safely.
+- Consider concurrency, cleanup, compatibility, cancellation, rollback, and error propagation.
+- Run focused verification while iterating, then all affected checks. Never fabricate test, coverage, lint, or build results.
+
+## REFACTOR
+
+Simplify names, remove duplication, and narrow interfaces without changing observable behavior. Rerun the focused test after each change; a red result means the refactor changed behavior, so undo it rather than adjust the test.
+
+## Not-Applicable Tasks
+
+For a task marked `not-applicable`, record start, implement, verify, then complete with the verification `run.argv`. No RED or GREEN record is needed.
+
 ## Progress Recording Example
 
 For a TDD-required task, persist the observed sequence: start; RED with `run: { argv: ["npx", "jest", "src/order.test.ts"] }`, which the server runs and must see fail; GREEN with the same `run`, which the server must see pass; COMPLETE with the final verification `run` plus affected project-relative artifacts. The server stores the observed exit code, a SHA-256 of the output, and an 8 KB excerpt on each record; you never supply them. A RED whose excerpt is classified `setup` can be recorded again after the test is fixed. If interrupted, status supplies the persisted state and next action; never reconstruct it from conversation history.
