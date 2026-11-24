@@ -36,13 +36,25 @@ describe('classifyRedEvidence', () => {
     expect(result).toEqual({ classification: 'setup', matchedPattern: 'module-not-found' });
   });
 
+  it.each<[string, string, string]>([
+    ['a test file named after an error code', 'npx jest src/ENOENT.test.ts', 'Expected: 1\nReceived: 2'],
+    ['a command that names SyntaxError', 'npx jest -t SyntaxError', '3 tests failed'],
+  ])('never matches setup patterns in the command: %s', (...[, command, summary]) => {
+    expect(classifyRedEvidence(command, summary).classification).not.toBe('setup');
+  });
+
+  it.each<[string, string]>([
+    ['a Jest toThrow(SyntaxError) expectation', '● parse › rejects bad input\n\n    expect(received).toThrow(expected)\n\n    Expected constructor: SyntaxError\n    Received function did not throw\n'],
+    ['an expected ENOENT error code', 'expect(received).toBe(expected) // Object.is equality\n\nExpected: "ENOENT"\nReceived: "EACCES"\n'],
+    ['a pytest.raises(ImportError) that did not raise', ">       with pytest.raises(ImportError):\nE       Failed: DID NOT RAISE <class 'ImportError'>\nFAILED tests/test_loader.py::test_import - Failed: DID NOT RAISE\n"],
+    ['an expected ReferenceError', 'AssertionError: expected [Function] to throw ReferenceError\n'],
+  ])('lets an assertion frame win over an error name it mentions: %s', (...[, summary]) => {
+    expect(classifyRedEvidence('npx jest a.test.ts', summary).classification).toBe('assertion');
+  });
+
   it('returns ambiguous when nothing matches', () => {
     expect(classifyRedEvidence('npm test', '3 tests failed')).toEqual({ classification: 'ambiguous' });
     expect(classifyRedEvidence('', '')).toEqual({ classification: 'ambiguous' });
-  });
-
-  it('matches against the command as well as the summary', () => {
-    expect(classifyRedEvidence('tsc --noEmit # TS2339', 'failed').classification).toBe('setup');
   });
 
   it.each(['TS12 appeared', 'ENOENTITY is a name', 'TS12345 is too long'])('does not treat %p as a setup error', (summary) => {

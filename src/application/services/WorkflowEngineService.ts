@@ -504,7 +504,7 @@ export class WorkflowEngineService {
     const incomplete = task.dependencies.filter((dependency) => implementation.tasks[dependency]?.status !== 'completed');
     if (request.action === 'start' && incomplete.length > 0) throw new GovernanceError('TaskDependencyIncomplete', 'Task dependencies are incomplete. Complete the listed dependency tasks first.', { dependencies: incomplete });
     const prior = task.status;
-    this.assertEvidenceActionAllowed(task, request, prior);
+    this.assertEvidenceActionAllowed(task, request, prior, context.settings.mode);
     this.assertContinuity(task, request, context);
     this.assertVerifyCommand(request, context.settings);
     if (request.action === 'complete' && context.unmatched && context.unmatched.length > 0) {
@@ -513,10 +513,10 @@ export class WorkflowEngineService {
     return { implementation, task, prior };
   }
 
-  private assertEvidenceActionAllowed(task: NonNullable<WorkflowSpecV5['implementation']>['tasks'][string], request: RecordTaskProgressRequest, prior: TaskStatus): void {
+  private assertEvidenceActionAllowed(task: NonNullable<WorkflowSpecV5['implementation']>['tasks'][string], request: RecordTaskProgressRequest, prior: TaskStatus, mode: EvidenceMode): void {
     if (request.action === 'record-red' && (!task.tdd_required || !this.canRecordRed(task.evidence.red, prior))) this.invalidTransition(request.action, prior);
     if (request.action === 'record-green' && (!task.tdd_required || prior !== 'red-observed')) this.invalidTransition(request.action, prior);
-    if (request.action === 'record-green') this.assertRedNotSetup(task.evidence.red);
+    if (request.action === 'record-green' && mode === 'verified') this.assertRedNotSetup(task.evidence.red);
     if (request.action !== 'complete') return;
     if (prior !== (task.tdd_required ? 'green-observed' : 'in-progress')) this.invalidTransition(request.action, prior);
     if (task.planned_artifacts.length > 0 && this.normalizeArtifacts(request.affectedArtifacts ?? []).length === 0) {
@@ -596,7 +596,7 @@ export class WorkflowEngineService {
     }
   }
 
-  /** An engine RED that failed at setup proves nothing about behavior, so it cannot unlock GREEN. */
+  /** An engine RED that failed at setup proves nothing about behavior, so it cannot unlock GREEN in verified mode; self-reported mode is the rollback. */
   private assertRedNotSetup(red: ExecutionEvidence | undefined): void {
     if (red?.source === 'engine' && red.redClassification === 'setup') {
       throw new GovernanceError('RedSetupFailure', 'Fix the test setup so the test fails on an assertion. Record RED again before recording GREEN.');

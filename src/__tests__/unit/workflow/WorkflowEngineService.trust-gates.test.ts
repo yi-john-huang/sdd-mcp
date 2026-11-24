@@ -78,6 +78,15 @@ describe('WorkflowEngineService trust gates', () => {
       await expect(act(workflow, 'record-green', red.revision, { evidence: { command: 'jest', exitCode: 0, summary: 'pass' } }))
         .resolves.toMatchObject({ taskState: 'green-observed' });
     });
+
+    it('should let self-reported mode record GREEN over an engine setup RED, as a rollback', async () => {
+      const port = new ScriptedProcessPort([exited(SETUP_OUTPUT, 1)]);
+      const started = await act(engine({ port }), 'start', 0);
+      const red = await act(engine({ port }), 'record-red', started.revision, { run: RUN });
+      expect(red.observed?.classification).toBe('setup');
+      await expect(act(engine({ env: SELF_REPORTED }), 'record-green', red.revision, { evidence: { command: 'jest', exitCode: 0, summary: 'pass' } }))
+        .resolves.toMatchObject({ taskState: 'green-observed' });
+    });
   });
 });
 

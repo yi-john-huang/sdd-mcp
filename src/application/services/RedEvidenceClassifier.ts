@@ -8,17 +8,19 @@ export interface RedClassificationResult {
 interface NamedPattern {
   name: string;
   regex: RegExp;
+  /** An error name that a test may also expect, such as `toThrow(SyntaxError)`; an assertion frame outranks it. */
+  weak?: true;
 }
 
 const SETUP_PATTERNS: readonly NamedPattern[] = [
   { name: 'module-not-found', regex: /Cannot find module|Module not found|ERR_MODULE_NOT_FOUND/ },
-  { name: 'syntax-error', regex: /SyntaxError/ },
+  { name: 'syntax-error', regex: /SyntaxError/, weak: true },
   { name: 'typescript', regex: /\bTS\d{4}\b/ },
-  { name: 'enoent', regex: /\bENOENT\b/ },
-  { name: 'reference-error', regex: /ReferenceError|\bis not defined\b/ },
+  { name: 'enoent', regex: /\bENOENT\b/, weak: true },
+  { name: 'reference-error', regex: /ReferenceError|\bis not defined\b/, weak: true },
   { name: 'command-not-found', regex: /command not found/ },
   // Python: import and collection failures.
-  { name: 'python-import', regex: /ModuleNotFoundError|ImportError|IndentationError/ },
+  { name: 'python-import', regex: /ModuleNotFoundError|ImportError|IndentationError/, weak: true },
   { name: 'pytest-collection', regex: /ERROR collecting|errors? during collection/ },
   // Go: build and module failures.
   { name: 'go-build', regex: /\bundefined: \w|\[build failed\]|\[setup failed\]/ },
@@ -44,19 +46,21 @@ const ASSERTION_PATTERNS: readonly NamedPattern[] = [
   { name: 'dotnet-assertion', regex: /Assert\.\w+\(\) Failure|Expected: .*\n\s*(?:But was|Actual): / },
 ];
 
-function firstMatch(patterns: readonly NamedPattern[], text: string): string | undefined {
-  return patterns.find(({ regex }) => regex.test(text))?.name;
+function firstMatch(patterns: readonly NamedPattern[], text: string): NamedPattern | undefined {
+  return patterns.find(({ regex }) => regex.test(text));
 }
 
 /**
- * Pure, free classification of RED evidence. Setup wins when both kinds match,
- * because a broken setup cannot prove missing behavior.
+ * Pure, free classification of RED evidence. Only the output is read: a command may name a file or test after an error.
+ * A setup failure wins over an assertion, because a broken setup cannot prove missing behavior,
+ * except that an assertion frame outranks a weak setup pattern, which may be the error the test expects.
  */
-export function classifyRedEvidence(command: string, summary: string): RedClassificationResult {
-  const text = `${command}\n${summary}`;
-  const setup = firstMatch(SETUP_PATTERNS, text);
-  if (setup) return { classification: 'setup', matchedPattern: setup };
-  const assertion = firstMatch(ASSERTION_PATTERNS, text);
-  if (assertion) return { classification: 'assertion', matchedPattern: assertion };
+export function classifyRedEvidence(_command: string, summary: string): RedClassificationResult {
+  const setup = firstMatch(SETUP_PATTERNS.filter(({ weak }) => !weak), summary);
+  if (setup) return { classification: 'setup', matchedPattern: setup.name };
+  const assertion = firstMatch(ASSERTION_PATTERNS, summary);
+  if (assertion) return { classification: 'assertion', matchedPattern: assertion.name };
+  const weakSetup = firstMatch(SETUP_PATTERNS.filter(({ weak }) => weak), summary);
+  if (weakSetup) return { classification: 'setup', matchedPattern: weakSetup.name };
   return { classification: 'ambiguous' };
 }
