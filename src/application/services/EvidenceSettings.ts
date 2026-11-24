@@ -1,3 +1,5 @@
+import { inlineEvalFlag, programName } from './EvidenceCommandPolicy.js';
+import { validateArgv } from './EvidenceRunner.js';
 import type { ProjectConfig } from './ProjectConfig.js';
 
 export type EvidenceMode = 'verified' | 'self-reported';
@@ -7,6 +9,8 @@ export interface EvidenceSettings {
   readonly timeoutMs: number;
   readonly allowedCommands: ReadonlySet<string>;
   readonly passEnv: ReadonlySet<string>;
+  /** The project's fixed completion command, from `.spec/sdd-config.json` `evidence.verifyCommand`. */
+  readonly verifyCommand?: readonly string[];
   /** Invalid configuration values, one line each, for the caller to report once. */
   readonly warnings: readonly string[];
 }
@@ -80,14 +84,37 @@ function resolveNameList(
   return new Set(fallback);
 }
 
+/** A fixed completion argv: valid argv, an allowed program, and no inline evaluation; anything else is ignored with one warning. */
+function resolveVerifyCommand(value: unknown, allowedCommands: ReadonlySet<string>, out: Resolution): readonly string[] | undefined {
+  if (value === undefined) return undefined;
+  const reject = (reason: string): undefined => {
+    out.warnings.push(`evidence.verifyCommand ${reason}; ignoring it`);
+    return undefined;
+  };
+  if (!Array.isArray(value) || !value.every((entry) => typeof entry === 'string')) return reject('must be a list of strings');
+  const argv = value as string[];
+  try {
+    validateArgv(argv);
+    const program = programName(argv[0]);
+    if (!allowedCommands.has(program)) return reject(`runs "${program}", which is not an allowed evidence command`);
+    if (inlineEvalFlag(argv) !== undefined) return reject('evaluates inline code');
+  } catch {
+    return reject('must have 1 to 64 elements of 1 to 4096 bytes without NUL or line breaks');
+  }
+  return Object.freeze([...argv]);
+}
+
 export function resolveEvidenceSettings(env: Env, projectConfig: ProjectConfig | undefined): EvidenceSettings {
   const section = evidenceSection(projectConfig);
   const out: Resolution = { warnings: [] };
+  const allowedCommands = resolveNameList(section.allowedCommands, 'evidence.allowedCommands', BARE_PROGRAM_NAME, DEFAULT_ALLOWED_COMMANDS, out);
+  const verifyCommand = resolveVerifyCommand(section.verifyCommand, allowedCommands, out);
   const settings = {
     mode: resolveMode(env, section, out),
     timeoutMs: resolveTimeout(env, section, out),
-    allowedCommands: resolveNameList(section.allowedCommands, 'evidence.allowedCommands', BARE_PROGRAM_NAME, DEFAULT_ALLOWED_COMMANDS, out),
+    allowedCommands,
     passEnv: resolveNameList(section.passEnv, 'evidence.passEnv', ENV_NAME, [], out),
+    ...(verifyCommand ? { verifyCommand } : {}),
     warnings: Object.freeze([...out.warnings]),
   };
   // Keep only the two scalar fields in logs and serialized results.

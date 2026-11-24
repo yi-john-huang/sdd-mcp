@@ -63,7 +63,7 @@ export function childEnv(serverEnv: Env, settings: EvidenceSettings): Record<str
   return env;
 }
 
-function validateArgv(argv: readonly string[]): void {
+export function validateArgv(argv: readonly string[]): void {
   if (argv.length === 0 || argv.length > MAX_ARGV_LENGTH) throw invalid(`argv must have 1 to ${MAX_ARGV_LENGTH} elements`);
   for (const element of argv) {
     if (typeof element !== 'string' || element.length === 0 || element.includes('\u0000') || Buffer.byteLength(element, 'utf8') > MAX_ARG_BYTES) {
