@@ -62,7 +62,7 @@ docker-compose up -d --scale sdd-mcp-server=3
 
 See [Optional JEV advisory](docs/WORKFLOW.md#optional-jev-advisory) and [Verified execution evidence](docs/WORKFLOW.md#verified-execution-evidence).
 
-`.spec/sdd-config.json` may also hold `evidence.allowedCommands` (the programs the server may run; the default list is `node`, `npm`, `npx`, `pnpm`, `yarn`, `bun`, `jest`, `vitest`, `tsc`, `pytest`, `python`, `python3`, `go`, `cargo`, `make`, `mvn`, `gradle`, `dotnet`) and `evidence.passEnv` (variable names that reach the test process although they look like secrets). A list with an invalid entry is ignored as a whole, and the default applies.
+`.spec/sdd-config.json` may also hold `evidence.allowedCommands` (the programs the server may run; the default list is `node`, `npm`, `npx`, `pnpm`, `yarn`, `bun`, `jest`, `vitest`, `tsc`, `pytest`, `python`, `python3`, `go`, `cargo`, `make`, `mvn`, `gradle`, `dotnet`) `evidence.passEnv` (variable names that reach the test process although they look like secrets), and `evidence.verifyCommand` (a fixed argv the server runs at COMPLETE in verified mode, so COMPLETE may omit `run`). A list with an invalid entry is ignored as a whole, and the default applies.
 
 ### Advanced Configuration
 

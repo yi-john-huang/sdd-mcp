@@ -66,6 +66,14 @@ describe('requirements and design Skill wording', () => {
     expect(reference).toMatch(/## Not-Applicable Tasks/);
   });
 
+  it('lists every evidence error code and the verify-command omission in the implement REFERENCE', () => {
+    const reference = fs.readFileSync(path.resolve(process.cwd(), 'skills/sdd-implement/REFERENCE.md'), 'utf8');
+    for (const code of ['EvidenceCommandInlineEval', 'RedSetupFailure', 'EvidenceContinuityViolation', 'ObservedArtifactMismatch', 'VerifyCommandMismatch']) {
+      expect(reference).toContain(`\`${code}\``);
+    }
+    expect(reference).toMatch(/evidence\.verifyCommand/);
+  });
+
   it('keeps sdd-correct at or below 3,000 bytes', () => {
     expect(Buffer.byteLength(fs.readFileSync(path.resolve(process.cwd(), 'skills/sdd-correct/SKILL.md'), 'utf8'))).toBeLessThanOrEqual(3_000);
   });

@@ -27,6 +27,13 @@ For a TDD-required task, persist the observed sequence: start; RED with `run: { 
 - `SelfReportedEvidenceRejected`: the project runs in verified evidence mode; pass the command as `run.argv` instead of an evidence object. Projects configured for `self-reported` mode still accept the legacy object.
 - `EvidenceCommandNotAllowed`: the program is not on the allowlist (`node`, `npm`, `npx`, `pnpm`, `yarn`, `bun`, `jest`, `vitest`, `tsc`, `pytest`, `python`, `python3`, `go`, `cargo`, `make`, `mvn`, `gradle`, `dotnet`, or the project's `evidence.allowedCommands`). Shells are never allowed.
 - `EvidenceRunTimedOut`: the command exceeded the configured timeout (default 120 s); narrow the test selection or raise `SDD_EVIDENCE_TIMEOUT_MS`.
+- `EvidenceCommandInlineEval`: the command runs inline code (`node -e`, `python -c`, a `data:` loader, `npx -c`, `bun eval`, or a package manager running one of these). Put the code in a test file and run the file.
+- `RedSetupFailure`: in verified mode, GREEN was recorded while the latest RED is classified `setup`. Fix the test setup and record RED again.
+- `EvidenceContinuityViolation`: GREEN used a different `argv` from RED, or no file changed since RED. Run the same command after changing the code.
+- `ObservedArtifactMismatch`: a completion artifact did not change since `start`. Remove the listed paths or make the change first.
+- `VerifyCommandMismatch`: the project sets `evidence.verifyCommand` and COMPLETE ran a different command. Omit `run` at COMPLETE so the server runs `evidence.verifyCommand`, or pass exactly that argv.
+
+A program given by path must sit in `node_modules/.bin`, `.venv/bin`, `venv/bin`, `.venv/Scripts`, or `venv/Scripts` inside the project; otherwise use its bare name.
 
 ## Design Prompts
 

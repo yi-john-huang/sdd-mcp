@@ -34,6 +34,14 @@ describe('target-aware documentation consistency', () => {
     expect(workflow).toContain('sdd-correct');
   });
 
+  it('keeps the requirements reference link with requirements, and the verify command in DEPLOYMENT', () => {
+    const paragraphs = read('docs/WORKFLOW.md').split(/\n\n+/);
+    const link = paragraphs.find((paragraph) => paragraph.includes('[Requirements Reference]'));
+    expect(link).toBeDefined();
+    expect(link).not.toContain('Interface Spike');
+    expect(read('DEPLOYMENT.md')).toContain('evidence.verifyCommand');
+  });
+
   it('states the parallel restriction and /sdd-correct in routing and root guidance', () => {
     for (const file of ['docs/MODEL-ROUTING.md', 'AGENTS.md', 'templates/CLAUDE.md', 'templates/codex-AGENTS.md', 'src/cli/tool-support/root-guidance.ts']) {
       const content = read(file);
