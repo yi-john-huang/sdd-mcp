@@ -192,7 +192,7 @@ export const SDD_TOOL_DEFINITIONS: ReadonlyArray<Tool & { name: SDDToolName }> =
       required: ['check'], additionalProperties: false,
       allOf: [
         requiredWhenCheck(['requirements', 'design', 'testcases', 'red'], ['featureName']),
-        requiredWhenCheck(['red'], ['taskNumber', 'testName', 'evidence']),
+        requiredWhenCheck(['red'], ['taskNumber', 'testName']),
         requiredWhenCheck(['security'], ['findings']),
         requiredWhenCheck(['principles'], ['units']),
       ],

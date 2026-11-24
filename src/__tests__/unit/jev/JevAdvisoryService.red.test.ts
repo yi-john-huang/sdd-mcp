@@ -152,6 +152,15 @@ describe('JevAdvisoryService RED validity check', () => {
       expect(await service().check(request(TS_ERROR))).toMatchObject({ status: 'skipped', skipReason: 'not-ready' });
     });
 
+    it('asks for an engine RED or evidence when an in-progress task has neither', async () => {
+      await startTask(project);
+      await expect(service().check({ ...request(AMBIGUOUS), evidence: undefined })).rejects.toMatchObject({
+        code: 'InvalidParams',
+        message: 'Record RED through the engine first, or pass evidence for the red check.',
+      });
+      expect(http.calls).toHaveLength(0);
+    });
+
     it('skips a task that is not TDD-required', async () => {
       await startTask(project, '1.1');
       expect(await service().check(request(TS_ERROR, { taskNumber: '1.2' }))).toMatchObject({ status: 'skipped', skipReason: 'not-ready' });
@@ -159,7 +168,6 @@ describe('JevAdvisoryService RED validity check', () => {
 
     it('skips incomplete input and evidence with a zero exit code', async () => {
       await startTask(project);
-      expect(await service().check({ ...request(AMBIGUOUS), evidence: undefined })).toMatchObject({ status: 'skipped', skipReason: 'not-ready' });
       expect(await service().check(request(TS_ERROR, { testName: undefined }))).toMatchObject({ status: 'skipped', skipReason: 'not-ready' });
       expect(await service().check(request({ ...TS_ERROR, exitCode: 0 }))).toMatchObject({ status: 'skipped', skipReason: 'not-ready' });
       expect(http.calls).toHaveLength(0);
