@@ -54,6 +54,8 @@ export function buildCompactRootGuidance(
     '',
     ...routing,
     'Review, security, and independent implementation slices ask once per session (inline or project agent) and report agents, parallelism, configured model/effort, and fallbacks.',
+    'Parallel slices need one git worktree per slice; while evidence mode is verified, implementation slices run serially.',
+    `After a repeated agent failure, invoke \`${invocation}sdd-correct\` to fix it at the strongest tier: structure, then lint or CI, then a test, and only then rule text.`,
     '',
     '## Commits and pull requests',
     '',

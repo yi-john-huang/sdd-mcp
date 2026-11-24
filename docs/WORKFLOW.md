@@ -40,7 +40,9 @@ The Skill-governed journey is:
 
 Only an unambiguous affirmative response inside the active phase Skill can approve that exact revision. Host permission is not approval. If you invoke a later Skill early, it presents the persisted blocker. It makes no file change.
 
-Requirement metadata accepts inline values. It also accepts values on lines below their labels. For example, a numbered list may follow `**Acceptance Criteria:**` on later lines. The runtime accepts this documented shape starting in 5.0.1. See the [Requirements Reference](../skills/sdd-requirements/REFERENCE.md) for the complete document shape.
+Requirement metadata accepts inline values. It also accepts values on lines below their labels. For example, a numbered list may follow `**Acceptance Criteria:**` on the label line or on later lines. The runtime accepts this documented shape starting in 5.0.1, and the `sdd-requirements` Skill describes both forms.
+
+A design may add an optional `## Interface Spike` section when two interface shapes are both plausible. The spike is throwaway code under `.spec/specs/<feature>/spike/` that production code never imports. The section names the question, the path, and the decision it settled. Validation ignores the extra heading, and approval still needs the explicit human answer. See the [Requirements Reference](../skills/sdd-requirements/REFERENCE.md) for the complete document shape.
 
 ## Durable authority and continuation
 
@@ -145,8 +147,8 @@ The server runs each task's test command itself and records what it observed. Th
 - A RED, GREEN, or COMPLETE record carries the test command as `run.argv`: the program first, then its arguments. The `sdd-implement` Skill supplies it; the user does not operate the tool.
 - The server runs the command in the project root with no shell, with a timeout, and with a bounded output capture. It records the observed exit code, a SHA-256 of the output, the duration, and an 8 KB excerpt of the last output. Secrets are redacted from the excerpt before it is saved.
 - RED needs a non-zero exit code. GREEN and COMPLETE need zero. When the observed code does not fit the action, the result is `TaskTransitionInvalid`, the error details carry the observation, and `spec.json` is unchanged.
-- The RED excerpt is classified `setup`, `assertion`, or `ambiguous`. After a `setup` or `ambiguous` RED, the agent can fix the test and record RED again; the new observation replaces the old one. An `assertion` RED is final.
-- The JEV `red` check runs after RED is recorded and judges the persisted excerpt, not a summary the agent wrote.
+- The RED excerpt is classified `setup`, `assertion`, or `ambiguous`. Named patterns cover JavaScript and TypeScript, Python, Go, Rust, JVM, and .NET output; setup wins when both kinds match. After a `setup` or `ambiguous` RED, the agent can fix the test and record RED again; the new observation replaces the old one. An `assertion` RED is final. GREEN is rejected with `RedSetupFailure` while the latest RED is `setup`.
+- The JEV `red` check runs after RED is recorded and judges the persisted excerpt, not a summary the agent wrote. It needs no `evidence` input in that case. When a task is in progress with neither an engine RED nor `evidence`, the check returns `InvalidParams` and names the fix.
 - One evidence command runs per feature at a time. A second task action for the same feature waits up to 2 s for the evidence-run lock and then reports `RevisionConflict` or `LockTimeout`; it never starts a second command.
 - The command runs outside the feature lock. Status, JEV checks, and the handoff stay readable while it runs. The transition is checked before the run and again before the result is saved.
 - A host must wait for the tool result at least as long as the longest command. The Codex registration sets `tool_timeout_sec = 660`; Codex otherwise stops waiting after 60 s.
@@ -157,13 +159,15 @@ The server runs each task's test command itself and records what it observed. Th
 |---|---|
 | `SDD_EVIDENCE_MODE` | `verified` (default) or `self-reported`. In `self-reported` mode the 5.5.0 evidence object is accepted and saved with `source: "caller"`. |
 | `SDD_EVIDENCE_TIMEOUT_MS` | Timeout for one command in milliseconds. The default is 120000. The limits are 5000 and 600000. |
-| `.spec/sdd-config.json` | Optional project settings: `{"evidence":{"mode":"verified","timeoutMs":120000,"allowedCommands":["npm","npx"],"passEnv":["MY_TEST_TOKEN"]}}`. |
+| `.spec/sdd-config.json` | Optional project settings: `{"evidence":{"mode":"verified","timeoutMs":120000,"allowedCommands":["npm","npx"],"passEnv":["MY_TEST_TOKEN"],"verifyCommand":["npm","test"]}}`. |
+| `evidence.verifyCommand` | Optional argv that the server runs at COMPLETE in verified mode. COMPLETE may then omit `run`; a different `run` is rejected with `VerifyCommandMismatch`. The value must pass the allowlist and the inline-code rule, or it is ignored with one warning. There is no environment override. `sdd-status` and the handoff show it. |
 
 The environment variable wins over the project setting. An unrecognized value falls back to the default, and the tool result carries one warning. `sdd-status` reports the resolved `evidenceMode`.
 
 ### Allowed programs and environment
 
 - The program in `run.argv[0]` must be on the allowlist after its directory and any `.cmd`, `.exe`, or `.bat` suffix are removed. The default list is `node`, `npm`, `npx`, `pnpm`, `yarn`, `bun`, `jest`, `vitest`, `tsc`, `pytest`, `python`, `python3`, `go`, `cargo`, `make`, `mvn`, `gradle`, and `dotnet`. `evidence.allowedCommands` replaces it. Shells such as `sh` and `bash` are never allowed, and `argv` is never interpreted by a shell. One exception exists on Windows: a program that resolves to a `.cmd` or `.bat` file (`npm`, `npx`, `yarn`, `pnpm`) cannot start without `cmd.exe`, so it runs through `cmd.exe /d /s /c` under its original name, with every argument quoted and every `cmd` metacharacter escaped. An argument that contains a line break is rejected on every platform, because a line break would end the `cmd.exe` command line.
+- Inline code is rejected with `EvidenceCommandInlineEval`, because a typed exit code could hide in it. The rule covers `node`/`bun` `-e`, `--eval`, `-p`, and `--print`; `python`/`python3` `-c`; and `npx`/`npm exec` running one of those interpreters with such a flag. Put the code in a script file and run the file instead.
 - The test process receives the server environment without `SDD_JEV_API_KEY` and without any variable whose name ends a word with `KEY`, `TOKEN`, `SECRET`, `PASSWORD`, `PASSWD`, or `CREDENTIAL(S)` (joined forms such as `OPENAI_APIKEY` included) or holds `PAT` as a word. Names listed in `evidence.passEnv` pass through. `CI=1` is set when `CI` is unset.
 
 ### Errors
@@ -174,12 +178,41 @@ The environment variable wins over the project setting. An unrecognized value fa
 | `EvidenceCommandNotAllowed` | The program is not on the allowlist. | Use an allowed test runner or add the program to `evidence.allowedCommands`. |
 | `EvidenceRunTimedOut` | The command did not finish within the timeout. Nothing was saved. | Narrow the test selection or raise `SDD_EVIDENCE_TIMEOUT_MS`. |
 | `EvidenceRunnerUnavailable` | The server has no evidence runner wired in. | Report the installation problem; this does not happen with the packaged server. |
+| `EvidenceCommandInlineEval` | The command runs inline code (`-e`, `--eval`, `-p`, `--print`, or `-c`). | Put the code in a script file and run the file. |
+| `RedSetupFailure` | GREEN was recorded while the latest RED is classified `setup`. | Fix the test setup so the test fails on an assertion, then record RED again. |
+| `EvidenceContinuityViolation` | GREEN ran a different command than RED (`argv-mismatch`), or the working tree did not change since RED (`unchanged-tree`). | Run the RED command again for GREEN, after changing files. |
+| `ObservedArtifactMismatch` | A completion artifact did not change since the task started. The details list up to 20 paths. | Remove the listed paths, or make the change first. |
+| `VerifyCommandMismatch` | COMPLETE carried a `run` that differs from `evidence.verifyCommand`. | Omit `run`, or pass the configured command. |
+
+### Evidence binding
+
+When the project is a git repository, the server binds evidence to the working tree. A binding is a SHA-256 over the `HEAD` tree plus every dirty or untracked path and its content hash. `.spec/specs/` and `.spec/reviews/` are left out, so workflow writes do not count as changes. Observation has a 10 s deadline and at most 2,000 dirty paths; beyond that the binding is `unavailable`.
+
+- **Start:** `start` stores the tree as `start_tree` on the task.
+- **Continuity:** GREEN must run the same `argv` as RED, and the tree must differ from the RED tree. Otherwise the result is `EvidenceContinuityViolation`.
+- **Artifact cross-check:** each completion artifact must be a path that changed since `start_tree`, or a directory that contains one. A path under `.spec/specs/` only needs to exist. Otherwise the result is `ObservedArtifactMismatch`, and the verify command does not run.
+- **Drift:** `sdd-status` for one feature compares the live tree with the latest verified completion. It reports `verificationDrift` with the task number and up to 50 changed paths, or `verificationBinding: "unavailable"` when the tree cannot be compared. It never writes `spec.json`. The feature list view skips this check. `sdd-commit` shows drift and labels the commit content unverified.
+
+Every check skips when a binding is `unavailable` or the project is not a git repository, so the 6.0.0 behavior applies there. `sdd-status` reports `binding: "bound"` or `"unbound"` per task.
+
+### Parallel slices
+
+Parallel slices need one git worktree per slice, because a binding covers one working tree. While evidence mode is `verified`, `sdd-implement` does not offer parallel project-agent mode, so slices run serially. The implementer agent works only in its assigned worktree and returns a blocker when none is assigned.
 
 ### Compatibility and rollback
 
 - Evidence entries in `spec.json` stay on schema version 5. New fields (`source`, `argv`, `output_sha256`, `duration_ms`, `output_excerpt`, `truncated`, `redactions`, `red_classification`) are added only to engine-observed entries. An entry without `source` is read as `caller`.
 - `sdd-status` reports the source of each recorded entry per task, and the handoff marks each completed task `(verified)` when every entry was engine-observed and `(self-reported)` otherwise. Features without evidence render as before.
+- The binding fields (`start_tree` on a task and `working_tree` on an evidence entry) are optional, so specs written before them still load.
 - To roll back, set `SDD_EVIDENCE_MODE=self-reported`. Specs written in verified mode stay readable.
+
+## Corrections
+
+When an agent repeats a failure, invoke `sdd-correct` (`/sdd-correct`, `$sdd-correct`, or `/skill:sdd-correct`). It logs the symptom in `.spec/corrections.md` and fixes it at the strongest feasible tier: structure (types, data shape, or an engine gate), then lint, type, or CI, then a test, and only then rule or Skill text. Rule or Skill text needs a second occurrence, or an irreversible or security-relevant failure, and explicit approval. The Skill also proposes deleting lines that the fix makes obsolete. The log is never loaded into feature context.
+
+### Skill changes
+
+A structural Skill edit changes a Skill's method, gates, stop rules, or output contract. Before one merges, run the blind-test kit in `evals/skills/` against the base branch and the change, and paste the result table into the pull request. A lower pass rate on any checklist item needs a reason or a fix. Wording-only edits do not need the kit. See `evals/skills/README.md` for the run steps and the blinding procedure.
 
 ## Optional JEV advisory
 

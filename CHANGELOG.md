@@ -7,6 +7,36 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- GREEN is rejected with `RedSetupFailure` while the latest RED is classified `setup`.
+- Evidence is bound to a content fingerprint of the git working tree: `start` stores `start_tree`, and each evidence entry stores `working_tree`. `sdd-status` reports `binding` per task.
+- GREEN must run the same `argv` as RED on a changed tree, or it is rejected with `EvidenceContinuityViolation` (`argv-mismatch` or `unchanged-tree`).
+- Completion artifacts must be paths that changed since the task started, or their parent directories; others are rejected with `ObservedArtifactMismatch`, listing up to 20 paths, before the verify command runs.
+- `sdd-status` for one feature reports `verificationDrift` (task number and up to 50 changed paths) after the latest verified completion, or `verificationBinding: "unavailable"`. It never writes `spec.json`. `sdd-commit` shows drift and labels the commit content unverified.
+- `.spec/sdd-config.json` `evidence.verifyCommand` fixes the completion command. COMPLETE may omit `run`; a different `run` is rejected with `VerifyCommandMismatch`. Status and the handoff show the command.
+- Inline code in an evidence command (`node -e`, `--eval`, `-p`, `--print`, `python -c`, and the same through `npx` or `npm exec`) is rejected with `EvidenceCommandInlineEval`.
+- The RED classifier names setup and assertion patterns for Python, Go, Rust, JVM, and .NET, proven by a fixture corpus.
+- The `sdd-correct` Skill fixes a repeated agent failure at the strongest tier (structure, lint or CI, test, then rule text), logs it in `.spec/corrections.md`, and needs explicit approval for any rule text. The log is never loaded into context.
+- A Skill blind-test kit in `evals/skills/` (not packaged) for structural Skill changes.
+- `sdd-design` offers an optional `## Interface Spike` section for throwaway code under the spec folder.
+- CI runs build, strict typecheck, the lint ratchet, and tests on Linux and macOS. `npm run lint:baseline` lowers the warning baseline.
+
+### Changed
+- TypeScript runs in `strict` mode with `noImplicitReturns` and `noEmitOnError`.
+- `npm run lint` is a lint ratchet: any ESLint error, or any warning count above `scripts/lint-baseline.json` per file and rule, fails.
+- The JEV `red` check no longer requires `evidence` when the engine recorded RED. An in-progress task with neither now returns `InvalidParams` instead of a silent skip.
+- `sdd-implement` requires one git worktree per parallel slice and does not offer parallel agents in verified mode. It stops for confirmation before deploy or publish, data deletion, force-push, external messages, or credential changes, and records a blocker after 3 failed GREEN attempts. Reports add `Unverified / Could Not Run` and a decision log. `sdd-review` cites a reproducible command for each behavioral finding or labels it unconfirmed.
+- `sdd-requirements` accepts acceptance criteria on the label line or the next lines, matching the validator.
+- The always-on rules shrink from 10,759 to 3,814 bytes, keeping only what tools do not enforce.
+
+### Removed
+- The `validate-sdd-workflow` and `check-test-coverage` hooks, which described a bypass flag and a strictness variable that no tool reads. Reinstalling removes unmodified copies and reports edited ones as `obsolete-modified`.
+
+### Compatibility
+- The spec stays on schema version 5. All new `spec.json` fields are optional, and every new check skips when the project is not a git repository or a binding is unavailable.
+- The MCP contract stays at 17 tools. Schemas only relax: `complete` may omit `run` when a verify command is configured, and the JEV `red` check may omit `evidence`.
+- Rollback: set `SDD_EVIDENCE_MODE=self-reported` to return to caller evidence, or remove `evidence.verifyCommand`. Specs written with bindings stay readable by 6.0.0, which ignores the extra fields.
+
 ## [6.0.0] - 2026-11-22
 
 ### Added

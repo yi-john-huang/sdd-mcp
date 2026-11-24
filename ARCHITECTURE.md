@@ -72,6 +72,22 @@ Approval invariants include these rules:
 - If the handoff fails after the commit, the service returns an approved transition with `pending-regeneration`. It never returns stale content.
 - Repeated approval is idempotent. It repairs only a missing or stale cache.
 
+### Evidence trust gates
+
+`EvidenceRunner` runs a task's `run.argv` with no shell. `EvidenceCommandPolicy` rejects inline code (`node -e`, `python -c`, and the same through `npx` or `npm exec`) before the allowlist lets a command run. `EvidenceSettings` resolves the mode, timeout, allowlist, passed environment, and the optional `verifyCommand`. `RedEvidenceClassifier` labels RED output `setup`, `assertion`, or `ambiguous` with named patterns for six ecosystems.
+
+`WorkingTreeFingerprint` observes the git tree through the optional `GitPort`: a SHA-256 over the `HEAD` tree plus dirty paths, without `.spec/specs/` and `.spec/reviews/`. `WorkflowEngineService` stores the tree at `start` and on each evidence entry. Under the evidence-run lock, it checks the transition before the run and again before the commit:
+
+```text
+recordTaskProgress
+  -> withVerifyCommand (COMPLETE uses evidence.verifyCommand)
+  -> observeTree, unmatchedArtifacts (ObservedArtifactCheck)
+  -> assertTransition: RedSetupFailure, EvidenceContinuityViolation, ObservedArtifactMismatch, VerifyCommandMismatch
+  -> run the command, then commit spec.json
+```
+
+Status computes drift outside the feature lock. `getFeatureStatus` finds the latest verified completion, observes the live tree, and, when they differ, lists up to 50 changed paths as `verificationDrift`. A missing binding yields `verificationBinding: "unavailable"`. Status never writes `spec.json`, and `listFeatureStatuses` skips drift. Every gate skips when a binding is unavailable.
+
 Rollback is an internal, disk-addressable service operation. It atomically resets the affected approvals and invalidates the rebuildable handoff cache. v4 does not expose a public rollback tool.
 
 ## Phase-aware context

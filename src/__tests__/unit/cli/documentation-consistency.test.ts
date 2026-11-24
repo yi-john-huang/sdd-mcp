@@ -20,6 +20,43 @@ describe('target-aware documentation consistency', () => {
 
 
 
+  it('documents the workflow trust gates, the verify command, and sdd-correct', () => {
+    const workflow = read('docs/WORKFLOW.md');
+    for (const code of ['RedSetupFailure', 'EvidenceContinuityViolation', 'ObservedArtifactMismatch', 'VerifyCommandMismatch', 'EvidenceCommandInlineEval']) {
+      expect(workflow).toContain(`| \`${code}\` |`);
+    }
+    expect(workflow).toContain('evidence.verifyCommand');
+    expect(workflow).toMatch(/### Evidence binding/);
+    expect(workflow).toMatch(/inline.*(-e|--eval)/is);
+    expect(workflow).toMatch(/one git worktree per slice/i);
+    expect(workflow).toMatch(/### Skill changes/);
+    expect(workflow).toContain('evals/skills');
+    expect(workflow).toContain('sdd-correct');
+  });
+
+  it('states the parallel restriction and /sdd-correct in routing and root guidance', () => {
+    for (const file of ['docs/MODEL-ROUTING.md', 'AGENTS.md', 'templates/CLAUDE.md', 'templates/codex-AGENTS.md', 'src/cli/tool-support/root-guidance.ts']) {
+      const content = read(file);
+      expect({ file, worktree: /one git worktree per slice/i.test(content), correct: /sdd-correct/.test(content) })
+        .toEqual({ file, worktree: true, correct: true });
+    }
+  });
+
+  it('describes the binding components, CI steps, and the release entry', () => {
+    const architecture = read('ARCHITECTURE.md');
+    for (const term of ['WorkingTreeFingerprint', 'EvidenceCommandPolicy', 'verificationDrift']) expect(architecture).toContain(term);
+    const deployment = read('DEPLOYMENT.md');
+    expect(deployment).toContain('npm run lint:baseline');
+    expect(deployment).toMatch(/npm run typecheck[\s\S]*npm run lint[\s\S]*npm test/);
+    const unreleased = read('CHANGELOG.md').split(/\n## \[/)[1] ?? '';
+    expect(unreleased).toMatch(/^Unreleased\]/);
+    for (const term of ['RedSetupFailure', 'verifyCommand', 'drift', 'sdd-correct', 'lint ratchet', 'schema version 5', '17 tools', 'Rollback']) {
+      expect(unreleased).toContain(term);
+    }
+    const readme = read('README.md');
+    expect(readme).toContain('sdd-correct');
+  });
+
   it('keeps project steering in step with the package version and tool count', () => {
     const tech = read('.spec/steering/tech.md');
     const version = (JSON.parse(read('package.json')) as { version: string }).version;

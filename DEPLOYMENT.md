@@ -525,6 +525,20 @@ curl http://localhost:9090/metrics
 
 ## Maintenance
 
+### Continuous integration
+CI runs these steps on Linux and macOS, in this order:
+
+```bash
+npm ci
+npm run build
+npm run typecheck   # strict TypeScript; any error fails the build
+npm run lint        # lint ratchet against scripts/lint-baseline.json
+npm test
+```
+
+The lint ratchet fails on any ESLint error, and on any warning count per file and rule that is above `scripts/lint-baseline.json`. After you fix warnings, run `npm run lint:baseline` to lower the recorded counts and commit the baseline. The command never raises a count. A missing or malformed baseline exits 2; `node scripts/lint-ratchet.mjs --init` writes a new one.
+
+
 ### Regular Tasks
 - Update dependencies monthly
 - Rotate logs weekly
