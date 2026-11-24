@@ -56,10 +56,13 @@ describe('target-aware documentation consistency', () => {
     const deployment = read('DEPLOYMENT.md');
     expect(deployment).toContain('npm run lint:baseline');
     expect(deployment).toMatch(/npm run typecheck[\s\S]*npm run lint[\s\S]*npm test/);
-    const unreleased = read('CHANGELOG.md').split(/\n## \[/)[1] ?? '';
-    expect(unreleased).toMatch(/^Unreleased\]/);
+    // The release bump moves Unreleased notes under the new version, so check both sections.
+    const sections = read('CHANGELOG.md').split(/\n## \[/).slice(1);
+    expect(sections[0]).toMatch(/^Unreleased\]/);
+    const version = JSON.parse(read('package.json')).version as string;
+    const pending = [sections[0], sections.find((s) => s.startsWith(`${version}]`)) ?? ''].join('\n');
     for (const term of ['RedSetupFailure', 'verifyCommand', 'drift', 'sdd-correct', 'lint ratchet', 'schema version 5', '17 tools', 'Rollback']) {
-      expect(unreleased).toContain(term);
+      expect(pending).toContain(term);
     }
     const readme = read('README.md');
     expect(readme).toContain('sdd-correct');
